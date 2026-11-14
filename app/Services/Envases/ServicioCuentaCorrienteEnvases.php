@@ -103,6 +103,17 @@ class ServicioCuentaCorrienteEnvases
             ? $movimiento->datos['ajuste_recepcion'] : null;
     }
 
+    /** CSG que recibió los envases del destare: el elegido en Romana o, si hay uno solo, ese. */
+    private static function csgSalida(array $recepcionesCsg, ?string $recepcionId): ?array
+    {
+        $datos = $recepcionesCsg[$recepcionId ?? ''] ?? null;
+        if (! empty($datos['salida']['codigo'])) {
+            return ['codigo' => $datos['salida']['codigo'], 'nombre' => $datos['salida']['nombre'] ?? null];
+        }
+
+        return count($datos['csg'] ?? []) === 1 ? $datos['csg'][0] : null;
+    }
+
     private static function etiquetaProductor(?array $productor): string
     {
         return empty($productor['codigo']) ? 'Sin productor declarado'
@@ -295,6 +306,7 @@ class ServicioCuentaCorrienteEnvases
                 'entradas' => $esSalida ? 0 : $impacto, 'salidas' => $esSalida ? -$impacto : 0,
                 'csg' => match ($movimiento->tipo_movimiento) {
                     TipoMovimientoEnvase::DespachoCliente => $destinatario,
+                    TipoMovimientoEnvase::SalidaRecepcionFruta => self::csgSalida($recepcionesCsg, $movimiento->recepcion_romana_id),
                     TipoMovimientoEnvase::DevolucionEnvases => $devolucion['productor'] ?? null,
                     TipoMovimientoEnvase::AjusteCuenta => $ajusteRecepcion['productor'] ?? null,
                     default => null,
@@ -326,6 +338,9 @@ class ServicioCuentaCorrienteEnvases
                     TipoMovimientoEnvase::RecepcionFruta => $recepcionesCsg[$movimiento->recepcion_romana_id]['productor'] ?? 'Sin productor declarado',
                     TipoMovimientoEnvase::DevolucionEnvases => self::etiquetaDevolucion($devolucion),
                     TipoMovimientoEnvase::AjusteCuenta => $ajusteRecepcion !== null ? self::etiquetaProductor($ajusteRecepcion['productor'] ?? null) : null,
+                    // La entrega en el destare: el CSG elegido en Romana o el único de la recepción.
+                    TipoMovimientoEnvase::SalidaRecepcionFruta => ($csgSalida = self::csgSalida($recepcionesCsg, $movimiento->recepcion_romana_id))
+                        ? self::etiquetaProductor($csgSalida) : null,
                     default => null,
                 },
             ]];
@@ -435,7 +450,7 @@ class ServicioCuentaCorrienteEnvases
         $recepciones = RecepcionRomana::query()
             ->whereKey($movimientos->pluck('recepcion_romana_id')->filter()->unique()->values())
             ->get(['id', 'numero_recepcion', 'numero_guia_despacho', 'numero_guia_salida', 'nombre_conductor',
-                'rut_conductor', 'patente_camion', 'patente_carro'])
+                'rut_conductor', 'patente_camion', 'patente_carro', 'salida_productor_snapshot'])
             ->keyBy('id');
         $repartoGuias = $this->repartoGuias($movimientos);
         $documentos = [];
@@ -449,7 +464,7 @@ class ServicioCuentaCorrienteEnvases
             $opciones = $recepcionesCsg[$movimiento->recepcion_romana_id]['csg'] ?? [];
             $asignaciones = match ($movimiento->tipo_movimiento) {
                 TipoMovimientoEnvase::DespachoCliente => [['csg' => $guia?->productorDestino(), 'compartido' => null, 'tipos' => $porTipo]],
-                TipoMovimientoEnvase::SalidaRecepcionFruta => [['csg' => count($opciones) === 1 ? $opciones[0] : null, 'compartido' => null, 'tipos' => $porTipo]],
+                TipoMovimientoEnvase::SalidaRecepcionFruta => [['csg' => self::csgSalida($recepcionesCsg, $movimiento->recepcion_romana_id), 'compartido' => null, 'tipos' => $porTipo]],
                 // La devolución de un productor conserva el CSG declarado en Romana o al asociarla.
                 TipoMovimientoEnvase::DevolucionEnvases => [['csg' => $movimiento->datos['devolucion']['productor'] ?? null, 'compartido' => null, 'tipos' => $porTipo]],
                 // El ajuste de una recepción va al productor indicado al ajustar (o al único de la recepción).
@@ -575,7 +590,9 @@ class ServicioCuentaCorrienteEnvases
                 'referencia' => $unir([
                     'Destare de '.($recepcion?->numero_recepcion ?? 'la recepción').($recepcion?->numero_guia_despacho ? ' (guía de ingreso '.$recepcion->numero_guia_despacho.')' : ''),
                     $vehiculo($recepcion?->patente_camion, $recepcion?->patente_carro),
-                    count($opciones) > 1 ? 'Recepción con '.count($opciones).' CSG: la entrega no se reparte por productor' : null,
+                    count($opciones) > 1 ? (! empty($recepcion?->salida_productor_snapshot['codigo'])
+                        ? 'Entregados a '.self::etiquetaProductor($recepcion->salida_productor_snapshot).' (camión con '.count($opciones).' CSG)'
+                        : 'Recepción con '.count($opciones).' CSG: la entrega no se reparte por productor') : null,
                 ]),
             ],
             TipoMovimientoEnvase::DevolucionEnvases => [
@@ -706,13 +723,17 @@ class ServicioCuentaCorrienteEnvases
             return [];
         }
 
+        // Productor al que Romana entregó los envases del destare, cuando el camión trae varios CSG.
+        $salidas = RecepcionRomana::query()->whereKey($recepciones)->whereNotNull('salida_productor_snapshot')
+            ->get(['id', 'salida_productor_snapshot'])->pluck('salida_productor_snapshot', 'id');
+
         return ValidacionMp::query()
             ->whereIn('recepcion_romana_id', $recepciones)
             ->where('estado', EstadoValidacionMp::Validada)
             ->with(['segmentos.csg.productor', 'segmentos.envases'])
             ->get(['id', 'recepcion_romana_id'])
             ->keyBy('recepcion_romana_id')
-            ->map(function (ValidacionMp $validacion): array {
+            ->map(function (ValidacionMp $validacion, string $recepcionId) use ($salidas): array {
                 $csg = [];
                 $envases = [];
                 $etiquetas = [];
@@ -732,7 +753,7 @@ class ServicioCuentaCorrienteEnvases
                     }
                 }
 
-                return ['productor' => implode(' / ', array_unique($etiquetas)) ?: null,
+                return ['salida' => $salidas[$recepcionId] ?? null, 'productor' => implode(' / ', array_unique($etiquetas)) ?: null,
                     'csg' => array_values($csg), 'envases' => $envases];
             })->all();
     }

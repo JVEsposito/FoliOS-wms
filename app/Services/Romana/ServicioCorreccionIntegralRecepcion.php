@@ -94,8 +94,12 @@ class ServicioCorreccionIntegralRecepcion
                 'peso_bruto' => (float) $recepcion->peso_bruto, 'peso_tara' => (float) $recepcion->peso_tara,
                 'peso_neto' => (float) $recepcion->peso_neto, 'modo_salida_envases' => $recepcion->modo_salida_envases,
                 'numero_guia_salida' => $recepcion->numero_guia_salida,
+                // Camión con varios CSG: productor que recibió los envases que salieron.
+                'salida_productor_csg' => $recepcion->salida_productor_snapshot['codigo'] ?? null,
                 'salida_envases' => $recepcion->salidasEnvases->map(fn ($s): array => ['tipo_envase' => $s->tipo_envase->value, 'cantidad' => (int) $s->cantidad])->values()->all(),
             ] : null,
+            'productores_csg' => array_map(fn (array $p): array => ['codigo' => $p['codigo'], 'nombre' => $p['nombre']],
+                app(ProductoresRecepcion::class)->opciones($recepcion)),
             'lotes' => $lotes->map(fn (LoteMateriaPrima $l): array => ['numero_lote' => $l->numero_lote, 'estado' => $l->estado->value,
                 'kilos_netos' => $l->kilos_netos_confirmados !== null ? (float) $l->kilos_netos_confirmados : null,
                 'con_entregas' => in_array($l->estado, [EstadoLoteMateriaPrima::EntregaParcialProceso, EstadoLoteMateriaPrima::EntregadoProceso], true)])->values()->all(),
@@ -183,6 +187,7 @@ class ServicioCorreccionIntegralRecepcion
                 'peso_tara' => round((float) $destare['peso_tara'], 2),
                 'modo_salida_envases' => (string) $destare['modo_salida_envases'],
                 'numero_guia_salida' => filled($destare['numero_guia_salida'] ?? null) ? trim((string) $destare['numero_guia_salida']) : null,
+                'salida_productor_csg' => filled($destare['salida_productor_csg'] ?? null) ? trim((string) $destare['salida_productor_csg']) : null,
                 'salida_envases' => $envases($destare['salida_envases'] ?? []),
                 'taras_envases' => collect($destare['taras_envases'] ?? [])->mapWithKeys(fn ($t): array => [(string) $t['tipo_envase'] => round((float) $t['tara_unitaria'], 3)])->sortKeys()->all(),
             ],
@@ -519,6 +524,8 @@ class ServicioCorreccionIntegralRecepcion
             $documentos->bloquear($recepcion->temporada_id, $recepcion->cliente_id, $guiaSalida, 'numero_guia_salida');
             $documentos->asegurarSinDespacho($recepcion->temporada_id, $recepcion->cliente_id, $guiaSalida, $recepcion->id);
         }
+        $productorSalida = app(ProductoresRecepcion::class)->elegirSalida($recepcion, $destare['salida_productor_csg'],
+            array_sum($salidas) > 0, 'destare.salida_productor_csg');
         $this->corregirSalidas($recepcion, $salidas, $tarasUnitarias, $guiaSalida, $usuario, $ahora, $contexto);
         foreach ($recepcion->detallesEnvases as $detalle) {
             $detalle->update(['tara_unitaria_salida' => $tarasUnitarias[$detalle->tipo_envase->value] ?? $detalle->tara_unitaria_salida]);
@@ -542,7 +549,8 @@ class ServicioCorreccionIntegralRecepcion
         }
         $netoAnterior = (float) $recepcion->peso_neto;
         $recepcion->update([...$calculo, 'peso_tara' => $destare['peso_tara'], 'peso_tara_envases' => round($taraEnvases, 3), 'peso_neto' => $neto,
-            'modo_salida_envases' => $modo, 'salida_sin_envases' => $modo === 'vacio', 'numero_guia_salida' => $guiaSalida]);
+            'modo_salida_envases' => $modo, 'salida_sin_envases' => $modo === 'vacio', 'numero_guia_salida' => $guiaSalida,
+            'salida_productor_snapshot' => $productorSalida]);
 
         return abs($netoAnterior - $neto) > 0.0005 || $repartoActual !== app(ServicioRepartoEnvases::class)->snapshot($recepcion->refresh());
     }

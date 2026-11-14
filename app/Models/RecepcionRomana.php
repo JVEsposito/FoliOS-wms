@@ -77,6 +77,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'formato_registro_localidad',
     'devolucion_productor_csg_id',
     'devolucion_productor_snapshot',
+    'salida_productor_snapshot',
     'devolucion_guia_salida',
 ])]
 class RecepcionRomana extends Model implements PerteneceATemporada
@@ -273,6 +274,7 @@ class RecepcionRomana extends Model implements PerteneceATemporada
             'peso_neto_por_envase' => 'decimal:3',
             'reparto_neto_envases' => 'array',
             'devolucion_productor_snapshot' => 'array',
+            'salida_productor_snapshot' => 'array',
             'ingreso_at' => 'datetime',
             'ingreso_confirmado_at' => 'datetime',
             'salida_at' => 'datetime',

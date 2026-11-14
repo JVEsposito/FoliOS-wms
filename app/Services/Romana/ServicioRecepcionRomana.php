@@ -894,6 +894,9 @@ class ServicioRecepcionRomana
                 $documentoSalida->asegurarSinDespacho($recepcion->temporada_id, $recepcion->cliente_id, $payload['numero_guia_salida'], $recepcion->id);
             }
             $tarasEnvases = $this->calcularTaraEnvasesSalida($recepcion, $payload);
+            // Camión con varios CSG: Romana indica a qué productor se entregan los envases que salen.
+            $productorSalida = app(ProductoresRecepcion::class)->elegirSalida($recepcion, $payload['salida_productor_csg'],
+                array_sum($tarasEnvases['salidas']) > 0);
             if ($payload['modo_salida_envases'] !== 'vacio') {
                 app(ServicioInspeccionEnvases::class)->guardar($recepcion, 'despacho', $tarasEnvases['salidas'], $payload['inspeccion_envases'], $usuario, $datos['operacion_id']);
             }
@@ -915,6 +918,7 @@ class ServicioRecepcionRomana
                 'salida_sin_envases' => false,
                 'modo_salida_envases' => $payload['modo_salida_envases'],
                 'numero_guia_salida' => $payload['numero_guia_salida'],
+                'salida_productor_snapshot' => $productorSalida,
                 'peso_tara_envases' => $pesoTaraEnvases,
                 'tipo_envase_calculo_neto' => $tipoCalculo,
                 'cantidad_envase_calculo_neto' => $detalleCalculo->cantidadConFruta(),
@@ -963,6 +967,7 @@ class ServicioRecepcionRomana
                     'peso_tara' => $tara,
                     'modo_salida_envases' => $payload['modo_salida_envases'],
                     'numero_guia_salida' => $payload['numero_guia_salida'],
+                    'salida_productor' => $productorSalida,
                     'salidas_envases' => $tarasEnvases['salidas'],
                     'peso_tara_envases' => $pesoTaraEnvases,
                     'peso_tara_total' => round($tara + $pesoTaraEnvases, 3),
@@ -1039,7 +1044,10 @@ class ServicioRecepcionRomana
             }
             $anteriores = $recepcion->salidasEnvases->keyBy(fn ($salida): string => $salida->tipo_envase->value);
             $tipos = collect(array_keys($resultado['salidas']))->merge($anteriores->keys())->unique();
-            $cambio = $recepcion->modo_salida_envases !== $payload['modo_salida_envases']
+            $productorSalida = app(ProductoresRecepcion::class)->elegirSalida($recepcion, $payload['salida_productor_csg'],
+                array_sum($resultado['salidas']) > 0);
+            $cambio = ($recepcion->salida_productor_snapshot['codigo'] ?? null) !== ($productorSalida['codigo'] ?? null)
+                || $recepcion->modo_salida_envases !== $payload['modo_salida_envases']
                 || $recepcion->numero_guia_salida !== $payload['numero_guia_salida']
                 || abs((float) $recepcion->peso_neto - $nuevoNeto) > 0.0005
                 || $tipos->contains(fn (string $tipo): bool => (int) ($anteriores->get($tipo)?->cantidad ?? 0)
@@ -1128,6 +1136,7 @@ class ServicioRecepcionRomana
                 'modo_salida_envases' => $payload['modo_salida_envases'],
                 'salida_sin_envases' => $payload['modo_salida_envases'] === 'vacio',
                 'numero_guia_salida' => $payload['numero_guia_salida'],
+                'salida_productor_snapshot' => $productorSalida,
                 'peso_tara_envases' => $resultado['peso_tara_envases'],
                 'peso_neto' => $nuevoNeto,
                 'peso_neto_por_envase' => $recepcion->reparto_neto_envases
@@ -1147,6 +1156,7 @@ class ServicioRecepcionRomana
                     'salidas_nuevas' => $resultado['salidas'],
                     'neto_anterior' => $netoAnterior,
                     'neto_nuevo' => $nuevoNeto,
+                    'salida_productor' => $productorSalida,
                 ],
             );
 
@@ -1168,6 +1178,7 @@ class ServicioRecepcionRomana
             'tipo_envase_calculo_neto' => $datos['tipo_envase_calculo_neto'] ?? null,
             'modo_salida_envases' => $datos['modo_salida_envases'],
             'numero_guia_salida' => $datos['numero_guia_salida'] ?? null,
+            'salida_productor_csg' => filled($datos['salida_productor_csg'] ?? null) ? trim((string) $datos['salida_productor_csg']) : null,
             'salida_envases' => collect($datos['salida_envases'] ?? [])
                 ->map(fn (array $fila): array => [
                     'tipo_envase' => $fila['tipo_envase'], 'cantidad' => (int) $fila['cantidad'],

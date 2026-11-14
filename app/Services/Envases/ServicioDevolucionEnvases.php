@@ -9,6 +9,7 @@ use App\Enums\TipoMovimientoEnvase;
 use App\Models\Cliente;
 use App\Models\GuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
+use App\Models\ProductorCsg;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\ValidacionMp;
@@ -157,6 +158,12 @@ class ServicioDevolucionEnvases
      */
     private function productorRecepcion(string $recepcionId): ?array
     {
+        // Camión con varios CSG: el productor al que Romana entregó los envases en el destare.
+        $elegido = RecepcionRomana::query()->whereKey($recepcionId)->value('salida_productor_snapshot');
+        $elegido = is_string($elegido) ? json_decode($elegido, true) : $elegido;
+        if (! empty($elegido['productor_id']) && ($productor = ProductorCsg::query()->find($elegido['productor_id']))) {
+            return ['id' => $productor->id, 'codigo' => $productor->codigo, 'nombre' => $productor->razon_social];
+        }
         $validacion = ValidacionMp::query()->where('recepcion_romana_id', $recepcionId)
             ->where('estado', EstadoValidacionMp::Validada->value)->with('segmentos.csg.productor')->first();
         $productores = ($validacion?->segmentos ?? collect())->map(fn ($segmento) => $segmento->csg?->productor)

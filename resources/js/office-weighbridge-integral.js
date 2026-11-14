@@ -79,6 +79,7 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
             estado.destare.peso_tara = form.peso_tara.value;
             estado.destare.modo_salida_envases = form.modo_salida_envases.value;
             estado.destare.numero_guia_salida = form.numero_guia_salida.value;
+            if (form.salida_productor_csg) estado.destare.salida_productor_csg = form.salida_productor_csg.value;
             estado.destare.salida_envases = toList(read('salida').total || {});
         }
     }
@@ -238,7 +239,9 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
             ${cerrada ? `<section><h3>Destare</h3><div class="integral-grid">
                 <label class="field"><span>Tara del camión *</span><input name="peso_tara" type="number" min="0.01" step="0.01" inputmode="decimal" value="${esc(estado.destare.peso_tara)}" required></label>
                 <label class="field"><span>Salida de envases *</span><select name="modo_salida_envases">${Object.entries(EXIT_LABELS).map(([value, text]) => `<option value="${value}" ${estado.destare.modo_salida_envases === value ? 'selected' : ''}>${text}</option>`).join('')}</select></label>
-                <label class="field"><span>Guía de salida</span><input name="numero_guia_salida" maxlength="80" value="${esc(estado.destare.numero_guia_salida || '')}"></label></div>
+                <label class="field"><span>Guía de salida</span><input name="numero_guia_salida" maxlength="80" value="${esc(estado.destare.numero_guia_salida || '')}"></label>
+                ${(estado.productores_csg || []).length > 1 ? `<label class="field"><span>CSG que recibe los envases *</span><select name="salida_productor_csg" ${estado.destare.modo_salida_envases === 'vacio' ? '' : 'required'}>
+                    <option value="">Seleccionar…</option>${estado.productores_csg.map((p) => `<option value="${esc(p.codigo)}" ${estado.destare.salida_productor_csg === p.codigo ? 'selected' : ''}>CSG ${esc(p.codigo)}${p.nombre ? ` · ${esc(p.nombre)}` : ''}</option>`).join('')}</select></label>` : ''}</div>
                 <div class="integral-scroll ${estado.destare.modo_salida_envases === 'diferentes' ? '' : 'is-hidden'}" id="integralExit"><table class="integral-table"><thead>${header('Envases que salen')}</thead><tbody><tr><td>Cantidad</td>${inputs('salida', 'total', amounts(estado.destare.salida_envases))}</tr></tbody></table></div>
                 <div class="integral-grid">${tipos.map((tipo) => `<label class="field"><span>Tara unitaria · ${esc(typeName(tipo))}</span><input data-tara="${esc(tipo)}" type="number" min="0.001" step="0.001" inputmode="decimal" value="${esc(estado.taras[tipo] ?? '')}" required></label>`).join('')}</div>
             </section>` : ''}
@@ -262,7 +265,11 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
             render();
             return;
         }
-        if (event.target.name === 'modo_salida_envases') dialog.querySelector('#integralExit')?.classList.toggle('is-hidden', event.target.value !== 'diferentes');
+        if (event.target.name === 'modo_salida_envases') {
+            dialog.querySelector('#integralExit')?.classList.toggle('is-hidden', event.target.value !== 'diferentes');
+            const producer = dialog.querySelector('[name="salida_productor_csg"]');
+            if (producer) producer.required = event.target.value !== 'vacio';
+        }
         preview();
     });
     dialog.addEventListener('click', (event) => {
@@ -290,6 +297,7 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
             destare: estado.destare ? {
                 peso_tara: Number(estado.destare.peso_tara), modo_salida_envases: estado.destare.modo_salida_envases,
                 numero_guia_salida: estado.destare.modo_salida_envases === 'vacio' ? null : (estado.destare.numero_guia_salida.trim() || null),
+                ...((estado.productores_csg || []).length > 1 && estado.destare.modo_salida_envases !== 'vacio' ? { salida_productor_csg: estado.destare.salida_productor_csg || null } : {}),
                 salida_envases: estado.destare.modo_salida_envases === 'diferentes' ? estado.destare.salida_envases : [],
                 taras_envases: tipos.filter((tipo) => Number(estado.taras[tipo]) > 0).map((tipo) => ({ tipo_envase: tipo, tara_unitaria: Number(estado.taras[tipo]) })),
             } : null,
