@@ -320,6 +320,10 @@ function render(data) {
             const reverseButton = state.identity?.puede_ajustar_cuenta_envases && movement.puede_revertir_ajuste
                 ? `<button data-reverse-adjustment="${escapeHtml(movement.id)}">Revertir asiento</button>` : '';
             const returnNote = movement.devolucion ? ` · ${escapeHtml(returnLabel(movement.devolucion))}` : '';
+            // Ajuste hecho en Romana solo sobre la cuenta: se corrige o se deshace desde esa recepción.
+            const receptionAdjustment = movement.ajuste_recepcion
+                ? ` · ${escapeHtml(movement.ajuste_recepcion.numero_recepcion)}: ${escapeHtml(movement.ajuste_recepcion.lado)} ${movement.ajuste_recepcion.registro} → ${movement.ajuste_recepcion.correcto}`
+                : '';
             const documentNote = movement.cuenta_corregida ? ` · saldo anterior vigente: ${signed(movement.impacto_cuenta_vigente)}` : movement.corregido ? ' · propiedad corregida' : movement.cantidad_corregida ? ' · cantidad corregida' : movement.correccion_propiedad ? ' · ajuste de propiedad' : movement.correccion_cantidad ? ' · ajuste de cantidad' : '';
             const correction = movement.correccion_propiedad || movement.correccion_cantidad || movement.ajuste_cuenta || movement.correccion_cuenta;
             const trace = correction
@@ -328,7 +332,7 @@ function render(data) {
             const account = movement.impacto_cuenta === 0
                 ? '<td class="impact-none" title="No mueve la cuenta de ningún cliente">—</td>'
                 : `<td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${signed(movement.impacto_cuenta)}</td>`;
-            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${returnNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${returnButton}${quantityButton}${historicalButton}${reverseButton}${!guideButton && !reviewButton && !propertyButton && !returnButton && !quantityButton && !historicalButton && !reverseButton ? '—' : ''}</div></td></tr>`;
+            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${returnNote}${receptionAdjustment}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${returnButton}${quantityButton}${historicalButton}${reverseButton}${!guideButton && !reviewButton && !propertyButton && !returnButton && !quantityButton && !historicalButton && !reverseButton ? '—' : ''}</div></td></tr>`;
         }).join('')
         : '<tr><td colspan="8">Aún no hay movimientos confirmados.</td></tr>';
 }

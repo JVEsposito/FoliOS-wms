@@ -108,6 +108,9 @@ class ServicioDiagnosticoEnvasesRecepcion
                 TipoMovimientoEnvase::CorreccionCantidad => 'Corrección de cantidad',
                 TipoMovimientoEnvase::CorreccionPropiedad => 'Corrección de propiedad',
                 TipoMovimientoEnvase::CorreccionCuenta => 'Corrección de cuenta',
+                TipoMovimientoEnvase::AjusteCuenta => ! empty($movimiento->datos['ajuste_recepcion'])
+                    ? 'Ajuste de cuenta de administración (revierte en Cuenta Envases)' : 'Ajuste de cuenta',
+                TipoMovimientoEnvase::ReversionAjusteCuenta => 'Reversa de ajuste de cuenta',
                 default => ucfirst(str_replace('_', ' ', $movimiento->tipo_movimiento->value)),
             };
             $fecha = $movimiento->ocurrido_at?->timezone(config('app.operational_timezone', 'America/Santiago'))->format('d-m-Y H:i');

@@ -37,6 +37,9 @@ class ServicioCorreccionSaldoHistoricoEnvases
                 || $recepcion?->estado === EstadoRecepcionRomana::Anulada || ! empty($origen->datos['correccion_propiedad'])) {
                 throw new ConflictoOperacion('Selecciona un ingreso en arriendo, apertura o ajuste vigente de la temporada activa.');
             }
+            if (! empty($origen->datos['ajuste_recepcion'])) {
+                throw new ConflictoOperacion('Este ajuste viene de una recepción: corrígelo desde Romana, en «Solo cuenta de envases».');
+            }
             $vinculados = MovimientoEnvase::where('movimiento_origen_id', $origen->id)->orderBy('id')->lockForUpdate()->get();
             if ($vinculados->contains(fn ($m) => in_array($m->tipo_movimiento, [TipoMovimientoEnvase::CorreccionCantidad,
                 TipoMovimientoEnvase::CorreccionPropiedad, TipoMovimientoEnvase::ReversionAjusteCuenta, TipoMovimientoEnvase::AnulacionRecepcion], true))) {

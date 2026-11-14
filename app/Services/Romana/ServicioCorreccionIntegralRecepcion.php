@@ -149,6 +149,7 @@ class ServicioCorreccionIntegralRecepcion
             if ($this->comparable($antes) === $this->comparable($despues)) {
                 throw new ConflictoOperacion('La corrección no presenta cambios respecto de lo registrado.');
             }
+            app(ServicioAjusteCuentaEnvasesRecepcion::class)->asegurarSinDobleCorreccion($recepcion, $antes, $despues);
             EventoRecepcionRomana::create([
                 'operacion_id' => $datos['operacion_id'], 'payload_hash' => $hash, 'recepcion_romana_id' => $recepcion->id,
                 'tipo' => TipoEventoRomana::CorreccionIntegral, 'estado_anterior' => $recepcion->estado, 'estado_nuevo' => $recepcion->estado,

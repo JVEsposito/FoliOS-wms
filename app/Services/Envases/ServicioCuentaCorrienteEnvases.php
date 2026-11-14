@@ -96,6 +96,19 @@ class ServicioCuentaCorrienteEnvases
         ]));
     }
 
+    /** Datos del ajuste de administración que corrige solo la cuenta de una recepción, si lo es. */
+    public static function ajusteRecepcion(MovimientoEnvase $movimiento): ?array
+    {
+        return $movimiento->tipo_movimiento === TipoMovimientoEnvase::AjusteCuenta && ! empty($movimiento->datos['ajuste_recepcion']['lado'])
+            ? $movimiento->datos['ajuste_recepcion'] : null;
+    }
+
+    private static function etiquetaProductor(?array $productor): string
+    {
+        return empty($productor['codigo']) ? 'Sin productor declarado'
+            : 'CSG '.$productor['codigo'].(! empty($productor['nombre']) ? ' · '.$productor['nombre'] : '');
+    }
+
     public static function etiquetaPropiedad(PropiedadEnvase $propiedad): string
     {
         return self::ETIQUETAS_PROPIEDAD[$propiedad->value];
@@ -262,8 +275,12 @@ class ServicioCuentaCorrienteEnvases
             if ($fin !== null && $movimiento->ocurrido_at->gte($fin)) {
                 continue;
             }
-            $esSalida = in_array($movimiento->tipo_movimiento, self::SALIDAS, true)
-                || (($movimiento->tipo_movimiento->esAjusteCuenta() || in_array($movimiento->id, $historicos, true)) && $impacto < 0);
+            // Un ajuste de administración sobre una recepción corrige sus recibidos o sus entregados,
+            // con signo: −2 recibidos no se lee como 2 entregados.
+            $ajusteRecepcion = self::ajusteRecepcion($movimiento);
+            $esSalida = $ajusteRecepcion !== null ? $ajusteRecepcion['lado'] === 'entregados'
+                : (in_array($movimiento->tipo_movimiento, self::SALIDAS, true)
+                    || (($movimiento->tipo_movimiento->esAjusteCuenta() || in_array($movimiento->id, $historicos, true)) && $impacto < 0));
             $guia = $movimiento->documento_tipo === self::DOCUMENTO_GUIA
                 ? $guiasEmitidas->get($movimiento->documento_id) : null;
             $destinatario = $guia?->productorDestino();
@@ -279,6 +296,7 @@ class ServicioCuentaCorrienteEnvases
                 'csg' => match ($movimiento->tipo_movimiento) {
                     TipoMovimientoEnvase::DespachoCliente => $destinatario,
                     TipoMovimientoEnvase::DevolucionEnvases => $devolucion['productor'] ?? null,
+                    TipoMovimientoEnvase::AjusteCuenta => $ajusteRecepcion['productor'] ?? null,
                     default => null,
                 },
             ];
@@ -299,13 +317,15 @@ class ServicioCuentaCorrienteEnvases
             // un mismo envase (FIFO, varias recepciones) no se le muestran al cliente. Una recepción
             // de fruta con varias guías se muestra separada por guía, con lo validado de cada una.
             $partes = $this->partesPorGuia($movimiento, $impacto, $esSalida, $guiasRecepcion) ?? [[
-                'impacto' => $impacto, 'clave' => '',
+                // Los ajustes de recibidos y de entregados de una recepción son documentos distintos.
+                'impacto' => $impacto, 'clave' => $ajusteRecepcion['lado'] ?? '',
                 'documento' => $guia?->numero_guia_despacho ?: $movimiento->numero_documento,
                 'productor' => match ($movimiento->tipo_movimiento) {
                     TipoMovimientoEnvase::DespachoCliente => $destinatario
                         ? 'CSG '.$destinatario['codigo'].' · '.$destinatario['nombre'] : 'Sin productor asignado',
                     TipoMovimientoEnvase::RecepcionFruta => $recepcionesCsg[$movimiento->recepcion_romana_id]['productor'] ?? 'Sin productor declarado',
                     TipoMovimientoEnvase::DevolucionEnvases => self::etiquetaDevolucion($devolucion),
+                    TipoMovimientoEnvase::AjusteCuenta => $ajusteRecepcion !== null ? self::etiquetaProductor($ajusteRecepcion['productor'] ?? null) : null,
                     default => null,
                 },
             ]];
@@ -336,7 +356,11 @@ class ServicioCuentaCorrienteEnvases
                     'orden' => [$documentos[$claveDocumento], $movimiento->tipo_envase->orden(), $movimiento->propiedad->value],
                     'fecha' => $this->local($movimiento->ocurrido_at),
                     'documento' => $parte['documento'],
-                    'movimiento' => (in_array($movimiento->id, $historicos, true) ? 'Saldo anterior corregido' : self::etiquetaMovimiento($movimiento->tipo_movimiento)),
+                    'movimiento' => match (true) {
+                        $ajusteRecepcion !== null => 'Ajuste de '.$ajusteRecepcion['lado'].' de '.$ajusteRecepcion['numero_recepcion'].' (administración)',
+                        in_array($movimiento->id, $historicos, true) => 'Saldo anterior corregido',
+                        default => self::etiquetaMovimiento($movimiento->tipo_movimiento),
+                    },
                     'productor' => $parte['productor'],
                     'tipo_envase' => $movimiento->tipo_envase->etiqueta(),
                     'propiedad' => self::etiquetaPropiedad($movimiento->propiedad),
@@ -428,6 +452,8 @@ class ServicioCuentaCorrienteEnvases
                 TipoMovimientoEnvase::SalidaRecepcionFruta => [['csg' => count($opciones) === 1 ? $opciones[0] : null, 'compartido' => null, 'tipos' => $porTipo]],
                 // La devolución de un productor conserva el CSG declarado en Romana o al asociarla.
                 TipoMovimientoEnvase::DevolucionEnvases => [['csg' => $movimiento->datos['devolucion']['productor'] ?? null, 'compartido' => null, 'tipos' => $porTipo]],
+                // El ajuste de una recepción va al productor indicado al ajustar (o al único de la recepción).
+                TipoMovimientoEnvase::AjusteCuenta => [['csg' => self::ajusteRecepcion($movimiento)['productor'] ?? null, 'compartido' => null, 'tipos' => $porTipo]],
                 TipoMovimientoEnvase::RecepcionFruta => $this->asignarIngreso($porTipo, $opciones,
                     $parte['clave'] !== '' ? ($repartoGuias[$parte['clave']] ?? []) : ($recepcionesCsg[$movimiento->recepcion_romana_id]['envases'] ?? [])),
                 default => [['csg' => null, 'compartido' => null, 'tipos' => $porTipo]],
@@ -517,6 +543,23 @@ class ServicioCuentaCorrienteEnvases
         $rutLegible = fn (string $rut): string => preg_match('/^(\d{1,9})-([\dkK])$/', $rut, $m)
             ? number_format((int) $m[1], 0, ',', '.').'-'.strtoupper($m[2]) : $rut;
         $chofer = fn (?string $nombre, ?string $rut): ?string => $nombre ? 'Chofer '.$nombre.($rut ? ' (RUT '.$rutLegible($rut).')' : '') : null;
+        if ($ajuste = self::ajusteRecepcion($movimiento)) {
+            $registrado = isset($ajuste['registrado_at'])
+                ? CarbonImmutable::parse($ajuste['registrado_at'])->setTimezone(config('app.operational_timezone'))->format('d-m-Y') : null;
+
+            return [
+                'titulo' => $ajuste['lado'] === 'recibidos'
+                    ? 'Ajuste a la guía de ingreso N° '.($numero ?: 'sin número')
+                    : ($numero ? 'Ajuste a la guía de salida N° '.$numero : 'Ajuste a la salida del destare'),
+                'chofer' => null,
+                'movimiento' => 'Ajuste de '.$ajuste['lado'].' por administración',
+                'referencia' => $unir([
+                    'Recepción '.$ajuste['numero_recepcion'],
+                    $registrado ? 'registrado el '.$registrado : null,
+                    filled($ajuste['motivo'] ?? null) ? 'Motivo: '.$ajuste['motivo'] : null,
+                ]),
+            ];
+        }
 
         return match ($movimiento->tipo_movimiento) {
             TipoMovimientoEnvase::RecepcionFruta => [
@@ -807,6 +850,9 @@ class ServicioCuentaCorrienteEnvases
             $corrige = match ($movimiento->tipo_movimiento) {
                 TipoMovimientoEnvase::ReversionDespacho => $movimiento->datos['reversa_de_movimiento_id'] ?? null,
                 TipoMovimientoEnvase::ConciliacionSalida => $movimiento->datos['movimiento_conciliado_id'] ?? null,
+                // Un ajuste de recepción reemplazado o revertido no se muestra: queda solo el vigente.
+                TipoMovimientoEnvase::ReversionAjusteCuenta => isset($porId[$movimiento->movimiento_origen_id])
+                    && self::ajusteRecepcion($porId[$movimiento->movimiento_origen_id]) !== null ? $movimiento->movimiento_origen_id : null,
                 TipoMovimientoEnvase::ReversionSalidaRecepcionFruta,
                 TipoMovimientoEnvase::CorreccionCantidad,
                 TipoMovimientoEnvase::CorreccionCuenta,

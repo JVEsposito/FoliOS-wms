@@ -82,6 +82,7 @@ class ServicioAjustesCuentaEnvases
                 'tipo_movimiento' => TipoMovimientoEnvase::ReversionAjusteCuenta->value,
                 'cantidad' => -$origen->cantidad * $origen->signo_cuenta,
                 'referencia' => $origen->numero_documento, 'motivo' => $payload['motivo'],
+                'recepcion_romana_id' => $origen->recepcion_romana_id, 'documento_tipo' => $origen->documento_tipo, 'documento_id' => $origen->documento_id,
             ], $fecha, $actor, $origen->id, $payload);
         }, attempts: 3);
     }
@@ -116,7 +117,8 @@ class ServicioAjustesCuentaEnvases
     {
         return MovimientoEnvase::create([
             'operacion_id' => $operacion, 'temporada_id' => $datos['temporada_id'], 'cliente_id' => $datos['cliente_id'],
-            'documento_tipo' => 'ajuste_cuenta_envases', 'numero_documento' => $datos['referencia'],
+            'recepcion_romana_id' => $datos['recepcion_romana_id'] ?? null, 'documento_tipo' => $datos['documento_tipo'] ?? 'ajuste_cuenta_envases',
+            'documento_id' => $datos['documento_id'] ?? null, 'numero_documento' => $datos['referencia'],
             'tipo_movimiento' => $datos['tipo_movimiento'], 'tipo_envase' => $datos['tipo_envase'], 'propiedad' => $datos['propiedad'],
             'cantidad' => abs($datos['cantidad']), 'signo_cuenta' => $datos['cantidad'] < 0 ? -1 : 1, 'signo_existencia' => 0,
             'movimiento_origen_id' => $origen, 'ocurrido_at' => $fecha, 'estado_revision' => EstadoRevisionMovimientoEnvase::Pendiente,

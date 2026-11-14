@@ -349,5 +349,15 @@ body.has-reception-drawer .office-app .weighbridge-filters { grid-template-colum
 .integral-lots { margin: 0; padding-left: 18px; }
 .integral-help { opacity: .8; }
 .integral-add { margin-top: 10px; max-width: 280px; }
+/* Modo de la corrección: recepción completa o solo la cuenta de envases. */
+.integral-mode { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin: 16px 0 0; padding: 0; border: 0; }
+.integral-mode legend { margin-bottom: 8px; padding: 0; font-weight: 700; }
+.integral-mode__option { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border, #51717d); border-radius: 8px; cursor: pointer; }
+.integral-mode__option:has(input:checked) { box-shadow: inset 0 0 0 1.5px var(--area-ink); }
+.integral-mode__option:has(input:disabled) { cursor: not-allowed; opacity: .65; }
+.integral-mode__option input { margin-top: 3px; }
+.integral-mode__option small { display: block; margin-top: 2px; opacity: .8; }
+.integral-producer { margin-top: 14px; max-width: 420px; }
+.integral-lots li small { display: block; opacity: .75; }
 /* Fila de vacíos bajo cada segmento de la corrección integral. */
 .integral-empty-row td { padding-top: 0; border-bottom-style: dashed; }
