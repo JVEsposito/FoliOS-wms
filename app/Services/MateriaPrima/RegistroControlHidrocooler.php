@@ -56,6 +56,9 @@ class RegistroControlHidrocooler
                     'filas' => $ciclos->map(fn ($p) => $this->valores($p))->values()->all(),
                     'observaciones' => $ciclos->map(function ($p): string {
                         $notas = collect([
+                            // Registro de patio: la planilla deja en blanco lo que mide la otra área.
+                            $p->modalidad === 'patio' ? 'Registro de patio: agua inicial '.$this->agua($p->condicion_visual_agua)
+                                .($p->termino_at ? ', final '.$this->agua($p->condicion_visual_agua_final) : '') : null,
                             $p->observacion_inicio, $p->observacion,
                             $p->accion_correctiva ? 'Acción: '.$p->accion_correctiva : null,
                             $p->motivo_retencion ? 'Retención: '.$p->motivo_retencion : null,
@@ -126,6 +129,15 @@ class RegistroControlHidrocooler
         }
 
         return $paginas;
+    }
+
+    private function agua(?string $estado): string
+    {
+        return match ($estado) {
+            'conforme' => 'conforme',
+            'no_conforme' => 'no conforme',
+            default => 'sin registro',
+        };
     }
 
     private function siNo(?bool $valor): string

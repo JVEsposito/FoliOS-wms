@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'operacion_termino_id',
     'payload_termino_hash',
     'estado',
+    'modalidad',
     'equipo',
     'turno',
     'cantidad_bombas_funcionando',

@@ -29,6 +29,28 @@ finalizar, liberar o descargar registros.
   de archivos del dispositivo. Se descargan usando el token del usuario y se
   guardan en la caché local de la app antes de compartirlos.
 
+## Registro de patio y registro completo
+
+Al iniciar un ciclo, en la tablet y en Oficina, se elige el **tipo de registro**. Por omisión es el **registro de patio**.
+
+- **Registro de patio** (`modalidad = patio`): pide solo tiempos, temperaturas y estado del agua.
+  - **Al iniciar:** equipo, hora de inicio, temperatura de fruta al entrar, temperatura del agua (opcional), estado del agua (conforme / no conforme) y observación.
+  - **Al terminar:** hora de término, temperatura de fruta al salir, temperatura del agua (opcional), estado del agua, destino (cámara o proceso) y observación.
+  - No pide turno, bombas, temperatura objetivo, cloro, pH, ambiente, humedad, pozo, pastilla, producto ni dosificador. Si el cliente los envía, la API los descarta.
+  - No depende de que el formato POEMP-R3 esté activo.
+- **Registro completo POEMP-R3** (`modalidad = oficial`): el de siempre, sin cambios. Es también la modalidad de los ciclos anteriores y de las tablets que todavía no envían `modalidad`.
+- **Reglas de patio:**
+  - con agua no conforme no se inicia el ciclo, igual que en el registro completo;
+  - si el agua termina no conforme, el lote queda retenido («Estado final del agua no conforme») y supervisión lo libera;
+  - sin temperatura objetivo, la temperatura no retiene;
+  - al liberar, cloro y pH verificados son opcionales (siguen obligatorios en ciclos oficiales).
+- **Planilla POEMP-R3:** el registro PDF/Excel incluye los ciclos de patio con fecha, horas, lote, variedad, T° del agua, T° de ingreso y de salida, productor, tiempo de exposición, servicio y responsable. Las columnas de ambiente, HR, cloro, corrección, pastilla, producto, dosis, pH y mV quedan en blanco para que el área responsable las complete a mano. Las observaciones indican «Registro de patio: agua inicial … , final …». La planilla en blanco no cambia.
+- **API:**
+  - `POST …/hidrocooler/iniciar` acepta `modalidad`;
+  - en `…/completar` y `…/liberar`, los campos de cloro, pH y controles son opcionales en la solicitud y el servicio los exige solo en ciclos oficiales;
+  - el lote expone `hidrocooler.modalidad`;
+  - migración `2026_11_14_090000_modalidad_ciclo_hidrocooler_materia_prima`.
+
 ## Despliegue
 
 Se agregan `expo-file-system` y `expo-sharing`, módulos nativos. La versión de
