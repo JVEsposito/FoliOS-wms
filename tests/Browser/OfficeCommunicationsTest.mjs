@@ -14,16 +14,18 @@ const png = new PNG({ width: 32, height: 32 }); png.data.fill(200);
 const picture = PNG.sync.write(png);
 const launch = () => chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
 
-async function setup(browser) {
+async function setup(browser, { moderation = false } = {}) {
+    const directory = people.map(person => moderation && person.id === 18
+        ? { ...person, foto_version: '7f686a67-2914-4bd0-8df3-d0bdda65fc29' } : person);
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     await context.addInitScript(identity => {
         localStorage.setItem('estiba_wms_office_token', 'comms-fixture');
         localStorage.setItem('estiba_wms_office_identity', JSON.stringify(identity));
     }, user);
-    const state = { user, messageId: 300, mailId: 400, failChat: false, failMail: false, injectBeforeSend: false, readCalls: [], chatCalls: [], mailCalls: [], stickers: [], imageCalls: [], holdPrivate: null,
-        conversations: [{ id: 1, tipo: 'global', nombre: 'Chat global', puede_enviar: true, tiene_no_leidos: true, ultimo_mensaje_id: 101 },
+    const state = { user, messageId: 300, mailId: 400, failChat: false, failMail: false, injectBeforeSend: false, readCalls: [], chatCalls: [], mailCalls: [], stickers: [], imageCalls: [], holdPrivate: null, groups: new Map(), moderationCalls: [], deletions: [],
+        conversations: [{ id: 1, tipo: 'global', nombre: 'Chat global', puede_enviar: true, puede_moderar: moderation, tiene_no_leidos: true, ultimo_mensaje_id: 101 },
             { id: 2, tipo: 'privado', nombre: 'Sharon B', puede_enviar: true, tiene_no_leidos: true, ultimo_mensaje_id: 201 }],
-        messages: new Map([[1, [{ id: 101, conversacion_id: 1, remitente: people[0], texto: 'Aviso <img src=x onerror="window.__chatXss=1">', sticker: null, creado_at: date, operacion_id: null }]],
+        messages: new Map([[1, [{ id: 101, conversacion_id: 1, remitente: directory[0], texto: 'Aviso <img src=x onerror="window.__chatXss=1">', sticker: null, creado_at: date, operacion_id: null }]],
             [2, [{ id: 201, conversacion_id: 2, remitente: people[0], texto: 'Privado para Ivan', sticker: null, creado_at: date, operacion_id: null }]]]),
         mails: [{ id: 201, asunto: 'Cambio de turno', texto: '<script>window.__mailXss=1</script>\nMensaje del equipo.', remitente: people[0], destinatarios: [user], creado_at: date, es_destinatario: true, leido: false, archivado: false }],
     };
@@ -44,9 +46,29 @@ async function setup(browser) {
         assert.match(req.headers().authorization, /^Bearer /);
         assert.equal(url.search.includes('comms-fixture'), false);
         if (path.endsWith('/resumen')) return route.fulfill({ json: { data: { chat_no_leido: false, correos_no_leidos: state.mails.filter(m => m.destinatarios.some(p => p.id === state.user.id) && !m.leido && !m.archivado).length } } });
-        if (path.endsWith('/usuarios')) return route.fulfill({ json: { data: people.filter(p => p.id !== state.user.id && p.nombre.toLowerCase().includes((url.searchParams.get('buscar') || '').toLowerCase())), pagina: 1, ultima_pagina: 1 } });
+        if (path.endsWith('/usuarios')) return route.fulfill({ json: { data: directory.filter(p => p.id !== state.user.id && p.nombre.toLowerCase().includes((url.searchParams.get('buscar') || '').toLowerCase())), pagina: 1, ultima_pagina: 1 } });
         if (path.endsWith('/chat/conversaciones')) return route.fulfill({ json: { data: state.conversations.filter(c => c.tipo === 'global' || state.user.id === 17), pagina: 1, ultima_pagina: 1 } });
         if (path.endsWith('/chat/privados')) return route.fulfill({ json: { data: state.conversations[1] } });
+        if (/\/usuarios\/18\/foto$/.test(path)) return route.fulfill({ contentType: 'image/png', body: picture });
+        if (path.endsWith('/chat/grupos') && method === 'POST') {
+            const payload = req.postDataJSON(), id = 3;
+            const group = { id, tipo: 'grupo', nombre: payload.nombre, puede_enviar: true, puede_moderar: moderation };
+            state.groups.set(id, { ...group, creador_id: user.id, puede_gestionar: true, miembros: [user, ...directory.filter(p => payload.miembros.includes(p.id))] });
+            state.conversations.push(group);
+            state.messages.set(id, []);
+            return route.fulfill({ json: { data: group } });
+        }
+        if (path.endsWith('/chat/grupos/3') && method === 'GET') return route.fulfill({ json: { data: state.groups.get(3) } });
+        if (path.endsWith('/chat/conversaciones/1/silencios/18')) {
+            state.moderationCalls.push({ method, body: method === 'PUT' ? req.postDataJSON() : null });
+            return route.fulfill({ json: { data: { confirmado: true } } });
+        }
+        if (path.endsWith('/chat/conversaciones/1/mensajes/101') && method === 'DELETE') {
+            const message = state.messages.get(1).find(m => m.id === 101);
+            Object.assign(message, { eliminado: true, texto: null, sticker: null, referencias: [] });
+            state.deletions.push(101);
+            return route.fulfill({ json: { data: message } });
+        }
         const chat = path.match(/\/chat\/conversaciones\/(\d+)\/mensajes$/);
         if (chat) {
             const id = Number(chat[1]), rows = state.messages.get(id);
@@ -54,7 +76,9 @@ async function setup(browser) {
                 let data = [...rows];
                 if (url.searchParams.has('despues_id')) data = data.filter(m => m.id > Number(url.searchParams.get('despues_id')));
                 if (url.searchParams.has('antes_id')) data = data.filter(m => m.id < Number(url.searchParams.get('antes_id')));
-                const result = { conversacion: state.conversations.find(c => c.id === id), data, hay_mas_anteriores: false, hay_mas_nuevos: false };
+                const result = { conversacion: state.conversations.find(c => c.id === id), data, hay_mas_anteriores: false, hay_mas_nuevos: false,
+                    revision_moderacion: state.deletions.length, mensajes_eliminados: id === 1 && url.searchParams.has('revision_moderacion')
+                        ? state.deletions.slice(Number(url.searchParams.get('revision_moderacion'))) : [] };
                 if (id === 2 && state.holdPrivate) { const hold = state.holdPrivate; hold.started(); await hold.promise; }
                 try { return await route.fulfill({ json: result }); } catch { return; }
             }
@@ -263,4 +287,42 @@ test('comunicaciones: descarta respuestas privadas tardías al cambiar de chat o
         assert.deepEqual(errors, []);
         await context.close();
     } finally { release(); await browser.close(); }
+});
+
+
+test('comunicaciones: crear grupo, ver fotos y moderar desde el chat', async () => {
+    const browser = await launch();
+    try {
+        const { context, page, dialog, state, errors } = await setup(browser, { moderation: true });
+        const first = dialog.locator('[data-chat-message="101"]');
+        await page.waitForFunction(() => document.querySelector('[data-chat-message="101"] .comms-avatar img')?.naturalWidth > 0);
+        await dialog.getByRole('button', { name: 'Nuevo grupo', exact: true }).click();
+        await dialog.getByLabel('Nombre del grupo').fill('Turno B');
+        await dialog.locator('[data-group-person="18"]').check();
+        await dialog.getByRole('button', { name: 'Crear grupo', exact: true }).click();
+        await dialog.locator('[data-conversation-title]').filter({ hasText: 'Turno B' }).waitFor();
+        await dialog.getByRole('button', { name: 'Integrantes', exact: true }).click();
+        await dialog.locator('[data-group-members]').getByText('Sharon B', { exact: true }).waitFor();
+        await dialog.locator('[data-group-close]').click();
+        await dialog.locator('[data-select-conversation="1"]').click();
+        await first.getByRole('button', { name: 'Silenciar', exact: true }).click();
+        const form = dialog.locator('[data-moderation-form]');
+        await form.getByLabel('Duración en minutos').fill('15');
+        await form.getByRole('button', { name: 'Silenciar', exact: true }).click();
+        await form.waitFor({ state: 'hidden' });
+        assert.deepEqual(state.moderationCalls, [{ method: 'PUT', body: { minutos: 15 } }]);
+        await first.getByRole('button', { name: 'Eliminar', exact: true }).click();
+        await form.getByRole('button', { name: 'Eliminar mensaje', exact: true }).click();
+        await first.getByText('Mensaje eliminado por moderación').waitFor();
+        assert.doesNotMatch(await first.innerText(), /Aviso/);
+        await dialog.getByRole('button', { name: 'Silenciar usuario', exact: true }).click();
+        await dialog.locator('[data-open-user="18"]').click();
+        await form.getByRole('button', { name: 'Levantar silencio', exact: true }).click();
+        await form.waitFor({ state: 'hidden' });
+        assert.equal(state.moderationCalls.at(-1).method, 'DELETE');
+        await page.setViewportSize({ width: 390, height: 844 });
+        assert.equal(await dialog.evaluate(n => n.scrollWidth <= n.clientWidth + 1), true);
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
 });

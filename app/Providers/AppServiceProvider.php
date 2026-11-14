@@ -157,6 +157,7 @@ class AppServiceProvider extends ServiceProvider
         // Un usuario de cliente no recibe ningún permiso interno, aunque una regla lo olvide.
         Gate::before(fn (User $usuario, string $habilidad): ?bool => $usuario->esCliente() && $habilidad !== 'portal-cliente' ? false : null);
         Gate::define('portal-cliente', fn (User $usuario): bool => $usuario->esCliente() && $usuario->activo);
+        Gate::define('moderar-chat-interno', fn (User $usuario): bool => $usuario->activo && $usuario->rol === RolUsuario::Administrador);
         Gate::define('usar-comunicaciones-internas', fn (User $usuario): bool => $usuario->activo && ! $usuario->esCliente());
         Gate::define('controlar-personal-frigorifico', fn (User $usuario): bool => $alcance->puedeControlarPersonalFrigorifico($usuario));
 

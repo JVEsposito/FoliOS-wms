@@ -14,17 +14,22 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     const chatForm = $('[data-chat-form]');
     const mailForm = $('[data-mail-compose]');
     const uploadForm = $('[data-sticker-upload]');
+    const groupForm = $('[data-group-form]');
+    const moderationForm = $('[data-moderation-form]');
     let opened = false, generation = 0, selection = 0, tab = 'chat', user = null;
     let conversationRequest = 0, mailRequest = 0, stickerRequest = 0;
     let conversation = null, conversations = [], conversationPage = 1, conversationsMore = false;
     let messages = [], older = false, chatReady = false, receivedCursor = 0, readState = { last: 0, busy: false };
-    const renderedMessages = new Map();
+    const renderedMessages = new Map(), chatDeletions = new Set();
+    let moderationRevision = 0, group = null, moderation = null, busyGroup = false, busyModeration = false;
+    const groupMembers = new Map();
+    let directoryAction = 'private';
     let busyChat = false, busyMail = false, busySticker = false, busyPrivate = false, ticks = 0;
     const drafts = new Map();
     let folder = 'recibidos', mailPage = 1, mailPages = 1, selectedMail = null, composing = false, replyTo = null;
     let mailIntent = null, stickerIntent = null, stickerPage = 1, stickerMore = false, stickerRows = [];
     const recipients = new Map();
-    const directory = { private: { page: 1, rows: [], more: false, version: 0 }, mail: { page: 1, rows: [], more: false, version: 0 } };
+    const directory = { private: { page: 1, rows: [], more: false, version: 0 }, group: { page: 1, rows: [], more: false, version: 0 }, mail: { page: 1, rows: [], more: false, version: 0 } };
     const images = new Map(), queued = new Set(), visibleImages = new Set();
     let imageQueue = [], imageGeneration = 0, imageActive = 0, recipientTimer = null;
     let mailCitations = new Map(), citeCard = 0;
@@ -41,7 +46,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         return previous?.signature === signature ? previous : { signature, id: createUuid() };
     }
     function controls() {
-        const writing = busyChat || busyMail || busySticker;
+        const writing = busyChat || busyMail || busySticker || busyGroup || busyModeration;
         $('[data-comms-close]').disabled = writing;
         $('[data-chat-send]').disabled = busyChat || !chatReady || !conversation?.puede_enviar;
         chatForm.elements.texto.disabled = busyChat || !chatReady || !conversation?.puede_enviar;
@@ -50,20 +55,28 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         $$('[data-select-conversation]').forEach(b => { b.disabled = busyChat; });
         [...mailForm.elements].forEach(e => { e.disabled = busyMail; });
         [...uploadForm.elements].forEach(e => { e.disabled = busySticker; });
+        const mute = $('[data-chat-muted]');
+        mute.hidden = !conversation?.silenciado_hasta;
+        mute.textContent = mute.hidden ? '' : `Puedes leer el chat. El silencio de envío termina el ${date(conversation.silenciado_hasta)}.`;
+        $('[data-group-open]').hidden = conversation?.tipo !== 'grupo';
+        $('[data-global-moderation]').hidden = conversation?.tipo !== 'global' || !conversation.puede_moderar;
+        $('[data-group-save]').disabled = busyGroup;
+        $('[data-moderation-submit]').disabled = busyModeration;
+        $('[data-moderation-revoke]').disabled = busyModeration;
         $('[data-chat-send]').textContent = busyChat ? 'Enviando…' : 'Enviar mensaje';
         $('[data-mail-send]').textContent = busyMail ? 'Enviando…' : 'Enviar correo';
     }
     function clearImages() {
         imageGeneration += 1; imageQueue = []; queued.clear(); observer.disconnect(); visibleImages.clear();
         images.forEach(url => URL.revokeObjectURL(url)); images.clear();
-        $$('img[data-comms-sticker-id]').forEach(n => n.removeAttribute('src'));
+        $$('img[data-comms-image]').forEach(n => n.removeAttribute('src'));
     }
     function pruneImages() {
         for (const [id, url] of images) {
             if (images.size <= 60) break;
-            if ([...visibleImages].some(n => n.isConnected && n.dataset.commsStickerId === id)) continue;
+            if ([...visibleImages].some(n => n.isConnected && n.dataset.commsImage === id)) continue;
             images.delete(id); URL.revokeObjectURL(url);
-            $$(`img[data-comms-sticker-id="${id}"]`).forEach(n => n.removeAttribute('src'));
+            $$(`img[data-comms-image="${id}"]`).forEach(n => n.removeAttribute('src'));
         }
     }
     function pumpImages() {
@@ -72,7 +85,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
             void api.request(item.path, { image: true }).then(blob => {
                 if (!opened || item.version !== imageGeneration) return;
                 const url = URL.createObjectURL(blob); images.set(item.id, url);
-                $$(`img[data-comms-sticker-id="${item.id}"]`).forEach(n => { n.src = url; });
+                $$(`img[data-comms-image="${item.id}"]`).forEach(n => { n.src = url; });
                 pruneImages();
             }).catch(() => {}).finally(() => { imageActive -= 1; queued.delete(item.key); pumpImages(); });
         }
@@ -82,10 +95,10 @@ export function createCommunicationsApp(dialog, api, onChanged) {
             const node = entry.target;
             if (!entry.isIntersecting) { visibleImages.delete(node); continue; }
             visibleImages.add(node);
-            const id = node.dataset.commsStickerId;
+            const id = node.dataset.commsImage;
             if (images.has(id)) { if (node.getAttribute('src') !== images.get(id)) node.src = images.get(id); continue; }
-            const path = node.dataset.stickerUrl;
-            if (!/^\/api\/comunicaciones\/stickers\/\d+\/archivo$/.test(path || '')) continue;
+            const path = node.dataset.imageUrl;
+            if (!/^\/api\/comunicaciones\/(?:stickers\/\d+\/archivo|usuarios\/\d+\/foto\?v=[a-f0-9-]{36})$/i.test(path || '')) continue;
             const key = `${imageGeneration}:${id}`;
             if (queued.has(key)) continue;
             queued.add(key); imageQueue.push({ id, path, key, version: imageGeneration });
@@ -94,12 +107,20 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     }, { root: dialog, rootMargin: '100px' });
     function observeImages() {
         observer.disconnect(); visibleImages.clear();
-        $$('img[data-comms-sticker-id]').forEach(node => {
-            if (images.has(node.dataset.commsStickerId) && node.getAttribute('src') !== images.get(node.dataset.commsStickerId)) node.src = images.get(node.dataset.commsStickerId);
+        $$('img[data-comms-image]').forEach(node => {
+            if (images.has(node.dataset.commsImage) && node.getAttribute('src') !== images.get(node.dataset.commsImage)) node.src = images.get(node.dataset.commsImage);
             observer.observe(node);
         });
     }
-    const stickerImage = sticker => `<img loading="lazy" alt="${esc(sticker.nombre)}" data-comms-sticker-id="${Number(sticker.id)}" data-sticker-url="${esc(sticker.archivo_url)}">`;
+    const stickerImage = sticker => `<img loading="lazy" alt="${esc(sticker.nombre)}" data-comms-image="sticker-${Number(sticker.id)}" data-image-url="${esc(sticker.archivo_url)}">`;
+    function avatar(person) {
+        const initials = String(person.nombre || '').trim().split(/\s+/).slice(0, 2).map(part => Array.from(part)[0] || '').join('').toUpperCase();
+        const version = person.foto_version;
+        const image = /^[a-f0-9-]{36}$/i.test(version || '')
+            ? `<img alt="" data-comms-image="perfil-${Number(person.id)}-${version}" data-image-url="${base}/usuarios/${Number(person.id)}/foto?v=${version}">` : '';
+        return `<span class="comms-avatar" aria-hidden="true">${esc(initials || '?')}${image}</span>`;
+    }
+    const personName = person => `<span class="comms-person">${avatar(person)}<span>${esc(person.nombre)}</span></span>`;
     function nearBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight < 60; }
     async function markRead() {
         if (!opened || tab !== 'chat' || !conversation || document.hidden || !nearBottom() || !messages.length) return;
@@ -119,10 +140,18 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         const height = log.scrollHeight, top = log.scrollTop;
         if (!renderedMessages.size) log.replaceChildren();
         for (const m of messages) {
-            if (renderedMessages.has(m.id)) continue;
+            const current = renderedMessages.get(m.id);
+            if (current && (current.dataset.deleted === 'true') === Boolean(m.eliminado)) continue;
             const template = document.createElement('template');
-            template.innerHTML = `<article class="comms-message ${m.remitente.id === user.id ? 'is-mine' : ''} ${m.me_menciona ? 'is-mention' : ''}" data-chat-message="${Number(m.id)}"><header>${esc(m.remitente.nombre)}${m.me_menciona ? ' <span class="comms-mention-flag">te mencionó</span>' : ''}</header>${m.texto !== null ? `<p>${richText(m.texto, m.referencias)}</p>` : ''}${m.sticker ? stickerImage(m.sticker) : ''}<time>${esc(date(m.creado_at))}</time></article>`;
+            const actions = conversation?.puede_moderar && !m.eliminado
+                ? `<div class="comms-message-actions"><button type="button" data-delete-message="${Number(m.id)}">Eliminar</button>${m.remitente.id === user.id ? '' : `<button type="button" data-mute-message="${Number(m.id)}">Silenciar</button>`}</div>` : '';
+            const content = m.eliminado ? '<p>Mensaje eliminado por moderación</p>'
+                : `${m.texto !== null ? `<p>${richText(m.texto, m.referencias)}</p>` : ''}${m.sticker ? stickerImage(m.sticker) : ''}`;
+            template.innerHTML = `<article class="comms-message ${m.remitente.id === user.id ? 'is-mine' : ''} ${m.me_menciona ? 'is-mention' : ''} ${m.eliminado ? 'is-deleted' : ''}" data-chat-message="${Number(m.id)}" data-deleted="${Boolean(m.eliminado)}"><header>${personName(m.remitente)}${m.me_menciona ? ' <span class="comms-mention-flag">te mencionó</span>' : ''}</header>${content}<time>${esc(date(m.creado_at))}</time>${actions}</article>`;
             const node = template.content.firstElementChild;
+            if (current) {
+                current.replaceWith(node); renderedMessages.set(m.id, node); continue;
+            }
             const next = messages.find(other => other.id > m.id && renderedMessages.has(other.id));
             log.insertBefore(node, next ? renderedMessages.get(next.id) : null); renderedMessages.set(m.id, node);
         }
@@ -228,8 +257,8 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         observeImages(); controls();
     }
     function renderConversations() {
-        $('[data-conversation-list]').innerHTML = conversations.map(c => `<button type="button" class="comms-row ${c.tiene_no_leidos ? 'is-unread' : ''}" data-select-conversation="${c.id}" aria-current="${conversation?.id === c.id}"><strong>${esc(c.nombre)}${c.tiene_menciones ? ' <span class="comms-mention-flag" title="Te mencionaron">@</span>' : ''}</strong><small>${c.tipo === 'global' ? 'Todos los usuarios internos' : 'Conversación privada'}</small>${c.extracto ? `<small>${esc(c.extracto)}</small>` : ''}</button>`).join('');
-        $('[data-conversations-more]').hidden = !conversationsMore; controls();
+        $('[data-conversation-list]').innerHTML = conversations.map(c => `<button type="button" class="comms-row ${c.tiene_no_leidos ? 'is-unread' : ''}" data-select-conversation="${c.id}" aria-current="${conversation?.id === c.id}"><strong>${c.interlocutor ? personName(c.interlocutor) : esc(c.nombre)}${c.tiene_menciones ? ' <span class="comms-mention-flag" title="Te mencionaron">@</span>' : ''}</strong><small>${c.tipo === 'global' ? 'Todos los usuarios internos' : c.tipo === 'grupo' ? 'Grupo' : 'Conversación privada'}</small>${c.extracto ? `<small>${esc(c.extracto)}</small>` : ''}</button>`).join('');
+        $('[data-conversations-more]').hidden = !conversationsMore; observeImages(); controls();
     }
     async function loadConversations({ more = false } = {}) {
         const version = generation, page = more ? conversationPage + 1 : 1;
@@ -244,28 +273,48 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         const version = selection, app = generation, id = conversation.id;
         const params = new URLSearchParams();
         if (mode === 'new' && chatReady) params.set('despues_id', receivedCursor);
+        if (chatReady) params.set('revision_moderacion', moderationRevision);
         if (mode === 'old' && messages.length) params.set('antes_id', messages[0].id);
         const bottom = mode === 'initial' || nearBottom();
-        const result = await api.request(`${base}/chat/conversaciones/${id}/mensajes?${params}`);
+        let result;
+        try {
+            result = await api.request(`${base}/chat/conversaciones/${id}/mensajes?${params}`);
+        } catch (error) {
+            if (error.status !== 404 || !alive(app) || selection !== version || conversation.tipo !== 'grupo') throw error;
+            drafts.delete(id); closeGroup(); closeModeration(); conversation = null;
+            clearImages(); log.replaceChildren();
+            await loadConversations();
+            if (alive(app) && !conversation && conversations.length) await selectConversation(conversations[0].id);
+            notice('Ya no eres integrante del grupo.', true);
+            return;
+        }
         if (!alive(app) || selection !== version || tab !== 'chat') return;
         conversation = result.conversacion;
         $('[data-conversation-title]').textContent = conversation.nombre;
         if (mode !== 'new' || !chatReady) older = result.hay_mas_anteriores;
         const map = new Map(messages.map(m => [m.id, m]));
         const received = result.data.filter(m => m.conversacion_id === id);
-        received.forEach(m => map.set(m.id, m));
+        received.forEach(m => { if (!map.get(m.id)?.eliminado) map.set(m.id, m); });
+        const removed = result.mensajes_eliminados || [];
+        removed.forEach(id => chatDeletions.add(id));
+        for (const id of [...removed, ...received.filter(m => chatDeletions.has(m.id)).map(m => m.id)]) {
+            const row = map.get(id);
+            if (row) map.set(id, { ...row, eliminado: true, texto: null, sticker: null, referencias: [], me_menciona: false });
+        }
+        moderationRevision = Math.max(moderationRevision, result.revision_moderacion || 0);
         if (mode !== 'old' && received.length) receivedCursor = Math.max(receivedCursor, ...received.map(m => m.id));
         messages = [...map.values()].sort((a, b) => a.id - b.id); chatReady = true;
         const current = draft();
         if (current?.intent && result.data.some(m => m.remitente.id === user.id && m.operacion_id === current.intent.id)) {
             current.text = ''; current.sticker = null; current.intent = null; current.citations = new Map(); renderDraft();
         }
-        if (result.data.length || mode === 'initial') renderMessages({ bottom, prepend: mode === 'old' });
+        if (result.data.length || removed.length || mode === 'initial') renderMessages({ bottom, prepend: mode === 'old' });
         if (mode === 'new' && nearBottom()) void markRead();
         controls();
     }
     async function selectConversation(id) {
         if (busyChat) return;
+        closeGroup(); closeModeration(); closeDirectory(); moderationRevision = 0; chatDeletions.clear();
         selection += 1; chatCite.hide(); hideCitationCard(); conversation = conversations.find(c => c.id === id) || { id, nombre: 'Conversación', puede_enviar: false };
         messages = []; older = false; chatReady = false; receivedCursor = 0; renderedMessages.clear(); readState = { last: 0, busy: false }; clearImages();
         $('[data-sticker-panel]').hidden = true; $('[data-chat-bottom]').hidden = true;
@@ -285,7 +334,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         try {
             const result = await api.request(`${base}/chat/conversaciones/${id}/mensajes`, { method: 'POST', body: { ...payload, operacion_id: value.intent.id } });
             if (!alive(app) || selected !== selection) return;
-            if (!messages.some(m => m.id === result.data.id)) messages.push(result.data);
+            if (!messages.some(m => m.id === result.data.id) && !chatDeletions.has(result.data.id)) messages.push(result.data);
             messages.sort((a, b) => a.id - b.id); value.text = ''; value.sticker = null; value.intent = null; value.citations = new Map(); chatCite.hide();
             renderDraft(); renderMessages({ bottom: true }); notice('Mensaje enviado.'); onChanged();
             void loadConversations().catch(() => {});
@@ -298,22 +347,39 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         const state = directory[mode], requestVersion = ++state.version, app = generation;
         if (!more) {
             state.rows = [];
-            const region = mode === 'private' ? $('[data-private-users]') : $('[data-recipient-options]');
+            const region = mode === 'group' ? $('[data-group-options]') : mode === 'private' ? $('[data-private-users]') : $('[data-recipient-options]');
             region.textContent = 'Buscando personas…';
         }
-        const search = mode === 'private' ? $('[data-private-search]').elements.buscar.value : $('[data-recipient-search]').value;
+        const search = mode === 'group' ? groupForm.elements.buscar.value : mode === 'private' ? $('[data-private-search]').elements.buscar.value : $('[data-recipient-search]').value;
         const page = more ? state.page + 1 : 1;
         const result = await api.request(`${base}/usuarios?${new URLSearchParams({ buscar: search, pagina: page })}`);
         if (!alive(app) || requestVersion !== state.version) return;
         state.rows = more ? [...state.rows, ...result.data.filter(u => !state.rows.some(a => a.id === u.id))] : result.data;
         state.page = page; state.more = page < result.ultima_pagina;
         if (mode === 'private') {
-            $('[data-private-users]').innerHTML = state.rows.map(u => `<button class="comms-row" type="button" data-open-user="${u.id}">${esc(u.nombre)}</button>`).join('') || '<p>No hay personas para esta búsqueda.</p>';
+            $('[data-private-users]').innerHTML = state.rows.map(u => `<button class="comms-row" type="button" data-open-user="${u.id}">${personName(u)}</button>`).join('') || '<p>No hay personas para esta búsqueda.</p>';
             $('[data-private-more]').hidden = !state.more;
+            observeImages();
+        } else if (mode === 'group') {
+            renderGroupMembers();
         } else {
             $('[data-recipient-options]').innerHTML = state.rows.map(u => `<label><input type="checkbox" data-recipient="${u.id}" ${recipients.has(u.id) ? 'checked' : ''}> ${esc(u.nombre)}</label>`).join('') || '<p>No hay destinatarios para esta búsqueda.</p>';
             $('[data-recipients-more]').hidden = !state.more; controls();
         }
+    }
+    function closeDirectory() {
+        directory.private.version += 1;
+        $('[data-private-picker]').hidden = true;
+        if (!group) $('[data-conversation-list]').hidden = false;
+    }
+    function openDirectory(action) {
+        closeGroup(); closeDirectory();
+        directoryAction = action;
+        $('[data-directory-title]').textContent = action === 'mute' ? 'Silenciar usuario' : 'Nuevo privado';
+        $('[data-private-picker]').hidden = false;
+        $('[data-conversation-list]').hidden = true;
+        $('[data-private-search]').reset();
+        return loadDirectory('private');
     }
     async function openPrivate(id) {
         if (busyPrivate) return;
@@ -327,6 +393,102 @@ export function createCommunicationsApp(dialog, api, onChanged) {
             await selectConversation(data.id);
         } catch (error) { failed(error); }
         finally { if (alive(app)) busyPrivate = false; }
+    }
+    function closeGroup() {
+        group = null; groupMembers.clear(); directory.group.version += 1; directory.group.rows = [];
+        $('[data-group-picker]').hidden = true;
+        $('[data-conversation-list]').hidden = false;
+    }
+    function renderGroupMembers() {
+        const canManage = group?.puede_gestionar;
+        $('[data-group-members]').innerHTML = [...groupMembers.values()].map(person => {
+            const remove = canManage && person.id !== group.creador_id
+                ? `<button type="button" data-group-remove="${Number(person.id)}" aria-label="Quitar a ${esc(person.nombre)}">Quitar</button>` : '';
+            const mute = group.id && conversation?.puede_moderar && person.id !== user.id && person.activo !== false
+                ? `<button type="button" data-group-mute="${Number(person.id)}">Silenciar</button>` : '';
+            return `<span class="comms-person">${personName(person)}${remove}${mute}</span>`;
+        }).join('');
+        const people = directory.group.rows.filter(person => person.id !== group?.creador_id);
+        $('[data-group-options]').innerHTML = people.map(person => `<label><input type="checkbox" data-group-person="${Number(person.id)}" ${groupMembers.has(person.id) ? 'checked' : ''}>${personName(person)}</label>`).join('') || '<p>No hay personas para esta búsqueda.</p>';
+        $('[data-group-more]').hidden = !directory.group.more;
+        observeImages();
+    }
+    async function openGroup(id = null) {
+        const app = generation, selected = selection;
+        closeGroup();
+        const groupVersion = directory.group.version;
+        const result = id ? (await api.request(`${base}/chat/grupos/${id}`)).data : { nombre: '', miembros: [], creador_id: user.id, puede_gestionar: true };
+        if (!alive(app) || selection !== selected || directory.group.version !== groupVersion) return;
+        group = { ...result, id, intent: null };
+        result.miembros.forEach(person => groupMembers.set(person.id, person));
+        $('[data-private-picker]').hidden = true;
+        $('[data-conversation-list]').hidden = true;
+        $('[data-group-picker]').hidden = false;
+        $('[data-group-title]').textContent = id ? 'Integrantes' : 'Nuevo grupo';
+        $('[data-group-directory]').hidden = !group.puede_gestionar;
+        $('[data-group-save]').hidden = !group.puede_gestionar;
+        $('[data-group-save]').textContent = id ? 'Guardar cambios' : 'Crear grupo';
+        groupForm.reset(); groupForm.elements.nombre.value = result.nombre; groupForm.elements.nombre.readOnly = !group.puede_gestionar;
+        renderGroupMembers();
+        if (group.puede_gestionar) { groupForm.elements.nombre.focus(); await loadDirectory('group'); }
+    }
+    async function saveGroup(event) {
+        event.preventDefault();
+        if (busyGroup || !group?.puede_gestionar) return;
+        const editing = group, app = generation;
+        const body = { nombre: groupForm.elements.nombre.value.trim(), miembros: [...groupMembers.keys()].filter(id => id !== group.creador_id) };
+        if (!editing.id && !body.miembros.length) { notice('Selecciona al menos a otra persona.', true); return; }
+        if (!editing.id) {
+            editing.intent = intent(editing.intent, body);
+            body.operacion_id = editing.intent.id;
+        }
+        busyGroup = true; controls();
+        try {
+            const { data } = await api.request(`${base}/chat/grupos${editing.id ? `/${editing.id}` : ''}`, { method: editing.id ? 'PUT' : 'POST', body });
+            if (!alive(app) || group !== editing) return;
+            conversationRequest += 1;
+            conversations = [data, ...conversations.filter(item => item.id !== data.id)];
+            await selectConversation(data.id);
+            notice(editing.id ? 'Grupo actualizado.' : 'Grupo creado.');
+            onChanged(); void loadConversations().catch(() => {});
+        } finally { if (alive(app)) { busyGroup = false; controls(); } }
+    }
+    function closeModeration() {
+        moderation = null;
+        $('[data-chat-moderation]').hidden = true;
+    }
+    function openModeration(action, person, messageId = null) {
+        if (!conversation?.puede_moderar || busyModeration) return;
+        hideCitationCard(); moderationForm.reset();
+        moderation = { action, person, messageId, conversationId: conversation.id };
+        const mute = action === 'mute';
+        $('[data-moderation-title]').textContent = mute ? `Silenciar a ${person.nombre}` : 'Eliminar mensaje';
+        $('[data-moderation-description]').textContent = mute ? `Se suspenderá el envío en ${conversation.nombre} durante el tiempo indicado.` : 'El contenido se ocultará para todos los participantes.';
+        $('[data-moderation-duration]').hidden = !mute;
+        moderationForm.elements.minutos.disabled = !mute;
+        $('[data-moderation-submit]').textContent = mute ? 'Silenciar' : 'Eliminar mensaje';
+        $('[data-moderation-revoke]').hidden = !mute;
+        $('[data-chat-moderation]').hidden = false;
+        (mute ? moderationForm.elements.minutos : $('[data-moderation-submit]')).focus();
+    }
+    async function applyModeration(revoke = false) {
+        if (busyModeration || !moderation) return;
+        const item = moderation, app = generation;
+        const removing = item.action === 'delete';
+        const path = `${base}/chat/conversaciones/${item.conversationId}/${removing ? `mensajes/${item.messageId}` : `silencios/${item.person.id}`}`;
+        busyModeration = true; controls();
+        try {
+            const result = await api.request(path, { method: removing || revoke ? 'DELETE' : 'PUT',
+                body: removing || revoke ? undefined : { minutos: Number(moderationForm.elements.minutos.value) } });
+            if (!alive(app) || moderation !== item) return;
+            if (removing) {
+                chatDeletions.add(item.messageId);
+                messages = messages.map(m => m.id === item.messageId ? result.data : m);
+                hideCitationCard(); renderMessages(); onChanged(); void loadConversations().catch(() => {});
+            }
+            closeModeration();
+            notice(removing ? 'Mensaje eliminado.' : revoke ? 'Silencio levantado.' : 'Silencio aplicado.');
+        } finally { if (alive(app)) { busyModeration = false; controls(); } }
     }
     async function loadStickers(more = false) {
         const app = generation, page = more ? stickerPage + 1 : 1;
@@ -419,7 +581,7 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     }
     async function switchTab(value) {
         if (busyChat || busyMail || busySticker) return;
-        selection += 1; tab = value; clearImages(); hideCitationCard(); chatCite.hide(); mailCite.hide();
+        selection += 1; closeGroup(); closeModeration(); closeDirectory(); tab = value; clearImages(); hideCitationCard(); chatCite.hide(); mailCite.hide();
         $$('[data-comms-tab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.commsTab === value)));
         $('[data-comms-chat]').hidden = value !== 'chat'; $('[data-comms-mail]').hidden = value !== 'mail'; notice();
         if (value === 'chat') {
@@ -456,10 +618,29 @@ export function createCommunicationsApp(dialog, api, onChanged) {
             }
             if (button.dataset.selectConversation) return selectConversation(Number(button.dataset.selectConversation));
             if (button.hasAttribute('data-conversations-more')) return loadConversations({ more: true });
-            if (button.hasAttribute('data-private-new')) { $('[data-private-picker]').hidden = false; $('[data-conversation-list]').hidden = true; return loadDirectory('private'); }
-            if (button.hasAttribute('data-private-cancel')) { $('[data-private-picker]').hidden = true; $('[data-conversation-list]').hidden = false; return; }
+            if (button.hasAttribute('data-private-new')) return openDirectory('private');
+            if (button.hasAttribute('data-global-moderation')) return openDirectory('mute');
+            if (button.hasAttribute('data-private-cancel')) return closeDirectory();
+            if (button.hasAttribute('data-group-new')) return openGroup();
+            if (button.hasAttribute('data-group-open')) return openGroup(conversation.id);
+            if (button.hasAttribute('data-group-close')) return closeGroup();
+            if (button.hasAttribute('data-group-more')) return loadDirectory('group', true);
+            if (button.dataset.groupRemove) { groupMembers.delete(Number(button.dataset.groupRemove)); return renderGroupMembers(); }
+            if (button.dataset.groupMute) {
+                const person = groupMembers.get(Number(button.dataset.groupMute));
+                if (person) return openModeration('mute', person);
+            }
+            if (button.dataset.deleteMessage || button.dataset.muteMessage) {
+                const message = messages.find(row => row.id === Number(button.dataset.deleteMessage || button.dataset.muteMessage));
+                if (message) return openModeration(button.dataset.deleteMessage ? 'delete' : 'mute', message.remitente, message.id);
+            }
+            if (button.hasAttribute('data-moderation-close')) return closeModeration();
+            if (button.hasAttribute('data-moderation-revoke')) return applyModeration(true);
             if (button.hasAttribute('data-private-more')) return loadDirectory('private', true);
-            if (button.dataset.openUser) return openPrivate(Number(button.dataset.openUser));
+            if (button.dataset.openUser) {
+                const person = directory.private.rows.find(row => row.id === Number(button.dataset.openUser));
+                if (person) return directoryAction === 'mute' ? openModeration('mute', person) : openPrivate(person.id);
+            }
             if (button.hasAttribute('data-chat-older')) return loadMessages('old');
             if (button.hasAttribute('data-chat-bottom')) { log.scrollTop = log.scrollHeight; button.hidden = true; return markRead(); }
             if (button.hasAttribute('data-stickers-open')) { $('[data-sticker-panel]').hidden = false; return loadStickers(); }
@@ -493,6 +674,19 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     });
     const chatCite = citationAutocomplete(chatForm.elements.texto, chatForm.querySelector('[data-cite-suggest]'), () => draft()?.citations ?? new Map(), text => { if (draft()) draft().text = text; });
     const mailCite = citationAutocomplete(mailForm.elements.texto, mailForm.querySelector('[data-cite-suggest]'), () => mailCitations, () => {});
+    groupForm.addEventListener('submit', event => void saveGroup(event).catch(failed));
+    groupForm.elements.buscar.addEventListener('input', () => {
+        clearTimeout(recipientTimer);
+        recipientTimer = setTimeout(() => { if (group) void loadDirectory('group').catch(failed); }, 300);
+    });
+    $('[data-group-options]').addEventListener('change', event => {
+        const id = Number(event.target.dataset.groupPerson), person = directory.group.rows.find(row => row.id === id);
+        if (!person || !group) return;
+        if (event.target.checked) groupMembers.set(id, person); else groupMembers.delete(id);
+        renderGroupMembers();
+        $('[data-group-options]').querySelector(`[data-group-person="${id}"]`)?.focus();
+    });
+    moderationForm.addEventListener('submit', event => { event.preventDefault(); void applyModeration().catch(failed); });
     chatForm.addEventListener('submit', event => void sendChat(event).catch(failed));
     chatForm.elements.texto.addEventListener('input', () => { if (draft()) draft().text = chatForm.elements.texto.value; });
     mailForm.addEventListener('submit', event => void sendMail(event).catch(failed));
@@ -507,13 +701,13 @@ export function createCommunicationsApp(dialog, api, onChanged) {
     });
     log.addEventListener('scroll', () => { if (nearBottom()) { $('[data-chat-bottom]').hidden = true; void markRead(); } });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) void markRead(); });
-    dialog.addEventListener('cancel', event => { if (busyChat || busyMail || busySticker) event.preventDefault(); });
+    dialog.addEventListener('cancel', event => { if (busyChat || busyMail || busySticker || busyGroup || busyModeration) event.preventDefault(); });
     dialog.addEventListener('close', () => {
         if (dialog.open) return;
         opened = false; generation += 1; selection += 1; poller.stop(); api.reset(); clearImages(); clearTimeout(recipientTimer); hideCitationCard(); chatCite.hide(); mailCite.hide();
-        messages = []; conversation = null; selectedMail = null; chatReady = false; receivedCursor = 0; renderedMessages.clear();
+        messages = []; conversation = null; selectedMail = null; chatReady = false; receivedCursor = 0; renderedMessages.clear(); chatDeletions.clear();
         log.replaceChildren(); $('[data-conversation-list]').replaceChildren(); $('[data-mail-list]').replaceChildren(); $('[data-mail-detail]').replaceChildren();
-        busyChat = false; busyMail = false; busySticker = false; busyPrivate = false;
+        busyChat = false; busyMail = false; busySticker = false; busyPrivate = false; busyGroup = false; busyModeration = false; closeGroup(); closeModeration();
         document.querySelector('[data-communications-open]')?.focus();
     });
     return {
@@ -529,10 +723,10 @@ export function createCommunicationsApp(dialog, api, onChanged) {
         reset() {
             opened = false; generation += 1; selection += 1; poller.stop(); clearImages(); clearTimeout(recipientTimer); hideCitationCard(); chatCite.hide(); mailCite.hide();
             if (dialog.open) dialog.close(); mailCitations = new Map();
-            drafts.clear(); recipients.clear(); conversations = []; messages = []; renderedMessages.clear(); receivedCursor = 0; stickerRows = []; conversation = null; selectedMail = null;
+            drafts.clear(); recipients.clear(); conversations = []; messages = []; renderedMessages.clear(); chatDeletions.clear(); receivedCursor = 0; stickerRows = []; conversation = null; selectedMail = null;
             composing = false; replyTo = null; mailIntent = null; stickerIntent = null; user = null;
             folder = 'recibidos'; mailPage = 1; conversationPage = 1; older = false; chatReady = false;
-            busyChat = false; busyMail = false; busySticker = false; busyPrivate = false;
+            busyChat = false; busyMail = false; busySticker = false; busyPrivate = false; busyGroup = false; busyModeration = false; closeGroup(); closeModeration();
             chatForm.reset(); mailForm.reset(); uploadForm.reset(); mailForm.hidden = true; $('[data-mail-detail]').hidden = false;
             $('[data-private-search]').reset(); $('[data-mail-search]').reset(); $('[data-sticker-search]').reset();
             $('[data-private-picker]').hidden = true; $('[data-conversation-list]').hidden = false; $('[data-sticker-panel]').hidden = true; $('[data-chat-bottom]').hidden = true;

@@ -19,7 +19,12 @@ class FotoPerfilUsuarioController extends Controller
 
     public function show(Request $request): BinaryFileResponse
     {
-        $ruta = $this->usuario($request)->foto_perfil_ruta;
+        return self::archivo($this->usuario($request));
+    }
+
+    public static function archivo(User $usuario): BinaryFileResponse
+    {
+        $ruta = $usuario->foto_perfil_ruta;
         abort_unless($ruta && Storage::disk('local')->exists($ruta), 404);
         $respuesta = response()->file(Storage::disk('local')->path($ruta), [
             'Content-Type' => 'image/jpeg', 'X-Content-Type-Options' => 'nosniff',

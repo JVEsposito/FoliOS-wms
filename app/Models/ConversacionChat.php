@@ -8,10 +8,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['tipo', 'clave', 'ultimo_mensaje_id'])]
+#[Fillable(['tipo', 'clave', 'ultimo_mensaje_id', 'nombre', 'creador_user_id', 'revision_moderacion'])]
 class ConversacionChat extends Model
 {
     protected $table = 'com_conversaciones';
+
+    protected function casts(): array
+    {
+        return ['creador_user_id' => 'integer', 'revision_moderacion' => 'integer'];
+    }
 
     public function participantes(): BelongsToMany
     {
