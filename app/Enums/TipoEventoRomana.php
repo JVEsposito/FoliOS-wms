@@ -21,4 +21,6 @@ enum TipoEventoRomana: string
     case NetoPorEnvaseAjustado = 'neto_por_envase_ajustado';
     // Administración ajustó solo la cuenta corriente de envases (sin tocar guías, lotes ni kilos).
     case AjusteCuentaEnvases = 'ajuste_cuenta_envases';
+    // Solo cambió el número de una o más guías de ingreso.
+    case NumeroGuiaCorregido = 'numero_guia_corregido';
 }
