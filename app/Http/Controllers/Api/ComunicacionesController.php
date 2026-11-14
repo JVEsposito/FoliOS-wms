@@ -9,6 +9,8 @@ use App\Models\User;
 use App\Services\Comunicaciones\ReferenciasComunicaciones;
 use App\Services\Comunicaciones\ServicioChatInterno;
 use App\Services\Comunicaciones\ServicioCorreoInterno;
+use App\Services\Comunicaciones\ServicioGruposChat;
+use App\Services\Comunicaciones\ServicioModeracionChat;
 use App\Services\Comunicaciones\ServicioStickersChat;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,16 +34,17 @@ class ComunicacionesController extends Controller
         return $this->json(['data' => ['chat_no_leido' => $nuevos, 'menciones_sin_leer' => $menciones, 'correos_no_leidos' => $correos]]);
     }
 
-    public function usuarios(Request $request): JsonResponse
+    public function usuarios(Request $request, ServicioChatInterno $chat): JsonResponse
     {
         $datos = $request->validate(['buscar' => ['nullable', 'string', 'max:100'], 'pagina' => ['nullable', 'integer', 'min:1', 'max:10000']]);
         $consulta = User::where('activo', true)->where('rol', '!=', RolUsuario::Cliente->value)->where('id', '!=', $request->user()->id);
         if ($buscar = trim($datos['buscar'] ?? '')) {
             $consulta->where('name', 'like', '%'.addcslashes(ltrim($buscar, '@'), '%_\\').'%');
         }
-        $lista = $consulta->orderBy('name')->orderBy('id')->paginate(50, ['id', 'name'], 'pagina', $datos['pagina'] ?? 1);
+        $lista = $consulta->orderBy('name')->orderBy('id')->paginate(50, ['id', 'name', 'activo', 'rol', 'foto_perfil_ruta'], 'pagina', $datos['pagina'] ?? 1);
 
-        return $this->json(['data' => $lista->getCollection()->map(fn ($u) => ['id' => $u->id, 'nombre' => $u->name])->all(),
+        return $this->json(['data' => $lista->getCollection()
+            ->map(fn (User $persona) => array_filter($chat->representarPersona($persona), fn ($valor) => $valor !== null))->all(),
             'pagina' => $lista->currentPage(), 'ultima_pagina' => $lista->lastPage()]);
     }
 
@@ -60,13 +63,70 @@ class ComunicacionesController extends Controller
         return $this->json(['data' => $chat->representarConversacion($conversacion, $request->user())]);
     }
 
+    public function fotoUsuario(int $usuario): BinaryFileResponse
+    {
+        $persona = User::whereKey($usuario)->where('activo', true)->where('rol', '!=', RolUsuario::Cliente->value)->firstOrFail();
+
+        return FotoPerfilUsuarioController::archivo($persona);
+    }
+
+    public function crearGrupo(Request $request, ServicioGruposChat $grupos, ServicioChatInterno $chat): JsonResponse
+    {
+        $datos = $request->validate([...$this->reglasGrupo(), 'miembros' => ['required', 'array', 'min:1', 'max:49'], 'operacion_id' => ['required', 'uuid']]);
+        $grupo = $grupos->crear($request->user(), $datos);
+
+        return $this->json(['data' => $chat->representarConversacion($grupo, $request->user())]);
+    }
+
+    public function miembrosGrupo(Request $request, int $conversacion, ServicioGruposChat $grupos): JsonResponse
+    {
+        return $this->json(['data' => $grupos->integrantes($request->user(), $conversacion)]);
+    }
+
+    public function editarGrupo(Request $request, int $conversacion, ServicioGruposChat $grupos, ServicioChatInterno $chat): JsonResponse
+    {
+        $grupo = $grupos->editar($request->user(), $conversacion, $request->validate($this->reglasGrupo()));
+
+        return $this->json(['data' => $chat->representarConversacion($grupo, $request->user())]);
+    }
+
+    public function eliminarMensaje(Request $request, int $conversacion, int $mensaje, ServicioModeracionChat $moderacion, ServicioChatInterno $chat): JsonResponse
+    {
+        $eliminado = $moderacion->eliminar($request->user(), $conversacion, $mensaje);
+
+        return $this->json(['data' => $chat->representarMensaje($eliminado, $request->user())]);
+    }
+
+    public function silenciarChat(Request $request, int $conversacion, int $usuario, ServicioModeracionChat $moderacion): JsonResponse
+    {
+        $datos = $request->validate(['minutos' => ['required', 'integer', 'min:1', 'max:10080']]);
+        $moderacion->silenciar($request->user(), $conversacion, $usuario, (int) $datos['minutos']);
+
+        return $this->json(['data' => ['confirmado' => true]]);
+    }
+
+    public function levantarSilencio(Request $request, int $conversacion, int $usuario, ServicioModeracionChat $moderacion): JsonResponse
+    {
+        $moderacion->revocar($request->user(), $conversacion, $usuario);
+
+        return $this->json(['data' => ['confirmado' => true]]);
+    }
+
+    private function reglasGrupo(): array
+    {
+        return ['nombre' => ['required', 'string', 'max:100'], 'miembros' => ['present', 'array', 'max:49'],
+            'miembros.*' => ['required', 'integer', 'min:1', 'distinct']];
+    }
+
     public function mensajes(Request $request, int $conversacion, ServicioChatInterno $chat): JsonResponse
     {
-        $datos = $request->validate(['despues_id' => ['nullable', 'integer', 'min:0'], 'antes_id' => ['nullable', 'integer', 'min:1'], 'limite' => ['nullable', 'integer', 'min:1', 'max:100']]);
+        $datos = $request->validate(['despues_id' => ['nullable', 'integer', 'min:0'], 'antes_id' => ['nullable', 'integer', 'min:1'], 'limite' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'revision_moderacion' => ['nullable', 'integer', 'min:0']]);
         abort_if(isset($datos['despues_id'], $datos['antes_id']), 422, 'Consulta mensajes nuevos o anteriores, no ambos a la vez.');
 
         return $this->json($chat->mensajes($request->user(), $conversacion, isset($datos['despues_id']) ? (int) $datos['despues_id'] : null,
-            isset($datos['antes_id']) ? (int) $datos['antes_id'] : null, (int) ($datos['limite'] ?? 50)));
+            isset($datos['antes_id']) ? (int) $datos['antes_id'] : null, (int) ($datos['limite'] ?? 50),
+            isset($datos['revision_moderacion']) ? (int) $datos['revision_moderacion'] : null));
     }
 
     public function enviarMensaje(Request $request, int $conversacion, ServicioChatInterno $chat): JsonResponse

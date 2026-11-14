@@ -9,6 +9,7 @@ use App\Models\StickerChat;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -26,7 +27,7 @@ class ServicioChatInterno
 
     public function sinLeer(Builder $consulta, User $usuario): Builder
     {
-        return $consulta->where('remitente_user_id', '!=', $usuario->id)
+        return $consulta->whereNull('com_mensajes.eliminado_at')->where('remitente_user_id', '!=', $usuario->id)
             ->where('com_mensajes.created_at', '>=', $usuario->created_at)
             ->whereColumn('com_mensajes.id', '>', DB::raw('COALESCE(mi_lectura.ultimo_leido_id, 0)'));
     }
@@ -47,7 +48,7 @@ class ServicioChatInterno
             ->withExists(['mensajes as tiene_menciones' => fn (Builder $q) => $this->mencionesSinLeer($this->sinLeer($q, $usuario), $usuario)])
             ->orderByRaw("CASE WHEN tipo = 'global' THEN 0 ELSE 1 END")
             ->orderByDesc('ultimo_mensaje_id')->orderByDesc('com_conversaciones.id')->paginate(30, ['*'], 'pagina', $pagina);
-        $lista->getCollection()->where('tipo', 'privado')->load('participantes:id,name,activo,rol');
+        $lista->getCollection()->where('tipo', 'privado')->load('participantes:id,name,activo,rol,foto_perfil_ruta');
 
         return ['data' => $lista->getCollection()->map(fn ($c) => $this->representarConversacion($c, $usuario))->all(),
             'pagina' => $lista->currentPage(), 'ultima_pagina' => $lista->lastPage()];
@@ -67,7 +68,7 @@ class ServicioChatInterno
                 DB::table('com_participantes')->insertOrIgnore(['conversacion_id' => $conversacion->id, 'user_id' => $id]);
             }
 
-            return $conversacion->load('participantes:id,name,activo,rol');
+            return $conversacion->load('participantes:id,name,activo,rol,foto_perfil_ruta');
         }, 3);
     }
 
@@ -81,13 +82,13 @@ class ServicioChatInterno
         return $consulta->firstOrFail();
     }
 
-    public function mensajes(User $usuario, int $id, ?int $despues, ?int $antes, int $limite): array
+    public function mensajes(User $usuario, int $id, ?int $despues, ?int $antes, int $limite, ?int $revision = null): array
     {
         $conversacion = $this->obtener($usuario, $id);
         if ($conversacion->tipo === 'privado') {
-            $conversacion->load('participantes:id,name,activo,rol');
+            $conversacion->load('participantes:id,name,activo,rol,foto_perfil_ruta');
         }
-        $consulta = MensajeChat::where('conversacion_id', $id)->with(['remitente:id,name', 'sticker', 'referencias']);
+        $consulta = MensajeChat::where('conversacion_id', $id)->with(['remitente:id,name,activo,rol,foto_perfil_ruta', 'sticker', 'referencias']);
         if ($despues !== null) {
             $consulta->where('id', '>', $despues)->orderBy('id');
         } else {
@@ -100,7 +101,18 @@ class ServicioChatInterno
         $hayMas = $filas->count() > $limite;
         $filas = $filas->take($limite)->sortBy('id')->values();
 
-        return ['conversacion' => $this->representarConversacion($conversacion, $usuario),
+        $revisionActual = $conversacion->revision_moderacion;
+        $eliminados = $revision === null ? collect() : $conversacion->mensajes()
+            ->where('revision_eliminacion', '>', $revision)->where('revision_eliminacion', '<=', $revisionActual)
+            ->orderBy('revision_eliminacion')->limit(101)->get(['id', 'revision_eliminacion']);
+        if ($eliminados->count() > 100) {
+            $eliminados = $eliminados->take(100);
+            $revisionActual = $eliminados->last()->revision_eliminacion;
+        }
+        $hasta = $this->silencioVigente($usuario, $id);
+
+        return ['conversacion' => $this->representarConversacion($conversacion, $usuario, $hasta),
+            'revision_moderacion' => $revisionActual, 'mensajes_eliminados' => $eliminados->pluck('id')->all(),
             'data' => $filas->map(fn ($m) => $this->representarMensaje($m, $usuario))->all(),
             'hay_mas_anteriores' => $despues === null && $hayMas, 'hay_mas_nuevos' => $despues !== null && $hayMas];
     }
@@ -122,6 +134,7 @@ class ServicioChatInterno
                 if ($existente) {
                     return $this->reintento($existente, $id, $texto, $sticker);
                 }
+                abort_if($this->silencioVigente($usuario, $id) !== null, 403, 'Tienes el envío de mensajes silenciado en esta conversación.');
                 if ($conversacion->tipo === 'privado') {
                     $otro = $conversacion->participantes()->where('users.id', '!=', $usuario->id)->firstOrFail();
                     $this->destinatario($usuario, $otro->id);
@@ -159,31 +172,61 @@ class ServicioChatInterno
         }, 3);
     }
 
-    public function representarConversacion(ConversacionChat $conversacion, User $usuario): array
+    public function representarConversacion(ConversacionChat $conversacion, User $usuario, ?string $hasta = null): array
     {
         $otro = $conversacion->tipo === 'privado' ? $conversacion->participantes->firstWhere('id', '!=', $usuario->id) : null;
 
+        $nombre = match ($conversacion->tipo) {
+            'global' => 'Chat global',
+            'grupo' => $conversacion->nombre,
+            default => $otro?->name ?? 'Usuario',
+        };
+        $ultimo = $conversacion->ultimoMensaje;
+
         return ['id' => $conversacion->id, 'tipo' => $conversacion->tipo,
-            'nombre' => $conversacion->tipo === 'global' ? 'Chat global' : ($otro?->name ?? 'Usuario'),
-            'puede_enviar' => $conversacion->tipo === 'global' || ($otro?->activo && ! $otro->esCliente()),
+            'nombre' => $nombre,
+            'interlocutor' => $otro ? $this->representarPersona($otro) : null,
+            'puede_enviar' => $hasta === null && ($conversacion->tipo !== 'privado' || ($otro?->activo && ! $otro->esCliente())),
+            'silenciado_hasta' => $hasta,
+            'puede_moderar' => $conversacion->tipo !== 'privado' && $usuario->can('moderar-chat-interno'),
             'tiene_no_leidos' => (bool) ($conversacion->tiene_no_leidos ?? false),
             'tiene_menciones' => (bool) ($conversacion->tiene_menciones ?? false),
             'ultimo_mensaje_id' => (int) $conversacion->ultimo_mensaje_id,
-            'extracto' => $conversacion->ultimoMensaje
-                ? mb_substr($this->referencias->textoPlano($conversacion->ultimoMensaje->texto, $conversacion->ultimoMensaje->referencias) ?? 'Sticker', 0, 100) : null];
+            'extracto' => $ultimo?->eliminado_at ? 'Mensaje eliminado' : ($ultimo
+                ? mb_substr($this->referencias->textoPlano($ultimo->texto, $ultimo->referencias) ?? 'Sticker', 0, 100) : null)];
+    }
+
+    public function representarPersona(User $persona): array
+    {
+        return [
+            'id' => $persona->id, 'nombre' => $persona->name,
+            'foto_version' => $persona->activo && ! $persona->esCliente() && $persona->foto_perfil_ruta
+                ? pathinfo($persona->foto_perfil_ruta, PATHINFO_FILENAME) : null,
+        ];
     }
 
     public function representarMensaje(MensajeChat $mensaje, User $usuario): array
     {
-        $mensaje->loadMissing(['remitente:id,name', 'sticker', 'referencias']);
+        $mensaje->loadMissing(['remitente:id,name,activo,rol,foto_perfil_ruta', 'sticker', 'referencias']);
 
-        return ['id' => $mensaje->id, 'conversacion_id' => $mensaje->conversacion_id,
-            'remitente' => ['id' => $mensaje->remitente_user_id, 'nombre' => $mensaje->remitente->name],
-            'texto' => $mensaje->texto, 'sticker' => $mensaje->sticker ? ServicioStickersChat::representar($mensaje->sticker, $usuario) : null,
-            'referencias' => $this->referencias->representar($mensaje->referencias, $usuario),
-            'me_menciona' => $mensaje->remitente_user_id !== $usuario->id && $this->referencias->mencionaA($mensaje->referencias, $usuario),
+        $eliminado = $mensaje->eliminado_at !== null;
+
+        return ['id' => $mensaje->id, 'conversacion_id' => $mensaje->conversacion_id, 'eliminado' => $eliminado,
+            'remitente' => $this->representarPersona($mensaje->remitente),
+            'texto' => $eliminado ? null : $mensaje->texto,
+            'sticker' => ! $eliminado && $mensaje->sticker ? ServicioStickersChat::representar($mensaje->sticker, $usuario) : null,
+            'referencias' => $eliminado ? [] : $this->referencias->representar($mensaje->referencias, $usuario),
+            'me_menciona' => ! $eliminado && $mensaje->remitente_user_id !== $usuario->id && $this->referencias->mencionaA($mensaje->referencias, $usuario),
             'creado_at' => $mensaje->created_at->toAtomString(),
             'operacion_id' => $mensaje->remitente_user_id === $usuario->id ? $mensaje->operacion_id : null];
+    }
+
+    private function silencioVigente(User $usuario, int $conversacion): ?string
+    {
+        $hasta = DB::table('com_silencios_chat')->where('conversacion_id', $conversacion)->where('user_id', $usuario->id)
+            ->whereNull('revocado_at')->where('hasta', '>', now())->orderByDesc('hasta')->value('hasta');
+
+        return $hasta === null ? null : Carbon::parse($hasta)->toAtomString();
     }
 
     private function reintento(MensajeChat $mensaje, int $id, ?string $texto, ?int $sticker): MensajeChat

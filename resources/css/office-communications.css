@@ -112,3 +112,20 @@
     .comms-cite-card { top: auto; right: 6px; left: 6px; bottom: 6px; width: auto; max-height: 60%; }
     .comms-chat-compose .comms-suggest { left: 10px; right: 10px; }
 }
+
+.comms-message header, .comms-message-actions, .comms-person { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.comms-message-actions { margin-top: 4px; }
+.comms-dialog .comms-message-actions button { min-height: 28px; padding: 2px 7px; font-size: 11px; }
+.comms-avatar { position: relative; display: inline-grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: var(--surface-selected); color: var(--text-strong); font-size: 10px; font-weight: 700; }
+.comms-dialog .comms-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; object-fit: cover; }
+.comms-avatar img:not([src]) { visibility: hidden; }
+.comms-message.is-deleted p, [data-chat-muted] { color: var(--text-secondary); }
+.comms-message.is-deleted p { font-style: italic; }
+[data-chat-muted] { margin: 0 0 6px; }
+.comms-dialog [data-group-members] .comms-person { display: inline-flex; }
+.comms-dialog [data-group-options] label { display: flex; gap: 6px; align-items: center; }
+.comms-dialog .comms-row > .comms-person { display: flex; }
+.comms-rail:has([data-group-picker]:not([hidden])) > [data-conversations-more] { display: none; }
+@media (max-width: 700px) {
+    .comms-dialog:has([data-group-picker]:not([hidden])) .comms-rail { max-height: min(300px, 47dvh); }
+}

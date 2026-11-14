@@ -8,11 +8,20 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum', 'can:usar-comunicaciones-internas'])->prefix('comunicaciones')->group(function (): void {
     Route::get('/resumen', [ComunicacionesController::class, 'resumen']);
     Route::get('/usuarios', [ComunicacionesController::class, 'usuarios']);
+    Route::get('/usuarios/{usuario}/foto', [ComunicacionesController::class, 'fotoUsuario'])->whereNumber('usuario');
     Route::get('/referencias', [ComunicacionesController::class, 'referencias'])->middleware('throttle:120,1,com-referencias:');
     Route::get('/referencias/{tipo}/{id}', [ComunicacionesController::class, 'fichaReferencia'])
         ->where(['tipo' => '[a-z_]{2,30}', 'id' => '[A-Za-z0-9-]{1,36}'])->middleware('throttle:120,1,com-fichas:');
     Route::get('/chat/conversaciones', [ComunicacionesController::class, 'conversaciones']);
     Route::post('/chat/privados', [ComunicacionesController::class, 'privado'])->middleware('throttle:30,1,com-privados:');
+    Route::post('/chat/grupos', [ComunicacionesController::class, 'crearGrupo'])->middleware('throttle:30,1,com-grupos:');
+    Route::get('/chat/grupos/{conversacion}', [ComunicacionesController::class, 'miembrosGrupo'])->whereNumber('conversacion');
+    Route::put('/chat/grupos/{conversacion}', [ComunicacionesController::class, 'editarGrupo'])->whereNumber('conversacion');
+    Route::middleware('can:moderar-chat-interno')->prefix('/chat/conversaciones/{conversacion}')->where(['conversacion' => '[0-9]+'])->group(function (): void {
+        Route::delete('/mensajes/{mensaje}', [ComunicacionesController::class, 'eliminarMensaje'])->whereNumber('mensaje');
+        Route::put('/silencios/{usuario}', [ComunicacionesController::class, 'silenciarChat'])->whereNumber('usuario');
+        Route::delete('/silencios/{usuario}', [ComunicacionesController::class, 'levantarSilencio'])->whereNumber('usuario');
+    });
     Route::get('/chat/conversaciones/{conversacion}/mensajes', [ComunicacionesController::class, 'mensajes'])->whereNumber('conversacion');
     Route::post('/chat/conversaciones/{conversacion}/mensajes', [ComunicacionesController::class, 'enviarMensaje'])->whereNumber('conversacion')->middleware('throttle:60,1,com-chat:');
     Route::post('/chat/conversaciones/{conversacion}/leer', [ComunicacionesController::class, 'leerChat'])->whereNumber('conversacion');

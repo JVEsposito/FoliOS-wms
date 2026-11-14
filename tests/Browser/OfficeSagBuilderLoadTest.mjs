@@ -52,6 +52,8 @@ test('si falla una consulta, el armado de lotes conserva el resto y muestra el e
         await banner.waitFor();
         assert.match(await banner.innerText(), /clientes y especies: Error del servidor \(código 500\)/);
         // Tipos y destinos llegan aunque fallen las opciones de cliente.
+        await page.locator('#sagBuilderForm [name="tipo"] option[value="inspeccion_origen"]').waitFor({ state: 'attached' });
+        await page.waitForFunction(() => document.querySelector('#activeLotsMetric').textContent === '2');
         assert.equal(await page.locator('#sagBuilderForm [name="tipo"] option').count(), 2);
         assert.match(await page.locator('#destinationOptions').innerText(), /CN · China/);
         assert.equal(await page.locator('#activeLotsMetric').innerText(), '2');
@@ -84,12 +86,17 @@ test('una consulta que no responde termina en aviso y no bloquea el resto', asyn
             if (path.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css' })[extname(path)] || 'application/octet-stream' });
             if (path === '/api/inspeccion-sag/folios/opciones') return undefined; // nunca responde
             if (path === '/api/inspeccion-sag/catalogos') return route.fulfill({ json: catalogs });
+            if (path === '/api/inspeccion-sag/resumen') return route.fulfill({ json: { lotes_activos: 2 } });
             if (path === '/api/inspeccion-sag/lotes') return route.fulfill({ json: { data: [] } });
             return route.fulfill({ json: {} });
         });
+        const pendingOptions = page.waitForRequest('**/api/inspeccion-sag/folios/opciones');
         await page.goto('http://localhost/oficina/frigorifico/inspeccion-sag');
-        await page.waitForFunction(() => document.querySelectorAll('#sagBuilderForm [name="tipo"] option').length === 2);
-        await page.clock.runFor(31000);
+        await pendingOptions;
+        await page.locator('#sagBuilderForm [name="tipo"] option[value="inspeccion_origen"]').waitFor({ state: 'attached' });
+        await page.waitForFunction(() => document.querySelector('#activeLotsMetric').textContent === '2');
+        assert.equal(await page.locator('#sagLoadError').isHidden(), true);
+        await page.clock.fastForward(31000);
         await page.locator('#sagLoadError').waitFor();
         assert.match(await page.locator('#sagLoadError').innerText(), /clientes y especies: El servidor no respondió en 30 segundos/);
         await context.close();

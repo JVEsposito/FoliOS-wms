@@ -12,6 +12,13 @@ Está disponible para usuarios internos activos. Las cuentas del portal de clien
 - **Mensajes anteriores** carga otra página del historial. Si llegan mensajes mientras lees más arriba, **Ir al final** permite verlos. La lectura avanza hasta los mensajes mostrados al final; una lectura demorada no retrocede el seguimiento.
 - Si un envío no se confirma, conserva el mensaje y reintenta sin modificarlo. El identificador del intento impide duplicar su entrega.
 
+### Grupos, fotos y moderación
+
+- **Nuevo grupo** permite elegir un nombre y agregar personas internas. En **Integrantes**, quien creó el grupo puede cambiar su nombre y su composición. Un administrador que pertenezca al grupo también puede gestionarlo. Al incorporar a una persona se le da acceso al historial del grupo.
+- Cada mensaje muestra la foto de perfil del remitente. Si la foto no está disponible, se muestran sus iniciales.
+- En el chat global y en los grupos de los que forma parte, el rol **Administrador** puede eliminar un mensaje para todos o silenciar temporalmente a una persona. El chat muestra que el mensaje fue eliminado y deja registro de quién lo moderó y cuándo.
+- El silencio permite leer y suspende el envío de texto y stickers en esa conversación hasta que venza la duración indicada. El administrador puede levantarlo antes desde el mismo control. Las conversaciones privadas son visibles para sus participantes.
+
 El chat se actualiza aproximadamente cada cinco segundos con el panel abierto. Las pestañas ocultas o sin conexión pausan las consultas y los errores producen una espera creciente antes del próximo intento. El historial se descarga por páginas; no se vuelve a descargar completo en cada consulta.
 
 ## Citas de operaciones y menciones
@@ -45,7 +52,7 @@ Una coincidencia exacta se encuentra en cualquier temporada. Una parcial, como l
 
 **Ficha.** Cada cita se muestra como un botón. Al pulsarlo se abre una ficha con los datos del registro y un enlace al módulo, que se abre en otra pestaña. La ficha usa los permisos de quien la abre: sin acceso al módulo sólo se ve la etiqueta y el aviso «No tienes acceso…». Desde la ficha de una persona se puede abrir un privado. Los enlaces a un folio o a una recepción abren su búsqueda en Consultas; los de Prefrío abren el proceso (`/oficina/prefrio?proceso=…`).
 
-**Menciones.** Un mensaje que te menciona se destaca y su conversación muestra **@**. El botón **Chat / correo** también muestra **@** hasta que leas el mensaje. Sólo cuentan las menciones en conversaciones que la persona puede leer: el chat global y sus privados. En el correo, la mención se destaca para los destinatarios.
+**Menciones.** Un mensaje que te menciona se destaca y su conversación muestra **@**. El botón **Chat / correo** también muestra **@** hasta que leas el mensaje. Sólo cuentan las menciones en conversaciones que la persona puede leer: el chat global, sus privados y los grupos a los que pertenece. En el correo, la mención se destaca para los destinatarios.
 
 **Buscar correos.** La búsqueda del correo también encuentra lo citado: `CAR-2611-0042` o el nombre de una persona mencionada.
 
