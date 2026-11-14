@@ -117,13 +117,17 @@ function fillSelect(select, values, placeholder, mapper = (value) => ({ value, l
     }).join('')}`;
 }
 
-function setupOptions() {
+function renderInspectionCatalogs() {
     fillSelect(
         elements.builder.elements.tipo,
         state.catalogs.tipos_lote,
         'Seleccionar tipo de inspección',
         (entry) => ({ value: entry.value, label: entry.label }),
     );
+    renderDestinationOptions();
+}
+
+function renderBuilderOptions() {
     fillSelect(
         elements.builder.elements.cliente,
         state.options.clientes,
@@ -137,7 +141,6 @@ function setupOptions() {
         (entry) => ({ value: entry.value, label: entry.label }),
     );
     refreshCatalogHierarchy({ resetSpecies: true, resetOptional: true });
-    renderDestinationOptions();
 }
 
 function refreshCatalogHierarchy({ resetSpecies = false, resetOptional = false } = {}) {
@@ -243,11 +246,24 @@ function dateTime(value) {
 // Cada fuente carga por separado: si una falla, el resto de la pantalla sigue operativa y
 // el error queda a la vista en vez de dejar todas las listas vacías.
 const WORKSPACE_SOURCES = [
-    { key: 'summary', path: '/inspeccion-sag/resumen', label: 'el resumen' },
-    { key: 'catalogs', path: '/inspeccion-sag/catalogos', label: 'los tipos de inspección y destinos' },
-    { key: 'options', path: '/inspeccion-sag/folios/opciones', label: 'los clientes y especies' },
-    { key: 'lots', path: '/inspeccion-sag/lotes?per_page=100', label: 'los lotes' },
+    { path: '/inspeccion-sag/resumen', label: 'el resumen', render(summary) {
+        state.summary = summary || {};
+        renderSummary();
+    } },
+    { path: '/inspeccion-sag/catalogos', label: 'los tipos de inspección y destinos', render(catalogs) {
+        state.catalogs = { ...state.catalogs, ...(catalogs || {}) };
+        renderInspectionCatalogs();
+    } },
+    { path: '/inspeccion-sag/folios/opciones', label: 'los clientes y especies', render(options) {
+        state.options = options || {};
+        renderBuilderOptions();
+    } },
+    { path: '/inspeccion-sag/lotes?per_page=100', label: 'los lotes', render(lots) {
+        state.lots = lots?.data || [];
+        renderLots();
+    } },
 ];
+let workspaceVersion = 0;
 
 function renderLoadErrors(failures) {
     const banner = document.getElementById('sagLoadError');
@@ -262,34 +278,38 @@ function renderLoadErrors(failures) {
 const WORKSPACE_TIMEOUT_MS = 30000;
 
 async function withTimeout(path) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), WORKSPACE_TIMEOUT_MS);
     try {
-        return await api(path, { signal: AbortSignal.timeout(WORKSPACE_TIMEOUT_MS) });
+        const value = await api(path, { signal: controller.signal });
+        controller.signal.throwIfAborted();
+        return value;
     } catch (error) {
-        if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+        if (controller.signal.aborted) {
             throw new Error(`El servidor no respondió en ${WORKSPACE_TIMEOUT_MS / 1000} segundos.`);
         }
         throw error;
+    } finally {
+        clearTimeout(timeout);
     }
 }
 
 async function loadWorkspace() {
-    const results = await Promise.allSettled(WORKSPACE_SOURCES.map((source) => withTimeout(source.path)));
+    const version = ++workspaceVersion;
     const failures = [];
-    results.forEach((result, index) => {
-        const source = WORKSPACE_SOURCES[index];
-        if (result.status === 'rejected') {
-            failures.push({ label: source.label, message: result.reason?.message || 'Error desconocido.' });
+    renderLoadErrors(failures);
+    await Promise.all(WORKSPACE_SOURCES.map(async (source, index) => {
+        let value;
+        try {
+            value = await withTimeout(source.path);
+        } catch (error) {
+            if (version !== workspaceVersion) return;
+            failures[index] = { label: source.label, message: error?.message || 'Error desconocido.' };
+            renderLoadErrors(failures.filter(Boolean));
             return;
         }
-        if (source.key === 'summary') state.summary = result.value || {};
-        if (source.key === 'catalogs') state.catalogs = { ...state.catalogs, ...(result.value || {}) };
-        if (source.key === 'options') state.options = result.value || {};
-        if (source.key === 'lots') state.lots = result.value?.data || [];
-    });
-    setupOptions();
-    renderSummary();
-    renderLots();
-    renderLoadErrors(failures);
+        if (version === workspaceVersion) source.render(value);
+    }));
 }
 
 async function searchFolios() {
