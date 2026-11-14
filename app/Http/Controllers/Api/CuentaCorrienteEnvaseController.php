@@ -458,23 +458,26 @@ class CuentaCorrienteEnvaseController extends Controller
             .($todos ? '' : '-'.implode('-', array_map(fn (string $t): string => Str::slug($t), $tipos)));
 
         if ($request->input('formato') === 'xlsx') {
+            // Una fila por guía, CSG y propiedad, con una columna por envase: cada dato en su columna para filtrar y sumar.
             $ruta = $excel->generar('Estado de cuenta de envases', [
-                ['clave' => 'fecha', 'titulo' => 'Fecha y hora', 'tipo' => 'fecha_hora'],
-                ['clave' => 'documento', 'titulo' => 'Guía N°'],
-                ['clave' => 'movimiento', 'titulo' => 'Movimiento'],
-                ['clave' => 'tipo_envase', 'titulo' => 'Envase'],
-                ['clave' => 'propiedad', 'titulo' => 'Propiedad'],
-                ['clave' => 'entrada', 'titulo' => 'Recibidos', 'tipo' => 'numero'],
-                ['clave' => 'salida', 'titulo' => 'Entregados', 'tipo' => 'numero'],
-                ['clave' => 'saldo', 'titulo' => 'Saldo', 'tipo' => 'numero'],
-                ['clave' => 'productor', 'titulo' => 'Productor / CSG'],
-            ], $estado['movimientos'], [
+                ['clave' => 'fecha', 'titulo' => 'Fecha', 'tipo' => 'fecha_hora', 'ancho' => 18],
+                ['clave' => 'movimiento', 'titulo' => 'Tipo de movimiento', 'ancho' => 30],
+                ['clave' => 'guia', 'titulo' => 'N° guía', 'ancho' => 14],
+                ['clave' => 'csg', 'titulo' => 'CSG', 'ancho' => 12],
+                ['clave' => 'productor', 'titulo' => 'Productor (razón social)', 'ancho' => 36],
+                ...array_map(fn (array $tipo): array => ['clave' => 'envase_'.$tipo['tipo_envase'], 'titulo' => 'Cant. '.$tipo['nombre'],
+                    'tipo' => 'numero', 'ancho' => 14], $estado['tipos']),
+                ['clave' => 'propiedad', 'titulo' => 'Propiedad', 'ancho' => 14],
+            ], $estado['filas_excel'], [
                 'fecha_corte' => now(config('app.operational_timezone'))->format('d-m-Y H:i'),
                 'usuario' => $request->user()->name,
                 'temporada' => $temporada->codigo.' · '.$temporada->nombre,
                 'cliente' => $cliente->codigo.' · '.$cliente->nombre,
                 'periodo' => $this->periodo($filtros) ?? 'Toda la temporada',
-                'adicionales' => [['Envases', $estado['envases_incluidos'] ? implode(', ', $estado['envases_incluidos']) : 'Todos']],
+                'adicionales' => [
+                    ['Envases', $estado['envases_incluidos'] ? implode(', ', $estado['envases_incluidos']) : 'Todos'],
+                    ['Cantidades', 'Entradas en positivo y salidas en negativo: la suma de cada columna es el saldo.'],
+                ],
             ], 'Estado de cuenta');
 
             return response()->download($ruta, $nombre.'.xlsx')->deleteFileAfterSend();

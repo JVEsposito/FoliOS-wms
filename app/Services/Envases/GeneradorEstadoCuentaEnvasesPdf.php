@@ -104,17 +104,34 @@ class GeneradorEstadoCuentaEnvasesPdf
             ], $estado['movimientos'], array_keys($estado['movimientos']),
         ), []);
         $iniciado = false;
-        foreach ($grupos as $grupo) {
+        $tablas = array_map(function (array $grupo): array {
             $titulo = $grupo['codigo'] === null ? 'Sin productor asociado'
                 : ($grupo['nombre'] ?: 'Productor sin nombre').' · CSG '.$grupo['codigo'];
             $rotulo = $this->pdf->envolver($titulo, 523, self::CUERPO);
             $filas = array_map(fn ($tipo) => [...$tipo, 'textos' => $this->pdf->envolver($tipo['nombre'], 225, self::CUERPO)], $grupo['tipos']);
             $altoRotulo = count($rotulo) * 10 + 2;
-            $alto = $altoRotulo + array_sum(array_map(fn ($fila) => count($fila['textos']) * 10.5, $filas));
+            // Los CSG de una misma razón social forman un bloque; «sin productor» va solo.
+            $razon = $grupo['codigo'] === null ? null : (ResumenEnvasesPorCsg::razonSocial($grupo['nombre']) ?: null);
+
+            return ['rotulo' => $rotulo, 'filas' => $filas, 'alto_rotulo' => $altoRotulo, 'razon' => $razon,
+                'alto' => $altoRotulo + array_sum(array_map(fn ($fila) => count($fila['textos']) * 10.5, $filas))];
+        }, $grupos);
+        $capacidad = $pagina['inicio'] - 42 - self::LIMITE_INFERIOR;
+        foreach ($tablas as $indice => ['rotulo' => $rotulo, 'filas' => $filas, 'alto_rotulo' => $altoRotulo, 'alto' => $alto, 'razon' => $razon]) {
             $necesario = min($alto, $altoRotulo + 10.5);
             // Mantener juntas las tablas habituales de un CSG cuando caben completas.
-            if ($alto <= $pagina['inicio'] - 42 - self::LIMITE_INFERIOR) {
+            if ($alto <= $capacidad) {
                 $necesario = $alto;
+            }
+            // Al abrir una razón social con varios CSG, todos sus CSG en la misma hoja cuando caben en una.
+            if ($razon !== null && ($tablas[$indice - 1]['razon'] ?? null) !== $razon) {
+                $bloque = 0.0;
+                for ($siguiente = $indice; ($tablas[$siguiente]['razon'] ?? null) === $razon; $siguiente++) {
+                    $bloque += $tablas[$siguiente]['alto'];
+                }
+                if ($bloque <= $capacidad) {
+                    $necesario = max($necesario, $bloque);
+                }
             }
             if (! $iniciado) {
                 if ($pagina['y'] - $necesario - 42 < self::LIMITE_INFERIOR) {

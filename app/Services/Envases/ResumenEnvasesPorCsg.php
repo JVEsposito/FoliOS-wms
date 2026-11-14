@@ -2,6 +2,8 @@
 
 namespace App\Services\Envases;
 
+use Illuminate\Support\Str;
+
 /** Atribución de los movimientos al CSG sin prorrateos. */
 class ResumenEnvasesPorCsg
 {
@@ -46,6 +48,35 @@ class ResumenEnvasesPorCsg
         return $codigo === '' ? 'sin_csg' : 'csg:'.$codigo;
     }
 
+    /**
+     * Orden de los productores en el estado de cuenta: por razón social y, dentro de ella, por CSG, para que
+     * los CSG de una misma razón social queden juntos. Los CSG sin nombre van después y «sin productor», al final.
+     *
+     * @param  array{codigo: ?string, nombre?: ?string}  $a
+     * @param  array{codigo: ?string, nombre?: ?string}  $b
+     */
+    public static function comparar(array $a, array $b): int
+    {
+        $sinA = ($a['codigo'] ?? null) === null;
+        $sinB = ($b['codigo'] ?? null) === null;
+        if ($sinA || $sinB) {
+            return $sinA <=> $sinB;
+        }
+        $nombreA = self::razonSocial($a['nombre'] ?? null);
+        $nombreB = self::razonSocial($b['nombre'] ?? null);
+        if (($nombreA === '') !== ($nombreB === '')) {
+            return ($nombreA === '') <=> ($nombreB === '');
+        }
+
+        return strnatcmp($nombreA, $nombreB) ?: strnatcmp((string) $a['codigo'], (string) $b['codigo']);
+    }
+
+    /** Razón social comparable: sin tildes, mayúsculas ni puntuación («Agrícola Sur S.A.» = «AGRICOLA SUR SA»). */
+    public static function razonSocial(?string $nombre): string
+    {
+        return trim((string) preg_replace('/[^A-Z0-9]+/', ' ', strtoupper(Str::ascii((string) $nombre))));
+    }
+
     private static function completar(array $resumen, array $recepciones, array $anteriores): array
     {
         foreach (self::atribuir($anteriores, $recepciones) as $clave => $grupo) {
@@ -59,13 +90,7 @@ class ResumenEnvasesPorCsg
                 $resumen[$clave]['tipos'][$tipo]['saldo_inicial'] = $saldoInicial;
             }
         }
-        uasort($resumen, function ($a, $b) {
-            if ($a['codigo'] === null || $b['codigo'] === null) {
-                return ($a['codigo'] === null) <=> ($b['codigo'] === null);
-            }
-
-            return strnatcmp($a['codigo'], $b['codigo']);
-        });
+        uasort($resumen, [self::class, 'comparar']);
         foreach ($resumen as &$grupo) {
             uasort($grupo['tipos'], fn ($a, $b) => $a['orden'] <=> $b['orden']);
             $grupo['tipos'] = array_values(array_map(fn (array $fila): array => [
