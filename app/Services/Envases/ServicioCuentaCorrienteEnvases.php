@@ -359,8 +359,12 @@ class ServicioCuentaCorrienteEnvases
                 $porDocumento[$claveDocumento] ??= ['movimiento' => $movimiento, 'parte' => $parte, 'guia' => $guia,
                     'historico' => in_array($movimiento->id, $historicos, true), 'tipos' => []];
                 $porDocumento[$claveDocumento]['tipos'][$tipo] ??= ['nombre' => $movimiento->tipo_envase->etiqueta(),
-                    'orden' => $movimiento->tipo_envase->orden(), 'entradas' => 0, 'salidas' => 0];
+                    'orden' => $movimiento->tipo_envase->orden(), 'entradas' => 0, 'salidas' => 0, 'propiedades' => []];
                 $porDocumento[$claveDocumento]['tipos'][$tipo][$esSalida ? 'salidas' : 'entradas'] += $esSalida ? -$parte['impacto'] : $parte['impacto'];
+                // Neto por propiedad (entradas +, salidas −), para el Excel con la propiedad en su columna.
+                $propiedad = $movimiento->propiedad->value;
+                $porDocumento[$claveDocumento]['tipos'][$tipo]['propiedades'][$propiedad]
+                    = ($porDocumento[$claveDocumento]['tipos'][$tipo]['propiedades'][$propiedad] ?? 0) + $parte['impacto'];
                 if (isset($indices[$clave])) {
                     $lineas[$indices[$clave]][$esSalida ? 'salida' : 'entrada'] += $esSalida ? -$parte['impacto'] : $parte['impacto'];
                     $lineas[$indices[$clave]]['saldo'] = $saldoLinea;
@@ -408,7 +412,7 @@ class ServicioCuentaCorrienteEnvases
 
             return $linea;
         }, $lineas);
-        [$detalleCsg, $resumenCsg] = $this->detallePorCsg($porDocumento, $recepcionesCsg, $anterioresCsg, $movimientos);
+        [$detalleCsg, $resumenCsg, $filasExcel] = $this->detallePorCsg($porDocumento, $recepcionesCsg, $anterioresCsg, $movimientos, $inicio);
         $pendientes = DetalleEnvaseRecepcionRomana::query()
             ->whereHas('recepcion', fn (Builder $recepcion) => $recepcion
                 ->where('cliente_id', $cliente->id)
@@ -432,6 +436,7 @@ class ServicioCuentaCorrienteEnvases
             'grupos_documentos' => array_values($gruposDocumentos),
             'resumen_csg' => $resumenCsg,
             'detalle_csg' => $detalleCsg,
+            'filas_excel' => $filasExcel,
             'lineas_pendientes_validacion' => $pendientes,
             'emitido_at' => $this->local(now()),
         ];
@@ -449,9 +454,9 @@ class ServicioCuentaCorrienteEnvases
      *
      * @param  array<string, array<string, mixed>>  $porDocumento  en orden cronológico
      * @param  Collection<int, MovimientoEnvase>  $movimientos
-     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>}
+     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>, 2: list<array<string, mixed>>}
      */
-    private function detallePorCsg(array $porDocumento, array $recepcionesCsg, array $anterioresCsg, Collection $movimientos): array
+    private function detallePorCsg(array $porDocumento, array $recepcionesCsg, array $anterioresCsg, Collection $movimientos, ?CarbonImmutable $inicio): array
     {
         $recepciones = RecepcionRomana::query()
             ->whereKey($movimientos->pluck('recepcion_romana_id')->filter()->unique()->values())
@@ -485,21 +490,95 @@ class ServicioCuentaCorrienteEnvases
                         'orden' => $fila['orden'], 'entradas' => $fila['entradas'], 'salidas' => $fila['salidas']];
                 }
             }
-            $documentos[] = ['fecha' => $this->local($movimiento->ocurrido_at), 'asignaciones' => $asignaciones,
+            $documentos[] = ['fecha' => $this->local($movimiento->ocurrido_at), 'asignaciones' => $asignaciones, 'guia' => $parte['documento'],
                 ...$this->identidadDocumento($movimiento, $parte, $guia, $recepcion, $historico, $opciones)];
         }
         $resumen = ResumenEnvasesPorCsg::desdeAsignaciones($asignacionesResumen, $recepcionesCsg, $anterioresCsg);
         foreach ($anterioresCsg as $anterior) {
             $tipos[$anterior['tipo_envase']] ??= ['nombre' => $anterior['nombre_envase'], 'orden' => $anterior['orden']];
         }
-        $detalle = DetalleEnvasesPorCsg::armar($documentos, ResumenEnvasesPorCsg::saldosIniciales($recepcionesCsg, $anterioresCsg), $tipos);
+        $saldosIniciales = ResumenEnvasesPorCsg::saldosIniciales($recepcionesCsg, $anterioresCsg);
+        $detalle = DetalleEnvasesPorCsg::armar($documentos, $saldosIniciales, $tipos);
         $nombres = collect($resumen)->mapWithKeys(fn (array $g): array => [(string) $g['codigo'] => $g['nombre']]);
         foreach ($detalle as &$grupo) {
             $grupo['nombre'] = $grupo['nombre'] ?: ($nombres[(string) $grupo['codigo']] ?? '');
         }
         unset($grupo);
+        // Con los nombres completos, los CSG de una misma razón social quedan juntos.
+        usort($detalle, [ResumenEnvasesPorCsg::class, 'comparar']);
 
-        return [$detalle, $resumen];
+        return [$detalle, $resumen, $this->filasExcel($documentos, $detalle, $saldosIniciales, $inicio === null ? null : $this->local($inicio))];
+    }
+
+    /**
+     * Filas del Excel del estado de cuenta: una por documento, CSG y propiedad, con una columna por envase.
+     * Las entradas van en positivo y las salidas en negativo, así la suma de cada columna es el saldo; con un
+     * período, cada CSG parte con su saldo al inicio. Mismo orden que el detalle por productor: razón social,
+     * CSG y fecha.
+     *
+     * @param  list<array<string, mixed>>  $documentos  en orden cronológico, con sus asignaciones por CSG
+     * @param  list<array<string, mixed>>  $detalle  grupos ya ordenados
+     * @param  array<string, array<string, int>>  $saldosIniciales  por clave de CSG y tipo de envase
+     * @return list<array<string, mixed>>
+     */
+    private function filasExcel(array $documentos, array $detalle, array $saldosIniciales, ?string $inicio): array
+    {
+        $grupos = [];
+        foreach ($detalle as $orden => $grupo) {
+            $grupos[ResumenEnvasesPorCsg::clave($grupo['codigo'] === null ? null : ['codigo' => $grupo['codigo']])] = [
+                'orden' => $orden, 'csg' => $grupo['codigo'], 'productor' => $grupo['codigo'] === null ? 'Sin productor asociado' : $grupo['nombre']];
+        }
+        $propiedades = array_flip(array_map(fn (PropiedadEnvase $p): string => $p->value, PropiedadEnvase::cases()));
+        $filas = [];
+        $agregar = function (string $clave, int $documento, string $propiedad, array $base, array $cantidades) use (&$filas, $grupos, $propiedades): void {
+            $grupo = $grupos[$clave] ?? ['orden' => PHP_INT_MAX, 'csg' => null, 'productor' => 'Sin productor asociado'];
+            $fila = [...$base, 'csg' => $grupo['csg'], 'productor' => $grupo['productor'],
+                'propiedad' => match ($propiedad) {
+                    '' => null,
+                    'varias' => 'Varias',
+                    default => self::etiquetaPropiedad(PropiedadEnvase::from($propiedad)),
+                }];
+            foreach ($cantidades as $tipo => $cantidad) {
+                $fila['envase_'.$tipo] = $cantidad;
+            }
+            $filas[] = ['orden' => [$grupo['orden'], $documento, $propiedades[$propiedad] ?? -1], 'fila' => $fila];
+        };
+        if ($inicio !== null) {
+            foreach ($saldosIniciales as $clave => $porTipo) {
+                if ($porTipo = array_filter($porTipo)) {
+                    $agregar($clave, -1, '', ['fecha' => $inicio, 'movimiento' => 'Saldo al inicio del período', 'guia' => null], $porTipo);
+                }
+            }
+        }
+        foreach ($documentos as $indice => $documento) {
+            foreach ($documento['asignaciones'] as $asignacion) {
+                $porPropiedad = [];
+                foreach ($asignacion['tipos'] as $tipo => $fila) {
+                    $neto = $fila['entradas'] - $fila['salidas'];
+                    if ($fila['entradas'] === 0 && $fila['salidas'] === 0) {
+                        continue;
+                    }
+                    $netos = array_filter($fila['propiedades'] ?? []);
+                    if (count($netos) === 1) {
+                        $porPropiedad[array_key_first($netos)][$tipo] = $neto;
+                    } elseif ($netos && array_sum($netos) === $neto) {
+                        foreach ($netos as $propiedad => $cantidad) {
+                            $porPropiedad[$propiedad][$tipo] = $cantidad;
+                        }
+                    } else {
+                        // Parte de un envase con dos propiedades en una guía repartida entre CSG: no se prorratea.
+                        $porPropiedad['varias'][$tipo] = $neto;
+                    }
+                }
+                foreach ($porPropiedad as $propiedad => $cantidades) {
+                    $agregar(ResumenEnvasesPorCsg::clave($asignacion['csg']), $indice, (string) $propiedad,
+                        ['fecha' => $documento['fecha'], 'movimiento' => $documento['movimiento'], 'guia' => $documento['guia']], $cantidades);
+                }
+            }
+        }
+        usort($filas, fn (array $a, array $b): int => $a['orden'] <=> $b['orden']);
+
+        return array_column($filas, 'fila');
     }
 
     /**

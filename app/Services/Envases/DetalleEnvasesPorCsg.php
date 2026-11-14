@@ -54,13 +54,8 @@ class DetalleEnvasesPorCsg
                 }
             }
         }
-        uksort($grupos, function (string $a, string $b): int {
-            if ($a === 'sin_csg' || $b === 'sin_csg') {
-                return ($a === 'sin_csg') <=> ($b === 'sin_csg');
-            }
-
-            return strnatcmp($a, $b);
-        });
+        // Los CSG de una misma razón social, juntos: por razón social y luego por CSG.
+        uasort($grupos, [ResumenEnvasesPorCsg::class, 'comparar']);
 
         return array_values(array_map(function (array $grupo) use ($saldosIniciales, $tipos): array {
             $clave = $grupo['clave'];

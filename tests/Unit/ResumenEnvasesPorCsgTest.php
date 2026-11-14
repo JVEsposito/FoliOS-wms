@@ -137,4 +137,21 @@ class ResumenEnvasesPorCsgTest extends TestCase
             }
         }
     }
+
+    public function test_ordena_por_razon_social_y_luego_por_csg_con_sin_productor_al_final(): void
+    {
+        $grupos = [
+            ['codigo' => null, 'nombre' => ''],
+            ['codigo' => '300', 'nombre' => 'ZETA FRUTICOLA SPA.'],
+            ['codigo' => '050', 'nombre' => ''],
+            ['codigo' => '200', 'nombre' => 'Alfa Agrícola'],
+            ['codigo' => '100', 'nombre' => 'Zeta Frutícola SpA'],
+        ];
+        usort($grupos, [ResumenEnvasesPorCsg::class, 'comparar']);
+
+        // Las dos escrituras de Zeta son la misma razón social; el CSG sin nombre y «sin productor» van al final.
+        $this->assertSame(['200', '100', '300', '050', null], array_column($grupos, 'codigo'));
+        $this->assertSame('ZETA FRUTICOLA SPA', ResumenEnvasesPorCsg::razonSocial(' Zeta  Frutícola SpA'));
+        $this->assertSame('ZETA FRUTICOLA SPA', ResumenEnvasesPorCsg::razonSocial('ZETA FRUTICOLA SPA.'));
+    }
 }
