@@ -506,7 +506,9 @@ class GeneradorEstadoCuentaEnvasesPdf
             $y -= 12;
         }
         $y -= 7;
-        foreach ($this->pdf->envolver(sprintf('Temporada %s · %s · Emitido el %s', $estado['temporada']['codigo'], $periodo, $this->fecha($estado['emitido_at'])), 535, self::SECUNDARIO) as $linea) {
+        // Un estado de cuenta de solo algunos envases lo dice en la cabecera de cada hoja.
+        $envases = ! empty($estado['envases_incluidos']) ? ' · Envases: '.implode(', ', $estado['envases_incluidos']) : '';
+        foreach ($this->pdf->envolver(sprintf('Temporada %s · %s%s · Emitido el %s', $estado['temporada']['codigo'], $periodo, $envases, $this->fecha($estado['emitido_at'])), 535, self::SECUNDARIO) as $linea) {
             $contenido .= $this->pdf->texto(30, $y, self::SECUNDARIO, $linea);
             $y -= 11;
         }

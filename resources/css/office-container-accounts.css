@@ -654,3 +654,70 @@
     .reconciliation-candidates article { flex-direction: column; align-items: stretch; }
     .reconciliation-scroll-hint { display: block; }
 }
+
+/* Estado de cuenta: elegir qué envases incluye el documento. */
+.statement-dialog__types,
+.statement-dialog__format {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.statement-dialog__format { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.statement-dialog__types legend,
+.statement-dialog__format legend {
+    margin-bottom: 8px;
+    padding: 0;
+    color: var(--text-secondary);
+    font-size: .85rem;
+    font-weight: 800;
+}
+
+.review-dialog .statement-dialog__option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 44px;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.statement-dialog__option:has(input:checked) {
+    border-color: var(--corporate-blue);
+    background: var(--surface-muted);
+}
+
+.review-dialog .statement-dialog__option input {
+    width: 18px;
+    height: 18px;
+    min-height: 0;
+    flex: none;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--corporate-blue);
+}
+
+.review-dialog .statement-dialog__option span {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: .92rem;
+    font-weight: 700;
+}
+
+.statement-dialog__option small {
+    margin-left: auto;
+    color: var(--text-secondary);
+    font-size: .8rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.statement-dialog__quick { display: flex; flex-wrap: wrap; gap: 8px; }

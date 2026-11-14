@@ -441,15 +441,21 @@ class CuentaCorrienteEnvaseController extends Controller
         GeneradorLibroXlsx $excel,
     ): Response|BinaryFileResponse {
         Gate::authorize('consultar-cuenta-envases');
-        $request->validate([
+        $datos = $request->validate([
             'cliente_id' => ['required', 'uuid', 'exists:clientes,id'],
             'formato' => ['nullable', Rule::in(['pdf', 'xlsx'])],
+            // Solo los envases elegidos (por ejemplo, solo esponjas o bins y totes); sin indicar, todos.
+            'tipos_envase' => ['nullable', 'array', 'max:'.count(TipoEnvaseRomana::cases())],
+            'tipos_envase.*' => ['distinct', Rule::enum(TipoEnvaseRomana::class)],
         ]);
         $filtros = $this->filtros($request, $temporadaActiva);
         $cliente = Cliente::query()->findOrFail($filtros['cliente_id']);
         $temporada = Temporada::query()->findOrFail($filtros['temporada_id']);
-        $estado = $cuenta->estadoCuenta($cliente, $temporada, $filtros['desde'] ?? null, $filtros['hasta'] ?? null);
-        $nombre = 'estado-cuenta-envases-'.Str::slug($cliente->codigo ?: $cliente->nombre).'-'.$temporada->codigo;
+        $tipos = collect($datos['tipos_envase'] ?? [])->sortBy(fn (string $t): int => TipoEnvaseRomana::from($t)->orden())->values()->all();
+        $todos = $tipos === [] || count($tipos) === count(TipoEnvaseRomana::cases());
+        $estado = $cuenta->estadoCuenta($cliente, $temporada, $filtros['desde'] ?? null, $filtros['hasta'] ?? null, $todos ? null : $tipos);
+        $nombre = 'estado-cuenta-envases-'.Str::slug($cliente->codigo ?: $cliente->nombre).'-'.$temporada->codigo
+            .($todos ? '' : '-'.implode('-', array_map(fn (string $t): string => Str::slug($t), $tipos)));
 
         if ($request->input('formato') === 'xlsx') {
             $ruta = $excel->generar('Estado de cuenta de envases', [
@@ -468,6 +474,7 @@ class CuentaCorrienteEnvaseController extends Controller
                 'temporada' => $temporada->codigo.' · '.$temporada->nombre,
                 'cliente' => $cliente->codigo.' · '.$cliente->nombre,
                 'periodo' => $this->periodo($filtros) ?? 'Toda la temporada',
+                'adicionales' => [['Envases', $estado['envases_incluidos'] ? implode(', ', $estado['envases_incluidos']) : 'Todos']],
             ], 'Estado de cuenta');
 
             return response()->download($ruta, $nombre.'.xlsx')->deleteFileAfterSend();

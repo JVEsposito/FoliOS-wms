@@ -94,6 +94,19 @@
                 <div class="dialog-actions"><button class="secondary-button" id="accountAdjustmentCancel" type="button">Cancelar</button><button class="primary-button" type="submit">Registrar asiento</button></div>
             </form>
         </dialog>
+        <dialog class="review-dialog property-dialog statement-dialog" id="statementDialog" aria-labelledby="statementDialogTitle" aria-describedby="statementHelp">
+            <form id="statementForm" novalidate>
+                <input name="cliente_id" type="hidden">
+                <header class="review-dialog__header"><p class="eyebrow">ESTADO DE CUENTA</p><h2 id="statementDialogTitle">Descargar estado de cuenta</h2></header>
+                <div class="property-dialog__context"><span>CLIENTE Y PERÍODO</span><strong id="statementSummary"></strong></div>
+                <fieldset class="statement-dialog__types" id="statementTypes"><legend>Envases que incluye el documento</legend></fieldset>
+                <div class="statement-dialog__quick"><button class="secondary-button" type="button" data-statement-select="all">Marcar todos</button><button class="secondary-button" type="button" data-statement-select="none">Quitar todos</button></div>
+                <fieldset class="statement-dialog__format"><legend>Formato</legend><label class="statement-dialog__option"><input type="radio" name="formato" value="pdf" required><span>PDF</span></label><label class="statement-dialog__option"><input type="radio" name="formato" value="xlsx" required><span>Excel</span></label></fieldset>
+                <p class="property-dialog__help" id="statementHelp">Cada envase lleva su propia cuenta: el documento trae los movimientos, saldos y el detalle por CSG solo de los envases marcados.</p>
+                <p class="form-error" id="statementError" role="alert"></p>
+                <footer class="dialog-actions"><button class="secondary-button" id="statementCancel" type="button">Cancelar</button><button class="primary-button" id="statementSubmit" type="submit">Descargar</button></footer>
+            </form>
+        </dialog>
         <dialog class="review-dialog" id="reviewDialog" aria-labelledby="reviewDialogTitle">
             <form id="reviewForm" method="dialog">
                 <input name="movimiento_id" type="hidden">

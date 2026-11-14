@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const html = readFileSync(resolve(root, 'storage/app/ui/oficina/cuenta-corriente.html'), 'utf8');
 
-async function setup(browser, manage, width = 390, historical = false, reconciliation = {}) {
+async function setup(browser, manage, width = 390, historical = false, reconciliation = {}, statement = null) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const identity = { nombre: 'Cuenta Envases', rol: manage ? 'administrador' : 'consulta', puede_consultar_cuenta_envases: true, modulos_acceso: ['materia-prima.cuenta-envases'] };
     await context.addInitScript((user) => {
@@ -19,6 +19,7 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
     const client = { id: 'cliente', codigo: 'CLI', nombre: 'Cliente de arriendo' };
     const movements = historical ? [{ id: 'historico', cliente: client, numero_documento: '123', movimiento: 'Ingreso en arriendo', tipo_envase: 'bins', cantidad: 138, impacto_cuenta: 138, impacto_cuenta_vigente: 138, impacto_existencia: 138, propiedad: 'arrendada', ocurrido_at: '2026-09-01T13:36:00Z', estado_revision: 'pendiente', puede_corregir_saldo_historico: true }] : [];
     const writes = [];
+    const statements = [];
     const reconciliationCalls = { searches: [], previews: [], applies: [], refreshes: 0 };
     let reconciled = false;
     const pair = { recepcion_id: 'recepcion-1', guia_id: 'guia-1', cliente: client.nombre, recepcion: 'REC-2627-0011', guia_ingreso: '11893', despacho: 'GDE-2627-0001', guia_salida: reconciliation.different ? '2235' : '2236', guia_salida_romana: reconciliation.different ? '2234' : '002.236' };
@@ -34,7 +35,12 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
         }
         if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
         if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Prueba', temporada: { nombre: '2026' } } } });
-        if (path.endsWith('/cuenta-corriente/catalogos')) return route.fulfill({ json: { clientes: [client], temporadas: [{ id: 'temporada', codigo: '2026', nombre: '2026', activa: true }], tipos_envase: [{ codigo: 'bins', nombre: 'Bins' }], hoy: '2026-10-21', puede_ajustar: manage } });
+        if (path.endsWith('/cuenta-corriente/catalogos')) return route.fulfill({ json: { clientes: [client], temporadas: [{ id: 'temporada', codigo: '2026', nombre: '2026', activa: true }], tipos_envase: statement?.types || [{ codigo: 'bins', nombre: 'Bins' }], hoy: '2026-10-21', puede_ajustar: manage } });
+        if (path.endsWith('/cuenta-corriente/estado-cuenta')) {
+            const query = new URL(request.url()).searchParams;
+            statements.push({ formato: query.get('formato'), cliente: query.get('cliente_id'), tipos: query.getAll('tipos_envase[]') });
+            return route.fulfill({ body: '%PDF-1.4', contentType: 'application/pdf', headers: { 'Content-Disposition': 'attachment; filename="estado-cuenta.pdf"' } });
+        }
         if (path.endsWith('/conciliaciones-salida')) {
             const query = Object.fromEntries(new URL(request.url()).searchParams);
             reconciliationCalls.searches.push(query);
@@ -78,7 +84,7 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
         if (path.endsWith('/cuenta-corriente/movimientos')) {
             reconciliationCalls.refreshes++;
             return route.fulfill({ json: {
-            data: movements, pendientes: [], reservas: [], balances: [{ cliente: client, tipo_envase: 'bins', saldo: balance }],
+            data: movements, pendientes: [], reservas: [], balances: statement?.balances?.(client) || [{ cliente: client, tipo_envase: 'bins', saldo: balance }],
             existencia: { tipos: [], propios_entregados: [] }, resumen: { movimientos_confirmados: movements.length, envases_reservados: 0, lineas_pendientes_validacion: 0, observados: 0, sincronizado_at: '2026-10-21T15:00:00Z' },
             } });
         }
@@ -89,7 +95,7 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto('http://localhost/oficina/envases/cuenta-corriente');
     await page.waitForFunction(() => document.getElementById('balanceList')?.textContent.includes('Cliente de arriendo'));
-    return { context, page, writes, errors, reconciliationCalls };
+    return { context, page, writes, errors, reconciliationCalls, statements };
 }
 
 test('registra una apertura negativa y su reversa conservando el contexto de cuenta en móvil y escritorio', async () => {
@@ -318,6 +324,66 @@ test('corrige +138 a -138 con vista previa de -276 y conserva la existencia en m
             assert.equal(writes[0].saldo_correcto, -138);
             assert.equal(writes[0].es_saldo_historico, true);
             assert.match(await page.locator('#movementsBody').textContent(), /138/);
+            assert.deepEqual(errors, []);
+            await context.close();
+        }
+    } finally { await browser.close(); }
+});
+
+test('el estado de cuenta se descarga solo con los envases marcados, en PDF o Excel, en móvil y escritorio', async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
+    const statement = {
+        types: [{ codigo: 'bins', nombre: 'Bins plástico' }, { codigo: 'esponjas', nombre: 'Esponja de bins' }, { codigo: 'totes', nombre: 'Tote' }],
+        balances: (client) => [{ cliente: client, tipo_envase: 'bins', saldo: -12 }, { cliente: client, tipo_envase: 'esponjas', saldo: 4 }],
+    };
+    try {
+        for (const width of [390, 1280]) {
+            const { context, page, statements, errors } = await setup(browser, false, width, false, {}, statement);
+            const dialog = page.locator('#statementDialog');
+            const types = dialog.locator('#statementTypes input');
+            const choose = (label) => page.locator('.balance-client__header .office-action-select').selectOption({ label });
+            // De entrada vienen marcados los envases con saldo del cliente.
+            await choose('Estado de cuenta en Excel');
+            assert.equal(await dialog.isVisible(), true);
+            assert.deepEqual(await types.evaluateAll((inputs) => inputs.map((input) => [input.value, input.checked])), [['bins', true], ['esponjas', true], ['totes', false]]);
+            assert.equal(await dialog.locator('[name="formato"]:checked').inputValue(), 'xlsx');
+            assert.match(await dialog.locator('#statementSummary').textContent(), /CLI · Cliente de arriendo · Toda la temporada/);
+            assert.match(await dialog.locator('#statementTypes').textContent(), /Saldo -12.*Saldo \+4/s);
+            const box = await dialog.boundingBox();
+            assert.ok(box.x >= 0 && box.x + box.width <= width, 'el diálogo cabe en la pantalla');
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+
+            // Solo esponjas, en Excel.
+            await dialog.getByLabel('Bins plástico').uncheck();
+            await dialog.locator('#statementSubmit').click();
+            await page.waitForFunction(() => !document.getElementById('statementDialog').open);
+            assert.deepEqual(statements.at(-1), { formato: 'xlsx', cliente: 'cliente', tipos: ['esponjas'] });
+
+            // Todos los envases es el estado de cuenta completo: no envía filtro.
+            await choose('Estado de cuenta en PDF');
+            await dialog.getByRole('button', { name: 'Marcar todos' }).click();
+            await dialog.locator('#statementSubmit').click();
+            await page.waitForFunction(() => !document.getElementById('statementDialog').open);
+            assert.deepEqual(statements.at(-1), { formato: 'pdf', cliente: 'cliente', tipos: [] });
+
+            // Sin envases marcados no descarga; bins y totes, cambiando a Excel en el mismo diálogo.
+            await choose('Estado de cuenta en PDF');
+            await dialog.getByRole('button', { name: 'Quitar todos' }).click();
+            await dialog.locator('#statementSubmit').click();
+            assert.equal(await dialog.locator('#statementError').textContent(), 'Marca al menos un envase.');
+            assert.equal(statements.length, 2);
+            await dialog.getByLabel('Bins plástico').check();
+            await dialog.getByLabel('Tote').check();
+            await dialog.getByLabel('Excel').check();
+            await dialog.locator('#statementSubmit').click();
+            await page.waitForFunction(() => !document.getElementById('statementDialog').open);
+            assert.deepEqual(statements.at(-1), { formato: 'xlsx', cliente: 'cliente', tipos: ['bins', 'totes'] });
+
+            // Cancelar no descarga nada.
+            await choose('Estado de cuenta en PDF');
+            await dialog.locator('#statementCancel').click();
+            assert.equal(await dialog.isVisible(), false);
+            assert.equal(statements.length, 3);
             assert.deepEqual(errors, []);
             await context.close();
         }

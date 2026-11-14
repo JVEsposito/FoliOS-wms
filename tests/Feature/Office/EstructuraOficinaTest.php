@@ -37,7 +37,7 @@ class EstructuraOficinaTest extends TestCase
     public function test_cuenta_envases_incluye_conciliacion_y_guia_de_uso(): void
     {
         $html = $this->get('/oficina/envases/cuenta-corriente')->assertOk()->getContent();
-        foreach (['duplicateReconciliationOpen', 'duplicateReconciliationDialog', 'duplicateSearchForm', 'duplicatePreviewForm', 'duplicateApplyForm', 'reconciliationGuideDialog'] as $id) {
+        foreach (['duplicateReconciliationOpen', 'duplicateReconciliationDialog', 'duplicateSearchForm', 'duplicatePreviewForm', 'duplicateApplyForm', 'reconciliationGuideDialog', 'statementDialog', 'statementForm', 'statementTypes'] as $id) {
             $this->assertStringContainsString('id="'.$id.'"', $html);
         }
         $this->assertStringContainsString('Confirmar conciliación', $html);
