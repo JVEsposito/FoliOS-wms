@@ -93,6 +93,41 @@ class ProductorSalidaDestareTest extends TestCase
         $this->assertSame('CSG-CORR', $ajuste->datos['ajuste_recepcion']['productor']['codigo']);
     }
 
+    /**
+     * Caso de planta: el camión trajo envases de dos CSG y salió con todos hacia uno. La corrección que solo
+     * indica ese CSG no debe bloquearse porque un ingreso ya salió en un despacho (las esponjas propias).
+     * Con 2 bins de A y 2 de B, si los 4 salen a B: A queda +2 (los devolvió) y B −2 (se llevó los de A).
+     */
+    public function test_la_salida_total_va_al_csg_elegido_aunque_un_ingreso_ya_tenga_despachos(): void
+    {
+        [$recepcion] = $this->recepcionCerradaConDosGuias(dosCsg: true);
+        RecepcionRomana::whereKey($recepcion->id)->update(['salida_productor_snapshot' => null]);
+        $totes = MovimientoEnvase::where('recepcion_romana_id', $recepcion->id)->where('tipo_movimiento', 'recepcion_fruta')->where('tipo_envase', 'totes')->sole();
+        MovimientoEnvase::create([...$totes->only(['temporada_id', 'cliente_id', 'tipo_envase', 'propiedad']), 'operacion_id' => (string) Str::uuid(),
+            'documento_tipo' => 'guia_despacho_envases', 'numero_documento' => 'GD-PRUEBA', 'tipo_movimiento' => 'despacho_cliente', 'cantidad' => 10,
+            'signo_cuenta' => -1, 'signo_existencia' => -1, 'movimiento_origen_id' => $totes->id, 'ocurrido_at' => now(),
+            'estado_revision' => 'pendiente', 'creado_por_user_id' => User::factory()->create()->id]);
+        $ruta = "/api/romana/recepciones/{$recepcion->id}/correccion-integral";
+        $estado = $this->comoAdministrador()->getJson($ruta)->json('data');
+
+        // Cambiar el conteo de ese envase sigue bloqueado, con la salida a «Solo cuenta de envases».
+        $conteo = $this->payloadCompleto($estado);
+        $conteo['destare']['salida_productor_csg'] = 'CSG-CORR-B';
+        $conteo['segmentos'][0]['envases'] = [['tipo_envase' => 'bins', 'cantidad' => 2], ['tipo_envase' => 'totes', 'cantidad' => 47]];
+        $this->putJson($ruta, $conteo)->assertConflict()->assertJsonPath('message',
+            'El ingreso de Tote ya salió en un despacho o tiene un vínculo posterior: no se puede cambiar su conteo ni su propiedad aquí. Usa «Solo cuenta de envases» para corregir la cuenta del cliente.');
+
+        $payload = $this->payloadCompleto($estado);
+        $payload['destare']['salida_productor_csg'] = 'CSG-CORR-B';
+        $this->putJson($ruta, $payload)->assertOk()->assertJsonPath('data.salida_productor.codigo', 'CSG-CORR-B');
+
+        $cuenta = app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta($recepcion->cliente, $recepcion->temporada, null, null);
+        $saldos = fn (string $codigo): array => collect(collect($cuenta['resumen_csg'])->firstWhere('codigo', $codigo)['tipos'])
+            ->mapWithKeys(fn ($t) => [$t['tipo_envase'] => [$t['entradas'], $t['salidas'], $t['saldo_final']]])->all();
+        $this->assertSame(['bins' => [2, 0, 2], 'totes' => [48, 0, 48]], $saldos('CSG-CORR'));
+        $this->assertSame(['bins' => [2, 4, -2], 'totes' => [49, 97, -48]], $saldos('CSG-CORR-B'));
+    }
+
     public function test_corregir_salida_cambia_el_productor_y_el_camion_vacio_no_lo_pide(): void
     {
         [$recepcion] = $this->recepcionCerradaConDosGuias(dosCsg: true);
