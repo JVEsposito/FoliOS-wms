@@ -35,6 +35,7 @@ use App\Services\Romana\ProductoresRecepcion;
 use App\Services\Romana\ServicioAjusteCuentaEnvasesRecepcion;
 use App\Services\Romana\ServicioAnulacionRecepcionRomana;
 use App\Services\Romana\ServicioCorreccionIntegralRecepcion;
+use App\Services\Romana\ServicioCorreccionNumeroGuia;
 use App\Services\Romana\ServicioGuiasRecepcionRomana;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRecepcionRomana;
@@ -225,6 +226,20 @@ class RecepcionRomanaController extends Controller
     {
         return response()->json(['data' => [...$servicio->estado($recepcion), 'cuenta_envases' => $cuenta->estado($recepcion)]])
             ->header('Cache-Control', 'no-store, private');
+    }
+
+    /** Solo el número de las guías de ingreso, en cualquier etapa: no cambia envases, lotes ni kilos. */
+    public function corregirNumeroGuia(Request $request, RecepcionRomana $recepcion, ServicioCorreccionNumeroGuia $servicio): JsonResponse
+    {
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'], 'version_conocida' => ['required', 'integer', 'min:1'],
+            'motivo' => ['required', 'string', 'min:10', 'max:2000'],
+            'guias' => ['required', 'array', 'min:1', 'max:20'], 'guias.*.id' => ['required', 'uuid', 'distinct'],
+            'guias.*.numero_guia_despacho' => ['required', 'string', 'max:80'],
+        ]);
+        $recepcion = $servicio->corregir($recepcion, $datos, $request->user());
+
+        return response()->json(['data' => $this->recepcion($recepcion->refresh(), true)]);
     }
 
     /** Ajuste de administración solo en la cuenta corriente de envases: no toca guías, lotes ni kilos. */

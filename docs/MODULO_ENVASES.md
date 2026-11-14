@@ -353,6 +353,8 @@ Cuando Validación MP deja más de un CSG en la recepción y el camión sale con
 - en el ajuste solo de cuenta de los entregados;
 - en **Buscar salida** de una devolución, que precarga ese productor.
 
+Ejemplo: entraron 36 bins, 2 del CSG A y 34 del CSG B, y salieron los 36 con el CSG B. En la cuenta, A queda con +2 (devolvió 2) y B con −2 (se llevó 36 y trajo 34).
+
 **Corregir salida** de Romana permite cambiarlo. En las recepciones ya cerradas sin productor, la **Corrección administrativa** completa lo pide en su sección de destare. Cambiar solo el productor no mueve envases, lotes ni kilos, así que funciona aunque los lotes tengan entregas a proceso. Requiere la migración `2026_11_13_220000_productor_salida_destare_recepciones_romana`.
 
 ### Ajuste solo de la cuenta de envases de una recepción (administración)
@@ -364,6 +366,7 @@ La corrección completa de una recepción validada (Romana → **Corrección adm
 - Cada envase y lado queda con **un solo ajuste vigente contra lo registrado**: un asiento `ajuste_cuenta` con `signo_existencia = 0`, enlazado a la recepción (`documento_tipo = ajuste_cuenta_recepcion`), fechado un segundo después del ingreso o de la salida originales. Al ajustar de nuevo, el anterior se reversa en su misma fecha y se reemplaza; volver a lo registrado lo deja sin efecto. Los asientos guardan motivo, usuario, hora real del registro, lo registrado y lo correcto, y Romana deja el evento `ajuste_cuenta_envases`.
 - **Estado de cuenta**: el ajuste va en su propia línea, con signo y en su lado (−2 en recibidos no se lee como 2 entregados): *Ajuste a la guía de ingreso N° … · Ajuste de recibidos por administración · Recepción REC-… · registrado el … · Motivo: …*. El motivo se imprime: escríbelo para que lo lea el cliente. Los ajustes reemplazados no aparecen. En el detalle por CSG, el ajuste de recibidos va al CSG de la recepción; si tiene varios, al que indica el administrador. El de entregados va al CSG que recibió la salida del destare.
 - **RPR-01**: las observaciones agregan *Cuenta de envases ajustada por administración (fecha): Bins plástico recibidos 4 → 3. Motivo: …*. Lo recibido del documento sigue siendo lo validado.
+- **Bloqueos de la corrección completa**: un ingreso que ya salió en un despacho, o que tiene otra corrección, solo bloquea si cambia el conteo o la propiedad de ese envase. Cambiar la guía o el CSG de la salida no se bloquea; para corregir la cuenta de ese envase se usa «Solo cuenta de envases».
 - **Para no corregir dos veces**: la corrección completa rechaza cambiar el conteo o la salida de un envase con ajuste vigente, y **Corregir cantidad** o **Corregir propiedad** en Cuenta Envases rechazan una recepción con ajuste vigente. Primero se deja la cuenta como lo registrado desde Romana. **Corregir saldo anterior** no aplica a estos ajustes; **Revertir asiento** sí, y conserva la recepción. Un ajuste ya revertido no impide anular la recepción.
 
 ## Auditoría
