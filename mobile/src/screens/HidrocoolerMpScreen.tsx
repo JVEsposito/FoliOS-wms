@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AuthSession } from '../domain/estiba';
-import { HydroCatalog, FinishHydroCycle, HydroFilters, HydroLot, HydroSummary, HydroTray, ReleaseHydroCycle, StartHydroCycle } from '../domain/hidrocoolerMp';
+import { HydroCatalog, FinishHydroCycle, HydroFilters, HydroLot, HydroModality, HydroSummary, HydroTray, ReleaseHydroCycle, StartHydroCycle, StartHydroOfficial, buildPatioFinish, buildPatioStart, isPatioCycle, localDateTime, optional, optionalNumber, required, toDate, toNumber } from '../domain/hidrocoolerMp';
 import { getHydroCatalog, getHydroSummary, listHydroLots, startHydroCycle, finishHydroCycle, releaseHydroCycle, shareHydroRegister } from '../services/hidrocoolerMpApi';
 import { colors } from '../theme/colors';
 
@@ -22,12 +22,9 @@ const TRAYS: { value: HydroTray; label: string }[] = [
 const YES_NO: Option[] = [{ value: '1', label: 'Sí' }, { value: '0', label: 'No' }];
 const WATER: Option[] = [{ value: 'conforme', label: 'Conforme' }, { value: 'no_conforme', label: 'No conforme' }];
 const DESTINATIONS: Option[] = [{ value: 'camara', label: 'Cámara MP' }, { value: 'proceso', label: 'Directo a Fruta a proceso' }];
+const MODES: Option[] = [{ value: 'patio', label: 'Registro de patio' }, { value: 'oficial', label: 'Registro completo POEMP-R3' }];
 const numberFormat = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 3 });
 
-function localDateTime(date = new Date()) {
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16).replace('T', ' ');
-}
 function dateLabel(value: string | null | undefined) {
   if (!value) return '—';
   const date = new Date(value);
@@ -37,36 +34,11 @@ function label(value: string | null | undefined) {
   return ({ camara: 'Cámara MP', proceso: 'Directo a proceso', conforme: 'Conforme', no_conforme: 'No conforme', sin_novedad: 'Sin novedad', filtrado: 'Filtrado', recambio: 'Recambio' } as Record<string, string>)[value ?? ''] ?? (value || '—');
 }
 function errorMessage(reason: unknown) { return reason instanceof Error ? reason.message : 'No fue posible completar la operación.'; }
-function toNumber(value: string, name: string, min: number, max: number, integer = false) {
-  const input = value.trim().replace(',', '.');
-  if (!input || !/^-?\d+(\.\d{1,2})?$/.test(input)) throw new Error(`${name}: ingresa un número válido de hasta dos decimales.`);
-  const parsed = Number(input);
-  if (parsed < min || parsed > max || (integer && !Number.isInteger(parsed))) throw new Error(`${name}: debe estar entre ${min} y ${max}${integer ? ' y ser entero' : ''}.`);
-  return parsed;
-}
 function doseNumber(value: string) {
   const input = value.trim().replace(',', '.');
   if (!/^\d+(\.\d{1,4})?$/.test(input) || Number(input) <= 0 || Number(input) > 99999999) throw new Error('Dosis: ingresa un número positivo con hasta cuatro decimales.');
   return Number(input);
 }
-function optionalNumber(value: string, name: string, min: number, max: number) {
-  return value.trim() ? toNumber(value, name, min, max) : null;
-}
-function toDate(value: string, name: string) {
-  const input = value.trim();
-  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(input)) throw new Error(`${name}: usa el formato AAAA-MM-DD HH:mm.`);
-  const date = new Date(input.replace(' ', 'T'));
-  if (Number.isNaN(date.getTime()) || localDateTime(date) !== input || date.getTime() > Date.now()) {
-    throw new Error(`${name}: ingresa una fecha y hora válida que no sea futura.`);
-  }
-  return date.toISOString();
-}
-function required(value: string, name: string, min = 1, max = 2000) {
-  const text = value.trim();
-  if (text.length < min || text.length > max) throw new Error(`${name}: debe tener entre ${min} y ${max} caracteres.`);
-  return text;
-}
-function optional(value: string) { return value.trim() || null; }
 
 export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
   const canConsult = auth.usuario.capacidades.puede_consultar_hidrocooler_materia_prima === true;
@@ -87,6 +59,8 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
   const [form, setForm] = useState<Form>({});
   const [catalog, setCatalog] = useState<HydroCatalog>({ data: [], rango_cloro_ppm: null });
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Patio registra tiempos, temperaturas y estado del agua; el registro completo POEMP-R3 queda a elección.
+  const [startMode, setStartMode] = useState<HydroModality>('patio');
 
   useEffect(() => { if (canConsult) void load(1); }, [baseUrl, auth.token, tray, appliedFilters, canConsult]);
 
@@ -111,6 +85,7 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
   function openAction(kind: NonNullable<Action>['kind'], lot: HydroLot) {
     setError(''); setNotice('');
     setAction({ kind, lot, operationId: Crypto.randomUUID() });
+    if (kind === 'start') setStartMode('patio');
     setForm(kind === 'start'
       ? { inicio_at: localDateTime(), equipo: '', turno: '', cantidad_bombas_funcionando: '', temperatura_inicial_c: '', temperatura_objetivo_c: '', temperatura_agua_inicial_c: '', cloro_libre_ppm: '', ph_agua: '', temperatura_ambiente_c: '', humedad_relativa_pct: '', pozo_accutab_mv: '', recarga_pastilla: '', correccion_cloro_ppm: '', aplicacion_producto: '', producto_hidrocooler_id: '', producto_dosis: '', producto_unidad_dosis: '', control_inicial_conforme: '', condicion_visual_agua: '', dosificador_operativo: '', manejo_agua: '', observacion_inicio: '' }
       : kind === 'finish'
@@ -127,8 +102,17 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
       setError('');
       if (action.kind === 'start') {
         if (!canOperate) throw new Error('Tu cuenta no puede iniciar ciclos.');
-        const payload: StartHydroCycle = {
+        if (startMode === 'patio') {
+          const patio: StartHydroCycle = buildPatioStart(form, action.operationId);
+          setSaving(true);
+          await startHydroCycle(baseUrl, auth.token, action.lot.id, patio);
+          setNotice('Ciclo iniciado (registro de patio) y lote bloqueado en Hidrocooler.');
+          setAction(null); await load(1);
+          return;
+        }
+        const payload: StartHydroOfficial = {
           operacion_id: action.operationId,
+          modalidad: 'oficial',
           equipo: required(value('equipo'), 'Equipo', 1, 100),
           turno: required(value('turno'), 'Turno') as 'A' | 'B',
           cantidad_bombas_funcionando: toNumber(value('cantidad_bombas_funcionando'), 'Bombas', 1, 20, true),
@@ -148,9 +132,9 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
           producto_unidad_dosis: value('aplicacion_producto') === '1' ? required(value('producto_unidad_dosis'), 'Unidad dosis', 1, 30) : null,
           ph_agua: toNumber(value('ph_agua'), 'pH inicial', 0, 14),
           control_inicial_conforme: required(value('control_inicial_conforme'), 'Control inicial') === '1',
-          condicion_visual_agua: required(value('condicion_visual_agua'), 'Condición visual') as StartHydroCycle['condicion_visual_agua'],
+          condicion_visual_agua: required(value('condicion_visual_agua'), 'Condición visual') as StartHydroOfficial['condicion_visual_agua'],
           dosificador_operativo: required(value('dosificador_operativo'), 'Dosificador') === '1',
-          manejo_agua: required(value('manejo_agua'), 'Control del agua') as StartHydroCycle['manejo_agua'],
+          manejo_agua: required(value('manejo_agua'), 'Control del agua') as StartHydroOfficial['manejo_agua'],
           observacion_inicio: optional(value('observacion_inicio')),
         };
         const range = catalog.rango_cloro_ppm;
@@ -161,7 +145,7 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
         setNotice('Ciclo iniciado y lote bloqueado en Hidrocooler.');
       } else if (action.kind === 'finish') {
         if (!canOperate) throw new Error('Tu cuenta no puede finalizar ciclos.');
-        const payload: FinishHydroCycle = {
+        const payload: FinishHydroCycle = isPatioCycle(action.lot.hidrocooler) ? buildPatioFinish(form, action.operationId, action.lot.hidrocooler?.inicio_at) : {
           operacion_id: action.operationId,
           termino_at: toDate(value('termino_at'), 'Término'),
           temperatura_c: toNumber(value('temperatura_c'), 'Temperatura final fruta', -20, 50),
@@ -186,8 +170,10 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
         const payload: ReleaseHydroCycle = {
           operacion_id: action.operationId,
           temperatura_verificacion_c: toNumber(value('temperatura_verificacion_c'), 'Temperatura verificada', -20, 50),
-          cloro_libre_verificacion_ppm: toNumber(value('cloro_libre_verificacion_ppm'), 'Cloro libre verificado', 0, 500),
-          ph_agua_verificacion: toNumber(value('ph_agua_verificacion'), 'pH verificado', 0, 14),
+          ...(isPatioCycle(action.lot.hidrocooler) ? {} : {
+            cloro_libre_verificacion_ppm: toNumber(value('cloro_libre_verificacion_ppm'), 'Cloro libre verificado', 0, 500),
+            ph_agua_verificacion: toNumber(value('ph_agua_verificacion'), 'pH verificado', 0, 14),
+          }),
           control_verificacion_conforme: true,
           evaluacion_producto: required(value('evaluacion_producto'), 'Evaluación del producto', 10),
           verificacion_liberacion: required(value('verificacion_liberacion'), 'Acción correctiva y verificación', 10),
@@ -246,9 +232,11 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
         {lots.map((lot) => <View style={styles.lot} key={lot.id}>
           <View style={styles.lotHeader}><View style={styles.grow}><Text style={styles.lotTitle}>{lot.numero_lote}</Text><Text style={styles.muted}>{lot.cliente?.nombre ?? 'Sin cliente'} · {lot.recepcion?.numero_recepcion ?? 'Sin recepción'}</Text></View><Text style={styles.badge}>{lot.estado === 'hidrocooler_retenido' ? 'Retenido' : lot.hidrocooler?.termino_at ? label(lot.hidrocooler.destino_salida) : lot.estado === 'hidrocooler_en_curso' ? 'En curso' : 'Pendiente'}</Text></View>
           <Text style={styles.fact}>{[lot.trazabilidad.especie, lot.trazabilidad.variedad, lot.trazabilidad.cuartel].filter(Boolean).join(' · ') || 'Producto sin detalle'} · CSG {lot.trazabilidad.csg || '—'}</Text>
-          <Text style={styles.fact}>{lot.hidrocooler?.codigo ?? 'Ciclo por iniciar'} · {lot.hidrocooler?.equipo ?? 'Sin equipo'} · {lot.hidrocooler?.turno ? `Turno ${lot.hidrocooler.turno}` : 'Sin turno'}</Text>
+          <Text style={styles.fact}>{lot.hidrocooler?.codigo ?? 'Ciclo por iniciar'} · {lot.hidrocooler?.equipo ?? 'Sin equipo'} · {isPatioCycle(lot.hidrocooler) ? 'Registro de patio' : lot.hidrocooler?.turno ? `Turno ${lot.hidrocooler.turno}` : 'Sin turno'}</Text>
           <Text style={styles.fact}>{lot.hidrocooler?.cantidad_envases ?? lot.envases.cantidad_primarios} {lot.envases.primario} · {numberFormat.format(lot.hidrocooler?.kilos_netos ?? lot.pesos.kilos_netos_confirmados)} kg · {lot.hidrocooler?.operador ?? 'Sin operador'}</Text>
-          <Text style={styles.fact}>Fruta: {lot.hidrocooler?.temperatura_inicial_c ?? '—'} °C → objetivo {lot.hidrocooler?.temperatura_objetivo_c ?? '—'} °C → final {lot.hidrocooler?.temperatura_c ?? '—'} °C</Text>
+          <Text style={styles.fact}>{isPatioCycle(lot.hidrocooler)
+            ? `Fruta: ${lot.hidrocooler?.temperatura_inicial_c ?? '—'} °C → ${lot.hidrocooler?.temperatura_c ?? '—'} °C · agua ${label(lot.hidrocooler?.condicion_visual_agua_final ?? lot.hidrocooler?.condicion_visual_agua).toLowerCase()}`
+            : `Fruta: ${lot.hidrocooler?.temperatura_inicial_c ?? '—'} °C → objetivo ${lot.hidrocooler?.temperatura_objetivo_c ?? '—'} °C → final ${lot.hidrocooler?.temperatura_c ?? '—'} °C`}</Text>
           <Text style={styles.muted}>Inicio {dateLabel(lot.hidrocooler?.inicio_at ?? lot.confirmado_at)} · término {dateLabel(lot.hidrocooler?.termino_at)}</Text>
           {lot.hidrocooler?.motivo_retencion ? <Text style={styles.error}>Desviación: {lot.hidrocooler.motivo_retencion}</Text> : null}
           <View style={styles.row}>
@@ -268,6 +256,18 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
           <Text style={styles.muted}>{action.lot.cliente?.nombre} · {action.lot.envases.cantidad_primarios} {action.lot.envases.primario} · {numberFormat.format(action.lot.pesos.kilos_netos_confirmados)} kg</Text>
           {action.kind === 'start' ? <>
             <Text style={styles.notice}>El peso y la composición del lote quedarán registrados al iniciar el ciclo.</Text>
+            <Choice label="Tipo de registro" value={startMode} options={MODES} onChange={(v) => setStartMode(v as HydroModality)} />
+            {startMode === 'patio' ? <>
+              <Text style={styles.muted}>Tiempos, temperaturas y estado del agua. Cloro, pH y el resto de la planilla POEMP-R3 los completa la otra área.</Text>
+              <Field label="Equipo / Hidrocooler *" value={value('equipo')} onChange={(v) => change('equipo', v)} />
+              {summary?.equipos?.length ? <View style={styles.row}>{summary.equipos.map((item) => <Button key={item} title={item} active={value('equipo') === item} onPress={() => change('equipo', item)} />)}</View> : null}
+              <Text style={styles.fact}>Operador: {auth.usuario.nombre}</Text>
+              <Field label="Inicio · AAAA-MM-DD HH:mm *" value={value('inicio_at')} onChange={(v) => change('inicio_at', v)} />
+              <Field label="Temperatura de fruta al entrar °C *" value={value('temperatura_inicial_c')} onChange={(v) => change('temperatura_inicial_c', v)} numeric />
+              <Field label="Temperatura del agua °C" value={value('temperatura_agua_inicial_c')} onChange={(v) => change('temperatura_agua_inicial_c', v)} numeric />
+              <Choice label="Estado del agua *" value={value('condicion_visual_agua')} options={WATER} onChange={(v) => change('condicion_visual_agua', v)} />
+              <Field label="Observación" value={value('observacion_inicio')} onChange={(v) => change('observacion_inicio', v)} multiline />
+            </> : <>
             <Field label="Equipo / Hidrocooler *" value={value('equipo')} onChange={(v) => change('equipo', v)} />
             {summary?.equipos?.length ? <View style={styles.row}>{summary.equipos.map((item) => <Button key={item} title={item} active={value('equipo') === item} onPress={() => change('equipo', item)} />)}</View> : null}
             <Choice label="Turno *" value={value('turno')} options={[{ value: 'A', label: 'Turno A' }, { value: 'B', label: 'Turno B' }]} onChange={(v) => change('turno', v)} />
@@ -296,6 +296,16 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
             <Choice label="Dosificador operativo *" value={value('dosificador_operativo')} options={YES_NO} onChange={(v) => change('dosificador_operativo', v)} />
             <Choice label="Control del agua *" value={value('manejo_agua')} options={[{ value: 'sin_novedad', label: 'Sin novedad' }, { value: 'filtrado', label: 'Filtrado' }, { value: 'recambio', label: 'Recambio' }]} onChange={(v) => change('manejo_agua', v)} />
             <Field label="Observación de inicio" value={value('observacion_inicio')} onChange={(v) => change('observacion_inicio', v)} multiline />
+            </>}
+          </> : action.kind === 'finish' && isPatioCycle(action.lot.hidrocooler) ? <>
+            <Text style={styles.muted}>{action.lot.hidrocooler?.codigo} · registro de patio · inicio {dateLabel(action.lot.hidrocooler?.inicio_at)}</Text>
+            <Field label="Término · AAAA-MM-DD HH:mm *" value={value('termino_at')} onChange={(v) => change('termino_at', v)} />
+            <Field label="Temperatura de fruta al salir °C *" value={value('temperatura_c')} onChange={(v) => change('temperatura_c', v)} numeric />
+            <Field label="Temperatura del agua °C" value={value('temperatura_agua_final_c')} onChange={(v) => change('temperatura_agua_final_c', v)} numeric />
+            <Choice label="Estado del agua al término *" value={value('condicion_visual_agua_final')} options={WATER} onChange={(v) => change('condicion_visual_agua_final', v)} />
+            <Choice label="Destino después del Hidrocooler *" value={value('destino_salida')} options={DESTINATIONS} onChange={(v) => change('destino_salida', v)} />
+            <Field label="Observación" value={value('observacion')} onChange={(v) => change('observacion', v)} multiline />
+            <Text style={styles.notice}>Si el agua termina no conforme, el lote queda retenido para evaluación de supervisión.</Text>
           </> : action.kind === 'finish' ? <>
             <Text style={styles.muted}>{action.lot.hidrocooler?.codigo} · inicio {dateLabel(action.lot.hidrocooler?.inicio_at)}</Text>
             <Field label="Término · AAAA-MM-DD HH:mm *" value={value('termino_at')} onChange={(v) => change('termino_at', v)} />
@@ -314,8 +324,10 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
             <Text style={styles.error}>Retenido: {action.lot.hidrocooler?.motivo_retencion}</Text>
             <Text style={styles.fact}>Destino al liberar: {label(action.lot.hidrocooler?.destino_salida)}</Text>
             <Field label="Temperatura de fruta verificada °C *" value={value('temperatura_verificacion_c')} onChange={(v) => change('temperatura_verificacion_c', v)} numeric />
-            <Field label="Cloro libre verificado ppm *" value={value('cloro_libre_verificacion_ppm')} onChange={(v) => change('cloro_libre_verificacion_ppm', v)} numeric />
-            <Field label="pH verificado *" value={value('ph_agua_verificacion')} onChange={(v) => change('ph_agua_verificacion', v)} numeric />
+            {isPatioCycle(action.lot.hidrocooler) ? null : <>
+              <Field label="Cloro libre verificado ppm *" value={value('cloro_libre_verificacion_ppm')} onChange={(v) => change('cloro_libre_verificacion_ppm', v)} numeric />
+              <Field label="pH verificado *" value={value('ph_agua_verificacion')} onChange={(v) => change('ph_agua_verificacion', v)} numeric />
+            </>}
             <Choice label="Control del agua conforme al procedimiento *" value={value('control_verificacion_conforme')} options={[{ value: '1', label: 'Sí, verificado conforme' }]} onChange={(v) => change('control_verificacion_conforme', v)} />
             <Field label="Evaluación del producto afectado (mínimo 10 caracteres) *" value={value('evaluacion_producto')} onChange={(v) => change('evaluacion_producto', v)} multiline />
             <Field label="Acción correctiva y verificación (mínimo 10 caracteres) *" value={value('verificacion_liberacion')} onChange={(v) => change('verificacion_liberacion', v)} multiline />
@@ -334,6 +346,14 @@ export function HidrocoolerMpScreen({ auth, baseUrl, onLogout }: Props) {
 function CycleDetails({ lot }: { lot: HydroLot }) {
   const cycle = lot.hidrocooler;
   if (!cycle) return null;
+  if (isPatioCycle(cycle)) return <View style={styles.details}>
+    <Text style={styles.fact}>Registro de patio · operador {cycle.operador} · duración {cycle.duracion_minutos ?? '—'} min</Text>
+    <Text style={styles.fact}>Inicio: fruta {cycle.temperatura_inicial_c} °C · agua {cycle.temperatura_agua_inicial_c ?? '—'} °C · {label(cycle.condicion_visual_agua)}</Text>
+    {cycle.termino_at ? <Text style={styles.fact}>Término: fruta {cycle.temperatura_c ?? '—'} °C · agua {cycle.temperatura_agua_final_c ?? '—'} °C · {label(cycle.condicion_visual_agua_final)}</Text> : null}
+    {cycle.observacion_inicio ? <Text style={styles.fact}>Observación inicial: {cycle.observacion_inicio}</Text> : null}
+    {cycle.observacion ? <Text style={styles.fact}>Observación final: {cycle.observacion}</Text> : null}
+    {cycle.liberado_at ? <Text style={styles.fact}>Liberado por {cycle.liberado_por} · {dateLabel(cycle.liberado_at)} · evaluación: {cycle.evaluacion_producto} · verificación: {cycle.verificacion_liberacion}</Text> : null}
+  </View>;
   return <View style={styles.details}>
     <Text style={styles.fact}>Operador {cycle.operador} · {cycle.cantidad_bombas_funcionando} bombas · duración {cycle.duracion_minutos ?? '—'} min</Text>
     <Text style={styles.fact}>Inicio: agua {cycle.temperatura_agua_inicial_c ?? '—'} °C · cloro {cycle.cloro_libre_ppm} ppm · pH {cycle.ph_agua} · visual {label(cycle.condicion_visual_agua)} · dosificador {cycle.dosificador_operativo ? 'sí' : 'no'} · control {cycle.control_inicial_conforme ? 'conforme' : 'no conforme'} · {label(cycle.manejo_agua)}</Text>

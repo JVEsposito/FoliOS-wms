@@ -24,6 +24,7 @@ function fixture(primario) {
     Object.assign(node('finishForm'), {
         elements: fields,
         reset: () => {},
+        querySelectorAll: () => [],
         querySelector: (selector) => {
             assert.equal(selector, 'input[name="destino_salida"][value="proceso"]');
             return direct;

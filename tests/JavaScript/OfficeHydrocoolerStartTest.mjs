@@ -4,21 +4,37 @@ import test from 'node:test';
 import vm from 'node:vm';
 const source = readFileSync(new URL('../../resources/js/office-hydrocooler.js', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '').replace(/void boot\(\);\s*$/, '');
 function fixture() {
-    const fields = Object.fromEntries(['lote_id', 'operacion_id', 'operador', 'inicio_at', 'equipo', 'producto_hidrocooler_id', 'producto_dosis', 'producto_unidad_dosis', 'aplicacion_producto', 'cloro_libre_ppm', 'correccion_cloro_ppm'].map((key) => [key, { value: '', focus() {} }]));
+    const fields = Object.fromEntries(['lote_id', 'operacion_id', 'operador', 'inicio_at', 'equipo', 'modalidad', 'producto_hidrocooler_id', 'producto_dosis', 'producto_unidad_dosis', 'aplicacion_producto', 'cloro_libre_ppm', 'correccion_cloro_ppm'].map((key) => [key, { value: '', focus() {} }]));
     const nodes = new Map(); const listeners = new Map();
     const node = (id) => {
         if (!nodes.has(id)) nodes.set(id, { textContent: '', innerHTML: '', addEventListener: (name, fn) => listeners.set(`${id}:${name}`, fn), classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {} });
         return nodes.get(id);
     };
-    Object.assign(node('startForm'), { elements: fields, reset() {}, reportValidity() { return true; } });
+    Object.assign(node('startForm'), { elements: fields, reset() {}, reportValidity() { return true; }, querySelectorAll: () => [] });
     node('startDialog').showModal = () => {};
     const context = vm.createContext({ document: { getElementById: node, querySelectorAll: () => [] }, localStorage: { getItem: () => null }, crypto: { randomUUID: () => 'op' }, window: {}, containerLabel: () => undefined, loadContainerCatalog: async () => [], Headers, URLSearchParams });
     vm.runInContext(source, context);
     vm.runInContext(`state.lots = [{id:'lot',numero_lote:'L-1',trazabilidad:{},envases:{},pesos:{}}]; state.products=[{id:'product',nombre:'Prueba',unidad_dosis:'ml/L'}]; state.chlorineRange={min:90,max:110}; openStart('lot');`, context);
     return { fields, listeners, context, node };
 }
-test('inicio no asume respuestas y exige producto, dosis y unidad cuando se aplica', () => {
+// Las pruebas de producto y cloro son del registro completo POEMP-R3.
+function fixtureOficial() {
     const f = fixture();
+    f.fields.modalidad.value = 'oficial';
+    f.listeners.get('startForm:change')({ target: { name: 'modalidad', value: 'oficial' } });
+    return f;
+}
+test('inicio abre en registro de patio: sin producto ni corrección de cloro exigidos', () => {
+    const f = fixture();
+    assert.equal(f.fields.modalidad.value, 'patio');
+    f.fields.aplicacion_producto.value = '1';
+    f.fields.cloro_libre_ppm.value = '40';
+    vm.runInContext('updateStartControls()', f.context);
+    assert.equal(f.fields.producto_dosis.required, false);
+    assert.equal(f.fields.correccion_cloro_ppm.required, false);
+});
+test('inicio no asume respuestas y exige producto, dosis y unidad cuando se aplica', () => {
+    const f = fixtureOficial();
     assert.equal(f.fields.aplicacion_producto.value, '');
     assert.equal(f.fields.producto_dosis.disabled, true);
     f.fields.aplicacion_producto.value = '1';
@@ -34,7 +50,7 @@ test('inicio no asume respuestas y exige producto, dosis y unidad cuando se apli
     assert.equal(f.fields.producto_unidad_dosis.disabled, true);
 });
 test('corrección se exige solo con rango configurado y lectura fuera de sus límites', () => {
-    const f = fixture();
+    const f = fixtureOficial();
     f.fields.cloro_libre_ppm.value = '40'; vm.runInContext('updateStartControls()', f.context);
     assert.equal(f.fields.correccion_cloro_ppm.required, true);
     f.fields.cloro_libre_ppm.value = '90'; vm.runInContext('updateStartControls()', f.context);

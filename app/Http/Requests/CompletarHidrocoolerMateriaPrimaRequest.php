@@ -20,11 +20,13 @@ class CompletarHidrocoolerMateriaPrimaRequest extends FormRequest
             'termino_at' => ['required', 'date', 'before_or_equal:now'],
             'temperatura_c' => ['required', 'numeric', 'between:-20,50', 'decimal:0,2'],
             'temperatura_agua_final_c' => ['nullable', 'numeric', 'between:-20,50', 'decimal:0,2'],
-            'cloro_libre_final_ppm' => ['required', 'numeric', 'between:0,500', 'decimal:0,2'],
-            'ph_agua_final' => ['required', 'numeric', 'between:0,14', 'decimal:0,2'],
+            // Cloro, pH, dosificador y control final son del registro completo: el servicio los exige
+            // solo si el ciclo es oficial. El registro de patio pide temperaturas y estado del agua.
+            'cloro_libre_final_ppm' => ['nullable', 'numeric', 'between:0,500', 'decimal:0,2'],
+            'ph_agua_final' => ['nullable', 'numeric', 'between:0,14', 'decimal:0,2'],
             'condicion_visual_agua_final' => ['required', Rule::in(['conforme', 'no_conforme'])],
-            'dosificador_operativo_final' => ['required', 'boolean'],
-            'control_final_conforme' => ['required', 'boolean'],
+            'dosificador_operativo_final' => ['nullable', 'boolean'],
+            'control_final_conforme' => ['nullable', 'boolean'],
             'destino_salida' => ['required', Rule::in(['camara', 'proceso'])],
             'observacion' => ['nullable', 'string', 'max:2000'],
             'accion_correctiva' => ['nullable', 'string', 'max:2000'],

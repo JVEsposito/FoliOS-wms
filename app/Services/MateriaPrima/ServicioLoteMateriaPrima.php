@@ -386,17 +386,26 @@ class ServicioLoteMateriaPrima
                 throw new ConflictoOperacion('El lote ya posee un ciclo de hidrocooler registrado.');
             }
 
-            if ($datos['control_inicial_conforme'] !== true
+            $patio = ($datos['modalidad'] ?? 'oficial') === 'patio';
+            if ($patio && $datos['condicion_visual_agua'] !== 'conforme') {
+                throw ValidationException::withMessages([
+                    'condicion_visual_agua' => 'No inicies el ciclo con agua no conforme. Corrige el agua y vuelve a revisarla antes de procesar fruta.',
+                ]);
+            }
+            if (! $patio && ($datos['control_inicial_conforme'] !== true
                 || $datos['condicion_visual_agua'] !== 'conforme'
-                || $datos['dosificador_operativo'] !== true) {
+                || $datos['dosificador_operativo'] !== true)) {
                 throw ValidationException::withMessages([
                     'control_inicial_conforme' => 'No inicies el ciclo con agua o dosificador no conformes. Corrige y vuelve a medir antes de procesar fruta.',
                 ]);
             }
 
-            $rangoCloro = app(ControlCloroHidrocooler::class)->validar($datos);
+            // El registro de patio no mide cloro ni aplica producto: esos datos los completa la planilla oficial.
+            $rangoCloro = $patio ? null : app(ControlCloroHidrocooler::class)->validar($datos);
             $producto = null;
-            if ($datos['aplicacion_producto']) {
+            if ($patio) {
+                // Sin producto.
+            } elseif ($datos['aplicacion_producto']) {
                 $producto = ProductoHidrocooler::query()->lockForUpdate()->find($datos['producto_hidrocooler_id']);
                 if (! $producto?->activo) {
                     throw ValidationException::withMessages(['producto_hidrocooler_id' => 'Selecciona un producto activo del catálogo.']);
@@ -406,17 +415,18 @@ class ServicioLoteMateriaPrima
                 throw ValidationException::withMessages(['aplicacion_producto' => 'No registres producto ni dosis si declaras que no hubo aplicación.']);
             }
             $datosRegistro = [
-                'temperatura_ambiente_c' => $datos['temperatura_ambiente_c'],
-                'humedad_relativa_pct' => $datos['humedad_relativa_pct'],
-                'pozo_accutab_mv' => $datos['pozo_accutab_mv'],
-                'recarga_pastilla' => $datos['recarga_pastilla'],
+                'temperatura_ambiente_c' => $datos['temperatura_ambiente_c'] ?? null,
+                'humedad_relativa_pct' => $datos['humedad_relativa_pct'] ?? null,
+                'pozo_accutab_mv' => $datos['pozo_accutab_mv'] ?? null,
+                'recarga_pastilla' => $datos['recarga_pastilla'] ?? null,
                 'correccion_cloro_ppm' => $datos['correccion_cloro_ppm'] ?? null,
-                'aplicacion_producto' => $datos['aplicacion_producto'],
+                'aplicacion_producto' => $datos['aplicacion_producto'] ?? null,
                 'producto_hidrocooler_id' => $producto?->id,
                 'producto_nombre_snapshot' => $producto?->nombre,
                 'producto_dosis' => $producto ? $datos['producto_dosis'] : null,
                 'producto_unidad_dosis' => $producto ? trim($datos['producto_unidad_dosis']) : null,
-                'formato_registro_snapshot' => app(RegistroControlHidrocooler::class)->vigente(bloquear: true),
+                // El ciclo de patio también aparece en la planilla POEMP-R3, con lo que registró.
+                'formato_registro_snapshot' => $patio ? $this->formatoHidrocoolerSiActivo() : app(RegistroControlHidrocooler::class)->vigente(bloquear: true),
                 'cloro_min_ppm_snapshot' => $rangoCloro['min'] ?? null,
                 'cloro_max_ppm_snapshot' => $rangoCloro['max'] ?? null,
             ];
@@ -442,25 +452,26 @@ class ServicioLoteMateriaPrima
                     str_replace('-', '', $datos['operacion_id']),
                 ),
                 'estado' => EstadoHidrocoolerMateriaPrima::EnCurso,
+                'modalidad' => $patio ? 'patio' : 'oficial',
                 'equipo' => $equipo,
-                'turno' => $datos['turno'],
-                'cantidad_bombas_funcionando' => $datos['cantidad_bombas_funcionando'],
+                'turno' => $datos['turno'] ?? null,
+                'cantidad_bombas_funcionando' => $datos['cantidad_bombas_funcionando'] ?? null,
                 'equipo_activo_clave' => hash('sha256', mb_strtolower($equipo)),
                 'operador_snapshot' => $usuario->name,
                 'cantidad_envases_snapshot' => $lote->cantidad_envases_primarios,
                 'kilos_netos_snapshot' => $lote->kilos_netos_confirmados,
                 'inicio_at' => $inicio,
                 'temperatura_inicial_c' => round((float) $datos['temperatura_inicial_c'], 2),
-                'temperatura_objetivo_c' => round((float) $datos['temperatura_objetivo_c'], 2),
+                'temperatura_objetivo_c' => $patio ? null : round((float) $datos['temperatura_objetivo_c'], 2),
                 'temperatura_agua_inicial_c' => filled($datos['temperatura_agua_inicial_c'] ?? null)
                     ? round((float) $datos['temperatura_agua_inicial_c'], 2)
                     : null,
-                'cloro_libre_ppm' => round((float) $datos['cloro_libre_ppm'], 2),
-                'ph_agua' => round((float) $datos['ph_agua'], 2),
-                'control_inicial_conforme' => $datos['control_inicial_conforme'],
+                'cloro_libre_ppm' => $patio ? null : round((float) $datos['cloro_libre_ppm'], 2),
+                'ph_agua' => $patio ? null : round((float) $datos['ph_agua'], 2),
+                'control_inicial_conforme' => $datos['control_inicial_conforme'] ?? null,
                 'condicion_visual_agua' => $datos['condicion_visual_agua'],
-                'dosificador_operativo' => $datos['dosificador_operativo'],
-                'manejo_agua' => $datos['manejo_agua'],
+                'dosificador_operativo' => $datos['dosificador_operativo'] ?? null,
+                'manejo_agua' => $datos['manejo_agua'] ?? null,
                 'observacion_inicio' => $datos['observacion_inicio'] ?? null,
                 'iniciado_por_user_id' => $usuario->id,
             ]);
@@ -478,24 +489,25 @@ class ServicioLoteMateriaPrima
                 EstadoLoteMateriaPrima::HidrocoolerEnCurso,
                 [
                     ...$datosRegistro,
+                    'modalidad' => $patio ? 'patio' : 'oficial',
                     'equipo' => $equipo,
-                    'turno' => $datos['turno'],
-                    'cantidad_bombas_funcionando' => $datos['cantidad_bombas_funcionando'],
+                    'turno' => $datos['turno'] ?? null,
+                    'cantidad_bombas_funcionando' => $datos['cantidad_bombas_funcionando'] ?? null,
                     'operador' => $usuario->name,
                     'inicio_at' => $inicio->toAtomString(),
                     'cantidad_envases' => $lote->cantidad_envases_primarios,
                     'kilos_netos' => (float) $lote->kilos_netos_confirmados,
                     'temperatura_inicial_c' => (float) $datos['temperatura_inicial_c'],
-                    'temperatura_objetivo_c' => (float) $datos['temperatura_objetivo_c'],
+                    'temperatura_objetivo_c' => $patio ? null : (float) $datos['temperatura_objetivo_c'],
                     'temperatura_agua_inicial_c' => filled($datos['temperatura_agua_inicial_c'] ?? null)
                         ? (float) $datos['temperatura_agua_inicial_c']
                         : null,
-                    'cloro_libre_ppm' => (float) $datos['cloro_libre_ppm'],
-                    'ph_agua' => (float) $datos['ph_agua'],
-                    'control_inicial_conforme' => (bool) $datos['control_inicial_conforme'],
+                    'cloro_libre_ppm' => $patio ? null : (float) $datos['cloro_libre_ppm'],
+                    'ph_agua' => $patio ? null : (float) $datos['ph_agua'],
+                    'control_inicial_conforme' => $patio ? null : (bool) $datos['control_inicial_conforme'],
                     'condicion_visual_agua' => $datos['condicion_visual_agua'],
-                    'dosificador_operativo' => (bool) $datos['dosificador_operativo'],
-                    'manejo_agua' => $datos['manejo_agua'],
+                    'dosificador_operativo' => $patio ? null : (bool) $datos['dosificador_operativo'],
+                    'manejo_agua' => $datos['manejo_agua'] ?? null,
                     'payload_hash' => $hash,
                 ],
             );
@@ -557,18 +569,34 @@ class ServicioLoteMateriaPrima
                     'destino_salida' => 'La salida directa a proceso solo admite lotes en bins.',
                 ]);
             }
+            $patio = $proceso->modalidad === 'patio';
+            if (! $patio) {
+                $faltantes = array_filter(['cloro_libre_final_ppm' => 'Registra el cloro libre final.', 'ph_agua_final' => 'Registra el pH final del agua.',
+                    'dosificador_operativo_final' => 'Indica si el dosificador quedó operativo.', 'control_final_conforme' => 'Indica si cloro y pH finales son conformes.'],
+                    fn (string $mensaje, string $campo): bool => ! isset($datos[$campo]), ARRAY_FILTER_USE_BOTH);
+                if ($faltantes !== []) {
+                    throw ValidationException::withMessages($faltantes);
+                }
+            }
             $motivos = [];
-            if ($proceso->control_inicial_conforme !== true
-                || $proceso->condicion_visual_agua !== 'conforme'
-                || $proceso->dosificador_operativo !== true) {
-                $motivos[] = 'Control inicial de agua o dosificador con desviación';
+            if ($patio) {
+                // Registro de patio: retiene el estado del agua; sin temperatura objetivo no retiene por temperatura.
+                if ($datos['condicion_visual_agua_final'] !== 'conforme') {
+                    $motivos[] = 'Estado final del agua no conforme';
+                }
+            } else {
+                if ($proceso->control_inicial_conforme !== true
+                    || $proceso->condicion_visual_agua !== 'conforme'
+                    || $proceso->dosificador_operativo !== true) {
+                    $motivos[] = 'Control inicial de agua o dosificador con desviación';
+                }
+                if ($datos['control_final_conforme'] !== true
+                    || $datos['condicion_visual_agua_final'] !== 'conforme'
+                    || $datos['dosificador_operativo_final'] !== true) {
+                    $motivos[] = 'Control final de agua o dosificador con desviación';
+                }
             }
-            if ($datos['control_final_conforme'] !== true
-                || $datos['condicion_visual_agua_final'] !== 'conforme'
-                || $datos['dosificador_operativo_final'] !== true) {
-                $motivos[] = 'Control final de agua o dosificador con desviación';
-            }
-            if ((float) $datos['temperatura_c'] > (float) $proceso->temperatura_objetivo_c) {
+            if ($proceso->temperatura_objetivo_c !== null && (float) $datos['temperatura_c'] > (float) $proceso->temperatura_objetivo_c) {
                 $motivos[] = 'Temperatura final de fruta superior al objetivo';
             }
             $estadoNuevo = $motivos !== []
@@ -587,11 +615,11 @@ class ServicioLoteMateriaPrima
                 'temperatura_agua_final_c' => filled($datos['temperatura_agua_final_c'] ?? null)
                     ? round((float) $datos['temperatura_agua_final_c'], 2)
                     : null,
-                'cloro_libre_final_ppm' => round((float) $datos['cloro_libre_final_ppm'], 2),
-                'ph_agua_final' => round((float) $datos['ph_agua_final'], 2),
+                'cloro_libre_final_ppm' => $patio ? null : round((float) $datos['cloro_libre_final_ppm'], 2),
+                'ph_agua_final' => $patio ? null : round((float) $datos['ph_agua_final'], 2),
                 'condicion_visual_agua_final' => $datos['condicion_visual_agua_final'],
-                'dosificador_operativo_final' => $datos['dosificador_operativo_final'],
-                'control_final_conforme' => $datos['control_final_conforme'],
+                'dosificador_operativo_final' => $patio ? null : $datos['dosificador_operativo_final'],
+                'control_final_conforme' => $patio ? null : $datos['control_final_conforme'],
                 'motivo_retencion' => $motivos !== [] ? implode('; ', $motivos) : null,
                 'destino_salida' => $destino,
                 'observacion' => $datos['observacion'] ?? null,
@@ -620,11 +648,12 @@ class ServicioLoteMateriaPrima
                         ? (float) $proceso->temperatura_agua_final_c
                         : null,
                     'destino_salida' => $destino,
-                    'cloro_libre_final_ppm' => (float) $datos['cloro_libre_final_ppm'],
-                    'ph_agua_final' => (float) $datos['ph_agua_final'],
+                    'modalidad' => $proceso->modalidad,
+                    'cloro_libre_final_ppm' => $patio ? null : (float) $datos['cloro_libre_final_ppm'],
+                    'ph_agua_final' => $patio ? null : (float) $datos['ph_agua_final'],
                     'condicion_visual_agua_final' => $datos['condicion_visual_agua_final'],
-                    'dosificador_operativo_final' => (bool) $datos['dosificador_operativo_final'],
-                    'control_final_conforme' => (bool) $datos['control_final_conforme'],
+                    'dosificador_operativo_final' => $patio ? null : (bool) $datos['dosificador_operativo_final'],
+                    'control_final_conforme' => $patio ? null : (bool) $datos['control_final_conforme'],
                     'motivo_retencion' => $proceso->motivo_retencion,
                     'accion_correctiva' => $datos['accion_correctiva'] ?? null,
                     'payload_hash' => $hash,
@@ -666,7 +695,14 @@ class ServicioLoteMateriaPrima
                 || ! $proceso->destino_salida) {
                 throw new ConflictoOperacion('El lote no está retenido tras completar Hidrocooler.');
             }
-            if ((float) $datos['temperatura_verificacion_c'] > (float) $proceso->temperatura_objetivo_c) {
+            if ($proceso->modalidad !== 'patio') {
+                $faltantes = array_filter(['cloro_libre_verificacion_ppm' => 'Registra el cloro libre verificado.', 'ph_agua_verificacion' => 'Registra el pH verificado.'],
+                    fn (string $mensaje, string $campo): bool => ! isset($datos[$campo]), ARRAY_FILTER_USE_BOTH);
+                if ($faltantes !== []) {
+                    throw ValidationException::withMessages($faltantes);
+                }
+            }
+            if ($proceso->temperatura_objetivo_c !== null && (float) $datos['temperatura_verificacion_c'] > (float) $proceso->temperatura_objetivo_c) {
                 throw ValidationException::withMessages([
                     'temperatura_verificacion_c' => 'La fruta sigue sobre la temperatura objetivo; no puede liberarse.',
                 ]);
@@ -679,8 +715,8 @@ class ServicioLoteMateriaPrima
                 'operacion_liberacion_id' => $datos['operacion_id'],
                 'payload_liberacion_hash' => $hash,
                 'temperatura_verificacion_c' => round((float) $datos['temperatura_verificacion_c'], 2),
-                'cloro_libre_verificacion_ppm' => round((float) $datos['cloro_libre_verificacion_ppm'], 2),
-                'ph_agua_verificacion' => round((float) $datos['ph_agua_verificacion'], 2),
+                'cloro_libre_verificacion_ppm' => isset($datos['cloro_libre_verificacion_ppm']) ? round((float) $datos['cloro_libre_verificacion_ppm'], 2) : null,
+                'ph_agua_verificacion' => isset($datos['ph_agua_verificacion']) ? round((float) $datos['ph_agua_verificacion'], 2) : null,
                 'evaluacion_producto' => $datos['evaluacion_producto'],
                 'verificacion_liberacion' => $datos['verificacion_liberacion'],
                 'liberado_por_user_id' => $usuario->id,
@@ -702,8 +738,8 @@ class ServicioLoteMateriaPrima
                     'motivo_retencion' => $proceso->motivo_retencion,
                     'destino_salida' => $proceso->destino_salida,
                     'temperatura_verificacion_c' => (float) $datos['temperatura_verificacion_c'],
-                    'cloro_libre_verificacion_ppm' => (float) $datos['cloro_libre_verificacion_ppm'],
-                    'ph_agua_verificacion' => (float) $datos['ph_agua_verificacion'],
+                    'cloro_libre_verificacion_ppm' => isset($datos['cloro_libre_verificacion_ppm']) ? (float) $datos['cloro_libre_verificacion_ppm'] : null,
+                    'ph_agua_verificacion' => isset($datos['ph_agua_verificacion']) ? (float) $datos['ph_agua_verificacion'] : null,
                     'evaluacion_producto' => $datos['evaluacion_producto'],
                     'verificacion_liberacion' => $datos['verificacion_liberacion'],
                     'payload_hash' => $hash,
@@ -1241,6 +1277,16 @@ class ServicioLoteMateriaPrima
      * @param  array<string, mixed>  $datos
      * @return array<string, mixed>
      */
+    /** Formato POEMP-R3 activo, o nada: el registro de patio no depende de que la planilla oficial esté activa. */
+    private function formatoHidrocoolerSiActivo(): ?array
+    {
+        try {
+            return app(RegistroControlHidrocooler::class)->vigente(bloquear: true);
+        } catch (ValidationException) {
+            return null;
+        }
+    }
+
     private function payloadHidrocooler(array $datos): array
     {
         return collect($datos)->sortKeys()->all();
