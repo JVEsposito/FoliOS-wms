@@ -11,8 +11,8 @@ use App\Models\GuiaDespachoEnvase;
 use App\Services\Envases\GeneradorGuiaDespachoEnvasesPdf;
 use App\Services\Envases\ServicioGuiaDespachoEnvases;
 use App\Services\Envases\ServicioGuiaEmitidaEnvases;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -80,7 +80,6 @@ class GuiaDespachoEnvaseController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
         $temporadaId = $filtros['temporada_id'] ?? $temporadaActiva->obtener()->id;
-        $zona = config('app.operational_timezone');
         $guias = GuiaDespachoEnvase::query()
             ->with([
                 'cliente',
@@ -101,8 +100,8 @@ class GuiaDespachoEnvaseController extends Controller
             ->when(! empty($filtros['cliente_id']), fn (Builder $consulta) => $consulta->where('cliente_id', $filtros['cliente_id']))
             ->when(($filtros['csg'] ?? null) === 'con', fn (Builder $consulta) => $consulta->whereNotNull('productor_csg_id'))
             ->when(($filtros['csg'] ?? null) === 'sin', fn (Builder $consulta) => $consulta->whereNull('productor_csg_id'))
-            ->when(! empty($filtros['desde']), fn (Builder $consulta) => $consulta->where('salida_at', '>=', CarbonImmutable::parse($filtros['desde'], $zona)->startOfDay()->utc()))
-            ->when(! empty($filtros['hasta']), fn (Builder $consulta) => $consulta->where('salida_at', '<', CarbonImmutable::parse($filtros['hasta'], $zona)->addDay()->startOfDay()->utc()))
+            ->tap(fn (Builder $consulta) => app(CalendarioOperativo::class)
+                ->filtrar($consulta, 'salida_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null))
             ->when(filled($filtros['buscar'] ?? null), function (Builder $consulta) use ($filtros): void {
                 $texto = trim($filtros['buscar']);
                 $busqueda = '%'.addcslashes($texto, '\\%_').'%';
@@ -497,6 +496,7 @@ class GuiaDespachoEnvaseController extends Controller
                 'nombre' => $guia->cliente_nombre_snapshot ?: $guia->cliente->nombre,
             ],
             'salida_at' => $guia->salida_at?->toAtomString(),
+            ...app(CalendarioOperativo::class)->datos($guia->salida_at),
             'patente_camion' => $guia->patente_camion,
             'conductor' => [
                 'rut' => $guia->rut_conductor,

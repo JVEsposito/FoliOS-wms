@@ -30,7 +30,7 @@ import {
   ValidationSessionSnapshot,
   ValidationShift,
 } from '../domain/validation';
-import { formatValidationJourneyDate, validationJourneyDate, validationShifts } from '../domain/validationJourney';
+import { formatValidationJourneyDate, operationalValidationJourney, validationJourneyDate, validationShifts } from '../domain/validationJourney';
 import type { CatalogProgress } from '../domain/validationCatalogTransfer';
 import { ApiError } from '../services/apiError';
 import {
@@ -163,6 +163,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const deviceId = auth.dispositivo.id;
   const canReject = auth.usuario.capacidades.puede_rechazar_pallets;
   const journeyTimeZone = validationSession?.sesion.zona_horaria;
+  const calendarRules = validationSession?.sesion.calendario_operativo?.reglas;
+  const currentJourney = operationalValidationJourney(new Date(), journeyTimeZone, calendarRules);
   const sessionCacheId = auth.sesion?.id ?? 'actual';
   const sessionStartedAt = auth.sesion?.iniciada_at ?? validationSession?.sesion.iniciada_at ?? null;
   const currentSessionOutbox = useMemo(
@@ -299,11 +301,11 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
 
   useEffect(() => {
     if (!shift) return;
-    const refreshDate = () => setJourneyDate(validationJourneyDate(new Date(), shift, journeyTimeZone));
+    const refreshDate = () => setJourneyDate(validationJourneyDate(new Date(), shift, journeyTimeZone, calendarRules));
     refreshDate();
     const timer = setInterval(refreshDate, 15_000);
     return () => clearInterval(timer);
-  }, [shift, journeyTimeZone]);
+  }, [shift, journeyTimeZone, calendarRules]);
 
   useOperationalPolling(
     synchronize,
@@ -796,7 +798,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       brand,
       csgs: selectedOrigins.flatMap((origin) => origin ? [origin.csg] : []),
       at: payload.generado_dispositivo_at,
-      journeyDate: validationJourneyDate(payload.generado_dispositivo_at, shift, journeyTimeZone),
+      journeyDate: validationJourneyDate(payload.generado_dispositivo_at, shift, journeyTimeZone, calendarRules),
     };
 
     setBusy(true);
@@ -1078,11 +1080,19 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     </Pressable>
   ) : null;
 
+  const activeShiftHours = currentJourney?.rule;
+  const shiftHours = (value: ValidationShift) => activeShiftHours
+    ? value === 'A'
+      ? `${activeShiftHours.inicio_jornada}–${activeShiftHours.inicio_turno_b}`
+      : `${activeShiftHours.inicio_turno_b}–${activeShiftHours.inicio_jornada}`
+    : validationShifts[value].hours;
+
   const workContext = line && shift && !editingContext ? (
     <Pressable accessibilityLabel="Cambiar línea y turno" onPress={() => setEditingContext(true)} style={styles.jornada}>
       <View style={styles.jornadaCopy}>
         <Text style={styles.jornadaLabel}>Fecha de jornada · {formatValidationJourneyDate(journeyDate)}</Text>
-        <Text style={styles.jornadaValue}>Línea {line} · Turno {shift} ({validationShifts[shift].name.toLowerCase()})</Text>
+        <Text style={styles.jornadaValue}>Línea {line} · Turno {currentJourney?.turno ?? shift}{currentJourney ? '' : ` (${validationShifts[shift].name.toLowerCase()})`}</Text>
+        {currentJourney && currentJourney.turno !== shift ? <Text style={styles.jornadaLabel}>Turno declarado {shift}</Text> : null}
       </View>
       <Text style={styles.linkText}>Cambiar</Text>
     </Pressable>
@@ -1108,7 +1118,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           <View style={styles.segmented}>
             {(['A', 'B'] as ValidationShift[]).map((value) => (
               <Pressable
-                accessibilityLabel={`Turno ${value}, ${validationShifts[value].name}, ${validationShifts[value].hours}`}
+                accessibilityLabel={`Turno ${value}, ${validationShifts[value].name}, ${shiftHours(value)}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: shift === value }}
                 key={value}
@@ -1116,7 +1126,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
                 style={[styles.segment, shift === value && styles.segmentActive]}
               >
                 <Text style={[styles.segmentText, shift === value && styles.segmentTextActive]}>{value} · {validationShifts[value].name}</Text>
-                <Text style={styles.jornadaLabel}>{validationShifts[value].hours}</Text>
+                <Text style={styles.jornadaLabel}>{shiftHours(value)}</Text>
               </Pressable>
             ))}
           </View>
@@ -1383,7 +1393,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           <View style={styles.trayItemCopy}>
             <Text style={styles.trayFolio}>{item.payload.numero_folio}</Text>
             <Text style={styles.trayDetail}>
-              {statusLabel(item.status)} · jornada {formatValidationJourneyDate(validationJourneyDate(item.payload.generado_dispositivo_at, item.payload.turno, journeyTimeZone))} · {formatTime(item.payload.generado_dispositivo_at)}
+              {statusLabel(item.status)} · jornada {formatValidationJourneyDate(validationJourneyDate(item.payload.generado_dispositivo_at, item.payload.turno, journeyTimeZone, calendarRules))} · {formatTime(item.payload.generado_dispositivo_at)}
             </Text>
             {item.message ? <Text style={styles.trayMessage}>{item.message}</Text> : null}
           </View>
@@ -1435,7 +1445,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
               ) : null}
             </>
           )}
-          detail={`${item.payload.cantidad_cajas} cj · ${packageLabel(item.payload.tipo_bulto)} · línea ${item.payload.linea_proceso}, turno ${item.payload.turno} · jornada ${formatValidationJourneyDate(validationJourneyDate(item.payload.generado_dispositivo_at, item.payload.turno, journeyTimeZone))} · guardado en la ${device}`}
+          detail={`${item.payload.cantidad_cajas} cj · ${packageLabel(item.payload.tipo_bulto)} · línea ${item.payload.linea_proceso}, turno ${item.payload.turno} · jornada ${formatValidationJourneyDate(validationJourneyDate(item.payload.generado_dispositivo_at, item.payload.turno, journeyTimeZone, calendarRules))} · guardado en la ${device}`}
           folio={item.payload.numero_folio}
           key={item.id}
           message={item.message}
@@ -1447,7 +1457,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       {visibleSessionAttempts.map((item) => (
         <TalonRow
           aside={<StatusChip small label={item.estado === 'conflicto' ? 'Conflicto' : resultLabel(item.resultado)} tone={item.estado === 'conflicto' ? 'critical' : resultTone(item.resultado)} />}
-          detail={`${item.cantidad_cajas} cj · ${packageLabel(item.tipo_bulto)} · línea ${item.linea_proceso ?? '—'}, turno ${item.turno ?? '—'} · jornada ${formatValidationJourneyDate(item.fecha_jornada ?? validationJourneyDate(item.generado_dispositivo_at, item.turno, journeyTimeZone))}${item.numero_intento > 1 ? ` · intento ${item.numero_intento}` : ''}`}
+          detail={`${item.cantidad_cajas} cj · ${packageLabel(item.tipo_bulto)} · línea ${item.linea_proceso ?? '—'}, turno ${item.turno_operativo ?? item.turno ?? '—'} · jornada ${formatValidationJourneyDate(item.fecha_jornada ?? validationJourneyDate(item.generado_dispositivo_at, item.turno, journeyTimeZone, calendarRules))}${item.numero_intento > 1 ? ` · intento ${item.numero_intento}` : ''}`}
           disabled={busy || Boolean(editingOutbox)}
           folio={item.numero_folio}
           key={item.id}

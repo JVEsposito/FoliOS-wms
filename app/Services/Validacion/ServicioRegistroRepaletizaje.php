@@ -118,14 +118,14 @@ class ServicioRegistroRepaletizaje
         $grupos = $repas
             ->sortBy(fn (Repaletizaje $repa): string => implode('|', [
                 $repa->fecha_operacional?->toDateString() ?? '',
-                (string) $repa->turno,
+                (string) ($repa->turnoOperativo() ?? $repa->turno),
                 str_pad((string) $repa->user_id, 12, '0', STR_PAD_LEFT),
                 $repa->confirmado_at?->format('YmdHis.u') ?? '',
                 $repa->codigo,
             ]))
             ->groupBy(fn (Repaletizaje $repa): string => implode('|', [
                 $repa->fecha_operacional?->toDateString() ?? '',
-                (string) $repa->turno,
+                (string) ($repa->turnoOperativo() ?? $repa->turno),
                 (string) $repa->user_id,
             ]));
 
@@ -136,7 +136,7 @@ class ServicioRegistroRepaletizaje
             foreach (array_chunk($bloques, self::BLOQUES_POR_HOJA) as $indice => $lote) {
                 $paginas[] = [
                     'fecha' => $primera->fecha_operacional?->format('d-m-Y') ?? '',
-                    'turno' => (string) $primera->turno,
+                    'turno' => (string) ($primera->turnoOperativo() ?? $primera->turno),
                     'tarjador' => $primera->usuario?->name ?? 'Sin usuario',
                     'numero' => $indice + 1,
                     'bloques' => $lote,

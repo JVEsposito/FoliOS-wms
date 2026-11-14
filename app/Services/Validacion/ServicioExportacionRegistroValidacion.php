@@ -145,7 +145,7 @@ class ServicioExportacionRegistroValidacion
             $validacion->fechaJornada()?->toDateString() ?? '',
             str_pad((string) $validacion->user_id, 12, '0', STR_PAD_LEFT),
             (string) $validacion->linea_proceso,
-            (string) $validacion->turno,
+            (string) ($validacion->turnoOperativo() ?? $validacion->turno),
             $validacion->generado_dispositivo_at?->format('YmdHis.u') ?? '',
             (string) $validacion->numero_intento,
         ]));
@@ -155,7 +155,7 @@ class ServicioExportacionRegistroValidacion
             $validacion->fechaJornada()?->toDateString() ?? '',
             (string) $validacion->user_id,
             (string) $validacion->linea_proceso,
-            (string) $validacion->turno,
+            (string) ($validacion->turnoOperativo() ?? $validacion->turno),
         ])) as $grupo) {
             /** @var ValidacionPallet $primera */
             $primera = $grupo->first();
@@ -164,7 +164,7 @@ class ServicioExportacionRegistroValidacion
                     'fecha' => $primera->fechaJornada()?->format('d-m-Y') ?? '',
                     'encargado' => $primera->usuario?->name ?? 'Sin usuario',
                     'linea' => (int) $primera->linea_proceso,
-                    'turno' => (string) $primera->turno,
+                    'turno' => (string) ($primera->turnoOperativo() ?? $primera->turno),
                     'numero' => $indice + 1,
                     'validaciones' => $lote->values(),
                 ];
@@ -235,7 +235,12 @@ class ServicioExportacionRegistroValidacion
                 $this->texto($documento, $xpath, 'K'.$fila, 'X');
             }
 
-            $this->texto($documento, $xpath, 'L'.$fila, $this->observacion($validacion));
+            $turno = $validacion->turnoOperativo();
+            $traza = $turno ? implode(' · ', array_filter([
+                $validacion->generado_dispositivo_at?->setTimezone(config('app.operational_timezone'))->format('d-m-Y H:i:s'),
+                $validacion->turno !== $turno && $validacion->turno ? 'Turno declarado '.$validacion->turno : null,
+            ])) : null;
+            $this->texto($documento, $xpath, 'L'.$fila, implode(' · ', array_filter([$traza, $this->observacion($validacion)])));
             $this->texto(
                 $documento,
                 $xpath,

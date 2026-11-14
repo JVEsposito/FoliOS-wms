@@ -6,8 +6,8 @@ use App\Models\Camara;
 use App\Models\EntregaFrutaProceso;
 use App\Models\EventoLoteMateriaPrima;
 use App\Models\LoteMateriaPrima;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -24,8 +24,6 @@ class RegistroMovimientosCamaraMp
 
     public function consulta(array $filtros): Builder
     {
-        $zona = config('app.operational_timezone', 'America/Santiago');
-
         return EventoLoteMateriaPrima::query()
             ->whereIn('tipo', array_keys(self::TIPOS))
             ->whereHas('lote', fn (Builder $lote) => $lote
@@ -33,10 +31,8 @@ class RegistroMovimientosCamaraMp
             ->when(filled($filtros['lote_id'] ?? null) || filled($filtros['buscar'] ?? null),
                 fn (Builder $q) => $this->filtrarLotes($q, $filtros))
             ->when(filled($filtros['tipo'] ?? null), fn (Builder $q) => $q->where('tipo', $filtros['tipo']))
-            ->when(filled($filtros['desde'] ?? null), fn (Builder $q) => $q->where('ocurrido_at', '>=',
-                CarbonImmutable::parse($filtros['desde'], $zona)->startOfDay()->setTimezone(config('app.timezone'))))
-            ->when(filled($filtros['hasta'] ?? null), fn (Builder $q) => $q->where('ocurrido_at', '<',
-                CarbonImmutable::parse($filtros['hasta'], $zona)->addDay()->startOfDay()->setTimezone(config('app.timezone'))))
+            ->tap(fn (Builder $q) => app(CalendarioOperativo::class)
+                ->filtrar($q, 'ocurrido_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null))
             ->when(filled($filtros['camara_id'] ?? null), function (Builder $q) use ($filtros) {
                 $q->where(fn (Builder $c) => $c->where('datos->camara_origen_id', $filtros['camara_id'])
                     ->orWhere('datos->camara_destino_id', $filtros['camara_id'])

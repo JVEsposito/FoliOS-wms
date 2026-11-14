@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ArchivoTemporadaController;
 use App\Http\Controllers\Api\BandaOperacionalController;
 use App\Http\Controllers\Api\BloqueoMaterialController;
 use App\Http\Controllers\Api\BodegaMaterialController;
+use App\Http\Controllers\Api\CalendarioOperativoController;
 use App\Http\Controllers\Api\CamaraController;
 use App\Http\Controllers\Api\CambioAtributosPtController;
 use App\Http\Controllers\Api\CambioPasswordUsuarioController;
@@ -121,6 +122,11 @@ Route::post('/acceso-tablet', [AccesoTabletController::class, 'store'])->middlew
 Route::post('/acceso-oficina', [AccesoOficinaController::class, 'store'])->middleware('throttle:6,1');
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/jornada-operativa', [CalendarioOperativoController::class, 'mostrar']);
+    Route::middleware('can:administrar-accesos')->group(function (): void {
+        Route::get('/administracion/jornada-operativa', [CalendarioOperativoController::class, 'index']);
+        Route::post('/administracion/jornada-operativa', [CalendarioOperativoController::class, 'store']);
+    });
     Route::put('/usuario/password', CambioPasswordUsuarioController::class)->middleware('throttle:6,1');
     Route::get('/usuario/pin', [PinOperacionalController::class, 'show']);
     Route::put('/usuario/pin', [PinOperacionalController::class, 'update'])->middleware('throttle:6,1');

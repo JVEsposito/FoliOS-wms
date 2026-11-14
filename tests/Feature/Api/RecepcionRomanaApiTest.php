@@ -11,6 +11,7 @@ use App\Models\EventoRecepcionRomana;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -99,6 +100,32 @@ class RecepcionRomanaApiTest extends TestCase
         RecepcionRomana::query()->whereKey($recepcion['id'])->update(['especie_validacion_id' => null]);
         $this->getJson('/api/romana/recepciones/'.$recepcion['id'])
             ->assertOk()->assertJsonPath('data.especie_validacion_id', null);
+    }
+
+    public function test_romana_filtra_por_jornada_de_ingreso_y_el_pdf_conserva_la_fecha_real(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-12T12:00:00-03:00'));
+        $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        app(CalendarioOperativo::class)->publicar([
+            'vigente_desde' => '2026-11-13', 'inicio_jornada' => '07:00', 'inicio_turno_b' => '19:00', 'version_conocida' => 0,
+        ], $admin->id);
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
+        $datos = $this->datosIngreso($this->cliente());
+        $this->travelTo(CarbonImmutable::parse('2026-11-14T06:59:59-03:00'));
+        $id = $this->postJson('/api/romana/recepciones', $datos)->assertCreated()
+            ->assertJsonPath('data.ingreso_at', '2026-11-14T09:59:59+00:00')
+            ->assertJsonPath('data.fecha_jornada', '2026-11-13')
+            ->assertJsonPath('data.turno_operativo', 'B')
+            ->json('data.id');
+
+        $this->getJson('/api/romana/recepciones?desde=2026-11-13&hasta=2026-11-13')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $id);
+        $this->getJson('/api/romana/recepciones?desde=2026-11-14&hasta=2026-11-14')->assertOk()
+            ->assertJsonCount(0, 'data');
+        $pdf = $this->get('/api/romana/recepciones/'.$id.'/aviso-recibo')->assertOk()->getContent();
+        $this->assertStringContainsString('14-11-2026 06:59', $pdf);
+        $this->assertStringContainsString('13-11-2026', $pdf);
+        $this->assertStringContainsString('Turno B', $pdf);
     }
 
     public function test_exige_elegir_un_tipo_de_camion_valido_al_registrar_el_ingreso(): void

@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\AnularValidacionPalletRequest;
 use App\Models\AnulacionValidacionPallet;
 use App\Models\ValidacionPallet;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\ServicioAnulacionValidacionPallet;
 use Illuminate\Database\Eloquent\Builder;
@@ -85,9 +86,9 @@ class AnulacionValidacionPalletController extends Controller
             ->map(fn (AnulacionValidacionPallet $anulacion): array => $this->recursoAnulacion($anulacion))
             ->values();
 
-        $zona = config('app.operational_timezone');
-        $inicioHoy = now($zona)->startOfDay()->utc();
-        $finHoy = now($zona)->addDay()->startOfDay()->utc();
+        $calendario = app(CalendarioOperativo::class);
+        $hoy = $calendario->fecha();
+        [$inicioHoy, $finHoy] = $calendario->rango($hoy, $hoy);
         $porCategoria = $deLaTemporada()
             ->selectRaw('motivo_categoria, COUNT(*) as total')
             ->groupBy('motivo_categoria')

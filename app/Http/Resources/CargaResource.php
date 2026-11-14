@@ -6,6 +6,7 @@ use App\Enums\EstadoCarga;
 use App\Enums\EstadoCargaFolio;
 use App\Services\Cargas\CalculadorConcentracionCarga;
 use App\Services\Cargas\ServicioAcopioCarga;
+use App\Services\Jornadas\CalendarioOperativo;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
@@ -141,6 +142,7 @@ class CargaResource extends JsonResource
                 'observacion' => $this->observacion_cierre,
                 'datos_embarque' => $this->datos_embarque_cierre,
                 'cerrada_at' => $this->cerrada_at->toAtomString(),
+                ...app(CalendarioOperativo::class)->datos($this->cerrada_at),
                 'registrada_at' => $this->cierre_registrado_at?->toAtomString(),
                 'cerrada_por' => $this->whenLoaded('cerradaPor', fn () => [
                     'id' => $this->cerradaPor?->id,

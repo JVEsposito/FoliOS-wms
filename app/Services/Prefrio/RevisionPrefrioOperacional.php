@@ -2,6 +2,7 @@
 
 namespace App\Services\Prefrio;
 
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Revisiones\RevisionBandejasOperacionales;
 
 class RevisionPrefrioOperacional
@@ -28,6 +29,7 @@ class RevisionPrefrioOperacional
         return $this->huella([
             'revision' => $this->revisionActual(),
             'bandeja' => 'procesos',
+            'calendario' => app(CalendarioOperativo::class)->revision(),
             'filtros' => $filtros,
         ]);
     }

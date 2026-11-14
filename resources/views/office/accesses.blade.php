@@ -9,7 +9,7 @@
         <title>FoliOS · Administración de accesos</title>
 
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-            @vite(['resources/css/office.css', 'resources/css/office-admin.css', 'resources/js/office-admin.js', 'resources/js/office-access-profiles.js', 'resources/js/office-user-management.js', 'resources/js/office-client-users.js', 'resources/js/office-label-profiles.js', 'resources/js/office-record-formats.js'])
+            @vite(['resources/css/office.css', 'resources/css/office-admin.css', 'resources/js/office-admin.js', 'resources/js/office-access-profiles.js', 'resources/js/office-user-management.js', 'resources/js/office-client-users.js', 'resources/js/office-label-profiles.js', 'resources/js/office-record-formats.js', 'resources/js/office-operational-calendar.js'])
         @endif
         @include('office.partials.arranque')
     </head>
@@ -78,6 +78,7 @@
                     default="seasons"
                     :panels="[
                         'seasons' => ['label' => 'Temporadas', 'icon' => '◷'],
+                        'operational-calendar' => ['label' => 'Turnos operativos', 'icon' => '◷'],
                         'clients' => ['label' => 'Clientes', 'icon' => '◇'],
                         'labels' => ['label' => 'Etiquetas', 'icon' => '▤'],
                         'formats' => ['label' => 'Formatos de registro', 'icon' => '▤'],
@@ -92,6 +93,8 @@
                 />
 
                 @include('office.partials.external-connections')
+
+                @include('office.partials.operational-calendar')
 
                 <section class="admin-panel panel" id="administration-panel-formats" data-office-panel-group="administration" data-office-panel-id="formats" role="tabpanel" aria-labelledby="administration-tab-formats" hidden>
                     <div class="admin-panel__heading"><div><p class="eyebrow">CONTROL DE DOCUMENTOS</p><h2>Formatos de registro</h2></div><span id="recordFormatsSummary">Sin cargar</span></div>

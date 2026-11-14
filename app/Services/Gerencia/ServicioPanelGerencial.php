@@ -34,6 +34,7 @@ use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\ValidacionPallet;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Materiales\ServicioConsultaVencimientosMaterial;
 use App\Services\Materiales\ServicioReposicionMaterial;
 use App\Services\Verificaciones\ServicioIndicadoresVerificacionMateriales;
@@ -49,7 +50,7 @@ use Illuminate\Support\Str;
 
 class ServicioPanelGerencial
 {
-    public const CLAVE_CACHE = 'gerencia:panel:resumen:v6';
+    public const CLAVE_CACHE = 'gerencia:panel:resumen:v7';
 
     private const CLAVE_BLOQUEO = 'gerencia:panel:resumen:bloqueo';
 
@@ -99,10 +100,14 @@ class ServicioPanelGerencial
 
     public function claveCache(string $temporadaId): string
     {
+        $calendario = app(CalendarioOperativo::class);
+
         return implode(':', [
             self::CLAVE_CACHE,
             $this->versionCache(),
             $temporadaId,
+            $calendario->revision(),
+            $calendario->turnoActual()['fecha_jornada'] ?? 'historico',
         ]);
     }
 
@@ -495,7 +500,7 @@ class ServicioPanelGerencial
             'cerradas_hoy' => Carga::query()
                 ->where('temporada_id', $temporadaId)
                 ->whereIn('estado', [EstadoCarga::Despachada->value, EstadoCarga::Cerrada->value])
-                ->where('cerrada_at', '>=', now()->startOfDay())
+                ->tap(fn (Builder $q) => app(CalendarioOperativo::class)->filtrarHoy($q, 'cerrada_at', 'UTC'))
                 ->count(),
             'detalle' => $detalle->values()->all(),
         ];
@@ -506,10 +511,13 @@ class ServicioPanelGerencial
      */
     private function validacion(string $temporadaId): array
     {
-        $inicio = now()->startOfDay();
-        $baseHoy = ValidacionPallet::query()
-            ->where('temporada_id', $temporadaId)
-            ->where('recibido_servidor_at', '>=', $inicio);
+        $calendario = app(CalendarioOperativo::class);
+        $baseHoy = ValidacionPallet::query()->where('temporada_id', $temporadaId);
+        if ($calendario->contexto()['turno_operativo']) {
+            $baseHoy->deJornada(ValidacionPallet::fechaJornadaVigente());
+        } else {
+            $baseHoy->where('recibido_servidor_at', '>=', now()->startOfDay());
+        }
         $porResultado = (clone $baseHoy)
             ->groupBy('resultado')
             ->select('resultado')
@@ -720,7 +728,7 @@ class ServicioPanelGerencial
             'recepciones_confirmadas_hoy' => RecepcionMaterial::query()
                 ->where('temporada_id', $temporadaId)
                 ->where('estado', EstadoRecepcionMaterial::Confirmada->value)
-                ->where('confirmado_at', '>=', now()->startOfDay())
+                ->tap(fn (Builder $q) => app(CalendarioOperativo::class)->filtrarHoy($q, 'confirmado_at', 'UTC'))
                 ->count(),
             'recepciones_borrador' => RecepcionMaterial::query()
                 ->where('temporada_id', $temporadaId)
@@ -785,12 +793,12 @@ class ServicioPanelGerencial
             'confirmados_hoy' => LoteMateriaPrima::query()
                 ->where('temporada_id', $temporadaId)
                 ->whereNotNull('confirmado_at')
-                ->where('confirmado_at', '>=', now()->startOfDay())
+                ->tap(fn (Builder $q) => app(CalendarioOperativo::class)->filtrarHoy($q, 'confirmado_at', 'UTC'))
                 ->count(),
             'kilos_confirmados_hoy' => round((float) LoteMateriaPrima::query()
                 ->where('temporada_id', $temporadaId)
                 ->whereNotNull('confirmado_at')
-                ->where('confirmado_at', '>=', now()->startOfDay())
+                ->tap(fn (Builder $q) => app(CalendarioOperativo::class)->filtrarHoy($q, 'confirmado_at', 'UTC'))
                 ->sum('kilos_netos_confirmados'), 2),
         ];
     }
@@ -800,11 +808,12 @@ class ServicioPanelGerencial
      */
     private function envases(string $temporadaId): array
     {
-        $inicioHoy = now()->startOfDay();
-        $inicioSemana = now()->subDays(6)->startOfDay();
-        $hoy = MovimientoEnvase::query()
-            ->where('temporada_id', $temporadaId)
-            ->where('ocurrido_at', '>=', $inicioHoy);
+        $calendario = app(CalendarioOperativo::class);
+        $fechaHoy = $calendario->fecha(zonaHistorica: 'UTC');
+        $inicioSemana = CarbonImmutable::parse($fechaHoy, 'UTC')->subDays(6);
+        $hoy = $calendario->filtrar(
+            MovimientoEnvase::query()->where('temporada_id', $temporadaId), 'ocurrido_at', $fechaHoy, $fechaHoy, 'UTC',
+        );
 
         $existencias = MovimientoEnvase::query()
             ->where('temporada_id', $temporadaId)
@@ -821,16 +830,17 @@ class ServicioPanelGerencial
             ->get()
             ->keyBy(fn (MovimientoEnvase $movimiento): string => $movimiento->tipo_envase->value);
 
-        $tendencia = MovimientoEnvase::query()
-            ->where('temporada_id', $temporadaId)
-            ->where('ocurrido_at', '>=', $inicioSemana)
-            ->groupBy('tipo_envase')
-            ->groupByRaw('DATE(ocurrido_at)')
-            ->selectRaw('tipo_envase, DATE(ocurrido_at) as fecha')
-            ->selectRaw('COALESCE(SUM(CASE WHEN signo_existencia > 0 THEN cantidad ELSE 0 END), 0) as entradas')
-            ->selectRaw('COALESCE(SUM(CASE WHEN signo_existencia < 0 THEN cantidad ELSE 0 END), 0) as salidas')
-            ->get()
-            ->groupBy(fn (MovimientoEnvase $movimiento): string => $movimiento->tipo_envase->value);
+        $tendencia = collect(range(0, 6))->flatMap(function (int $dias) use ($calendario, $inicioSemana, $temporadaId) {
+            $fecha = $inicioSemana->addDays($dias)->toDateString();
+
+            return $calendario->filtrar(MovimientoEnvase::query()->where('temporada_id', $temporadaId), 'ocurrido_at', $fecha, $fecha, 'UTC')
+                ->groupBy('tipo_envase')
+                ->select('tipo_envase')
+                ->selectRaw('? as fecha', [$fecha])
+                ->selectRaw('COALESCE(SUM(CASE WHEN signo_existencia > 0 THEN cantidad ELSE 0 END), 0) as entradas')
+                ->selectRaw('COALESCE(SUM(CASE WHEN signo_existencia < 0 THEN cantidad ELSE 0 END), 0) as salidas')
+                ->get();
+        })->groupBy(fn (MovimientoEnvase $movimiento): string => $movimiento->tipo_envase->value);
 
         $saldos = MovimientoEnvase::query()
             ->where('temporada_id', $temporadaId)
@@ -1012,11 +1022,9 @@ class ServicioPanelGerencial
     {
         // Cada recepción es del día en que el camión ingresó, en hora de planta: si entra a las
         // 22:38 y sale después de medianoche, sus kilos son del día de ingreso, no del de salida.
-        $zona = (string) config('app.operational_timezone', 'America/Santiago');
-        $zonaBase = (string) config('app.timezone', 'UTC');
-        $hoy = CarbonImmutable::now($zona)->startOfDay();
-        $inicio = $hoy->subDays(6);
-        $termino = $hoy->addDay();
+        $calendario = app(CalendarioOperativo::class);
+        $hoy = CarbonImmutable::parse($calendario->fecha(), $calendario->zona());
+        [$inicio, $termino] = $calendario->rango($hoy->subDays(6)->toDateString(), $hoy->toDateString());
         $porEstado = RecepcionRomana::query()
             ->where('temporada_id', $temporadaId)
             ->whereIn('estado', [
@@ -1044,15 +1052,15 @@ class ServicioPanelGerencial
             ->selectRaw('COALESCE(SUM(r.peso_neto), 0) as kilos')
             ->get();
         $semana = (clone $cerradas)
-            ->where('r.ingreso_at', '>=', $inicio->setTimezone($zonaBase))
-            ->where('r.ingreso_at', '<', $termino->setTimezone($zonaBase))
+            ->where('r.ingreso_at', '>=', $inicio)
+            ->where('r.ingreso_at', '<', $termino)
             ->select(['r.cliente_id', 'r.ingreso_at', 'r.peso_neto', 'r.tipo_recepcion'])
             // Envases recibidos: lo contado por Validación MP; sin detalle, lo declarado.
             ->selectRaw('COALESCE((SELECT SUM(COALESCE(d.cantidad_validada, d.cantidad_declarada)) FROM detalles_envases_recepcion_romana d WHERE d.recepcion_romana_id = r.id), r.cantidad_envases_declarados) as envases_recibidos')
             ->get()
             ->map(fn (object $fila): array => [
                 'cliente' => (string) $fila->cliente_id,
-                'fecha' => CarbonImmutable::parse($fila->ingreso_at, $zonaBase)->setTimezone($zona)->toDateString(),
+                'fecha' => $calendario->fecha(CarbonImmutable::parse($fila->ingreso_at, 'UTC')),
                 'kilos' => $fila->tipo_recepcion === $fruta ? 0.0 : (float) $fila->peso_neto,
                 'fruta' => $fila->tipo_recepcion !== $fruta,
                 'envases' => (int) $fila->envases_recibidos,
@@ -1112,7 +1120,7 @@ class ServicioPanelGerencial
             'clientes_temporada' => $clientes->count(),
             'clientes' => $clientes->all(),
             'series_clientes' => $series->all(),
-            'zona_horaria' => $zona,
+            'zona_horaria' => $calendario->zona(),
             'tendencia_diaria' => $tendencia->all(),
         ];
     }

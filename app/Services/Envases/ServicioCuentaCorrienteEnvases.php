@@ -18,6 +18,7 @@ use App\Models\RecepcionRomana;
 use App\Models\SegmentoValidacionMp;
 use App\Models\Temporada;
 use App\Models\ValidacionMp;
+use App\Services\Jornadas\CalendarioOperativo;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -144,8 +145,7 @@ class ServicioCuentaCorrienteEnvases
     }
 
     /**
-     * Las fechas de los filtros son días de planta; los movimientos se guardan en UTC.
-     * Un ingreso a las 22:00 del 14 pertenece al 14 aunque en UTC ya sea el 15.
+     * Las fechas de los filtros son jornadas de planta; los movimientos se guardan en UTC.
      */
     public function filtrarDiasOperacionales(Builder $consulta, string $columna, ?string $desde, ?string $hasta): void
     {
@@ -161,12 +161,7 @@ class ServicioCuentaCorrienteEnvases
     /** @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable} inicio incluido y fin excluido, en UTC */
     public function rangoOperacional(?string $desde, ?string $hasta): array
     {
-        $zona = config('app.operational_timezone');
-
-        return [
-            filled($desde) ? CarbonImmutable::parse($desde, $zona)->startOfDay()->utc() : null,
-            filled($hasta) ? CarbonImmutable::parse($hasta, $zona)->addDay()->startOfDay()->utc() : null,
-        ];
+        return app(CalendarioOperativo::class)->rango($desde, $hasta);
     }
 
     /**

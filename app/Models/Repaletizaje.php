@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Contracts\PerteneceATemporada;
+use App\Services\Jornadas\CalendarioOperativo;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -73,6 +74,11 @@ class Repaletizaje extends Model implements PerteneceATemporada
     public function anuladoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'anulado_por_user_id');
+    }
+
+    public function turnoOperativo(): ?string
+    {
+        return app(CalendarioOperativo::class)->datos($this->confirmado_at)['turno_operativo'];
     }
 
     protected function casts(): array

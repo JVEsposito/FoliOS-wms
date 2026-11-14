@@ -159,7 +159,7 @@ function renderMetrics() {
     elements.dayApproved.textContent = String(day.aprobados ?? 0);
     elements.dayRejected.textContent = String(day.rechazados ?? 0);
     elements.observedCount.closest('article').classList.toggle('has-attention', day.observados > 0);
-    const context = validationDayContext(day.fecha, validationTimeZone());
+    const context = validationDayContext(day.fecha, validationTimeZone(), new Date(), day.jornada_vigente);
     elements.dayValidatedLabel.textContent = context.label;
     elements.linesTitle.textContent = context.title;
     elements.lines.innerHTML = (day.por_linea || []).map((line) => {

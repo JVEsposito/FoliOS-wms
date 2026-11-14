@@ -28,6 +28,7 @@ use App\Models\PesajeEnvaseRecepcionRomana;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Services\Envases\ServicioPrestamoInternoEnvases;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Romana\GeneradorAvisoReciboPdf;
 use App\Services\Romana\ObservacionConteoRecepcion;
 use App\Services\Romana\ProductoresRecepcion;
@@ -102,12 +103,7 @@ class RecepcionRomanaController extends Controller
     {
         $filtros = $request->validated();
         $base = RecepcionRomana::query();
-        if (! empty($filtros['desde'])) {
-            $base->whereDate('ingreso_at', '>=', $filtros['desde']);
-        }
-        if (! empty($filtros['hasta'])) {
-            $base->whereDate('ingreso_at', '<=', $filtros['hasta']);
-        }
+        app(CalendarioOperativo::class)->filtrar($base, 'ingreso_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null, 'UTC');
         $base->when(
             $filtros['temporada_id'] ?? null,
             fn (Builder $consulta, string $temporadaId): Builder => $consulta
@@ -513,6 +509,7 @@ class RecepcionRomanaController extends Controller
                     ->toDateString()
                 : null,
             'ingreso_at' => $recepcion->ingreso_at?->toAtomString(),
+            ...app(CalendarioOperativo::class)->datos($recepcion->ingreso_at, 'UTC'),
             'ingreso_confirmado_at' => $recepcion->ingreso_confirmado_at?->toAtomString(),
             'salida_at' => $recepcion->salida_at?->toAtomString(),
             'validacion_tomada_at' => $recepcion->validacion_tomada_at?->toAtomString(),

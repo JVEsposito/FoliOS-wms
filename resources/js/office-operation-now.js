@@ -444,7 +444,7 @@ function renderClock() {
             hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone,
         }).format(now);
     } catch {
-        elements.date.textContent = state.snapshot.jornada?.fecha || '—';
+        elements.date.textContent = state.snapshot.jornada?.fecha_real || state.snapshot.jornada?.fecha || '—';
         elements.time.textContent = state.snapshot.jornada?.hora || '--:--:--';
     }
     elements.timezone.textContent = timeZone || 'Hora operacional';
@@ -464,7 +464,7 @@ function renderHeader(data) {
         : 'Sin temporada activa';
     elements.updatedAt.textContent = `Última lectura: ${dateTime(data.generado_at)}`;
     elements.shift.textContent = data.jornada?.turno
-        ? `Turno: ${humanize(data.jornada.turno)}`
+        ? `Turno ${humanize(data.jornada.turno)} · Jornada ${data.jornada.fecha.split('-').reverse().join('-')}`
         : 'Turno sin configurar';
 
     const status = data.sincronizacion?.estado || 'sin_actividad';

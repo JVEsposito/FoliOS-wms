@@ -5,6 +5,7 @@ namespace App\Services\MateriaPrima;
 use App\Models\FormatoRegistro;
 use App\Models\ProcesoHidrocoolerMateriaPrima;
 use App\Services\Documentos\DocumentoPdfPlanta;
+use App\Services\Jornadas\CalendarioOperativo;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -55,7 +56,9 @@ class RegistroControlHidrocooler
                     'formato' => $ciclos->first()->formato_registro_snapshot ?? self::OFICIAL,
                     'filas' => $ciclos->map(fn ($p) => $this->valores($p))->values()->all(),
                     'observaciones' => $ciclos->map(function ($p): string {
+                        $jornada = app(CalendarioOperativo::class)->datos($p->inicio_at, 'UTC');
                         $notas = collect([
+                            $jornada['turno_operativo'] ? 'Jornada '.$jornada['fecha_jornada'].' · Turno '.$jornada['turno_operativo'] : null,
                             $p->observacion_inicio, $p->observacion,
                             $p->accion_correctiva ? 'Acción: '.$p->accion_correctiva : null,
                             $p->motivo_retencion ? 'Retención: '.$p->motivo_retencion : null,

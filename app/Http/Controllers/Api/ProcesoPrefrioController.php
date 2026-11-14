@@ -24,6 +24,7 @@ use App\Models\PresenciaCargaAnden;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
 use App\Services\Cargas\ServicioPlanDespachoDirecto;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Prefrio\GeneradorRegistroPrefrioR41;
 use App\Services\Prefrio\RegistroPrefrioR41;
 use App\Services\Prefrio\RevisionPrefrioOperacional;
@@ -75,6 +76,7 @@ class ProcesoPrefrioController extends Controller
         $folio = mb_strtoupper(trim((string) ($datos['folio'] ?? '')));
         $pagina = max(1, $request->integer('page', 1));
         $porPagina = (int) ($datos['per_page'] ?? 25);
+        $calendario = app(CalendarioOperativo::class);
 
         $etag = 'prefrio-procesos-'.$revision->procesos([
             'solo_activos' => $soloActivos,
@@ -102,10 +104,21 @@ class ProcesoPrefrioController extends Controller
             ->when($folio !== '', fn ($consulta) => $consulta
                 ->whereHas('folios.folio', fn ($folios) => $folios
                     ->where('numero_folio', 'like', "%{$folio}%")))
-            ->when($datos['fecha_desde'] ?? null, fn ($consulta, string $fecha) => $consulta
-                ->whereDate('created_at', '>=', $fecha))
-            ->when($datos['fecha_hasta'] ?? null, fn ($consulta, string $fecha) => $consulta
-                ->whereDate('created_at', '<=', $fecha))
+            ->when(isset($datos['fecha_desde']) || isset($datos['fecha_hasta']), function ($consulta) use ($datos, $calendario): void {
+                $desde = $datos['fecha_desde'] ?? null;
+                $hasta = $datos['fecha_hasta'] ?? null;
+                $vigencia = $calendario->primeraVigencia();
+                if (! $vigencia) {
+                    $calendario->filtrar($consulta, 'created_at', $desde, $hasta, 'UTC');
+
+                    return;
+                }
+
+                [$inicio, $fin] = $calendario->rango($desde, $hasta, 'UTC');
+                $instante = 'CASE WHEN iniciado_at >= ? THEN iniciado_at ELSE created_at END';
+                $consulta->when($inicio, fn ($q) => $q->whereRaw($instante.' >= ?', [$vigencia, $inicio]))
+                    ->when($fin, fn ($q) => $q->whereRaw($instante.' < ?', [$vigencia, $fin]));
+            })
             ->latest('created_at')
             ->paginate($porPagina);
 

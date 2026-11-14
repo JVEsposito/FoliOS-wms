@@ -28,6 +28,7 @@ use App\Models\TunelPrefrio;
 use App\Models\User;
 use App\Models\VerificacionUbicacion;
 use App\Services\Camaras\EstadoEvacuacionEmergencia;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
 use App\Services\Planificador\ServicioPuestoMandoPlanificador;
 use App\Services\Prefrio\PuntoRocio\ServicioPuntoRocio;
@@ -62,23 +63,26 @@ class ServicioOperacionAhora
         $estadoEmergencias = app(EstadoEvacuacionEmergencia::class);
         $codigosCamara = collect($camaras)->pluck('codigo', 'id');
         $ventana = app(VentanasVerificacion::class)->actual($ahora);
+        $calendario = app(CalendarioOperativo::class);
+        $jornada = $calendario->clasificar($ahora);
         app(ServicioVerificacionesUbicacion::class)->vencer($temporada);
 
         return [
             'generado_at' => $ahora->toAtomString(),
             'actualizacion_sugerida_segundos' => 30,
             'jornada' => [
-                'fecha' => $horaOperacional->toDateString(),
+                'fecha' => $jornada['fecha_jornada'],
+                'fecha_real' => $horaOperacional->toDateString(),
                 'hora' => $horaOperacional->format('H:i:s'),
                 'zona_horaria' => $horaOperacional->getTimezone()->getName(),
-                'turno' => $ventana['nombre'],
+                'turno' => $jornada['turno_operativo'] ?? $ventana['nombre'],
             ],
             'temporada' => [
                 'id' => $temporada->id,
                 'codigo' => $temporada->codigo,
                 'nombre' => $temporada->nombre,
             ],
-            'sincronizacion' => $this->sincronizacion($ahora, $horaOperacional),
+            'sincronizacion' => $this->sincronizacion($ahora),
             'camareros' => $this->camareros($temporada),
             'prefrio' => $prefrio,
             'incidencias' => $this->incidencias($temporada, $ahora),
@@ -837,7 +841,6 @@ class ServicioOperacionAhora
      */
     private function sincronizacion(
         CarbonImmutable $ahora,
-        CarbonImmutable $horaOperacional,
     ): array {
         $ultima = OperacionSincronizacion::query()
             ->with(['usuario:id,name', 'dispositivo:id,codigo,nombre'])
@@ -846,7 +849,7 @@ class ServicioOperacionAhora
             ->orderByDesc('id')
             ->first();
         $conteos = OperacionSincronizacion::query()
-            ->where('recibida_servidor_at', '>=', $horaOperacional->startOfDay()->utc())
+            ->tap(fn ($consulta) => app(CalendarioOperativo::class)->filtrarHoy($consulta, 'recibida_servidor_at'))
             ->where('recibida_servidor_at', '<=', $ahora)
             ->selectRaw('estado, COUNT(*) as total')
             ->groupBy('estado')

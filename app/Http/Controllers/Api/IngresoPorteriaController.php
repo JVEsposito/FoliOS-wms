@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\GuardarIngresoPorteriaRequest;
 use App\Models\Cliente;
 use App\Models\IngresoPorteria;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Porteria\ServicioIngresosPorteria;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,20 +15,19 @@ class IngresoPorteriaController extends Controller
 {
     public function catalogos(): JsonResponse
     {
-        return response()->json(['clientes' => Cliente::query()->where('activo', true)->orderBy('nombre')->get(['id', 'nombre']), 'ahora' => now()->toAtomString()])->header('Cache-Control', 'no-store, private');
+        return response()->json(['clientes' => Cliente::query()->where('activo', true)->orderBy('nombre')->get(['id', 'nombre']), 'ahora' => now()->toAtomString(), 'fecha_jornada' => app(CalendarioOperativo::class)->fecha()])->header('Cache-Control', 'no-store, private');
     }
 
     public function index(Request $request, ServicioIngresosPorteria $servicio): JsonResponse
     {
         $filtros = $request->validate(['fecha' => ['nullable', 'date_format:Y-m-d'], 'buscar' => ['nullable', 'string', 'max:100'], 'pendientes' => ['nullable', 'boolean']]);
-        $fecha = $filtros['fecha'] ?? CarbonImmutable::now('America/Santiago')->toDateString();
-        $desde = CarbonImmutable::parse($fecha, 'America/Santiago')->startOfDay()->utc();
-        $hasta = $desde->setTimezone('America/Santiago')->addDay()->startOfDay()->utc();
+        $calendario = app(CalendarioOperativo::class);
+        $fecha = $filtros['fecha'] ?? $calendario->fecha();
         $consulta = IngresoPorteria::query();
         if ($request->boolean('pendientes')) {
             $consulta->whereNull('anulado_at')->whereNull('revisado_at');
         } else {
-            $consulta->where('ingreso_at', '>=', $desde)->where('ingreso_at', '<', $hasta);
+            $calendario->filtrar($consulta, 'ingreso_at', $fecha, $fecha);
         }
         if ($buscar = $filtros['buscar'] ?? null) {
             $consulta->where(fn ($q) => $q->where('patente', 'like', '%'.$buscar.'%')->orWhere('cliente_nombre', 'like', '%'.$buscar.'%')->orWhere('nombre_conductor', 'like', '%'.$buscar.'%')->orWhereJsonContains('guias', $buscar));

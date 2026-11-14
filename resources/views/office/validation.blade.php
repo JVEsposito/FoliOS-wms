@@ -71,7 +71,7 @@
                     </div>
                     <form class="validation-filters" id="validationFilters">
                             <input name="folio" maxlength="50" placeholder="Buscar folio">
-                            <input name="fecha" type="date" value="{{ \App\Models\ValidacionPallet::fechaJornadaVigente() }}" aria-label="Fecha de jornada" title="El turno B de madrugada se cuenta en el día en que comenzó">
+                            <input name="fecha" type="date" value="{{ \App\Models\ValidacionPallet::fechaJornadaVigente() }}" aria-label="Fecha de jornada" title="Fecha de la jornada operativa de planta">
                             <select name="linea_proceso"><option value="">Todas las líneas</option><option value="1">Línea 1</option><option value="2">Línea 2</option><option value="3">Línea 3</option></select>
                             <select name="turno"><option value="">Todos los turnos</option><option value="A">Turno A</option><option value="B">Turno B</option></select>
                             <select id="validationUserFilter" name="user_id"><option value="">Todos los encargados</option></select>
@@ -80,7 +80,7 @@
                             <select name="estado"><option value="">Todos los estados</option><option value="aceptada">Aceptada</option><option value="conflicto">Conflicto</option></select>
                             <button class="secondary-button" type="submit">Filtrar</button>
                     </form>
-                    <p class="validation-help">El PDF y el Excel se descargan para el cliente y la jornada aplicados. Las validaciones del turno B antes de las 07:00 figuran en la fecha en que inició el turno. El Excel RRPP-01 agrupa las hojas por encargado, línea y turno. <button class="validation-link" id="downloadBlankValidationRegisterButton" type="button">Descargar planilla en blanco</button></p>
+                    <p class="validation-help">El PDF y el Excel se descargan para el cliente y la jornada aplicados. Cada validación se agrupa por la jornada de planta vigente a la hora de captura. El Excel RRPP-01 agrupa las hojas por encargado, línea y turno. <button class="validation-link" id="downloadBlankValidationRegisterButton" type="button">Descargar planilla en blanco</button></p>
                     <div class="validation-table-scroll"><table class="validation-table"><thead><tr><th>Folio</th><th>Artículo</th><th>Origen</th><th>Resultado</th><th>Validador y jornada</th><th scope="col"><span class="office-visually-hidden">Acciones</span></th></tr></thead><tbody id="validationHistoryBody"></tbody></table></div>
                 </section>
 

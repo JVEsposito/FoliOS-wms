@@ -20,6 +20,7 @@ use App\Models\Temporada;
 use App\Models\TransicionOperacional;
 use App\Models\ValidacionPallet;
 use App\Services\Autenticacion\ContextoOperacional;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\ContextoCorreccionValidacion;
 use App\Services\Validacion\GeneradorHistorialValidacionesPdf;
@@ -125,6 +126,7 @@ class ValidacionPalletController extends Controller
 
         return [
             'fecha' => $fecha,
+            'jornada_vigente' => ValidacionPallet::fechaJornadaVigente(),
             'validados' => $aceptadas->count(),
             'aprobados' => $aceptadas->where('resultado', ResultadoValidacionPallet::Aprobado)->count(),
             'observados' => $aceptadas->where('resultado', ResultadoValidacionPallet::Observado)->count(),
@@ -199,6 +201,7 @@ class ValidacionPalletController extends Controller
                 'iniciada_at' => $inicio->toAtomString(),
                 'servidor_at' => now()->toAtomString(),
                 'zona_horaria' => config('app.operational_timezone'),
+                'calendario_operativo' => app(CalendarioOperativo::class)->contexto(),
                 'usuario' => [
                     'id' => $usuario->id,
                     'nombre' => $usuario->name,
@@ -452,7 +455,7 @@ class ValidacionPalletController extends Controller
                     ->where('linea_proceso', (int) $linea),
             )
             ->when(
-                $filtros['turno'] ?? null,
+                empty($filtros['fecha']) ? ($filtros['turno'] ?? null) : null,
                 fn (Builder $consulta, string $turno): Builder => $consulta->where('turno', $turno),
             )
             ->when(
@@ -462,7 +465,7 @@ class ValidacionPalletController extends Controller
             )
             ->when(
                 $filtros['fecha'] ?? null,
-                fn (Builder $consulta, string $fecha): Builder => $consulta->deJornada($fecha),
+                fn (Builder $consulta, string $fecha): Builder => $consulta->deJornada($fecha, $filtros['turno'] ?? null),
             );
     }
 }

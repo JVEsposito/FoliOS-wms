@@ -11,10 +11,10 @@ use App\Models\PersonalAccessToken;
 use App\Models\PlantaOrigen;
 use App\Models\RecepcionFrutaEmbalada;
 use App\Models\User;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\RecepcionFrutaEmbalada\ServicioBorradorRecepcionFrutaEmbalada;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\CatalogoOperativoValidacion;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -38,12 +38,7 @@ class RecepcionFrutaEmbaladaController extends Controller
                 $query->where($campo, $f[$campo]);
             }
         }
-        foreach (['desde' => '>=', 'hasta' => '<='] as $campo => $comparacion) {
-            if (filled($f[$campo] ?? null)) {
-                $fecha = CarbonImmutable::parse($f[$campo], config('app.operational_timezone'));
-                $query->where('recepcion_at', $comparacion, ($campo === 'desde' ? $fecha->startOfDay() : $fecha->endOfDay())->utc());
-            }
-        }
+        app(CalendarioOperativo::class)->filtrar($query, 'recepcion_at', $f['desde'] ?? null, $f['hasta'] ?? null);
 
         return response()->json($query->orderByDesc('recepcion_at')->orderByDesc('id')->paginate($f['per_page'] ?? 25)->withQueryString());
     }

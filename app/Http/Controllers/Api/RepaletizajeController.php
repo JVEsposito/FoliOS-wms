@@ -10,6 +10,7 @@ use App\Models\Folio;
 use App\Models\PersonalAccessToken;
 use App\Models\Repaletizaje;
 use App\Models\RepaletizajeDetalle;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\CuadraturaReembalaje;
 use App\Services\Validacion\RegistroReembalaje;
@@ -70,22 +71,22 @@ class RepaletizajeController extends Controller
         $datos = $request->validate([
             'fecha' => ['nullable', 'date_format:Y-m-d'],
         ]);
-        $fecha = $datos['fecha'] ?? now(config('app.operational_timezone'))->toDateString();
+        $fecha = $datos['fecha'] ?? app(CalendarioOperativo::class)->fecha();
 
         $planillas = Repaletizaje::query()->where('modalidad', '!=', 'reembalaje')
             ->whereDate('fecha_operacional', $fecha)
             ->whereHas('folioResultante', fn ($folios) => $folios
                 ->where('temporada_id', app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with('usuario:id,name')
-            ->get(['id', 'turno', 'user_id', 'estado', 'fecha_operacional'])
-            ->groupBy(fn (Repaletizaje $repa): string => ($repa->turno ?? '').'|'.$repa->user_id)
+            ->get(['id', 'turno', 'user_id', 'estado', 'fecha_operacional', 'confirmado_at'])
+            ->groupBy(fn (Repaletizaje $repa): string => ($repa->turnoOperativo() ?? $repa->turno ?? '').'|'.$repa->user_id)
             ->map(function ($grupo) use ($fecha): array {
                 /** @var Repaletizaje $primera */
                 $primera = $grupo->first();
 
                 return [
                     'fecha' => $fecha,
-                    'turno' => $primera->turno,
+                    'turno' => $primera->turnoOperativo() ?? $primera->turno,
                     'tarjador' => [
                         'id' => $primera->user_id,
                         'nombre' => $primera->usuario?->name,
@@ -115,10 +116,10 @@ class RepaletizajeController extends Controller
             ->whereDate('fecha_operacional', $datos['fecha'])
             ->whereHas('folioResultante', fn ($folios) => $folios
                 ->where('temporada_id', app(ServicioTemporadaActiva::class)->buscar()?->id))
-            ->when($datos['turno'] ?? null, fn ($consulta, string $turno) => $consulta->where('turno', $turno))
             ->when($datos['user_id'] ?? null, fn ($consulta, int $usuario) => $consulta->where('user_id', $usuario))
             ->with([...$this->relaciones(), 'resultados'])
-            ->get();
+            ->get()
+            ->when($datos['turno'] ?? null, fn ($repas, string $turno) => $repas->filter(fn (Repaletizaje $repa) => ($repa->turnoOperativo() ?? $repa->turno) === $turno));
 
         $nombre = sprintf(
             'RRPL-01_%s%s.xlsx',
@@ -353,6 +354,7 @@ class RepaletizajeController extends Controller
             ] : null,
             'observacion' => $repa->observacion,
             'turno' => $repa->turno,
+            'turno_operativo' => $repa->turnoOperativo(),
             'fecha_operacional' => $repa->fecha_operacional?->toDateString(),
             'confirmado_at' => $repa->confirmado_at?->toAtomString(),
             'anulado_at' => $repa->anulado_at?->toAtomString(),

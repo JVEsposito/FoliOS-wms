@@ -21,8 +21,14 @@ function localTime(value) {
 function displayTime(value) { return new Intl.DateTimeFormat('es-CL', { timeZone: state.response.meta.zona_horaria, dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)); }
 function selectDraft(id) {
     const source = state.response.data.find((t) => t.id === id);
+    const { ahora, turno_operativo: operationalShift } = state.response.meta;
     state.draft = source ? { id: source.id, version: source.version, nombre: source.nombre, inicio: localTime(source.inicio_at), fin: localTime(source.fin_at), asignaciones: structuredClone(source.asignaciones) }
-        : { nombre: '', inicio: localTime(state.response.meta.ahora), fin: localTime(new Date(new Date(state.response.meta.ahora).getTime() + 8 * 3600000)), asignaciones: [] };
+        : {
+            nombre: operationalShift ? `Turno ${operationalShift.nombre}` : '',
+            inicio: localTime(operationalShift?.inicio_at ?? ahora),
+            fin: localTime(operationalShift?.fin_at ?? new Date(new Date(ahora).getTime() + 8 * 3600000)),
+            asignaciones: [],
+        };
     state.dirty = false; state.conflict = false; $('shiftDraft').textContent = ''; $('shiftError').textContent = '';
     $('shiftSelect').value = source?.id || ''; renderForm(); renderJobs(source?.labores || []);
 }

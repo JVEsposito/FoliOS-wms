@@ -9,24 +9,27 @@ export function validationOriginLabel(catalog = {}) {
 export function validationJourneyLabel(item, timeZone = 'America/Santiago') {
     const date = new Date(item.generado_dispositivo_at);
     const valid = Boolean(item.generado_dispositivo_at) && !Number.isNaN(date.getTime());
-    if (!item.linea_proceso || !item.turno) {
+    const shift = item.turno_operativo || item.turno;
+    if (!item.linea_proceso || !shift) {
         const formatted = valid ? new Intl.DateTimeFormat('es-CL', {
             dateStyle: 'short', timeStyle: 'short', hourCycle: 'h23', timeZone,
         }).format(date) : 'Sin fecha';
         return `Sin jornada histórica · ${formatted}`;
     }
     const time = valid ? new Intl.DateTimeFormat('es-CL', {
+        ...(item.turno_operativo ? { day: '2-digit', month: '2-digit' } : {}),
         hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone,
     }).format(date) : 'Sin fecha';
     const jornada = item.fecha_jornada ? ` · Jornada ${item.fecha_jornada.split('-').reverse().join('-')}` : '';
-    return `Línea ${item.linea_proceso}, turno ${item.turno}, ${time}${jornada}${item.dispositivo?.codigo ? ` · ${item.dispositivo.codigo}` : ''}`;
+    const declared = item.turno_operativo && item.turno && item.turno !== shift ? ` · Declarado ${item.turno}` : '';
+    return `Línea ${item.linea_proceso}, turno ${shift}, ${time}${jornada}${declared}${item.dispositivo?.codigo ? ` · ${item.dispositivo.codigo}` : ''}`;
 }
 
-export function validationDayContext(fecha, timeZone = 'America/Santiago', now = new Date()) {
+export function validationDayContext(fecha, timeZone = 'America/Santiago', now = new Date(), currentJourney = null) {
     const parts = Object.fromEntries(new Intl.DateTimeFormat('en', {
         timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
     }).formatToParts(now).map(({ type, value }) => [type, value]));
-    const today = `${parts.year}-${parts.month}-${parts.day}`;
+    const today = currentJourney || `${parts.year}-${parts.month}-${parts.day}`;
     const label = !fecha || fecha === today ? 'hoy' : fecha.split('-').reverse().join('-');
     return { label: label === 'hoy' ? 'hoy' : `el ${label}`, title: `Por línea, ${label}` };
 }

@@ -14,6 +14,7 @@ use App\Services\Consultas\ServicioAsociacionProductorCsg;
 use App\Services\Consultas\ServicioConsultaOperacional;
 use App\Services\Consultas\ServicioTrazabilidadLotes;
 use App\Services\Existencias\GeneradorLibroXlsx;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\ProyeccionTrazabilidadFolio;
 use Illuminate\Http\JsonResponse;
@@ -43,7 +44,7 @@ class ConsultaOficinaController extends Controller
             ],
             'lotes' => LoteMateriaPrima::query()->count(),
             'consultas_sag_hoy' => ConsultaSag::query()
-                ->whereDate('ocurrido_at', today())
+                ->tap(fn ($q) => app(CalendarioOperativo::class)->filtrarHoy($q, 'ocurrido_at', 'UTC'))
                 ->count(),
         ]);
     }

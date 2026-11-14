@@ -13,6 +13,7 @@ use App\Models\Dispositivo;
 use App\Models\MedicionPuntoRocio;
 use App\Models\PersonalAccessToken;
 use App\Models\SalaControlRocio;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Prefrio\PuntoRocio\ServicioPlanCadenaFrio;
 use App\Services\Prefrio\PuntoRocio\ServicioPuntoRocio;
 use Carbon\CarbonImmutable;
@@ -34,9 +35,7 @@ class PuntoRocioPrefrioController extends Controller
             'fecha' => ['nullable', 'date_format:Y-m-d'],
             'etapa' => ['nullable', Rule::enum(EtapaMedicionPuntoRocio::class)],
         ]);
-        $fecha = isset($filtros['fecha'])
-            ? CarbonImmutable::createFromFormat('Y-m-d', $filtros['fecha'], $this->servicio->zona())->startOfDay()
-            : CarbonImmutable::now($this->servicio->zona())->startOfDay();
+        $fecha = CarbonImmutable::parse($filtros['fecha'] ?? app(CalendarioOperativo::class)->fecha(), $this->servicio->zona());
         $usuario = $request->user();
 
         return response()->json([

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Prefrio\RegistroPrefrioR41;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -13,6 +14,11 @@ class ProcesoPrefrioResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $calendario = app(CalendarioOperativo::class);
+        $vigencia = $calendario->primeraVigencia();
+        $inicio = $this->iniciado_at;
+        $instante = $vigencia && $inicio && $inicio->gte($vigencia) ? $inicio : $this->created_at;
+
         return [
             'id' => $this->id,
             'temporada' => $this->whenLoaded('temporada', fn () => $this->temporada ? [
@@ -41,6 +47,7 @@ class ProcesoPrefrioResource extends JsonResource
             'version' => $this->version,
             'observacion' => $this->observacion,
             'iniciado_at' => $this->iniciado_at?->toAtomString(),
+            ...$calendario->datos($instante, 'UTC'),
             'pendiente_verificacion_at' => $this->pendiente_verificacion_at?->toAtomString(),
             'finalizado_at' => $this->finalizado_at?->toAtomString(),
             'folios' => $this->whenLoaded('folios', fn () => $this->folios->map(fn ($asignacion) => [

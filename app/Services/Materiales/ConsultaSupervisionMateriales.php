@@ -2,8 +2,8 @@
 
 namespace App\Services\Materiales;
 
+use App\Services\Jornadas\CalendarioOperativo;
 use Illuminate\Database\Query\Builder;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /** Lecturas agregadas y paginadas; nunca reconstruye ni modifica existencias. */
@@ -230,12 +230,7 @@ class ConsultaSupervisionMateriales
 
     private function periodo(Builder $q, array $f, string $columna): void
     {
-        $zona = config('app.operational_timezone');
-        // Sumar la fecha en UTC evita arrastrar la 01:00 del cambio horario
-        // chileno a la jornada siguiente cuando la medianoche no existe.
-        $diaSiguiente = Carbon::parse($f['hasta'], 'UTC')->addDay()->toDateString();
-        $q->where($columna, '>=', Carbon::parse($f['desde'], $zona)->startOfDay()->utc())
-            ->where($columna, '<', Carbon::parse($diaSiguiente, $zona)->startOfDay()->utc());
+        app(CalendarioOperativo::class)->filtrar($q, $columna, $f['desde'], $f['hasta']);
     }
 
     private function cliente(Builder $q, array $f): void

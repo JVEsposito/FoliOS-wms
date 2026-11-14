@@ -48,6 +48,7 @@ use App\Observers\ReplanificarSegregacionMovimientoObserver;
 use App\Observers\SolicitarArbitrajePlanificadorObserver;
 use App\Observers\UbicacionActualObserver;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Planificador\ServicioSaludProcesos;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ContextoEjecucionTransicionOperacional;
@@ -69,6 +70,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(ContextoEjecucionTransicionOperacional::class);
         $this->app->scoped(ServicioTemporadaActiva::class);
+        $this->app->scoped(CalendarioOperativo::class);
 
         if ($this->app->environment('local') &&
             class_exists(\Laravel\Telescope\TelescopeServiceProvider::class)) {
