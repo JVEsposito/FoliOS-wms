@@ -568,10 +568,10 @@ class ServicioCuentaCorrienteEnvases
                     : ($numero ? 'Ajuste a la guía de salida N° '.$numero : 'Ajuste a la salida del destare'),
                 'chofer' => null,
                 'movimiento' => 'Ajuste de '.$ajuste['lado'].' por administración',
+                // El motivo es trazabilidad interna (RPR-01, kardex y expediente): el estado de cuenta es formal e informativo.
                 'referencia' => $unir([
                     'Recepción '.$ajuste['numero_recepcion'],
                     $registrado ? 'registrado el '.$registrado : null,
-                    filled($ajuste['motivo'] ?? null) ? 'Motivo: '.$ajuste['motivo'] : null,
                 ]),
             ];
         }

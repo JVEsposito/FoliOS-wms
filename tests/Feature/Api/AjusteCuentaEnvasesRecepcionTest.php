@@ -68,7 +68,7 @@ class AjusteCuentaEnvasesRecepcionTest extends TestCase
         $evento = EventoRecepcionRomana::where('recepcion_romana_id', $recepcion->id)->where('tipo', 'ajuste_cuenta_envases')->sole();
         $this->assertSame([self::MOTIVO, 'Bins plástico recibidos 4 → 3'], [$evento->datos['motivo'], $evento->datos['resumen']]);
 
-        // Estado de cuenta: el ajuste va en su propia línea, con signo, motivo y el CSG de la recepción.
+        // Estado de cuenta: el ajuste va en su propia línea, con signo y el CSG de la recepción. El motivo es interno: no sale.
         $cuenta = app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta($recepcion->cliente, $recepcion->temporada, null, null);
         $linea = collect($cuenta['movimientos'])->firstWhere('movimiento', "Ajuste de recibidos de {$recepcion->numero_recepcion} (administración)");
         $this->assertSame([-1, null, 'CSG CSG-CORR', '1511 / 1512'], [$linea['entrada'], $linea['salida'], $linea['productor'], $linea['documento']]);
@@ -76,7 +76,13 @@ class AjusteCuentaEnvasesRecepcionTest extends TestCase
         $grupo = collect($cuenta['detalle_csg'])->firstWhere('codigo', 'CSG-CORR');
         $documento = collect($grupo['documentos'])->firstWhere('titulo', 'Ajuste a la guía de ingreso N° 1511 / 1512');
         $this->assertSame('Ajuste de recibidos por administración', $documento['movimiento']);
-        $this->assertStringContainsString('Motivo: '.self::MOTIVO, $documento['referencia']);
+        $this->assertSame("Recepción {$recepcion->numero_recepcion} · registrado el ".now(config('app.operational_timezone'))->format('d-m-Y'), $documento['referencia']);
+        $pdf = $this->get('/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$recepcion->cliente_id)->assertOk()->getContent();
+        $excel = $this->get('/api/envases/cuenta-corriente/estado-cuenta?formato=xlsx&cliente_id='.$recepcion->cliente_id)->assertOk();
+        foreach ([$pdf, (string) file_get_contents('zip://'.$excel->baseResponse->getFile()->getPathname().'#xl/worksheets/sheet1.xml')] as $documentoCliente) {
+            $this->assertStringNotContainsString('Conteo real de bins en patio', $documentoCliente);
+            $this->assertStringNotContainsString('Motivo', $documentoCliente);
+        }
         $this->assertSame([['tipo_envase' => 'Bins plástico', 'entrada' => -1, 'salida' => null, 'saldo' => -1]], $documento['lineas']);
         $this->assertSame(3, collect($grupo['totales'])->firstWhere('tipo_envase', 'Bins plástico')['entradas']);
         $resumen = collect($cuenta['resumen_csg'])->firstWhere('codigo', 'CSG-CORR');
