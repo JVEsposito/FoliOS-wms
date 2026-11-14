@@ -97,6 +97,8 @@ class LoteMateriaPrimaResource extends JsonResource
                 'id' => $this->hidrocooler->id,
                 'codigo' => $this->hidrocooler->codigo,
                 'estado' => $this->hidrocooler->estado->value,
+                // oficial: registro completo POEMP-R3; patio: tiempos, temperaturas y estado del agua.
+                'modalidad' => $this->hidrocooler->modalidad ?? 'oficial',
                 'equipo' => $this->hidrocooler->equipo,
                 'turno' => $this->hidrocooler->turno,
                 'cantidad_bombas_funcionando' => $this->hidrocooler->cantidad_bombas_funcionando,

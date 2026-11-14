@@ -17,8 +17,9 @@ class LiberarHidrocoolerMateriaPrimaRequest extends FormRequest
         return [
             'operacion_id' => ['required', 'uuid'],
             'temperatura_verificacion_c' => ['required', 'numeric', 'between:-20,50', 'decimal:0,2'],
-            'cloro_libre_verificacion_ppm' => ['required', 'numeric', 'between:0,500', 'decimal:0,2'],
-            'ph_agua_verificacion' => ['required', 'numeric', 'between:0,14', 'decimal:0,2'],
+            // Obligatorios para ciclos oficiales (lo exige el servicio); opcionales en el registro de patio.
+            'cloro_libre_verificacion_ppm' => ['nullable', 'numeric', 'between:0,500', 'decimal:0,2'],
+            'ph_agua_verificacion' => ['nullable', 'numeric', 'between:0,14', 'decimal:0,2'],
             'control_verificacion_conforme' => ['required', 'accepted'],
             'evaluacion_producto' => ['required', 'string', 'min:10', 'max:2000'],
             'verificacion_liberacion' => ['required', 'string', 'min:10', 'max:2000'],

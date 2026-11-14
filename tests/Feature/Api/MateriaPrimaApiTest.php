@@ -16,11 +16,13 @@ use App\Models\EventoLoteMateriaPrima;
 use App\Models\FormatoRegistro;
 use App\Models\LineaProceso;
 use App\Models\LoteMateriaPrima;
+use App\Models\ProcesoHidrocoolerMateriaPrima;
 use App\Models\ProductoHidrocooler;
 use App\Models\Temporada;
 use App\Models\TipoResultadoPacking;
 use App\Models\User;
 use App\Models\VariedadValidacion;
+use App\Services\MateriaPrima\RegistroControlHidrocooler;
 use App\Services\MateriaPrima\RegistroMovimientosCamaraMp;
 use App\Services\MateriaPrima\RellenoEnvasesLotes;
 use App\Services\MateriaPrima\ServicioCompletarEnvasesSegmentos;
@@ -1271,6 +1273,94 @@ class MateriaPrimaApiTest extends TestCase
         $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/liberar", $liberacion)
             ->assertConflict();
         $this->assertDatabaseCount('procesos_hidrocooler_materia_prima', 1);
+    }
+
+    public function test_registro_de_patio_pide_solo_tiempos_temperaturas_y_estado_del_agua(): void
+    {
+        $lote = $this->loteParaHidrocooler('LOTE-PATIO-1');
+
+        // Con agua no conforme no se inicia; los campos de la planilla oficial no se piden ni se guardan.
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", $this->inicioPatio('HIDRO-01', ['condicion_visual_agua' => 'no_conforme']))
+            ->assertUnprocessable()->assertJsonValidationErrors('condicion_visual_agua');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", $this->inicioPatio('HIDRO-01', ['cloro_libre_ppm' => 95, 'turno' => 'Z']))
+            ->assertOk()->assertJsonPath('data.estado', 'hidrocooler_en_curso')
+            ->assertJsonPath('data.hidrocooler.modalidad', 'patio')
+            ->assertJsonPath('data.hidrocooler.turno', null)
+            ->assertJsonPath('data.hidrocooler.cloro_libre_ppm', null)
+            ->assertJsonPath('data.hidrocooler.temperatura_objetivo_c', null)
+            ->assertJsonPath('data.hidrocooler.temperatura_inicial_c', 18.5);
+        // Término de patio: sin objetivo, la temperatura no retiene; el agua conforme deja seguir.
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/completar", [
+            'operacion_id' => (string) Str::uuid(), 'termino_at' => now()->toAtomString(), 'temperatura_c' => 7.2,
+            'temperatura_agua_final_c' => 2.1, 'condicion_visual_agua_final' => 'conforme', 'destino_salida' => 'camara',
+        ])->assertOk()->assertJsonPath('data.estado', 'pendiente_asignacion')
+            ->assertJsonPath('data.hidrocooler.duracion_minutos', 40)
+            ->assertJsonPath('data.hidrocooler.cloro_libre_final_ppm', null);
+
+        // La planilla POEMP-R3 trae lo de patio y deja en blanco lo que mide la otra área.
+        $procesos = ProcesoHidrocoolerMateriaPrima::query()->with('lote')->get();
+        $hoja = app(RegistroControlHidrocooler::class)->hojas($procesos)[0];
+        $fila = $hoja['filas'][0];
+        $this->assertSame(['LOTE-PATIO-1', '1,5', '', '18,5', '7,2', '', '40'], [$fila[3], $fila[5], $fila[6], $fila[8], $fila[9], $fila[10], $fila[19]]);
+        $this->assertStringContainsString('Lote LOTE-PATIO-1: Registro de patio: agua inicial conforme, final conforme', $hoja['observaciones']);
+    }
+
+    public function test_registro_de_patio_retiene_por_agua_y_supervision_libera_sin_cloro_ni_ph(): void
+    {
+        $lote = $this->loteParaHidrocooler('LOTE-PATIO-2');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", $this->inicioPatio('HIDRO-02'))->assertOk();
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/completar", [
+            'operacion_id' => (string) Str::uuid(), 'termino_at' => now()->toAtomString(), 'temperatura_c' => 6,
+            'condicion_visual_agua_final' => 'no_conforme', 'destino_salida' => 'proceso',
+        ])->assertOk()->assertJsonPath('data.estado', 'hidrocooler_retenido')
+            ->assertJsonPath('data.hidrocooler.motivo_retencion', 'Estado final del agua no conforme');
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::SupervisorFrio]), 'sanctum')
+            ->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/liberar", [
+                'operacion_id' => (string) Str::uuid(), 'temperatura_verificacion_c' => 5, 'control_verificacion_conforme' => true,
+                'evaluacion_producto' => 'Fruta revisada sin daño visible.', 'verificacion_liberacion' => 'Agua renovada y revisada conforme.',
+            ])->assertOk()->assertJsonPath('data.estado', 'disponible_proceso')
+            ->assertJsonPath('data.hidrocooler.cloro_libre_verificacion_ppm', null);
+    }
+
+    public function test_el_registro_completo_sigue_exigiendo_cloro_ph_y_controles(): void
+    {
+        $lote = $this->loteParaHidrocooler('LOTE-OFICIAL-3');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", [
+            'operacion_id' => (string) Str::uuid(), 'equipo' => 'HIDRO-03', 'turno' => 'A', 'cantidad_bombas_funcionando' => 2,
+            'inicio_at' => now()->subMinutes(30)->toAtomString(), 'temperatura_inicial_c' => 18, 'temperatura_objetivo_c' => 4,
+            'temperatura_ambiente_c' => 20, 'humedad_relativa_pct' => 65, 'pozo_accutab_mv' => 700, 'recarga_pastilla' => false,
+            'aplicacion_producto' => false, 'cloro_libre_ppm' => 95, 'ph_agua' => 6.5, 'control_inicial_conforme' => true,
+            'condicion_visual_agua' => 'conforme', 'dosificador_operativo' => true, 'manejo_agua' => 'sin_novedad',
+        ])->assertOk()->assertJsonPath('data.hidrocooler.modalidad', 'oficial');
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/iniciar", [
+            'operacion_id' => (string) Str::uuid(), 'modalidad' => 'oficial', 'equipo' => 'HIDRO-04', 'inicio_at' => now()->toAtomString(),
+            'temperatura_inicial_c' => 18, 'condicion_visual_agua' => 'conforme',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['turno', 'cloro_libre_ppm', 'temperatura_objetivo_c']);
+        $this->postJson("/api/materia-prima/lotes/{$lote['id']}/hidrocooler/completar", [
+            'operacion_id' => (string) Str::uuid(), 'termino_at' => now()->toAtomString(), 'temperatura_c' => 3.5,
+            'condicion_visual_agua_final' => 'conforme', 'destino_salida' => 'camara',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['cloro_libre_final_ppm', 'ph_agua_final', 'dosificador_operativo_final', 'control_final_conforme']);
+    }
+
+    /** Lote confirmado que requiere hidrocooler, con el digitador autenticado. */
+    private function loteParaHidrocooler(string $numero): array
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-14 08:00:00'));
+        $contexto = $this->prepararRecepcionValidada();
+        $lote = $this->actingAs(User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]), 'sanctum')
+            ->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, ['numero_lote' => $numero, 'requiere_hidrocooler' => true]))
+            ->assertCreated()->json('data');
+
+        return $this->postJson("/api/materia-prima/lotes/{$lote['id']}/confirmar", [
+            'operacion_id' => (string) Str::uuid(), 'version_conocida' => $lote['version'],
+        ])->assertOk()->json('data');
+    }
+
+    private function inicioPatio(string $equipo, array $extra = []): array
+    {
+        return ['operacion_id' => (string) Str::uuid(), 'modalidad' => 'patio', 'equipo' => $equipo,
+            'inicio_at' => now()->subMinutes(40)->toAtomString(), 'temperatura_inicial_c' => 18.5,
+            'temperatura_agua_inicial_c' => 1.5, 'condicion_visual_agua' => 'conforme', ...$extra];
     }
 
     public function test_controla_identificadores_disponibilidad_y_correccion_supervisada(): void

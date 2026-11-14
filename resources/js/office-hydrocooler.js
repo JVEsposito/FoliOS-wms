@@ -187,11 +187,13 @@ function card(lot) {
             <div><span>PRODUCTO</span><strong>${escapeHtml(product || 'Sin detalle')}</strong></div>
             <div><span>ENVASES / KILOS</span><strong>${escapeHtml(cycle?.cantidad_envases ?? lot.envases.cantidad_primarios)} ${escapeHtml(label(lot.envases.primario))}<br>${escapeHtml(formatKilos(cycle?.kilos_netos ?? lot.pesos.kilos_netos_confirmados))}</strong></div>
             <div><span>OPERADOR / DURACIÓN</span><strong>${escapeHtml(cycle?.operador || 'Pendiente')}<br>${duration === null ? 'Pendiente' : escapeHtml(formatDuration(duration))}</strong></div>
-            <div><span>TURNO / BOMBAS</span><strong>${escapeHtml(cycle?.turno ? `Turno ${cycle.turno}` : 'Pendiente')}<br>${cycle?.cantidad_bombas_funcionando === null || cycle?.cantidad_bombas_funcionando === undefined ? '—' : `${cycle.cantidad_bombas_funcionando} bombas`}</strong></div>
+            ${cycle?.modalidad === 'patio'
+        ? '<div><span>TIPO DE REGISTRO</span><strong>Registro de patio<br>Planilla POEMP-R3 aparte</strong></div>'
+        : `<div><span>TURNO / BOMBAS</span><strong>${escapeHtml(cycle?.turno ? `Turno ${cycle.turno}` : 'Pendiente')}<br>${cycle?.cantidad_bombas_funcionando === null || cycle?.cantidad_bombas_funcionando === undefined ? '—' : `${cycle.cantidad_bombas_funcionando} bombas`}</strong></div>`}
         </div>
         <div class="cycle-temperature"><div><span>INICIAL FRUTA</span>${escapeHtml(formatTemperature(cycle?.temperatura_inicial_c))}</div><div><span>OBJETIVO</span>${escapeHtml(formatTemperature(cycle?.temperatura_objetivo_c))}</div><div><span>FINAL FRUTA</span>${escapeHtml(formatTemperature(cycle?.temperatura_c))}</div></div>
         ${cycle ? `<div class="cycle-quality"><div><span>CLORO / PH INICIO → FIN</span>${cycle.cloro_libre_ppm === null ? '—' : `${escapeHtml(formatNumber(cycle.cloro_libre_ppm, 2))} ppm · pH ${escapeHtml(formatNumber(cycle.ph_agua, 2))}`} → ${cycle.cloro_libre_final_ppm === null ? '—' : `${escapeHtml(formatNumber(cycle.cloro_libre_final_ppm, 2))} ppm · pH ${escapeHtml(formatNumber(cycle.ph_agua_final, 2))}`}</div><div><span>AGUA / DOSIFICADOR</span>${cycle.condicion_visual_agua ? escapeHtml(label(cycle.condicion_visual_agua)) : '—'} · ${cycle.dosificador_operativo === null ? '—' : (cycle.dosificador_operativo ? 'Operativo' : 'No operativo')}</div><div><span>CONTROL AGUA</span>${cycle.manejo_agua ? escapeHtml(label(cycle.manejo_agua)) : '—'}</div></div>` : ''}
-        ${cycle ? `<p class="cycle-note">Ambiente ${escapeHtml(formatTemperature(cycle.temperatura_ambiente_c))} · HR ${escapeHtml(cycle.humedad_relativa_pct ?? '—')} % · Pozo ${escapeHtml(cycle.pozo_accutab_mv ?? '—')} mV · Recarga ${cycle.recarga_pastilla === null ? '—' : cycle.recarga_pastilla ? 'Sí' : 'No'} · Corrección ${escapeHtml(cycle.correccion_cloro_ppm ?? '—')} ppm${cycle.aplicacion_producto ? ` · ${escapeHtml(cycle.producto_nombre_snapshot)} ${escapeHtml(cycle.producto_dosis)} ${escapeHtml(cycle.producto_unidad_dosis)}` : ''}</p>` : ''}
+        ${cycle && cycle.modalidad !== 'patio' ? `<p class="cycle-note">Ambiente ${escapeHtml(formatTemperature(cycle.temperatura_ambiente_c))} · HR ${escapeHtml(cycle.humedad_relativa_pct ?? '—')} % · Pozo ${escapeHtml(cycle.pozo_accutab_mv ?? '—')} mV · Recarga ${cycle.recarga_pastilla === null ? '—' : cycle.recarga_pastilla ? 'Sí' : 'No'} · Corrección ${escapeHtml(cycle.correccion_cloro_ppm ?? '—')} ppm${cycle.aplicacion_producto ? ` · ${escapeHtml(cycle.producto_nombre_snapshot)} ${escapeHtml(cycle.producto_dosis)} ${escapeHtml(cycle.producto_unidad_dosis)}` : ''}</p>` : ''}
         ${cycle?.motivo_retencion ? `<p class="cycle-note">Desviación: ${escapeHtml(cycle.motivo_retencion)}${cycle.liberado_at ? ` · Liberado por ${escapeHtml(cycle.liberado_por || 'supervisión')} ${escapeHtml(formatDate(cycle.liberado_at))}` : ' · pendiente de evaluación'}</p>` : ''}
         <p class="cycle-note">${cycle ? `Inicio ${escapeHtml(formatDate(cycle.inicio_at))}${cycle.termino_at ? ` · término ${escapeHtml(formatDate(cycle.termino_at))}` : ''}${note ? ` · ${escapeHtml(note)}` : ''}` : `Confirmado ${escapeHtml(formatDate(lot.confirmado_at))} · CSG ${escapeHtml(lot.trazabilidad.csg)}`}</p>
         ${action ? `<div class="cycle-card__actions">${action}</div>` : ''}
@@ -239,6 +241,19 @@ async function load({ silent = false } = {}) {
 function summaryMarkup(lot) {
     return `<div><span>LOTE</span><strong>${escapeHtml(lot.numero_lote)}</strong></div><div><span>PRODUCTO</span><strong>${escapeHtml(lot.trazabilidad.especie)} · ${escapeHtml(lot.trazabilidad.variedad)}</strong></div><div><span>ENVASES</span><strong>${escapeHtml(lot.envases.cantidad_primarios)} ${escapeHtml(label(lot.envases.primario))}</strong></div><div><span>NETO</span><strong>${escapeHtml(formatKilos(lot.pesos.kilos_netos_confirmados))}</strong></div>`;
 }
+// Registro de patio: oculta y desactiva los campos que solo pide la planilla oficial POEMP-R3.
+function applyModality(form, patio) {
+    form.querySelectorAll('[data-oficial]').forEach((field) => {
+        field.classList.toggle('is-hidden', patio);
+        field.querySelectorAll('input, select, textarea').forEach((control) => {
+            if (control.dataset.requerido === undefined) control.dataset.requerido = control.required ? '1' : '0';
+            control.required = !patio && control.dataset.requerido === '1';
+            control.disabled = patio;
+        });
+    });
+}
+function startIsPatio() { return elements.startForm.elements.modalidad.value === 'patio'; }
+function isPatio(lot) { return lot?.hidrocooler?.modalidad === 'patio'; }
 function openStart(lotId) {
     const lot = state.lots.find((item) => item.id === lotId); if (!lot) return;
     state.selected = lot; elements.startForm.reset(); elements.startError.textContent = '';
@@ -246,6 +261,8 @@ function openStart(lotId) {
     form.operador.value = state.identity?.nombre || 'Usuario conectado';
     form.inicio_at.value = localDateTimeValue(); form.inicio_at.max = localDateTimeValue();
     form.producto_hidrocooler_id.innerHTML = '<option value="">Seleccionar del catálogo</option>' + state.products.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.nombre)}</option>`).join('');
+    form.modalidad.value = 'patio';
+    applyModality(elements.startForm, true);
     updateStartControls();
     elements.startTitle.textContent = `Iniciar ${lot.numero_lote}`;
     elements.startDescription.textContent = 'La composición y el peso del lote quedarán congelados en este ciclo.';
@@ -253,14 +270,14 @@ function openStart(lotId) {
 }
 function updateStartControls() {
     const form = elements.startForm.elements;
-    const applied = form.aplicacion_producto.value === '1';
+    const applied = !startIsPatio() && form.aplicacion_producto.value === '1';
     for (const key of ['producto_hidrocooler_id', 'producto_dosis', 'producto_unidad_dosis']) {
         form[key].required = applied; form[key].disabled = !applied;
         if (!applied) form[key].value = '';
     }
     const range = state.chlorineRange;
     const ppm = form.cloro_libre_ppm.value === '' ? null : Number(form.cloro_libre_ppm.value);
-    form.correccion_cloro_ppm.required = range !== null && ppm !== null && (ppm < range.min || ppm > range.max);
+    form.correccion_cloro_ppm.required = !startIsPatio() && range !== null && ppm !== null && (ppm < range.min || ppm > range.max);
     byId('chlorineRangeHint').textContent = range ? `Rango SOP: ${range.min}–${range.max} ppm. Se exige corrección fuera de rango.` : 'Rango numérico pendiente de validación por planta; declara conformidad según el SOP vigente.';
 }
 function openFinish(lotId) {
@@ -273,6 +290,10 @@ function openFinish(lotId) {
     const direct = elements.finishForm.querySelector('input[name="destino_salida"][value="proceso"]');
     direct.disabled = lot.envases.primario !== 'bins';
     direct.closest('label')?.classList.toggle('is-disabled', direct.disabled);
+    applyModality(elements.finishForm, isPatio(lot));
+    byId('finishRule').textContent = isPatio(lot)
+        ? 'Registro de patio: si el agua termina no conforme, el lote queda retenido para evaluación de supervisión.'
+        : 'Si algún control no es conforme o la fruta supera el objetivo, el lote quedará retenido para evaluación de supervisión.';
     elements.finishTitle.textContent = `Finalizar ${lot.numero_lote}`;
     elements.finishDescription.textContent = `${lot.hidrocooler.codigo} · ${lot.hidrocooler.equipo} · inicio ${formatDate(lot.hidrocooler.inicio_at)}.`;
     elements.finishSummary.innerHTML = summaryMarkup(lot); elements.finishDialog.showModal(); form.termino_at.focus();
@@ -281,13 +302,22 @@ function openRelease(lotId) {
     const lot = state.lots.find((item) => item.id === lotId); if (!lot?.hidrocooler) return;
     state.selected = lot; elements.releaseForm.reset(); elements.releaseError.textContent = '';
     const form = elements.releaseForm.elements; form.lote_id.value = lot.id; form.operacion_id.value = uuid();
+    applyModality(elements.releaseForm, isPatio(lot));
     elements.releaseTitle.textContent = `Evaluar ${lot.numero_lote}`;
     elements.releaseDescription.textContent = `${lot.hidrocooler.motivo_retencion}. Destino tras liberar: ${label(lot.hidrocooler.destino_salida)}. Solo supervisión puede disponer del producto.`;
     elements.releaseDialog.showModal(); form.temperatura_verificacion_c.focus();
 }
 async function submitStart() {
     const data = new FormData(elements.startForm);
-    const payload = {
+    const payload = startIsPatio() ? {
+        operacion_id: data.get('operacion_id'), modalidad: 'patio', equipo: String(data.get('equipo') || '').trim(),
+        inicio_at: new Date(data.get('inicio_at')).toISOString(),
+        temperatura_inicial_c: Number(data.get('temperatura_inicial_c')),
+        temperatura_agua_inicial_c: data.get('temperatura_agua_inicial_c') === '' ? null : Number(data.get('temperatura_agua_inicial_c')),
+        condicion_visual_agua: data.get('condicion_visual_agua'),
+        observacion_inicio: String(data.get('observacion_inicio') || '').trim() || null,
+    } : {
+        modalidad: 'oficial',
         operacion_id: data.get('operacion_id'), equipo: String(data.get('equipo') || '').trim(),
         turno: data.get('turno'), cantidad_bombas_funcionando: Number(data.get('cantidad_bombas_funcionando')),
         inicio_at: new Date(data.get('inicio_at')).toISOString(),
@@ -318,15 +348,18 @@ async function submitStart() {
 }
 async function submitFinish() {
     const data = new FormData(elements.finishForm);
+    const patio = isPatio(state.selected);
     const payload = {
         operacion_id: data.get('operacion_id'), termino_at: new Date(data.get('termino_at')).toISOString(),
         temperatura_c: Number(data.get('temperatura_c')),
         temperatura_agua_final_c: data.get('temperatura_agua_final_c') === '' ? null : Number(data.get('temperatura_agua_final_c')),
-        cloro_libre_final_ppm: Number(data.get('cloro_libre_final_ppm')),
-        ph_agua_final: Number(data.get('ph_agua_final')),
+        ...(patio ? {} : {
+            cloro_libre_final_ppm: Number(data.get('cloro_libre_final_ppm')),
+            ph_agua_final: Number(data.get('ph_agua_final')),
+            dosificador_operativo_final: data.get('dosificador_operativo_final') === '1',
+            control_final_conforme: data.get('control_final_conforme') === '1',
+        }),
         condicion_visual_agua_final: data.get('condicion_visual_agua_final'),
-        dosificador_operativo_final: data.get('dosificador_operativo_final') === '1',
-        control_final_conforme: data.get('control_final_conforme') === '1',
         destino_salida: data.get('destino_salida'), observacion: String(data.get('observacion') || '').trim() || null,
         accion_correctiva: String(data.get('accion_correctiva') || '').trim() || null,
     };
@@ -344,8 +377,10 @@ async function submitRelease() {
     const payload = {
         operacion_id: data.get('operacion_id'),
         temperatura_verificacion_c: Number(data.get('temperatura_verificacion_c')),
-        cloro_libre_verificacion_ppm: Number(data.get('cloro_libre_verificacion_ppm')),
-        ph_agua_verificacion: Number(data.get('ph_agua_verificacion')),
+        ...(isPatio(state.selected) ? {} : {
+            cloro_libre_verificacion_ppm: Number(data.get('cloro_libre_verificacion_ppm')),
+            ph_agua_verificacion: Number(data.get('ph_agua_verificacion')),
+        }),
         control_verificacion_conforme: data.get('control_verificacion_conforme') === '1',
         evaluacion_producto: String(data.get('evaluacion_producto') || '').trim(),
         verificacion_liberacion: String(data.get('verificacion_liberacion') || '').trim(),
@@ -381,6 +416,10 @@ elements.list.addEventListener('click', (event) => {
 });
 elements.startForm.addEventListener('input', updateStartControls);
 elements.startForm.addEventListener('change', (event) => {
+    if (event.target.name === 'modalidad') {
+        applyModality(elements.startForm, startIsPatio());
+        updateStartControls();
+    }
     if (event.target.name === 'producto_hidrocooler_id') {
         elements.startForm.elements.producto_unidad_dosis.value = state.products.find((p) => p.id === event.target.value)?.unidad_dosis || '';
     }

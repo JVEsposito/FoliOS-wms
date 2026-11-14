@@ -47,6 +47,20 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_hidrocooler_ofrece_registro_de_patio_y_registro_completo(): void
+    {
+        $html = $this->get('/oficina/materia-prima/hidrocooler')->assertOk()->getContent();
+        foreach (['startModality', 'startForm', 'finishForm', 'releaseForm', 'finishRule'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        $this->assertStringContainsString('Registro de patio', $html);
+        $this->assertStringContainsString('Registro completo POEMP-R3', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/hidrocooler.html'), $html);
+        }
+    }
+
     public function test_repaletizajes_exporta_la_vista_para_probar_sus_origenes(): void
     {
         $html = $this->get('/oficina/validacion/repaletizajes')->assertOk()->getContent();
