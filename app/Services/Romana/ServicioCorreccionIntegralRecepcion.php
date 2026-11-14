@@ -404,13 +404,17 @@ class ServicioCorreccionIntegralRecepcion
         $correcciones = MovimientoEnvase::query()->whereIn('movimiento_origen_id', $ingresos->pluck('id'))->lockForUpdate()->get()->groupBy('movimiento_origen_id');
         $cadenas = $ingresos->map(function (MovimientoEnvase $ingreso) use ($correcciones): array {
             $propias = $correcciones->get($ingreso->id, collect());
-            if ($propias->contains(fn ($m): bool => ! in_array($m->tipo_movimiento, self::CORRECCIONES, true)
-                || in_array($m->tipo_movimiento, [TipoMovimientoEnvase::CorreccionPropiedad, TipoMovimientoEnvase::CorreccionCuenta, TipoMovimientoEnvase::AnulacionRecepcion], true))) {
-                throw new ConflictoOperacion("El ingreso de {$ingreso->tipo_envase->etiqueta()} ya tiene una corrección de propiedad, de cuenta o un vínculo previo. Corrígelo desde la cuenta corriente.");
-            }
+            $ajustes = $propias->filter(fn ($m): bool => in_array($m->tipo_movimiento, self::CORRECCIONES, true));
+            // Un ingreso que ya salió en un despacho o que tiene otra corrección solo bloquea si su envase cambia.
+            $bloqueo = match (true) {
+                $propias->contains(fn ($m): bool => ! in_array($m->tipo_movimiento, self::CORRECCIONES, true)) => 'ya salió en un despacho o tiene un vínculo posterior',
+                $propias->contains(fn ($m): bool => in_array($m->tipo_movimiento, [TipoMovimientoEnvase::CorreccionPropiedad,
+                    TipoMovimientoEnvase::CorreccionCuenta, TipoMovimientoEnvase::AnulacionRecepcion], true)) => 'ya tiene una corrección de propiedad o de cuenta',
+                default => null,
+            };
 
-            return ['ingreso' => $ingreso, 'neto' => $ingreso->cantidad * $ingreso->signo_existencia
-                + $propias->sum(fn ($m): int => $m->cantidad * $m->signo_existencia)];
+            return ['ingreso' => $ingreso, 'bloqueo' => $bloqueo, 'neto' => $ingreso->cantidad * $ingreso->signo_existencia
+                + $ajustes->sum(fn ($m): int => $m->cantidad * $m->signo_existencia)];
         })->groupBy(fn (array $cadena): string => $cadena['ingreso']->tipo_envase->value);
 
         foreach (array_unique([...array_keys($validados), ...$cadenas->keys()->all()]) as $tipo) {
@@ -421,6 +425,10 @@ class ServicioCorreccionIntegralRecepcion
             $mismaPropiedad = $vigentes->every(fn (array $c): bool => $c['ingreso']->propiedad === $propiedad);
             if ($actual === $objetivo && ($objetivo === 0 || $mismaPropiedad)) {
                 continue;
+            }
+            if ($bloqueada = $cadenas->get($tipo, collect())->first(fn (array $c): bool => $c['bloqueo'] !== null)) {
+                throw new ConflictoOperacion("El ingreso de {$bloqueada['ingreso']->tipo_envase->etiqueta()} {$bloqueada['bloqueo']}: no se puede cambiar su conteo ni su propiedad aquí. "
+                    .'Usa «Solo cuenta de envases» para corregir la cuenta del cliente.');
             }
             if ($vigentes->isNotEmpty() && $mismaPropiedad && $objetivo > 0) {
                 // Misma propiedad: una corrección de cantidad sobre el ingreso principal.
