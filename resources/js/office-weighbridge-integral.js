@@ -210,7 +210,7 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
             ${modeField()}
             ${account ? accountBody() : fullBody()}
             <label class="field"><span>Motivo de la corrección *</span><textarea name="motivo_correccion" rows="3" minlength="10" maxlength="2000" required
-                placeholder="${account ? 'Qué estaba mal y cómo se verificó. Se imprime en el estado de cuenta del cliente.' : 'Qué estaba mal y cómo se verificó'}">${esc(estado.motivo || '')}</textarea></label>
+                placeholder="${account ? 'Qué estaba mal y cómo se verificó. Es trazabilidad interna: no sale en el estado de cuenta del cliente.' : 'Qué estaba mal y cómo se verificó'}">${esc(estado.motivo || '')}</textarea></label>
             <p class="form-error" id="integralError" role="alert"></p>
             <footer class="dialog-actions"><button class="secondary-button" type="button" data-cerrar>Cancelar</button><button class="primary-button" type="submit">${account ? 'Guardar ajuste de cuenta' : 'Guardar corrección'}</button></footer>
         </form>`;
