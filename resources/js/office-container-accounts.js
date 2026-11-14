@@ -48,6 +48,8 @@ const elements = {
     quantityError: byId('quantityError'),
     quantityCancel: byId('quantityCancel'),
     historicalDialog: byId('historicalBalanceDialog'), historicalForm: byId('historicalBalanceForm'), historicalSummary: byId('historicalBalanceSummary'), historicalPreview: byId('historicalBalancePreview'), historicalError: byId('historicalBalanceError'),
+    statementDialog: byId('statementDialog'), statementForm: byId('statementForm'), statementSummary: byId('statementSummary'),
+    statementTypes: byId('statementTypes'), statementError: byId('statementError'), statementSubmit: byId('statementSubmit'),
     adjustmentNew: byId('accountAdjustmentNew'),
     adjustmentDialog: byId('accountAdjustmentDialog'),
     adjustmentForm: byId('accountAdjustmentForm'),
@@ -179,13 +181,44 @@ function downloadGuide(guideId, number) {
     );
 }
 
-/** Temporada y fechas aplicadas: el estado de cuenta es de un cliente, sin los demás filtros. */
-function statementPath(clientId, format) {
+/**
+ * Temporada y fechas aplicadas: el estado de cuenta es de un cliente, sin los demás filtros.
+ * Con solo algunos envases marcados (por ejemplo, solo esponjas), el documento trae solo esos.
+ */
+function statementPath(clientId, format, types = []) {
     const parameters = new URLSearchParams({ cliente_id: clientId, formato: format });
     ['temporada_id', 'desde', 'hasta'].forEach((key) => {
         if (state.parameters.get(key)) parameters.set(key, state.parameters.get(key));
     });
+    const all = state.catalogs?.tipos_envase?.length || 0;
+    if (types.length && types.length < all) types.forEach((type) => parameters.append('tipos_envase[]', type));
     return `/api/envases/cuenta-corriente/estado-cuenta?${parameters}`;
+}
+
+function statementPeriod() {
+    const date = (value) => value.split('-').reverse().join('-');
+    const [from, to] = [state.parameters.get('desde'), state.parameters.get('hasta')];
+    if (from && to) return `Del ${date(from)} al ${date(to)}`;
+    if (from) return `Desde el ${date(from)}`;
+    if (to) return `Hasta el ${date(to)}`;
+    return 'Toda la temporada';
+}
+
+/** Marca de entrada los envases del cliente que se ven en los saldos (respetan el filtro de envase). */
+function openStatement(clientId, format) {
+    const lines = state.balances.filter((line) => line.cliente.id === clientId);
+    const client = lines[0]?.cliente || state.catalogs.clientes.find((item) => item.id === clientId);
+    const balances = new Map(lines.map((line) => [line.tipo_envase, line.saldo]));
+    const form = elements.statementForm;
+    form.reset();
+    form.elements.cliente_id.value = clientId;
+    form.querySelector(`[name="formato"][value="${format}"]`).checked = true;
+    elements.statementSummary.textContent = `${client?.codigo || ''} · ${client?.nombre || ''} · ${statementPeriod()}`;
+    elements.statementTypes.innerHTML = '<legend>Envases que incluye el documento</legend>' + state.catalogs.tipos_envase.map((type) => `<label class="statement-dialog__option"><input type="checkbox" name="tipos_envase" value="${escapeHtml(type.codigo)}"${!balances.size || balances.has(type.codigo) ? ' checked' : ''}><span>${escapeHtml(type.nombre)}</span>${balances.has(type.codigo) ? `<small>Saldo ${signed(balances.get(type.codigo))}</small>` : ''}</label>`).join('');
+    elements.statementError.textContent = '';
+    elements.statementSubmit.disabled = false;
+    elements.statementSubmit.textContent = 'Descargar';
+    elements.statementDialog.showModal();
 }
 
 function showOffice() {
@@ -428,6 +461,40 @@ function openAdjustment(origin = null) {
 }
 
 elements.adjustmentNew.addEventListener('click', () => openAdjustment());
+byId('statementCancel').addEventListener('click', () => elements.statementDialog.close());
+elements.statementDialog.addEventListener('click', (event) => {
+    const select = event.target.closest('[data-statement-select]');
+    if (!select) return;
+    elements.statementTypes.querySelectorAll('input').forEach((input) => { input.checked = select.dataset.statementSelect === 'all'; });
+    elements.statementError.textContent = '';
+});
+elements.statementDialog.addEventListener('cancel', (event) => { if (elements.statementSubmit.disabled) event.preventDefault(); });
+elements.statementForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = elements.statementForm;
+    const types = [...elements.statementTypes.querySelectorAll('input:checked')].map((input) => input.value);
+    if (!types.length) {
+        elements.statementError.textContent = 'Marca al menos un envase.';
+        return;
+    }
+    const format = form.querySelector('[name="formato"]:checked')?.value || 'pdf';
+    elements.statementError.textContent = '';
+    elements.statementSubmit.disabled = true;
+    elements.statementSubmit.textContent = 'Generando…';
+    try {
+        await download(
+            statementPath(form.elements.cliente_id.value, format, types),
+            `estado-cuenta-envases.${format}`,
+            'No fue posible generar el estado de cuenta.',
+        );
+        elements.statementDialog.close();
+    } catch (error) {
+        elements.statementError.textContent = error.message;
+    } finally {
+        elements.statementSubmit.disabled = false;
+        elements.statementSubmit.textContent = 'Descargar';
+    }
+});
 elements.adjustmentCancel.addEventListener('click', () => elements.adjustmentDialog.close());
 elements.adjustmentForm.addEventListener('input', updateAdjustmentPreview);
 elements.adjustmentForm.addEventListener('submit', async (event) => {
@@ -523,21 +590,7 @@ document.addEventListener('click', async (event) => {
             toast(error.message, true);
         }
     }
-    if (statementButton) {
-        const format = statementButton.dataset.format;
-        busy(true, 'Generando estado de cuenta…');
-        try {
-            await download(
-                statementPath(statementButton.dataset.statement, format),
-                `estado-cuenta-envases.${format}`,
-                'No fue posible generar el estado de cuenta.',
-            );
-        } catch (error) {
-            toast(error.message, true);
-        } finally {
-            busy(false);
-        }
-    }
+    if (statementButton) openStatement(statementButton.dataset.statement, statementButton.dataset.format);
     if (reviewButton) {
         elements.reviewForm.reset();
         elements.reviewForm.elements.movimiento_id.value = reviewButton.dataset.review;

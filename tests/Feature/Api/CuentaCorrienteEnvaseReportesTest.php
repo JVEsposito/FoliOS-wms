@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
+use App\Enums\TipoEnvaseRomana;
 use App\Models\Cliente;
 use App\Models\CsgValidacion;
 use App\Models\EspecieValidacion;
@@ -408,6 +409,64 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $this->assertSame(190, $estado['tipos'][0]['saldo_final']);
     }
 
+    /**
+     * El encargado de cuentas corrientes envía al cliente solo algunos envases (solo esponjas, o bins y
+     * totes): el documento trae los movimientos, saldos y el detalle por CSG solo de esos envases.
+     */
+    public function test_el_estado_de_cuenta_se_emite_solo_con_los_envases_elegidos(): void
+    {
+        $this->movimiento($this->productor, 'recepcion_fruta', 40, 1, 1, 'cliente', '2026-10-09 09:00', 'REC-ESP', envase: 'esponjas');
+        $this->movimiento($this->productor, 'despacho_cliente', 15, -1, -1, 'cliente', '2026-10-10 09:00', 'GDE-ESP', envase: 'esponjas');
+        $this->movimiento($this->productor, 'recepcion_fruta', 12, 1, 1, 'cliente', '2026-10-11 09:00', 'REC-TOT', envase: 'totes');
+        $cuenta = app(ServicioCuentaCorrienteEnvases::class);
+
+        $esponjas = $cuenta->estadoCuenta($this->productor, $this->temporada, null, null, ['esponjas']);
+        $this->assertSame(['esponjas'], array_column($esponjas['tipos'], 'tipo_envase'));
+        $this->assertSame(25, $esponjas['tipos'][0]['saldo_final']);
+        $this->assertSame(['REC-ESP', 'GDE-ESP'], array_column($esponjas['movimientos'], 'documento'));
+        $this->assertSame([40, 25], array_column($esponjas['movimientos'], 'saldo'));
+        $this->assertSame(['Esponja de bins'], $esponjas['envases_incluidos']);
+        $this->assertNotEmpty($esponjas['resumen_csg']);
+        foreach ([...$esponjas['resumen_csg'], ...$esponjas['detalle_csg']] as $grupo) {
+            $this->assertCount(1, $grupo['tipos'] ?? $grupo['totales']);
+            $this->assertStringNotContainsString('Bins plástico', json_encode($grupo, JSON_UNESCAPED_UNICODE));
+        }
+
+        // Bins y totes, en el orden del catálogo aunque se pidan al revés; cada envase conserva su propia cuenta.
+        $binsTotes = $cuenta->estadoCuenta($this->productor, $this->temporada, null, null, ['totes', 'bins']);
+        $this->assertSame(['bins', 'totes'], array_column($binsTotes['tipos'], 'tipo_envase'));
+        $this->assertSame([160, 12], array_column($binsTotes['tipos'], 'saldo_final'));
+        $this->assertSame(['Bins plástico', 'Tote'], $binsTotes['envases_incluidos']);
+        $this->assertNotContains('REC-ESP', array_column($binsTotes['movimientos'], 'documento'));
+        $todos = $cuenta->estadoCuenta($this->productor, $this->temporada, null, null);
+        $this->assertSame(['bins', 'esponjas', 'totes'], array_column($todos['tipos'], 'tipo_envase'));
+        $this->assertNull($todos['envases_incluidos']);
+
+        $this->actingAs($this->administrador, 'sanctum');
+        $ruta = '/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$this->productor->id;
+        $win = fn (string $texto): string => iconv('UTF-8', 'Windows-1252', $texto);
+        $respuesta = $this->get($ruta.'&tipos_envase[]=totes&tipos_envase[]=bins')->assertOk()
+            ->assertDownload('estado-cuenta-envases-prb-'.$this->temporada->codigo.'-bins-totes.pdf');
+        $pdf = $respuesta->getContent();
+        $this->assertStringContainsString($win('Envases: Bins plástico, Tote'), $pdf);
+        $this->assertStringContainsString('REC-TOT', $pdf);
+        $this->assertStringNotContainsString('REC-ESP', $pdf);
+
+        $excel = $this->get($ruta.'&formato=xlsx&tipos_envase[]=esponjas')->assertOk()
+            ->assertDownload('estado-cuenta-envases-prb-'.$this->temporada->codigo.'-esponjas.xlsx');
+        $archivo = $excel->baseResponse->getFile()->getPathname();
+        $this->assertSame(['Esponja de bins', 'Esponja de bins'], array_column(array_slice($this->filasExcel($archivo), 1), 3));
+        $this->assertContains(['Envases', 'Esponja de bins'], $this->filasExcel($archivo, 'sheet2'));
+
+        // Marcar todos es el estado de cuenta completo, con el nombre de siempre.
+        $completo = $this->get($ruta.'&formato=xlsx&'.http_build_query(['tipos_envase' => array_column(TipoEnvaseRomana::catalogo(), 'codigo')]))
+            ->assertOk()->assertDownload('estado-cuenta-envases-prb-'.$this->temporada->codigo.'.xlsx');
+        $this->assertContains(['Envases', 'Todos'], $this->filasExcel($completo->baseResponse->getFile()->getPathname(), 'sheet2'));
+
+        $this->getJson($ruta.'&tipos_envase[]=cajones')->assertUnprocessable()->assertJsonValidationErrors('tipos_envase.0');
+        $this->getJson($ruta.'&tipos_envase[]=bins&tipos_envase[]=bins')->assertUnprocessable()->assertJsonValidationErrors('tipos_envase.0');
+    }
+
     private function movimiento(
         Cliente $cliente,
         string $tipo,
@@ -439,12 +498,12 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         ]);
     }
 
-    /** @return list<list<string>> valores de la hoja Movimientos, fila por fila */
-    private function filasExcel(string $ruta): array
+    /** @return list<list<string>> valores de una hoja (por defecto, la de movimientos), fila por fila */
+    private function filasExcel(string $ruta, string $hoja = 'sheet1'): array
     {
         $zip = new ZipArchive;
         $this->assertTrue($zip->open($ruta));
-        $hoja = simplexml_load_string((string) $zip->getFromName('xl/worksheets/sheet1.xml'));
+        $hoja = simplexml_load_string((string) $zip->getFromName("xl/worksheets/{$hoja}.xml"));
         $zip->close();
         $filas = [];
         foreach ($hoja->sheetData->row as $fila) {

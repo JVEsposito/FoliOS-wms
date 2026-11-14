@@ -243,12 +243,18 @@ class ServicioCuentaCorrienteEnvases
      *
      * @return array<string, mixed>
      */
-    public function estadoCuenta(Cliente $cliente, Temporada $temporada, ?string $desde, ?string $hasta): array
+    /**
+     * @param  list<string>|null  $tiposEnvase  solo esos envases (por ejemplo, solo esponjas); null o vacío, todos.
+     */
+    public function estadoCuenta(Cliente $cliente, Temporada $temporada, ?string $desde, ?string $hasta, ?array $tiposEnvase = null): array
     {
+        $tiposEnvase = $tiposEnvase ? array_values(array_unique($tiposEnvase)) : null;
+        // Cada asiento y sus correcciones son del mismo envase: filtrar por tipo deja la cuenta de ese envase completa.
         $movimientos = MovimientoEnvase::query()
             ->where('temporada_id', $temporada->id)
             ->where('cliente_id', $cliente->id)
             ->where('signo_cuenta', '!=', 0)
+            ->when($tiposEnvase, fn ($consulta) => $consulta->whereIn('tipo_envase', $tiposEnvase))
             ->whereNotIn('tipo_movimiento', array_map(fn (TipoMovimientoEnvase $tipo): string => $tipo->value, self::PRESTAMO_INTERNO))
             ->orderBy('ocurrido_at')
             ->orderBy('id')
@@ -421,6 +427,11 @@ class ServicioCuentaCorrienteEnvases
             'temporada' => ['codigo' => $temporada->codigo, 'nombre' => $temporada->nombre],
             'desde' => $desde,
             'hasta' => $hasta,
+            // Envases elegidos para el documento; null cuando incluye todos.
+            'envases_incluidos' => $tiposEnvase === null ? null : collect($tiposEnvase)
+                ->map(fn (string $tipo): TipoEnvaseRomana => TipoEnvaseRomana::from($tipo))
+                ->sortBy(fn (TipoEnvaseRomana $tipo): int => $tipo->orden())
+                ->map(fn (TipoEnvaseRomana $tipo): string => $tipo->etiqueta())->values()->all(),
             'tipos' => collect($tipos)->sortBy('orden')->values()->all(),
             'movimientos' => $lineas,
             'grupos_documentos' => array_values($gruposDocumentos),
