@@ -2,6 +2,7 @@
 
 namespace App\Services\Verificaciones;
 
+use App\Services\Jornadas\CalendarioOperativo;
 use Carbon\CarbonImmutable;
 
 final class VentanasVerificacion
@@ -9,6 +10,10 @@ final class VentanasVerificacion
     /** @return array{inicio: CarbonImmutable, fin: CarbonImmutable, nombre: string} */
     public function actual(?CarbonImmutable $ahora = null): array
     {
+        if ($turno = app(CalendarioOperativo::class)->turnoActual($ahora)) {
+            return $turno;
+        }
+
         $zona = (string) config('app.operational_timezone', 'America/Santiago');
         $ahora = ($ahora ?? CarbonImmutable::now($zona))->setTimezone($zona);
         [$hora, $minuto] = array_map('intval', explode(':', (string) config('verificaciones.turnos.inicio', '06:00')));

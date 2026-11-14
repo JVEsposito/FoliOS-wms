@@ -20,6 +20,7 @@ use App\Models\Pais;
 use App\Models\ResultadoDestinoInspeccionSag;
 use App\Services\InspeccionSag\ServicioEstadoSagFolio;
 use App\Services\InspeccionSag\ServicioInspeccionSag;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -45,11 +46,11 @@ class InspeccionSagController extends Controller
             'finalizados_hoy' => LoteInspeccionSag::query()
                 ->whereHas('temporada', fn (Builder $consulta): Builder => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
                 ->where('estado', EstadoLoteInspeccionSag::Finalizado)
-                ->whereDate('finalizado_at', today())
+                ->tap(fn (Builder $q) => app(CalendarioOperativo::class)->filtrarHoy($q, 'finalizado_at', 'UTC'))
                 ->count(),
             'autorizaciones_hoy' => ResultadoDestinoInspeccionSag::query()
                 ->where('resultado', ResultadoInspeccionSag::Aprobado)
-                ->whereDate('resuelto_at', today())
+                ->tap(fn (Builder $q) => app(CalendarioOperativo::class)->filtrarHoy($q, 'resuelto_at', 'UTC'))
                 ->count(),
         ]);
     }

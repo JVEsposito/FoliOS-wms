@@ -444,7 +444,7 @@ function renderClock() {
             hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone,
         }).format(now);
     } catch {
-        elements.date.textContent = state.snapshot.jornada?.fecha || '—';
+        elements.date.textContent = state.snapshot.jornada?.fecha_real || state.snapshot.jornada?.fecha || '—';
         elements.time.textContent = state.snapshot.jornada?.hora || '--:--:--';
     }
     elements.timezone.textContent = timeZone || 'Hora operacional';
@@ -463,8 +463,10 @@ function renderHeader(data) {
         ? `${data.temporada.codigo} · ${data.temporada.nombre}`
         : 'Sin temporada activa';
     elements.updatedAt.textContent = `Última lectura: ${dateTime(data.generado_at)}`;
+    // La jornada operativa puede no venir (respuestas antiguas o sin calendario): el turno se muestra igual.
+    const jornada = data.jornada?.fecha ? ` · Jornada ${String(data.jornada.fecha).split('-').reverse().join('-')}` : '';
     elements.shift.textContent = data.jornada?.turno
-        ? `Turno: ${humanize(data.jornada.turno)}`
+        ? `Turno ${humanize(data.jornada.turno)}${jornada}`
         : 'Turno sin configurar';
 
     const status = data.sincronizacion?.estado || 'sin_actividad';

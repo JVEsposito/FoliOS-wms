@@ -12,6 +12,7 @@ use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\ValidacionMp;
 use App\Services\Existencias\GeneradorLibroXlsx;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\MateriaPrima\RegistroDefectosRecepcionPdf;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
@@ -297,12 +298,7 @@ class DefectoRecepcionMpController extends Controller
             ?? app(ServicioTemporadaActiva::class)->buscar()?->id;
         $consulta = DefectoRecepcionMp::query()->with(['validador:id,name', 'dispositivo:id,codigo', 'evidencias'])
             ->where('temporada_id', $temporadaId ?? '');
-        if (isset($filtros['desde'])) {
-            $consulta->whereDate('registrado_at', '>=', $filtros['desde']);
-        }
-        if (isset($filtros['hasta'])) {
-            $consulta->whereDate('registrado_at', '<=', $filtros['hasta']);
-        }
+        app(CalendarioOperativo::class)->filtrar($consulta, 'registrado_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null, 'UTC');
         if (isset($filtros['categoria'])) {
             $consulta->where('categoria', $filtros['categoria']);
         }

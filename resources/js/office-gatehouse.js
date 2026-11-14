@@ -103,7 +103,7 @@ async function start(user) {
     const catalogs = await api('/api/porteria/catalogos');
     fields.cliente_id.innerHTML = '<option value="">Seleccione cliente</option>' + catalogs.clientes.map((client) => `<option value="${esc(client.id)}">${esc(client.nombre)}</option>`).join('') + '<option value="otro">Otro cliente / servicio</option>';
     byId('gateClock').textContent = `Hora del servidor: ${gatehouseDate(catalogs.ahora)} · fecha y hora automáticas al registrar`;
-    byId('gateDate').value = gatehouseDay(new Date(catalogs.ahora));
+    byId('gateDate').value = catalogs.fecha_jornada || gatehouseDay(new Date(catalogs.ahora));
     byId('gatePending').checked = romanaMode;
     await load();
     listPoller?.stop();

@@ -15,6 +15,7 @@ use App\Services\ControlDespacho\GeneradorPlanillaControlDespacho;
 use App\Services\ControlDespacho\PlanillaControlDespacho;
 use App\Services\ControlDespacho\ServicioControlDespacho;
 use App\Services\ControlDespacho\ServicioFotosControlDespacho;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -54,15 +55,12 @@ class ControlDespachoController extends Controller
             'hasta' => ['nullable', 'date_format:Y-m-d'],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
-        $zona = config('app.operational_timezone', config('app.timezone'));
         $buscar = trim((string) ($filtros['buscar'] ?? ''));
         $pagina = ControlDespacho::query()
             ->where('temporada_id', $temporadas->buscar()?->id)
             ->when($filtros['estado'] ?? null, fn (Builder $consulta, string $estado): Builder => $consulta->where('estado', $estado))
-            ->when($filtros['desde'] ?? null, fn (Builder $consulta, string $desde): Builder => $consulta
-                ->where('iniciado_at', '>=', CarbonImmutable::parse($desde, $zona)->startOfDay()->utc()))
-            ->when($filtros['hasta'] ?? null, fn (Builder $consulta, string $hasta): Builder => $consulta
-                ->where('iniciado_at', '<', CarbonImmutable::parse($hasta, $zona)->addDay()->startOfDay()->utc()))
+            ->tap(fn (Builder $consulta) => app(CalendarioOperativo::class)
+                ->filtrar($consulta, 'iniciado_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null))
             ->when($buscar !== '', fn (Builder $consulta): Builder => $consulta->where(fn (Builder $texto): Builder => $texto
                 ->whereHas('carga', fn (Builder $carga): Builder => $carga->where('codigo', 'like', "%{$buscar}%")
                     ->orWhereHas('embarque', fn (Builder $embarque): Builder => $embarque->where('codigo', 'like', "%{$buscar}%")->orWhere('contenedor', 'like', "%{$buscar}%")))
@@ -84,6 +82,7 @@ class ControlDespachoController extends Controller
                 'tipo_camion' => ($control->encabezado ?? [])['tipo_camion'] ?? null,
                 'pallets' => $control->posiciones_count,
                 'iniciado_at' => $control->iniciado_at?->toAtomString(),
+                ...app(CalendarioOperativo::class)->datos($control->iniciado_at),
                 'iniciado_por' => $control->iniciadoPor?->name,
                 'cerrado_at' => $control->cerrado_at?->toAtomString(),
                 'cerrado_por' => $control->cerradoPor?->name,

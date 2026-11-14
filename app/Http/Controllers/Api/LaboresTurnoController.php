@@ -15,6 +15,7 @@ use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\TurnoPlanificador;
 use App\Models\User;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Planificador\ServicioLaboresTurno;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
@@ -35,6 +36,8 @@ class LaboresTurnoController extends Controller
         $usuarios = User::query()->where('activo', true)->orderBy('name')->get()->filter(fn (User $u) => $u->can('operar-camaras-productos'));
         $vigente = $servicio->vigente($temporada->id);
 
+        $turnoOperativo = app(CalendarioOperativo::class)->turnoActual();
+
         return response()->json(['data' => $turnos->map(fn ($turno) => [
             ...$servicio->turnoJson($turno), 'vigente' => $turno->id === $vigente?->id,
             'asignaciones' => $turno->asignaciones->map(fn ($a) => [...$a->only(['user_id', 'funcion_principal', 'funciones_apoyo', 'preferencia', 'disponible', 'version']), 'nombre' => $a->usuario->name])->all(),
@@ -49,7 +52,12 @@ class LaboresTurnoController extends Controller
             'sag' => PlanOperacional::query()->where('temporada_id', $temporada->id)->where('tipo', TipoPlanOperacional::PreparacionInspeccion)
                 ->whereIn('estado', ['programado', 'en_ejecucion'])->orderByDesc('updated_at')->limit(100)->get(['id', 'titulo']),
         ], 'meta' => ['temporada_id' => $temporada->id, 'zona_horaria' => config('app.operational_timezone'),
-            'ahora' => now()->toISOString(), 'vigente_id' => $vigente?->id]])->header('Cache-Control', 'no-store, private');
+            'ahora' => now()->toISOString(), 'vigente_id' => $vigente?->id,
+            'turno_operativo' => $turnoOperativo ? [
+                'nombre' => $turnoOperativo['nombre'],
+                'inicio_at' => $turnoOperativo['inicio']->toISOString(),
+                'fin_at' => $turnoOperativo['fin']->toISOString(),
+            ] : null]])->header('Cache-Control', 'no-store, private');
     }
 
     public function store(Request $request, ServicioTemporadaActiva $temporadas, ServicioLaboresTurno $servicio): JsonResponse

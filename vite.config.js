@@ -41,6 +41,7 @@ export default defineConfig({
                 'resources/js/office-user-management.js',
                 'resources/js/office-label-profiles.js',
                 'resources/js/office-record-formats.js',
+                'resources/js/office-operational-calendar.js',
                 'resources/css/office-materials.css',
                 'resources/js/office-materials.js',
                 'resources/js/office-material-items.js',

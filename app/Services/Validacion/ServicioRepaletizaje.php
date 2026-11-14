@@ -19,6 +19,7 @@ use App\Models\RepaletizajeResultado;
 use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\InspeccionSag\ServicioExistenciasSag;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
@@ -1024,16 +1025,15 @@ class ServicioRepaletizaje
         ];
     }
 
-    /**
-     * Fecha del registro RRPL-01: la declarada por el turno o, si no, el día
-     * operacional en curso.
-     *
-     * @param  array<string, mixed>  $payload
-     */
+    /** @param array<string, mixed> $payload */
     private function fechaOperacional(array $payload): string
     {
-        return $payload['fecha_operacional']
-            ?? now(config('app.operational_timezone'))->toDateString();
+        $calendario = app(CalendarioOperativo::class);
+        $jornada = $calendario->contexto();
+
+        return $jornada['turno_operativo'] || empty($payload['fecha_operacional'])
+            ? $jornada['fecha_jornada']
+            : $payload['fecha_operacional'];
     }
 
     /** @param array<string, mixed> $payload */

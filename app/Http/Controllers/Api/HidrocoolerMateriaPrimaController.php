@@ -8,10 +8,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\LoteMateriaPrimaResource;
 use App\Models\LoteMateriaPrima;
 use App\Models\ProcesoHidrocoolerMateriaPrima;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\MateriaPrima\RegistroHidrocoolerPdf;
 use App\Services\MateriaPrima\RegistroHidrocoolerXlsx;
 use App\Services\Temporadas\ServicioTemporadaActiva;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,7 +47,7 @@ class HidrocoolerMateriaPrimaController extends Controller
                 ->where('temporada_id', $temporada->id));
         $completadosHoy = (clone $procesos)
             ->where('estado', EstadoHidrocoolerMateriaPrima::Completado->value)
-            ->whereDate('termino_at', today());
+            ->tap(fn (Builder $query) => app(CalendarioOperativo::class)->filtrarHoy($query, 'termino_at', 'UTC'));
 
         return response()->json([
             'temporada' => [
@@ -118,20 +118,9 @@ class HidrocoolerMateriaPrimaController extends Controller
             ->when($request->filled('destino'), fn (Builder $query) => $query
                 ->whereHas('hidrocooler', fn (Builder $hidrocooler) => $hidrocooler
                     ->where('destino_salida', $request->string('destino')->toString())))
-            ->when($request->filled('desde'), fn (Builder $query) => $query
-                ->whereHas('hidrocooler', fn (Builder $hidrocooler) => $hidrocooler
-                    ->where(
-                        'inicio_at',
-                        '>=',
-                        CarbonImmutable::parse($request->string('desde')->toString())->startOfDay(),
-                    )))
-            ->when($request->filled('hasta'), fn (Builder $query) => $query
-                ->whereHas('hidrocooler', fn (Builder $hidrocooler) => $hidrocooler
-                    ->where(
-                        'inicio_at',
-                        '<',
-                        CarbonImmutable::parse($request->string('hasta')->toString())->addDay()->startOfDay(),
-                    )))
+            ->when($request->filled('desde') || $request->filled('hasta'), fn (Builder $query) => $query
+                ->whereHas('hidrocooler', fn (Builder $hidrocooler) => app(CalendarioOperativo::class)
+                    ->filtrar($hidrocooler, 'inicio_at', $request->input('desde'), $request->input('hasta'), 'UTC')))
             ->when($request->filled('buscar'), function (Builder $query) use ($request): void {
                 $buscar = '%'.$request->string('buscar')->trim()->toString().'%';
                 $query->where(function (Builder $filtro) use ($buscar): void {
@@ -237,14 +226,16 @@ class HidrocoolerMateriaPrimaController extends Controller
                 ->where('turno', $request->string('turno')->toString()))
             ->when($request->filled('destino'), fn (Builder $query) => $query
                 ->where('destino_salida', $request->string('destino')->toString()))
-            ->when($request->filled('desde'), fn (Builder $query) => $query
-                ->where('inicio_at', '>=', CarbonImmutable::parse($request->string('desde')->toString())->startOfDay()))
-            ->when($request->filled('hasta'), fn (Builder $query) => $query
-                ->where('inicio_at', '<', CarbonImmutable::parse($request->string('hasta')->toString())->addDay()->startOfDay()))
-            ->when(
-                ! $request->filled('desde') && ! $request->filled('hasta'),
-                fn (Builder $query) => $query->where('inicio_at', '>=', CarbonImmutable::today()->startOfDay()),
-            )
+            ->tap(function (Builder $query) use ($request): void {
+                $calendario = app(CalendarioOperativo::class);
+                $desde = $request->input('desde');
+                $hasta = $request->input('hasta');
+                if ($desde || $hasta) {
+                    $calendario->filtrar($query, 'inicio_at', $desde, $hasta, 'UTC');
+                } else {
+                    $calendario->filtrarHoy($query, 'inicio_at', 'UTC');
+                }
+            })
             ->when($request->filled('buscar'), function (Builder $query) use ($request): void {
                 $buscar = '%'.$request->string('buscar')->trim()->toString().'%';
                 $query->where(function (Builder $filtro) use ($buscar): void {

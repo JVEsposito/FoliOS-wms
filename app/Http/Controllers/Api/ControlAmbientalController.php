@@ -12,7 +12,7 @@ use App\Models\Camara;
 use App\Models\RegistroControlAmbiental;
 use App\Services\Autenticacion\ContextoOperacional;
 use App\Services\ControlAmbiental\ServicioControlAmbiental;
-use Carbon\CarbonImmutable;
+use App\Services\Jornadas\CalendarioOperativo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Http\JsonResponse;
@@ -131,22 +131,8 @@ class ControlAmbientalController extends Controller
                 isset($filtros['camara_id']),
                 fn (Builder $query) => $query->where('camara_id', $filtros['camara_id']),
             )
-            ->when(
-                isset($filtros['desde']),
-                fn (Builder $query) => $query->where(
-                    'capturado_at',
-                    '>=',
-                    CarbonImmutable::parse($filtros['desde'])->startOfDay(),
-                ),
-            )
-            ->when(
-                isset($filtros['hasta']),
-                fn (Builder $query) => $query->where(
-                    'capturado_at',
-                    '<',
-                    CarbonImmutable::parse($filtros['hasta'])->addDay()->startOfDay(),
-                ),
-            )
+            ->tap(fn (Builder $consulta) => app(CalendarioOperativo::class)
+                ->filtrar($consulta, 'capturado_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null, 'UTC'))
             ->orderByDesc('capturado_at')
             ->orderByDesc('recibido_servidor_at');
 

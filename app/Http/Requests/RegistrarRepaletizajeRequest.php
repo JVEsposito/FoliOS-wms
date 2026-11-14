@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\Jornadas\CalendarioOperativo;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -32,6 +33,7 @@ class RegistrarRepaletizajeRequest extends FormRequest
     public function rules(): array
     {
         $hoy = now(config('app.operational_timezone'));
+        $calendarioVigente = app(CalendarioOperativo::class)->contexto()['turno_operativo'] !== null;
 
         return [
             'operacion_id' => ['required', 'uuid'],
@@ -93,7 +95,9 @@ class RegistrarRepaletizajeRequest extends FormRequest
             'fecha_operacional' => [
                 'nullable',
                 'date_format:Y-m-d',
-                'after_or_equal:'.($this->input('turno') === 'B' ? $hoy->copy()->subDay()->toDateString() : $hoy->toDateString()),
+                ...($calendarioVigente ? [] : [
+                    'after_or_equal:'.($this->input('turno') === 'B' ? $hoy->copy()->subDay()->toDateString() : $hoy->toDateString()),
+                ]),
                 'before_or_equal:'.$hoy->toDateString(),
             ],
         ];

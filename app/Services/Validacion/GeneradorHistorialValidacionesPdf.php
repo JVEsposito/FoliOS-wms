@@ -111,6 +111,11 @@ class GeneradorHistorialValidacionesPdf
         };
         $hora = $validacion->generado_dispositivo_at?->setTimezone(config('app.operational_timezone'))->format('H:i');
 
+        $turno = $validacion->turnoOperativo();
+        if ($turno) {
+            $hora = $validacion->generado_dispositivo_at?->setTimezone(config('app.operational_timezone'))->format('d-m-Y H:i:s');
+        }
+
         return [
             $validacion->numero_folio,
             implode(' · ', array_filter([$origen['cliente'] ?? 'Sin origen', $origen['marca'] ?? null])),
@@ -125,7 +130,8 @@ class GeneradorHistorialValidacionesPdf
             ($validacion->usuario?->name ?? 'Sin usuario')."\n".implode(' · ', array_filter([
                 $hora,
                 $validacion->linea_proceso ? 'Línea '.$validacion->linea_proceso : null,
-                $validacion->turno ? 'Turno '.$validacion->turno : null,
+                ($turno ?? $validacion->turno) ? 'Turno '.($turno ?? $validacion->turno) : null,
+                $turno && $validacion->turno && $turno !== $validacion->turno ? 'Declarado '.$validacion->turno : null,
             ])),
         ];
     }

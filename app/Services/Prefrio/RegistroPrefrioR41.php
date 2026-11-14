@@ -8,6 +8,7 @@ use App\Enums\TipoEventoPrefrio;
 use App\Models\EventoPrefrio;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
+use App\Services\Jornadas\CalendarioOperativo;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -220,7 +221,11 @@ class RegistroPrefrioR41
         $fin = $proceso->pendiente_verificacion_at ? CarbonImmutable::parse($proceso->pendiente_verificacion_at) : null;
         $deshielos = $eventos->filter(fn (EventoPrefrio $e): bool => $e->tipo === TipoEventoPrefrio::Deshielo)->sortBy('ocurrido_at')->values();
         $inversion = $eventos->filter(fn (EventoPrefrio $e): bool => $e->tipo === TipoEventoPrefrio::InversionRegistrada)->sortBy('ocurrido_at')->first();
-        $observaciones = collect([$proceso->observacion])
+        $jornada = app(CalendarioOperativo::class)->datos($inicio ?? $proceso->created_at);
+        $observacionJornada = $jornada['turno_operativo']
+            ? 'Jornada de inicio '.CarbonImmutable::parse($jornada['fecha_jornada'])->format('d-m-Y').' · Turno '.$jornada['turno_operativo']
+            : null;
+        $observaciones = collect([$observacionJornada, $proceso->observacion])
             ->merge($eventos->filter(fn (EventoPrefrio $e): bool => in_array($e->tipo, [TipoEventoPrefrio::Pausa, TipoEventoPrefrio::Reanudacion, TipoEventoPrefrio::Deshielo, TipoEventoPrefrio::InversionRegistrada], true))
                 ->sortBy('ocurrido_at')
                 ->map(fn (EventoPrefrio $e): string => sprintf('%s %s%s', $hora($e->ocurrido_at), mb_strtolower(self::nombreEvento($e->tipo)), $e->observacion ? ': '.$e->observacion : '')))

@@ -6,6 +6,7 @@ use App\Exceptions\ConflictoOperacion;
 use App\Models\Cliente;
 use App\Models\IngresoPorteria;
 use App\Models\User;
+use App\Services\Jornadas\CalendarioOperativo;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -130,6 +131,7 @@ class ServicioIngresosPorteria
             'tipo_camion' => $ingreso->tipo_camion, 'nombre_conductor' => $ingreso->nombre_conductor,
             'guias' => $ingreso->guias, 'cantidad' => $ingreso->cantidad, 'unidad' => $ingreso->unidad,
             'observacion' => $ingreso->observacion, 'ingreso_at' => $ingreso->ingreso_at->toAtomString(),
+            ...app(CalendarioOperativo::class)->datos($ingreso->ingreso_at),
             'creado_por_nombre' => $ingreso->creado_por_nombre,
             'revisado_at' => $ingreso->revisado_at?->toAtomString(), 'revisado_por_nombre' => $ingreso->revisado_por_nombre,
             'anulado_at' => $ingreso->anulado_at?->toAtomString(), 'motivo_anulacion' => $ingreso->motivo_anulacion,

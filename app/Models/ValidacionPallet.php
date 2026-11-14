@@ -8,6 +8,7 @@ use App\Enums\ResultadoValidacionPallet;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use App\Models\Concerns\TemporadaPorColumna;
 use App\Models\Contracts\PerteneceATemporada;
+use App\Services\Jornadas\CalendarioOperativo;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -37,39 +38,64 @@ class ValidacionPallet extends Model implements PerteneceATemporada
 
     public static function fechaJornadaVigente(): string
     {
-        $local = now(config('app.operational_timezone'))->toImmutable();
-
-        return ($local->hour < self::HORA_FIN_NOCHE ? $local->subDay() : $local)->toDateString();
+        return app(CalendarioOperativo::class)->fecha(inicioHistorico: '07:00');
     }
 
     public function fechaJornada(): ?CarbonImmutable
     {
-        $local = $this->generado_dispositivo_at?->toImmutable()->setTimezone(config('app.operational_timezone'));
-
-        if ($local && $this->turno === self::TURNO_NOCHE && $local->hour < self::HORA_FIN_NOCHE) {
-            return $local->subDay();
+        $instante = $this->generado_dispositivo_at;
+        if (! $instante) {
+            return null;
         }
 
-        return $local;
+        $calendario = app(CalendarioOperativo::class);
+        $vigencia = $calendario->primeraVigencia();
+        if ($vigencia && $vigencia->lte($instante)) {
+            $fecha = $calendario->fecha($instante);
+        } else {
+            $local = $instante->toImmutable()->setTimezone($calendario->zona());
+            $fecha = ($this->turno === self::TURNO_NOCHE && $local->hour < self::HORA_FIN_NOCHE ? $local->subDay() : $local)->toDateString();
+        }
+
+        return CarbonImmutable::parse($fecha, $calendario->zona());
+    }
+
+    public function turnoOperativo(): ?string
+    {
+        return $this->generado_dispositivo_at
+            ? app(CalendarioOperativo::class)->clasificar($this->generado_dispositivo_at)['turno_operativo']
+            : null;
     }
 
     #[Scope]
-    protected function deJornada(Builder $consulta, string $fecha): void
+    protected function deJornada(Builder $consulta, string $fecha, ?string $turno = null): void
     {
-        $inicio = CarbonImmutable::parse($fecha, config('app.operational_timezone'))->startOfDay();
+        $calendario = app(CalendarioOperativo::class);
+        $vigencia = $calendario->primeraVigencia();
+        $inicio = CarbonImmutable::parse($fecha, $calendario->zona())->startOfDay();
         $siguiente = $inicio->addDay()->startOfDay();
 
-        // El turno B cambia de fecha de jornada a las 07:00. A y los registros sin turno
-        // cambian a medianoche. Los límites se convierten a UTC después del cálculo local.
-        $consulta->where(fn (Builder $jornada) => $jornada
-            ->where(fn (Builder $noche) => $noche
-                ->where('turno', self::TURNO_NOCHE)
-                ->where('generado_dispositivo_at', '>=', $inicio->setTime(self::HORA_FIN_NOCHE, 0)->utc())
-                ->where('generado_dispositivo_at', '<', $siguiente->setTime(self::HORA_FIN_NOCHE, 0)->utc()))
-            ->orWhere(fn (Builder $dia) => $dia
-                ->where(fn (Builder $turno) => $turno->where('turno', '!=', self::TURNO_NOCHE)->orWhereNull('turno'))
-                ->where('generado_dispositivo_at', '>=', $inicio->utc())
-                ->where('generado_dispositivo_at', '<', $siguiente->utc())));
+        $consulta->where(function (Builder $jornada) use ($inicio, $siguiente, $calendario, $vigencia, $fecha, $turno): void {
+            $jornada->where(fn (Builder $historica) => $historica
+                ->when($vigencia, fn (Builder $q) => $q->where('generado_dispositivo_at', '<', $vigencia))
+                ->when($turno, fn (Builder $q) => $q->where('turno', $turno))
+                ->where(fn (Builder $dia) => $dia
+                    ->where(fn (Builder $noche) => $noche
+                        ->where('turno', self::TURNO_NOCHE)
+                        ->where('generado_dispositivo_at', '>=', $inicio->setTime(self::HORA_FIN_NOCHE, 0)->utc())
+                        ->where('generado_dispositivo_at', '<', $siguiente->setTime(self::HORA_FIN_NOCHE, 0)->utc()))
+                    ->orWhere(fn (Builder $otrosTurnos) => $otrosTurnos
+                        ->where(fn (Builder $turno) => $turno->where('turno', '!=', self::TURNO_NOCHE)->orWhereNull('turno'))
+                        ->where('generado_dispositivo_at', '>=', $inicio->utc())
+                        ->where('generado_dispositivo_at', '<', $siguiente->utc()))));
+
+            if ($vigencia) {
+                [$desde, $hasta] = ($turno ? $calendario->rangoTurno($fecha, $turno) : null) ?? $calendario->rango($fecha, $fecha);
+                $jornada->orWhere(fn (Builder $operativa) => $operativa
+                    ->where('generado_dispositivo_at', '>=', $desde->max($vigencia))
+                    ->where('generado_dispositivo_at', '<', $hasta));
+            }
+        });
     }
 
     public function folio(): BelongsTo

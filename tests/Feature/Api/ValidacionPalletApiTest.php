@@ -7,6 +7,7 @@ use App\Models\Dispositivo;
 use App\Models\Folio;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -851,6 +852,41 @@ class ValidacionPalletApiTest extends TestCase
         $this->assertSame('07-11-2026', $this->valorCelda($hoja, 'C5'));
         $this->assertSame('PAL-NOCHE', $this->valorCelda($hoja, 'B11'));
         $this->assertSame('PAL-ANTES-CORTE', $this->valorCelda($hoja, 'B12'));
+    }
+
+    public function test_el_turno_operativo_filtra_lista_totales_y_pdf_por_hora_de_captura(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-12T11:00:00-03:00'));
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        app(CalendarioOperativo::class)->publicar([
+            'vigente_desde' => '2026-11-13', 'inicio_jornada' => '07:00', 'inicio_turno_b' => '19:00', 'version_conocida' => 0,
+        ], $administrador->id);
+        $this->travelTo(CarbonImmutable::parse('2026-11-14T07:10:00-03:00'));
+        [$catalogo, $token] = $this->contexto(RolUsuario::Validador, 'VAL-CALENDARIO');
+        foreach ([
+            ['JORNADA-ANTES', 'A', '2026-11-14T06:59:59-03:00', '2026-11-13', 'B'],
+            ['JORNADA-NUEVA', 'B', '2026-11-14T07:00:00-03:00', '2026-11-14', 'A'],
+        ] as [$folio, $declarado, $instante, $jornada, $operativo]) {
+            $this->conToken($token)->postJson('/api/validacion/pallets', [
+                ...$this->payload($catalogo, $folio),
+                'turno' => $declarado,
+                'fecha_embalaje' => '2026-11-13',
+                'generado_dispositivo_at' => $instante,
+            ])->assertCreated()
+                ->assertJsonPath('data.turno', $declarado)
+                ->assertJsonPath('data.turno_operativo', $operativo)
+                ->assertJsonPath('data.fecha_jornada', $jornada);
+        }
+
+        $filtros = http_build_query(['temporada_id' => $catalogo['temporada_id'], 'fecha' => '2026-11-13', 'cliente' => 'DIS', 'turno' => 'B']);
+        $this->conToken($token)->getJson('/api/validacion/pallets?'.$filtros)->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.numero_folio', 'JORNADA-ANTES');
+        $this->conToken($token)->getJson('/api/validacion/registro/resumen?'.$filtros)->assertOk()
+            ->assertJsonPath('dia.validados', 1);
+        $pdf = $this->conToken($token)->get('/api/validacion/registro/rrpp-01?'.$filtros.'&formato=pdf')->assertOk()->getContent();
+        $this->assertStringContainsString('14-11-2026 06:59:59', $pdf);
+        $this->assertStringContainsString('JORNADA-ANTES', $pdf);
+        $this->assertStringNotContainsString('JORNADA-NUEVA', $pdf);
     }
 
     public function test_filtra_el_historial_y_ambas_descargas_por_cliente_registrado(): void

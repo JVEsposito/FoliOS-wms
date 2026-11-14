@@ -19,8 +19,8 @@ use App\Models\SaldoMaterialAlmacen;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Services\InspeccionSag\ServicioEstadoSagFolio;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
-use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Support\LazyCollection;
 
@@ -123,6 +123,8 @@ class ServicioExistencias
                 'columnas' => [
                     ['clave' => 'temporada', 'titulo' => 'Temporada', 'ancho' => 16],
                     ['clave' => 'fecha_salida', 'titulo' => 'Fecha de salida', 'ancho' => 20, 'tipo' => 'fecha_hora'],
+                    ['clave' => 'fecha_jornada', 'titulo' => 'Jornada operativa', 'ancho' => 18, 'tipo' => 'fecha'],
+                    ['clave' => 'turno_operativo', 'titulo' => 'Turno operativo', 'ancho' => 17],
                     ['clave' => 'carga', 'titulo' => 'Carga', 'ancho' => 16],
                     ['clave' => 'orden_embarque', 'titulo' => 'Orden de embarque', 'ancho' => 20],
                     ['clave' => 'patente', 'titulo' => 'Patente', 'ancho' => 12],
@@ -272,7 +274,6 @@ class ServicioExistencias
     /** @return LazyCollection<int, array<string, mixed>> */
     private function despachosProductoTerminado(?string $desde, ?string $hasta, ?string $cliente): LazyCollection
     {
-        $zona = config('app.operational_timezone', config('app.timezone'));
         $consulta = CargaFolio::query()
             ->with(['carga.temporada', 'folio'])
             // El cierre deja los pallets como «despachado»; «en_anden» cubre cierres anteriores a esa regla.
@@ -282,8 +283,7 @@ class ServicioExistencias
                 // Un retorno parcial conserva como despachados los pallets que no volvieron.
                 ->whereIn('estado', [EstadoCarga::Cerrada->value, EstadoCarga::RetornoParcial->value])
                 ->whereHas('temporada', fn ($temporada) => $temporada->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id)))
-            ->when($desde, fn ($consulta) => $consulta->where('finalizado_at', '>=', CarbonImmutable::parse($desde, $zona)->startOfDay()->utc()))
-            ->when($hasta, fn ($consulta) => $consulta->where('finalizado_at', '<=', CarbonImmutable::parse($hasta, $zona)->endOfDay()->utc()))
+            ->tap(fn ($consulta) => app(CalendarioOperativo::class)->filtrar($consulta, 'finalizado_at', $desde, $hasta))
             // El filtro por cliente se resuelve en la base: una temporada puede tener
             // 150.000 despachos y el archivo de un cliente solo necesita los suyos.
             ->when(filled($cliente), fn ($consulta) => $consulta->whereHas('folio', fn ($folio) => $folio
@@ -299,6 +299,7 @@ class ServicioExistencias
                 return [
                     'temporada' => $carga?->temporada?->codigo,
                     'fecha_salida' => $asignacion->finalizado_at?->toAtomString(),
+                    ...app(CalendarioOperativo::class)->datos($asignacion->finalizado_at),
                     'carga' => $carga?->codigo,
                     'orden_embarque' => $carga?->numero_orden_externa,
                     'patente' => $carga?->patente,

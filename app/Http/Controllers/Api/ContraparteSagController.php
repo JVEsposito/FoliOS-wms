@@ -6,6 +6,7 @@ use App\Exceptions\ConflictoOperacion;
 use App\Http\Controllers\Controller;
 use App\Models\ResponsableContraparteSag;
 use App\Services\InspeccionSag\ServicioExistenciasSag;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -98,12 +99,7 @@ class ContraparteSagController extends Controller
         $filtrar($base);
         $movimientos = DB::table('movimientos_existencia_sag')->where('temporada_id', $temporadaId);
         $filtrar($movimientos);
-        if (! empty($datos['desde'])) {
-            $movimientos->whereDate('created_at', '>=', $datos['desde']);
-        }
-        if (! empty($datos['hasta'])) {
-            $movimientos->whereDate('created_at', '<=', $datos['hasta']);
-        }
+        app(CalendarioOperativo::class)->filtrar($movimientos, 'created_at', $datos['desde'] ?? null, $datos['hasta'] ?? null, 'UTC');
         $totalCajas = (int) (clone $base)->sum('cajas');
         $totalUnidades = (int) (clone $base)->sum('unidades');
         $pagina = $base->orderBy('folio_id')->paginate($datos['per_page'] ?? 50);

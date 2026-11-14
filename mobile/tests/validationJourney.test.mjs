@@ -16,3 +16,10 @@ test('la fecha se calcula en la zona de planta y conserva el día al cruzar un a
   assert.equal(validationJourneyDate('2026-11-07T09:00:00Z', 'B', 'UTC'), '2026-11-07');
   assert.equal(formatValidationJourneyDate('2026-11-06'), '06/11/2026');
 });
+
+test('la PDA usa la jornada de planta para la hora de captura aunque el turno declarado sea distinto', () => {
+  const rules = [{ vigente_desde: '2026-11-13', inicio_jornada: '07:00', inicio_turno_b: '19:00' }];
+  assert.equal(validationJourneyDate('2026-11-14T06:59:59-03:00', 'A', 'America/Santiago', rules), '2026-11-13');
+  assert.equal(validationJourneyDate('2026-11-14T07:00:00-03:00', 'B', 'America/Santiago', rules), '2026-11-14');
+  assert.equal(validationJourneyDate('2026-11-12T02:00:00-03:00', 'A', 'America/Santiago', rules), '2026-11-12');
+});

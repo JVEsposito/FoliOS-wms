@@ -8,6 +8,7 @@ use App\Enums\TipoMovimientoAlmacenMaterial;
 use App\Models\AlmacenMaterial;
 use App\Models\MovimientoAlmacenMaterial;
 use App\Models\SaldoMaterialAlmacen;
+use App\Services\Jornadas\CalendarioOperativo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -363,10 +364,8 @@ class ServicioConsultaAlmacenesMaterial
                 ->whereHas('temporada', fn (Builder $temporadas) => $temporadas
                     ->where('activa', true)))
             ->when($tipos !== null, fn (Builder $consulta) => $consulta->whereIn('tipo', $tipos))
-            ->when($filtros['desde'] ?? null, fn (Builder $consulta, string $desde) => $consulta
-                ->whereDate('ocurrido_at', '>=', $desde))
-            ->when($filtros['hasta'] ?? null, fn (Builder $consulta, string $hasta) => $consulta
-                ->whereDate('ocurrido_at', '<=', $hasta))
+            ->tap(fn (Builder $consulta) => app(CalendarioOperativo::class)
+                ->filtrar($consulta, 'ocurrido_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null, 'UTC'))
             ->latest('ocurrido_at')
             ->latest('id');
     }
@@ -375,6 +374,7 @@ class ServicioConsultaAlmacenesMaterial
     {
         return [
             'id' => $movimiento->id,
+            ...app(CalendarioOperativo::class)->datos($movimiento->ocurrido_at, 'UTC'),
             'incidencia_verificacion_id' => $movimiento->incidencia_verificacion_id,
             'operacion_id' => $movimiento->operacion_id,
             'tipo' => $movimiento->tipo->value,

@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\IngresoPorteria;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Porteria\GeneradorDiarioPorteriaPdf;
 use App\Services\Porteria\ServicioIngresosPorteria;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -36,9 +36,8 @@ class RomanaPorteriaController extends Controller
     public function diario(Request $request, GeneradorDiarioPorteriaPdf $pdf): Response
     {
         $datos = $request->validate(['fecha' => ['required', 'date_format:Y-m-d']]);
-        $desde = CarbonImmutable::parse($datos['fecha'], 'America/Santiago')->startOfDay();
-        $hasta = $desde->addDay()->startOfDay();
-        $ingresos = IngresoPorteria::query()->where('ingreso_at', '>=', $desde->utc())->where('ingreso_at', '<', $hasta->utc())->orderBy('ingreso_at')->orderBy('id')->get();
+        $ingresos = app(CalendarioOperativo::class)->filtrar(IngresoPorteria::query(), 'ingreso_at', $datos['fecha'], $datos['fecha'])
+            ->orderBy('ingreso_at')->orderBy('id')->get();
 
         return response($pdf->generar($datos['fecha'], $ingresos))
             ->header('Content-Type', 'application/pdf')

@@ -1,3 +1,4 @@
+import type { OperationalCalendarRule } from './validationJourney';
 export type ValidationResult = 'aprobado' | 'observado' | 'rechazado';
 export type ValidationAttemptState = 'aceptada' | 'conflicto';
 export type ValidationLine = 1 | 2 | 3;
@@ -155,6 +156,7 @@ export type ValidationAttempt = {
   linea_proceso: ValidationLine | null;
   turno: ValidationShift | null;
   fecha_jornada?: string | null;
+  turno_operativo?: ValidationShift | null;
   temporada_id: string;
   articulo_validacion_id: string;
   origen_validacion_id: string;
@@ -207,6 +209,7 @@ export type ValidationSessionSnapshot = {
     iniciada_at: string;
     servidor_at: string;
     zona_horaria?: string;
+    calendario_operativo?: { reglas: OperationalCalendarRule[] };
     usuario: { id: string; nombre: string };
     dispositivo: { id: string; codigo: string; nombre: string };
     temporada: { id: string; codigo: string; nombre: string } | null;

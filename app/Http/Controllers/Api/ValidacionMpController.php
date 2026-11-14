@@ -13,12 +13,12 @@ use App\Models\EspecieValidacion;
 use App\Models\RecepcionRomana;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Romana\ServicioGuiasRecepcionRomana;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\ValidacionMp\ServicioValidacionMp;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -56,9 +56,9 @@ class ValidacionMpController extends Controller
     public function historico(Request $request): JsonResponse
     {
         $datos = $request->validate(['fecha' => ['nullable', 'date_format:Y-m-d']]);
-        $fecha = $datos['fecha'] ?? now(config('app.operational_timezone'))->toDateString();
-        $inicio = CarbonImmutable::parse($fecha, config('app.operational_timezone'))->startOfDay();
-        $fin = $inicio->addDay();
+        $calendario = app(CalendarioOperativo::class);
+        $fecha = $datos['fecha'] ?? $calendario->fecha();
+        [$inicio, $fin] = $calendario->rango($fecha, $fecha);
         $temporadaId = app(ServicioTemporadaActiva::class)->buscar()?->id;
 
         $validaciones = ValidacionMp::query()
@@ -73,6 +73,7 @@ class ValidacionMpController extends Controller
         return response()->json([
             'fecha' => $fecha,
             'data' => $validaciones->map(fn (ValidacionMp $validacion): array => [
+                ...$calendario->datos($validacion->validada_at),
                 'id' => $validacion->id,
                 'fecha' => $validacion->validada_at?->toAtomString(),
                 'numero_recepcion' => $validacion->recepcion->numero_recepcion,

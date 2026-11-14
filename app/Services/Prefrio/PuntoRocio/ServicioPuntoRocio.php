@@ -20,6 +20,7 @@ use App\Models\NotificacionOperacional;
 use App\Models\SalaControlRocio;
 use App\Models\TunelPrefrio;
 use App\Models\User;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -155,7 +156,7 @@ class ServicioPuntoRocio
                     || $gotas === GotasVisiblesPuntoRocio::Si,
                 'observacion' => $payload['observacion'],
                 'medido_at' => $medidoAt,
-                'fecha_operacional' => $medidoAt->setTimezone($this->zona())->toDateString(),
+                'fecha_operacional' => app(CalendarioOperativo::class)->fecha($medidoAt),
                 'registrado_por_user_id' => $usuario->id,
                 'dispositivo_id' => $dispositivo?->id,
             ]), attempts: 3);
@@ -328,13 +329,13 @@ class ServicioPuntoRocio
     public function referencias(CarbonImmutable $fecha): array
     {
         $horas = $this->horasReferencia();
-        $inicio = $fecha->setTimezone($this->zona())->startOfDay();
-        $fin = $inicio->endOfDay();
+        [$inicio, $fin] = app(CalendarioOperativo::class)->rango($fecha->toDateString(), $fecha->toDateString());
         $ahora = CarbonImmutable::now();
 
         return MedicionPuntoRocio::query()
             ->whereNull('anulada_at')
-            ->whereBetween('medido_at', [$inicio->subHours($horas)->utc(), ($fin->lessThan($ahora) ? $fin : $ahora)->utc()])
+            ->where('medido_at', '>=', $inicio->subHours($horas))
+            ->where('medido_at', '<', $fin)->where('medido_at', '<=', $ahora)
             ->where(fn (Builder $consulta) => $consulta
                 ->where('etapa', EtapaMedicionPuntoRocio::Sellado->value)
                 ->orWhereNotNull('temperatura_superficie_c'))

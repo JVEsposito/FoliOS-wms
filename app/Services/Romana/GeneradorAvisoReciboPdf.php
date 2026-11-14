@@ -8,6 +8,7 @@ use App\Enums\TipoRecepcionRomana;
 use App\Models\RecepcionRomana;
 use App\Services\Documentos\DocumentoPdfPlanta;
 use App\Services\Documentos\ServicioFormatosRegistro;
+use App\Services\Jornadas\CalendarioOperativo;
 use Carbon\CarbonImmutable;
 
 class GeneradorAvisoReciboPdf
@@ -54,9 +55,14 @@ class GeneradorAvisoReciboPdf
             $cerrada ? $this->peso($recepcion->peso_neto) : '',
         ];
 
+        $jornada = app(CalendarioOperativo::class)->datos($recepcion->ingreso_at);
+        $observacionJornada = $jornada['turno_operativo']
+            ? 'Jornada de ingreso '.CarbonImmutable::parse($jornada['fecha_jornada'])->format('d-m-Y').' · Turno '.$jornada['turno_operativo']
+            : null;
+
         return $this->renderizar(
             $this->formatos->paraRomana($recepcion), $valores,
-            [$recepcion->observacion, collect([
+            [collect([$observacionJornada, $recepcion->observacion])->filter()->implode("\n") ?: null, collect([
                 // Lo que Validación MP contó distinto de la guía: el chofer lo firma con el destare.
                 app(ObservacionConteoRecepcion::class)->resumen($recepcion),
                 $recepcion->observacion_cierre,

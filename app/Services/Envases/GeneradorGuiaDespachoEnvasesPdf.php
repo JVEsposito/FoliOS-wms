@@ -5,6 +5,7 @@ namespace App\Services\Envases;
 use App\Enums\EstadoGuiaDespachoEnvase;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\GuiaDespachoEnvase;
+use App\Services\Jornadas\CalendarioOperativo;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -48,11 +49,17 @@ class GeneradorGuiaDespachoEnvasesPdf
         $contenido .= "0.15 0.72 0.70 RG 38 728 m 557 728 l S\n";
 
         $guiaEmitida = $guia->numero_guia_despacho ?? ($snapshot['numero_guia_despacho'] ?? null);
+        $salida = $snapshot['salida_at'] ?? null;
+        $jornada = app(CalendarioOperativo::class)->datos($salida ? CarbonImmutable::parse($salida) : null);
+        $horaSalida = $this->fecha($salida);
+        if ($jornada['turno_operativo']) {
+            $horaSalida .= ' · Jornada '.CarbonImmutable::parse($jornada['fecha_jornada'])->format('d-m-Y').' · Turno '.$jornada['turno_operativo'];
+        }
         $lineas = [
             ['Guía de despacho', $guiaEmitida ? 'N° '.$guiaEmitida.' (sistema de facturación)' : ($esBorrador ? 'Se registra al confirmar la salida' : 'No registrada')],
             ['Temporada', $snapshot['temporada']['codigo'].' · '.$snapshot['temporada']['nombre']],
             ['Cliente destino', $snapshot['cliente']['codigo'].' · '.$snapshot['cliente']['nombre']],
-            ['Salida física', $this->fecha($snapshot['salida_at'] ?? null)],
+            ['Salida física', $horaSalida],
             ['Confirmación sistema', $this->fecha($snapshot['confirmado_at'] ?? null)],
             ['Patente', $snapshot['patente_camion'] ?: 'No informada'],
             ['Conductor', $snapshot['conductor']['nombre'] ?: 'No informado'],
