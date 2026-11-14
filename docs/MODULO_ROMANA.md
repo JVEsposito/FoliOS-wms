@@ -102,6 +102,21 @@ El cuadro muestra los lotes de la recepción, incluidos los anulados, y el enlac
 Un lote confirmado deja de aparecer en segmentos pendientes, pero permanece
 en **Lotes de la temporada** con su estado actual. No anularlo para corregir peso.
 
+### Corrección del N° de guía de ingreso por el administrador
+
+En el expediente, **Corregir N° de guía** cambia solo el número de una o más guías de ingreso, con motivo. Funciona en cualquier etapa: antes o después de Validación MP, con la recepción cerrada y aunque sus lotes ya tengan entregas a proceso. No cambia envases, conteos, lotes ni kilos.
+
+- El número nuevo se aplica a la recepción y a sus guías.
+- También a los asientos de la cuenta de envases que lo llevan como documento: ingresos, sus correcciones y los ajustes de recibidos. Los asientos de la salida conservan su propia guía.
+- También al registro de defectos. El RPR-01 y el estado de cuenta lo leen de la recepción.
+- Rechaza un número repetido dentro del camión o ya registrado para el mismo cliente en otra recepción, e indica cuál.
+- Permite intercambiar los números de dos guías del mismo camión.
+- Queda el evento `numero_guia_corregido` con cada «Guía anterior → nueva» y el motivo.
+- Ruta: `PUT /api/romana/recepciones/{recepcion}/numero-guia`, con `operacion_id`, `version_conocida`, `motivo` y `guias[]` (`id`, `numero_guia_despacho`).
+- Permiso: `corregir-recepciones-validadas` (administración).
+
+La corrección completa de una recepción validada, que también edita el número, ahora lo propaga igual.
+
 El estado de pesaje es independiente del avance de Validación MP. Una recepción puede estar cerrada en Romana y continuar pendiente, tomada o confirmada en el flujo de Validación MP.
 
 ## Datos transaccionales

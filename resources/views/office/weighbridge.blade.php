@@ -87,6 +87,7 @@
                             <button class="secondary-button is-hidden" id="annulReceptionButton" type="button">Anular recepción</button>
                             <button class="secondary-button is-hidden" id="editReceptionButton" type="button">Editar ingreso</button>
                             <button class="secondary-button is-hidden" id="correctGrossWeightButton" type="button">Corregir peso bruto</button>
+                            <button class="secondary-button is-hidden" id="guideNumberButton" type="button">Corregir N° de guía</button>
                             <button class="secondary-button is-hidden" id="integralCorrectionButton" type="button">Corregir recepción validada</button>
                             <button class="primary-button is-hidden" id="confirmEntryButton" type="button">Confirmar ingreso</button>
                             <button class="primary-button is-hidden" id="addContainerWeighingButton" type="button">+ Registrar tanda</button>
@@ -119,6 +120,7 @@
             </form>
         </dialog>
         <dialog class="weighbridge-dialog integral-dialog" id="integralCorrectionDialog" aria-label="Corregir recepción validada"></dialog>
+        <dialog class="weighbridge-dialog" id="guideNumberDialog" aria-label="Corregir N° de guía"></dialog>
         <dialog class="weighbridge-dialog weighbridge-dialog--compact" id="grossWeightDialog" aria-labelledby="grossWeightTitle">
             <form class="weighbridge-dialog__shell" id="grossWeightForm">
                 <header class="weighbridge-dialog__heading"><div><p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p><h2 id="grossWeightTitle">Corregir peso bruto</h2><p id="grossWeightDescription"></p></div></header>

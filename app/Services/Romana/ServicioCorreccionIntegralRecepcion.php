@@ -252,7 +252,10 @@ class ServicioCorreccionIntegralRecepcion
         }
         $ordenadas = $recepcion->guiasRecepcion()->where('vigente', 1)->orderBy('secuencia')->get(['numero_guia_despacho'])->toArray();
         $resumen = ServicioGuiasRecepcionRomana::resumen($ordenadas);
+        $resumenAnterior = $recepcion->numero_guia_despacho;
         $recepcion->update(['numero_guia_despacho' => $resumen, 'cantidad_envases_declarados' => array_sum($declarados)]);
+        // Ajustes de recibidos y registro de defectos que llevan la guía.
+        ServicioCorreccionNumeroGuia::propagar($recepcion, $resumenAnterior, $resumen);
         // El número de documento de los ingresos sigue a la guía corregida (dato documental, no cantidades).
         MovimientoEnvase::query()->where('recepcion_romana_id', $recepcion->id)
             ->whereIn('tipo_movimiento', array_map(fn ($t) => $t->value, [...self::INGRESOS, ...self::CORRECCIONES]))
