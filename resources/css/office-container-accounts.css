@@ -1,5 +1,7 @@
 .accounts-workspace {
     display: grid;
+    /* Una columna que no crece con la tabla de movimientos: la tabla se desplaza dentro de su panel en móvil. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
     padding: 16px;
 }
@@ -721,3 +723,154 @@
 }
 
 .statement-dialog__quick { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Reasignar guía: solo la cuenta de envases cambia de productor o de cliente. */
+.reassign-dialog { width: min(640px, calc(100vw - 32px)); }
+
+.reassign-dialog__choices {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.reassign-dialog__choices legend {
+    margin-bottom: 8px;
+    padding: 0;
+    color: var(--text-secondary);
+    font-size: .85rem;
+    font-weight: 800;
+}
+
+.review-dialog .reassign-dialog__choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.reassign-dialog__choice:has(input:checked) {
+    border-color: var(--corporate-blue);
+    background: var(--surface-muted);
+}
+
+.review-dialog .reassign-dialog__choice input {
+    width: 18px;
+    height: 18px;
+    min-height: 0;
+    flex: none;
+    margin: 2px 0 0;
+    padding: 0;
+    accent-color: var(--corporate-blue);
+}
+
+.review-dialog .reassign-dialog__choice span { margin: 0; }
+
+.reassign-dialog__choice b,
+.reassign-dialog__choice small {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.reassign-dialog__choice b { color: var(--text-strong); font-size: .92rem; }
+
+.reassign-dialog__choice small,
+.reassign-dialog__document span,
+.reassign-dialog__lines small,
+.reassign-dialog__history small {
+    color: var(--text-secondary);
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.45;
+}
+
+.reassign-dialog__lines {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: -6px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.reassign-dialog__lines li {
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-variant-numeric: tabular-nums;
+}
+
+.reassign-dialog__places {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+}
+
+.reassign-dialog__places div {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+}
+
+.reassign-dialog__places dt {
+    color: var(--text-secondary);
+    font-size: .8rem;
+    font-weight: 800;
+}
+
+.reassign-dialog__places dd {
+    margin: 0;
+    color: var(--text-strong);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.reassign-dialog__blocked {
+    margin: 0;
+    padding: 10px 12px;
+    border-left: 3px solid var(--warning-text, #855600);
+    background: var(--surface-muted);
+    font-size: .85rem;
+    line-height: 1.5;
+}
+
+.reassign-dialog__destination {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.reassign-dialog__preview {
+    margin: -6px 0 0;
+    color: var(--text-secondary);
+    font-size: .83rem;
+    line-height: 1.5;
+}
+
+.reassign-dialog__history summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: .85rem;
+    font-weight: 800;
+}
+
+.reassign-dialog__history ol {
+    display: grid;
+    gap: 8px;
+    margin: 10px 0 0;
+    padding-left: 18px;
+}
+
+.reassign-dialog__history li span,
+.reassign-dialog__history li small { display: block; overflow-wrap: anywhere; }
+
+@media (max-width: 560px) {
+    .reassign-dialog__destination { grid-template-columns: 1fr; }
+}

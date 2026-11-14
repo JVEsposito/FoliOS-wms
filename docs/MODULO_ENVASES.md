@@ -300,6 +300,9 @@ GET  /api/envases/cuenta-corriente/estado-cuenta?cliente_id=…&formato=pdf|xlsx
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/revisar
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/corregir-propiedad
 POST /api/envases/cuenta-corriente/movimientos/{movimiento}/corregir-cantidad
+GET  /api/envases/cuenta-corriente/movimientos/{movimiento}/reasignacion
+POST /api/envases/cuenta-corriente/reasignaciones
+POST /api/envases/cuenta-corriente/reasignaciones/{reasignacion}/deshacer
 GET  /api/envases/devoluciones/productores/{cliente}
 GET  /api/envases/devoluciones/salida?cliente_id=…&numero=…
 ```
@@ -371,6 +374,19 @@ La corrección completa de una recepción validada (Romana → **Corrección adm
 - **RPR-01**: las observaciones agregan *Cuenta de envases ajustada por administración (fecha): Bins plástico recibidos 4 → 3. Motivo: …*. Lo recibido del documento sigue siendo lo validado.
 - **Bloqueos de la corrección completa**: un ingreso que ya salió en un despacho, o que tiene otra corrección, solo bloquea si cambia el conteo o la propiedad de ese envase. Cambiar la guía o el CSG de la salida no se bloquea; para corregir la cuenta de ese envase se usa «Solo cuenta de envases».
 - **Para no corregir dos veces**: la corrección completa rechaza cambiar el conteo o la salida de un envase con ajuste vigente, y **Corregir cantidad** o **Corregir propiedad** en Cuenta Envases rechazan una recepción con ajuste vigente. Primero se deja la cuenta como lo registrado desde Romana. **Corregir saldo anterior** no aplica a estos ajustes; **Revertir asiento** sí, y conserva la recepción. Un ajuste ya revertido no impide anular la recepción.
+
+### Reasignar una guía a otro productor o cuenta corriente (administración)
+
+Pedido del encargado de cuentas corrientes (14-11-2026): mover una entrada o salida de envases entre productores CSG o entre cuentas corrientes sin tocar kilos, Validación MP, lotes ni cantidades. En Cuenta Envases → Movimientos, la acción **Reasignar guía** de un ingreso con fruta, una devolución o un arriendo, de la salida del destare o de un despacho abre el diálogo.
+
+- **Qué se mueve: la guía completa**, con lo vigente de la cuenta, es decir con sus correcciones y ajustes ya aplicados. Puede ser el ingreso de una recepción, la salida del destare (lado entregados) o un despacho de envases. En un camión con varias guías de ingreso, cada guía es un documento y se elige cuál se mueve. Esto vale cuando lo validado por guía cuadra con lo ingresado, que es como las separa el estado de cuenta; si no cuadra, se mueve la recepción completa.
+- **Destino**: una cuenta corriente activa (la misma u otra) y un productor CSG activo de esa cuenta. Se pide motivo (10 a 2000 caracteres). Solo administración (`ajustar-cuenta-envases`), en la temporada activa, con la recepción validada y cerrada (con destare) o el despacho confirmado.
+- **Asientos**, sin efecto en la existencia física:
+  - `reasignacion_salida` descuenta la guía de donde estaba, en la fecha de su asiento. Se suma a ese asiento como una anulación, así el estado de cuenta de origen ya no la muestra.
+  - `reasignacion_entrada` la deja en la cuenta de destino con el productor elegido y la fecha de la guía.
+  - Los dos llevan `documento_tipo = reasignacion_envases` y el número de la guía. La tabla `reasignaciones_envases` guarda cada reasignación y su deshacer, con origen, destino, envases, motivo, usuario y hora. La vigente dice dónde está hoy la guía.
+- **Estado de cuenta**: en la cuenta de destino, la guía se ve como la original: *Guía de ingreso N° … · Ingreso con fruta*, con chofer, recepción y camión, o *Guía de salida N° … · Entregados en el destare*, o *Guía de despacho N° …*. Va en el CSG de destino y no menciona la reasignación, porque el documento es formal e informativo. En la cuenta de origen desaparece. Una guía de un camión con varias deja de repartir el ingreso de su recepción; las demás guías siguen separadas. El kardex (Excel de movimientos) conserva los dos asientos y el motivo.
+- **Reasignar otra vez** mueve la guía desde donde está hoy. **Deshacer reasignación** la devuelve a su cuenta y productor de origen. Mientras está reasignada, su recepción o despacho no se corrige, ajusta, anula ni concilia: el servidor rechaza cualquier asiento nuevo con *«La guía … está reasignada a … Deshaz la reasignación en Cuenta Envases antes de corregir…»*. Se deshace, se corrige y se vuelve a reasignar. Corregir el N° de guía sí se puede y llega a la guía reasignada. Corregir el peso bruto (kilos) tampoco se bloquea, porque no toca envases.
 
 ## Auditoría
 

@@ -15,6 +15,7 @@ use App\Models\EventoRecepcionRomana;
 use App\Models\MovimientoEnvase;
 use App\Models\RecepcionRomana;
 use App\Models\User;
+use App\Services\Envases\ServicioReasignacionEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
@@ -268,7 +269,7 @@ class ServicioAjusteCuentaEnvasesRecepcion
             $recepcion->estado === EstadoRecepcionRomana::Anulada || $recepcion->eliminada_at !== null => 'La recepción está anulada o eliminada.',
             $recepcion->estado_validacion_mp !== EstadoValidacionMp::Validada => 'La recepción aún no está validada: todavía no mueve la cuenta de envases.',
             $recepcion->temporada_id !== app(ServicioTemporadaActiva::class)->buscar(bloquear: $bloquear)?->id => 'Solo se ajustan recepciones de la temporada activa.',
-            default => null,
+            default => app(ServicioReasignacionEnvases::class)->bloqueoRecepcion($recepcion),
         };
     }
 

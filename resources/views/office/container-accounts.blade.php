@@ -107,6 +107,29 @@
                 <footer class="dialog-actions"><button class="secondary-button" id="statementCancel" type="button">Cancelar</button><button class="primary-button" id="statementSubmit" type="submit">Descargar</button></footer>
             </form>
         </dialog>
+        <dialog class="review-dialog property-dialog reassign-dialog" id="reassignDialog" aria-labelledby="reassignTitle" aria-describedby="reassignHelp">
+            <form id="reassignForm" novalidate>
+                <header class="review-dialog__header"><p class="eyebrow">SOLO CUENTA DE ENVASES</p><h2 id="reassignTitle">Reasignar guía</h2></header>
+                <p class="property-dialog__help" id="reassignHelp">Mueve la guía completa a otro productor CSG o a otra cuenta corriente. No cambia kilos, Validación MP, lotes, cantidades ni la existencia física; el motivo queda en el kardex.</p>
+                <fieldset class="reassign-dialog__choices" id="reassignChoices" hidden></fieldset>
+                <div class="property-dialog__context reassign-dialog__document" id="reassignSummary"></div>
+                <ul class="reassign-dialog__lines" id="reassignLines"></ul>
+                <dl class="reassign-dialog__places">
+                    <div><dt>Hoy en</dt><dd id="reassignNow"></dd></div>
+                    <div id="reassignOrigin" hidden><dt>Origen</dt><dd id="reassignOriginText"></dd></div>
+                </dl>
+                <p class="reassign-dialog__blocked" id="reassignBlocked" role="status" hidden></p>
+                <div class="reassign-dialog__destination">
+                    <label><span>Cuenta corriente de destino</span><select name="cliente_destino_id" required></select></label>
+                    <label><span>Productor CSG de destino</span><select name="productor_csg_id" required><option value="">Seleccionar productor</option></select></label>
+                </div>
+                <label><span>Motivo</span><textarea name="motivo" rows="3" minlength="10" maxlength="2000" required placeholder="Ej.: Los bins de esta guía son de Agrícola Tres, no del CSG validado"></textarea></label>
+                <p class="reassign-dialog__preview" id="reassignPreview" aria-live="polite"></p>
+                <details class="reassign-dialog__history" id="reassignHistory" hidden><summary>Historial de reasignaciones</summary><ol id="reassignHistoryList"></ol></details>
+                <p class="form-error" id="reassignError" role="alert"></p>
+                <footer class="dialog-actions"><button class="secondary-button" id="reassignCancel" type="button">Cancelar</button><button class="secondary-button" id="reassignUndo" type="button" hidden>Deshacer reasignación</button><button class="primary-button" id="reassignSubmit" type="submit">Reasignar guía</button></footer>
+            </form>
+        </dialog>
         <dialog class="review-dialog" id="reviewDialog" aria-labelledby="reviewDialogTitle">
             <form id="reviewForm" method="dialog">
                 <input name="movimiento_id" type="hidden">

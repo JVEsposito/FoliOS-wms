@@ -12,6 +12,7 @@ use App\Models\GuiaRecepcionRomana;
 use App\Models\MovimientoEnvase;
 use App\Models\RecepcionRomana;
 use App\Models\User;
+use App\Services\Envases\ServicioReasignacionEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -93,6 +94,8 @@ class ServicioCorreccionNumeroGuia
             $resumen = ServicioGuiasRecepcionRomana::resumen($vigentes->map(fn (GuiaRecepcionRomana $g): array => ['numero_guia_despacho' => $g->numero_guia_despacho])->values()->all());
             $recepcion->update(['numero_guia_despacho' => $resumen, 'version' => $recepcion->version + 1]);
             self::propagar($recepcion, $resumenAnterior, $resumen);
+            // Una guía reasignada en la cuenta corriente también muestra su número nuevo donde quedó.
+            ServicioReasignacionEnvases::propagarNumeroGuia($recepcion, $resumenAnterior, $resumen, $cambios);
             $ahora = CarbonImmutable::now();
             EventoRecepcionRomana::create([
                 'operacion_id' => $datos['operacion_id'], 'payload_hash' => $hash, 'recepcion_romana_id' => $recepcion->id,

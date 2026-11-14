@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const html = readFileSync(resolve(root, 'storage/app/ui/oficina/cuenta-corriente.html'), 'utf8');
 
-async function setup(browser, manage, width = 390, historical = false, reconciliation = {}, statement = null) {
+async function setup(browser, manage, width = 390, historical = false, reconciliation = {}, statement = null, reassign = false) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
     const identity = { nombre: 'Cuenta Envases', rol: manage ? 'administrador' : 'consulta', puede_consultar_cuenta_envases: true, modulos_acceso: ['materia-prima.cuenta-envases'] };
     await context.addInitScript((user) => {
@@ -17,7 +17,21 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
         localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
     }, identity);
     const client = { id: 'cliente', codigo: 'CLI', nombre: 'Cliente de arriendo' };
-    const movements = historical ? [{ id: 'historico', cliente: client, numero_documento: '123', movimiento: 'Ingreso en arriendo', tipo_envase: 'bins', cantidad: 138, impacto_cuenta: 138, impacto_cuenta_vigente: 138, impacto_existencia: 138, propiedad: 'arrendada', ocurrido_at: '2026-09-01T13:36:00Z', estado_revision: 'pendiente', puede_corregir_saldo_historico: true }] : [];
+    const other = { id: 'otra', codigo: 'OTR', nombre: 'Exportadora otra' };
+    const reassignCalls = [];
+    let reassigned = false;
+    const reassignDocument = (numero, productor, envases) => ({
+        clave: `recepcion:rec-1:recibidos:guia:${numero}`, lado: 'recibidos', numero, movimiento: 'Ingreso con fruta', titulo: `Guía de ingreso N° ${numero}`,
+        recepcion: 'REC-2611-0026', despacho: null, fecha: '2026-11-13 09:30:00',
+        envases: envases.map(([tipo, nombre, cantidad]) => ({ tipo_envase: tipo, nombre, propiedad: 'cliente', propiedad_nombre: 'Del cliente', cantidad })),
+        origen: { cliente: client, productores: [productor] },
+        actual: reassigned && numero === '1512' ? { cliente: other, productores: [{ codigo: 'CSG-OTRA', nombre: 'Agrícola Otra' }] } : { cliente: client, productores: [productor] },
+        reasignada: reassigned && numero === '1512', reasignacion_vigente_id: reassigned && numero === '1512' ? 'reasignacion-1' : null,
+        disponible: true, motivo_no_disponible: null,
+        historial: reassigned && numero === '1512' ? [{ id: 'reasignacion-1', deshace: false, vigente: true, origen: { cliente: client, productor }, destino: { cliente: other, productor: { codigo: 'CSG-OTRA', nombre: 'Agrícola Otra' } }, motivo: 'Los bins de esta guía son de Agrícola Otra.', usuario: identity.nombre, registrado_at: '2026-11-14T21:00:00Z' }] : [],
+    });
+    const movements = reassign ? [{ id: 'ingreso', cliente: client, numero_documento: '1511 / 1512', movimiento: 'Recepción con fruta', tipo_movimiento: 'recepcion_fruta', tipo_envase: 'bins', cantidad: 4, impacto_cuenta: 4, impacto_existencia: 4, propiedad: 'cliente', ocurrido_at: '2026-11-13T12:30:00Z', estado_revision: 'pendiente', puede_reasignar: true }]
+        : historical ? [{ id: 'historico', cliente: client, numero_documento: '123', movimiento: 'Ingreso en arriendo', tipo_envase: 'bins', cantidad: 138, impacto_cuenta: 138, impacto_cuenta_vigente: 138, impacto_existencia: 138, propiedad: 'arrendada', ocurrido_at: '2026-09-01T13:36:00Z', estado_revision: 'pendiente', puede_corregir_saldo_historico: true }] : [];
     const writes = [];
     const statements = [];
     const reconciliationCalls = { searches: [], previews: [], applies: [], refreshes: 0 };
@@ -35,7 +49,7 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
         }
         if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
         if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Prueba', temporada: { nombre: '2026' } } } });
-        if (path.endsWith('/cuenta-corriente/catalogos')) return route.fulfill({ json: { clientes: [client], temporadas: [{ id: 'temporada', codigo: '2026', nombre: '2026', activa: true }], tipos_envase: statement?.types || [{ codigo: 'bins', nombre: 'Bins' }], hoy: '2026-10-21', puede_ajustar: manage } });
+        if (path.endsWith('/cuenta-corriente/catalogos')) return route.fulfill({ json: { clientes: reassign ? [client, other] : [client], temporadas: [{ id: 'temporada', codigo: '2026', nombre: '2026', activa: true }], tipos_envase: statement?.types || [{ codigo: 'bins', nombre: 'Bins' }], hoy: '2026-10-21', puede_ajustar: manage } });
         if (path.endsWith('/cuenta-corriente/estado-cuenta')) {
             const query = new URL(request.url()).searchParams;
             statements.push({ formato: query.get('formato'), cliente: query.get('cliente_id'), tipos: query.getAll('tipos_envase[]') });
@@ -61,6 +75,18 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
             reconciled = true;
             if (reconciliation.lostResponse) return route.abort('failed');
             return route.fulfill({ json: { data: { aplicada: true, hash: null, filas: [], compensaciones: 2, auditoria: audit } } });
+        }
+        if (path.endsWith('/ingreso/reasignacion')) return route.fulfill({ json: { data: [
+            reassignDocument('1511', { codigo: 'CSG-A', nombre: 'Agrícola Uno' }, [['bins', 'Bins plástico', 2], ['totes', 'Tote', 48]]),
+            reassignDocument('1512', { codigo: 'CSG-B', nombre: 'Agrícola Dos' }, [['bins', 'Bins plástico', 2], ['totes', 'Tote', 49]]),
+        ] } });
+        if (path.startsWith('/api/envases/devoluciones/productores/')) return route.fulfill({ json: { data: path.endsWith('/otra')
+            ? [{ id: 'prod-otra', codigo: 'CSG-OTRA', nombre: 'Agrícola Otra' }]
+            : [{ id: 'prod-a', codigo: 'CSG-A', nombre: 'Agrícola Uno' }, { id: 'prod-b', codigo: 'CSG-B', nombre: 'Agrícola Dos' }] } });
+        if (path.endsWith('/cuenta-corriente/reasignaciones') || path.endsWith('/deshacer')) {
+            reassignCalls.push({ path, body: request.postDataJSON() });
+            reassigned = path.endsWith('/cuenta-corriente/reasignaciones');
+            return route.fulfill({ status: 201, json: { data: { id: 'reasignacion-1' } } });
         }
         if (path.endsWith('/cuenta-corriente/ajustes')) {
             const body = request.postDataJSON();
@@ -95,7 +121,7 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto('http://localhost/oficina/envases/cuenta-corriente');
     await page.waitForFunction(() => document.getElementById('balanceList')?.textContent.includes('Cliente de arriendo'));
-    return { context, page, writes, errors, reconciliationCalls, statements };
+    return { context, page, writes, errors, reconciliationCalls, statements, reassignCalls };
 }
 
 test('registra una apertura negativa y su reversa conservando el contexto de cuenta en móvil y escritorio', async () => {
@@ -384,6 +410,59 @@ test('el estado de cuenta se descarga solo con los envases marcados, en PDF o Ex
             await dialog.locator('#statementCancel').click();
             assert.equal(await dialog.isVisible(), false);
             assert.equal(statements.length, 3);
+            assert.deepEqual(errors, []);
+            await context.close();
+        }
+    } finally { await browser.close(); }
+});
+
+test('reasigna una guía de un camión con varias a otra cuenta y la deshace, sin tocar cantidades, en móvil y escritorio', async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
+    try {
+        for (const width of [390, 1280]) {
+            const { context, page, reassignCalls, errors } = await setup(browser, true, width, false, {}, null, true);
+            await page.locator('#container-accounts-tab-movements').click();
+            // La tabla de movimientos se desplaza dentro de su panel: la página no se ensancha en móvil.
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+            await page.locator('#movementsBody .office-action-select').selectOption({ label: 'Reasignar guía' });
+            const dialog = page.locator('#reassignDialog');
+            await dialog.locator('[name="documento_clave"]').first().waitFor();
+            // Cada guía del camión es un documento: se elige cuál se mueve.
+            assert.equal(await dialog.locator('[name="documento_clave"]').count(), 2);
+            await dialog.locator('[name="documento_clave"][value$=":1512"]').check();
+            assert.match(await page.locator('#reassignNow').textContent(), /Cliente de arriendo · CSG CSG-B · Agrícola Dos/);
+            assert.match(await page.locator('#reassignLines').textContent(), /2 Bins plástico.*49 Tote/s);
+            assert.equal(await page.locator('#reassignUndo').isVisible(), false);
+            assert.equal(await page.locator('#reassignSubmit').isDisabled(), true);
+            await dialog.locator('[name="cliente_destino_id"]').selectOption('otra');
+            await page.waitForFunction(() => document.querySelector('#reassignForm [name="productor_csg_id"]').options.length === 2);
+            await dialog.locator('[name="productor_csg_id"]').selectOption('prod-otra');
+            await dialog.locator('[name="motivo"]').fill('Los bins de esta guía son de Agrícola Otra.');
+            assert.match(await page.locator('#reassignPreview').textContent(), /La guía 1512 pasa de Cliente de arriendo · CSG CSG-B · Agrícola Dos a Exportadora otra · CSG CSG-OTRA · Agrícola Otra\. Kilos, validación, lotes y cantidades no cambian\./);
+            assert.equal(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1), true);
+            if (process.env.WMS_REASSIGN_SCREENSHOTS) await page.screenshot({ path: `${process.env.WMS_REASSIGN_SCREENSHOTS}/reasignar-${width}.png` });
+            await page.locator('#reassignSubmit').dblclick();
+            await page.waitForFunction(() => !document.getElementById('reassignDialog').open);
+            assert.equal(reassignCalls.length, 1);
+            assert.deepEqual({ ...reassignCalls[0].body, operacion_id: undefined }, { documento_clave: 'recepcion:rec-1:recibidos:guia:1512', reasignacion_vigente_id: null,
+                cliente_destino_id: 'otra', productor_csg_id: 'prod-otra', motivo: 'Los bins de esta guía son de Agrícola Otra.', operacion_id: undefined });
+            assert.match(reassignCalls[0].body.operacion_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+
+            // Reasignada: se ve dónde está, de dónde viene, su historial y se puede deshacer.
+            await page.locator('#movementsBody .office-action-select').selectOption({ label: 'Reasignar guía' });
+            await dialog.locator('[name="documento_clave"]').first().waitFor();
+            await dialog.locator('[name="documento_clave"][value$=":1512"]').check();
+            assert.match(await page.locator('#reassignNow').textContent(), /Exportadora otra · CSG CSG-OTRA/);
+            assert.match(await page.locator('#reassignOriginText').textContent(), /Cliente de arriendo · CSG CSG-B/);
+            assert.equal(await page.locator('#reassignHistory').isVisible(), true);
+            assert.equal(await page.locator('#reassignUndo').isDisabled(), true);
+            await dialog.locator('[name="motivo"]').fill('La guía sí era de Agrícola Dos.');
+            await page.locator('#reassignUndo').click();
+            await page.waitForFunction(() => !document.getElementById('reassignDialog').open);
+            assert.equal(reassignCalls.length, 2);
+            assert.equal(reassignCalls[1].path, '/api/envases/cuenta-corriente/reasignaciones/reasignacion-1/deshacer');
+            assert.equal(reassignCalls[1].body.motivo, 'La guía sí era de Agrícola Dos.');
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
             assert.deepEqual(errors, []);
             await context.close();
         }
