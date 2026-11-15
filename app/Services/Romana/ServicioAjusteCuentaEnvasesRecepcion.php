@@ -65,6 +65,7 @@ class ServicioAjusteCuentaEnvasesRecepcion
             ...array_keys($cuenta['recibidos']), ...array_keys($cuenta['entregados']),
         ])->unique()->sortBy(fn (string $tipo): int => TipoEnvaseRomana::from($tipo)->orden())->values();
         $productores = $this->productores($recepcion);
+        $salenEnvases = array_sum($cuenta['entregados']) !== 0 || $recepcion->salidasEnvases->sum('cantidad') > 0;
 
         return [
             'disponible' => $this->impedimento($recepcion) === null && $this->mueveCuenta($recepcion),
@@ -75,6 +76,10 @@ class ServicioAjusteCuentaEnvasesRecepcion
             'salida_conciliada' => $conciliada,
             'productores' => $productores,
             'exige_productor' => count($productores) > 1,
+            // Camión con varios CSG: a qué productor se entregaron los envases del destare. Se puede declarar o
+            // cambiar aquí sin tocar cantidades (las recepciones anteriores al 13-11-2026 no lo pedían en Romana).
+            'elige_productor_entregados' => count($productores) > 1 && $cerrada && ! $conciliada && $salenEnvases,
+            'productor_entregados' => $recepcion->salida_productor_snapshot['codigo'] ?? null,
             'tipos' => $tipos->map(function (string $tipo) use ($recepcion, $cuenta, $porLado): array {
                 $detalle = $recepcion->detallesEnvases->first(fn ($d): bool => $d->tipo_envase->value === $tipo);
                 $salida = $recepcion->salidasEnvases->first(fn ($s): bool => $s->tipo_envase->value === $tipo);
@@ -149,8 +154,15 @@ class ServicioAjusteCuentaEnvasesRecepcion
                         'registro' => $actual - ($porLado[$lado][$envase['tipo_envase']] ?? 0)];
                 }
             }
-            if ($cambios === []) {
+            $entregadosA = $this->productorEntregados($recepcion, $payload['productor_entregados_csg'], $cerrada, $conciliada);
+            $productorAnterior = $recepcion->salida_productor_snapshot;
+            $cambiaProductor = $entregadosA !== null && ($productorAnterior['codigo'] ?? null) !== $entregadosA['codigo'];
+            if ($cambios === [] && ! $cambiaProductor) {
                 throw new ConflictoOperacion('El ajuste no presenta cambios respecto de la cuenta.');
+            }
+            // Los entregados (la salida y sus ajustes) pasan al CSG declarado, sin tocar cantidades.
+            if ($cambiaProductor) {
+                $recepcion->update(['salida_productor_snapshot' => $entregadosA]);
             }
             $productores = $this->productores($recepcion);
             $productor = $this->productorRecibidos($productores, $payload['productor_csg'], collect($cambios)->contains('lado', 'recibidos'));
@@ -176,7 +188,10 @@ class ServicioAjusteCuentaEnvasesRecepcion
                 'operacion_id' => $datos['operacion_id'], 'payload_hash' => $hash, 'recepcion_romana_id' => $recepcion->id,
                 'tipo' => TipoEventoRomana::AjusteCuentaEnvases, 'estado_anterior' => $recepcion->estado, 'estado_nuevo' => $recepcion->estado,
                 'user_id' => $usuario->id, 'ocurrido_at' => $ahora,
-                'datos' => ['motivo' => $payload['motivo'], 'resumen' => $this->texto($cambios), 'productor' => $productor, 'ajustes' => $registrados],
+                'datos' => ['motivo' => $payload['motivo'], 'productor' => $productor, 'ajustes' => $registrados,
+                    'resumen' => collect([$this->texto($cambios), $cambiaProductor ? 'Entregados del destare al CSG '.$entregadosA['codigo']
+                        .' (antes: '.(empty($productorAnterior['codigo']) ? 'sin productor' : 'CSG '.$productorAnterior['codigo']).')' : null])->filter()->implode('; '),
+                    ...($cambiaProductor ? ['productor_entregados' => ['anterior' => $productorAnterior, 'nuevo' => $entregadosA]] : [])],
             ]);
 
             return $recepcion->refresh();
@@ -256,6 +271,7 @@ class ServicioAjusteCuentaEnvasesRecepcion
             'version' => (int) $datos['version_conocida'],
             'motivo' => trim((string) $datos['motivo']),
             'productor_csg' => filled($datos['productor_csg'] ?? null) ? trim((string) $datos['productor_csg']) : null,
+            'productor_entregados_csg' => filled($datos['productor_entregados_csg'] ?? null) ? trim((string) $datos['productor_entregados_csg']) : null,
             'envases' => collect($datos['envases'])->map(fn ($e): array => ['tipo_envase' => (string) $e['tipo_envase'],
                 'recibidos' => isset($e['recibidos']) ? (int) $e['recibidos'] : null,
                 'entregados' => isset($e['entregados']) ? (int) $e['entregados'] : null])
@@ -383,6 +399,29 @@ class ServicioAjusteCuentaEnvasesRecepcion
         $salida = app(ProductoresRecepcion::class)->salida($recepcion);
 
         return $salida === null ? null : ['codigo' => $salida['codigo'], 'nombre' => $salida['nombre'] ?? null];
+    }
+
+    /**
+     * CSG al que se declaran entregados los envases del destare, cuando el camión trae varios. Null si no se
+     * indicó o si la recepción tiene un solo CSG (entonces la salida ya es de ese).
+     */
+    private function productorEntregados(RecepcionRomana $recepcion, ?string $codigo, bool $cerrada, bool $conciliada): ?array
+    {
+        $opciones = app(ProductoresRecepcion::class)->opciones($recepcion);
+        if ($codigo === null || count($opciones) <= 1 || $recepcion->esDevolucionEnvases()) {
+            return null;
+        }
+        if (! $cerrada) {
+            throw ValidationException::withMessages(['productor_entregados_csg' => 'La recepción aún no tiene destare: no hay entregados que asignar.']);
+        }
+        $elegido = collect($opciones)->firstWhere('codigo', $codigo)
+            ?? throw ValidationException::withMessages(['productor_entregados_csg' => 'Elige uno de los CSG del camión ('.implode(', ', array_column($opciones, 'codigo'))
+                .'). Para llevar la salida a un productor de fuera del camión, usa «Reasignar guía» en Cuenta Envases.']);
+        if ($conciliada && ($recepcion->salida_productor_snapshot['codigo'] ?? null) !== $elegido['codigo']) {
+            throw new ConflictoOperacion('La salida de esta recepción está conciliada con un despacho: su productor se corrige en ese despacho.');
+        }
+
+        return $elegido;
     }
 
     private function productorRecibidos(array $productores, ?string $codigo, bool $cambiaRecibidos): ?array

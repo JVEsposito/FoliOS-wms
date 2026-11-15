@@ -250,6 +250,7 @@ class RecepcionRomanaController extends Controller
             'operacion_id' => ['required', 'uuid'], 'version_conocida' => ['required', 'integer', 'min:1'],
             'motivo' => ['required', 'string', 'min:10', 'max:2000'],
             'productor_csg' => ['nullable', 'string', 'max:40'],
+            'productor_entregados_csg' => ['nullable', 'string', 'max:40'],
             'envases' => ['required', 'array', 'min:1', 'max:20'],
             'envases.*.tipo_envase' => ['required', 'distinct', Rule::in(array_column(TipoEnvaseRomana::catalogo(), 'codigo'))],
             'envases.*.recibidos' => ['nullable', 'integer', 'min:0', 'max:100000'],
