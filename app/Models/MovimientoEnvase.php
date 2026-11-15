@@ -9,6 +9,7 @@ use App\Enums\TipoMovimientoEnvase;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use App\Models\Concerns\TemporadaPorColumna;
 use App\Models\Contracts\PerteneceATemporada;
+use App\Services\Envases\ServicioReasignacionEnvases;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -42,6 +43,12 @@ class MovimientoEnvase extends Model implements PerteneceATemporada
     use HasUuids, ImpideEliminacionFisica, TemporadaPorColumna;
 
     protected $table = 'movimientos_envases';
+
+    protected static function booted(): void
+    {
+        // Ninguna corrección, anulación o conciliación se registra sobre una guía reasignada a otra cuenta o productor.
+        static::creating(fn (self $movimiento) => app(ServicioReasignacionEnvases::class)->asegurarSinReasignacion($movimiento));
+    }
 
     public function temporada(): BelongsTo
     {

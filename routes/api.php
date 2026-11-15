@@ -265,6 +265,12 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:corregir-cantidad-envases');
     Route::post('/envases/cuenta-corriente/ajustes', [CuentaCorrienteEnvaseController::class, 'registrarAjuste'])
         ->middleware('can:ajustar-cuenta-envases');
+    // Reasignar una guía completa a otro productor CSG o a otra cuenta corriente, sin tocar kilos ni cantidades.
+    Route::middleware('can:ajustar-cuenta-envases')->prefix('envases/cuenta-corriente')->group(function () {
+        Route::get('/movimientos/{movimientoEnvase}/reasignacion', [CuentaCorrienteEnvaseController::class, 'reasignacion']);
+        Route::post('/reasignaciones', [CuentaCorrienteEnvaseController::class, 'reasignar']);
+        Route::post('/reasignaciones/{reasignacionEnvases}/deshacer', [CuentaCorrienteEnvaseController::class, 'deshacerReasignacion']);
+    });
     Route::middleware('can:ajustar-cuenta-envases')->prefix('envases/cuenta-corriente/conciliaciones-salida')->group(function () {
         Route::get('/', [ConciliacionSalidaEnvaseController::class, 'index']);
         Route::post('/previsualizar', [ConciliacionSalidaEnvaseController::class, 'previsualizar']);

@@ -123,7 +123,8 @@ class ResumenEnvasesPorCsg
         }
         foreach ($entradasRecepcion as $id => $lineas) {
             $datos = $recepciones[$id] ?? [];
-            $opciones = $datos['csg'] ?? [];
+            // Sin las guías reasignadas por separado, que ya no son parte del ingreso de la recepción.
+            $opciones = $datos['csg_ingreso'] ?? $datos['csg'] ?? [];
             if (count($opciones) === 1) {
                 foreach ($lineas as $linea) {
                     self::agregar($resumen, $opciones[0], $linea);

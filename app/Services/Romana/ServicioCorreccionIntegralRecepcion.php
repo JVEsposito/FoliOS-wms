@@ -22,6 +22,7 @@ use App\Models\SegmentoValidacionMp;
 use App\Models\User;
 use App\Models\ValidacionMp;
 use App\Services\Envases\DocumentoSalidaEnvases;
+use App\Services\Envases\ServicioReasignacionEnvases;
 use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
@@ -198,6 +199,10 @@ class ServicioCorreccionIntegralRecepcion
     {
         if ($recepcion->estado === EstadoRecepcionRomana::Anulada || $recepcion->eliminada_at !== null) {
             throw new ConflictoOperacion('La recepción está anulada o eliminada y no admite correcciones.');
+        }
+        // Guías, conteos y destare deciden lo que se reasignó: con una reasignación vigente no se corrigen.
+        if ($bloqueo = app(ServicioReasignacionEnvases::class)->bloqueoRecepcion($recepcion)) {
+            throw new ConflictoOperacion($bloqueo);
         }
         if ($recepcion->estado_validacion_mp !== EstadoValidacionMp::Validada) {
             throw new ConflictoOperacion('La recepción aún no está validada: corrígela con la corrección administrativa de Romana.');

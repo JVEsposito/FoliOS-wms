@@ -53,6 +53,8 @@ class ServicioCuentaCorrienteEnvases
         'reversion_ajuste_cuenta' => 'Reversa de ajuste de cuenta',
         'prestamo_interno' => 'Préstamo interno de bins de planta',
         'devolucion_prestamo_interno' => 'Devolución interna de bins de planta',
+        'reasignacion_salida' => 'Reasignación: sale la guía',
+        'reasignacion_entrada' => 'Reasignación: entra la guía',
     ];
 
     /** Préstamo de bins de planta y su devolución: trazabilidad interna, con efecto neto 0. */
@@ -102,6 +104,59 @@ class ServicioCuentaCorrienteEnvases
     {
         return $movimiento->tipo_movimiento === TipoMovimientoEnvase::AjusteCuenta && ! empty($movimiento->datos['ajuste_recepcion']['lado'])
             ? $movimiento->datos['ajuste_recepcion'] : null;
+    }
+
+    /** Datos de la guía reasignada que trae una entrada de reasignación, si lo es. */
+    public static function reasignacion(MovimientoEnvase $movimiento): ?array
+    {
+        return $movimiento->tipo_movimiento === TipoMovimientoEnvase::ReasignacionEntrada ? ($movimiento->datos['reasignacion'] ?? null) : null;
+    }
+
+    /**
+     * Tipo con el que el cliente ve el movimiento: la entrada de una guía reasignada se ve como la guía
+     * original (ingreso, entrega en el destare, despacho o devolución), en la cuenta y con el productor de destino.
+     */
+    private static function tipoVisible(MovimientoEnvase $movimiento): TipoMovimientoEnvase
+    {
+        $reasignacion = self::reasignacion($movimiento);
+
+        return $reasignacion ? (TipoMovimientoEnvase::tryFrom($reasignacion['tipo'] ?? '') ?? $movimiento->tipo_movimiento) : $movimiento->tipo_movimiento;
+    }
+
+    private static function recepcionId(MovimientoEnvase $movimiento): ?string
+    {
+        return $movimiento->recepcion_romana_id ?? self::reasignacion($movimiento)['recepcion_id'] ?? null;
+    }
+
+    private static function guiaDespachoId(MovimientoEnvase $movimiento): ?string
+    {
+        return $movimiento->documento_tipo === self::DOCUMENTO_GUIA ? $movimiento->documento_id
+            : (self::reasignacion($movimiento)['guia_despacho_id'] ?? null);
+    }
+
+    /**
+     * Asiento al que se suma este movimiento en la vista del cliente (la anulación, corrección o reasignación
+     * de otro), o null si es un asiento propio.
+     *
+     * @param  Collection<string, MovimientoEnvase>  $porId
+     */
+    public static function corrige(MovimientoEnvase $movimiento, Collection $porId): ?string
+    {
+        return match ($movimiento->tipo_movimiento) {
+            TipoMovimientoEnvase::ReversionDespacho => $movimiento->datos['reversa_de_movimiento_id'] ?? null,
+            TipoMovimientoEnvase::ConciliacionSalida => $movimiento->datos['movimiento_conciliado_id'] ?? null,
+            // Un ajuste de recepción reemplazado o revertido no se muestra: queda solo el vigente.
+            TipoMovimientoEnvase::ReversionAjusteCuenta => isset($porId[$movimiento->movimiento_origen_id])
+                && self::ajusteRecepcion($porId[$movimiento->movimiento_origen_id]) !== null ? $movimiento->movimiento_origen_id : null,
+            // La guía reasignada sale de su cuenta como una anulación: se suma al asiento que reasigna.
+            TipoMovimientoEnvase::ReasignacionSalida => $movimiento->datos['reasignacion']['raiz_id'] ?? null,
+            TipoMovimientoEnvase::ReversionSalidaRecepcionFruta,
+            TipoMovimientoEnvase::CorreccionCantidad,
+            TipoMovimientoEnvase::CorreccionCuenta,
+            TipoMovimientoEnvase::AnulacionRecepcion,
+            TipoMovimientoEnvase::CorreccionPropiedad => $movimiento->movimiento_origen_id,
+            default => null,
+        };
     }
 
     /** CSG que recibió los envases del destare: el elegido en Romana o, si hay uno solo, ese. */
@@ -197,7 +252,7 @@ class ServicioCuentaCorrienteEnvases
             }
 
             $revision = $movimiento->revisiones->sortByDesc('revisado_at')->first();
-            $correccion = $movimiento->datos['correccion_propiedad'] ?? $movimiento->datos['correccion_cantidad'] ?? $movimiento->datos['ajuste_cuenta'] ?? $movimiento->datos['correccion_cuenta'] ?? $movimiento->datos['anulacion_recepcion'] ?? null;
+            $correccion = $movimiento->datos['correccion_propiedad'] ?? $movimiento->datos['correccion_cantidad'] ?? $movimiento->datos['ajuste_cuenta'] ?? $movimiento->datos['correccion_cuenta'] ?? $movimiento->datos['anulacion_recepcion'] ?? $movimiento->datos['reasignacion'] ?? null;
 
             yield [
                 'fecha_hora' => $this->local($movimiento->ocurrido_at),
@@ -254,8 +309,7 @@ class ServicioCuentaCorrienteEnvases
             ->orderBy('ocurrido_at')
             ->orderBy('id')
             ->get();
-        $idsGuias = $movimientos->where('documento_tipo', self::DOCUMENTO_GUIA)
-            ->pluck('documento_id')->filter()->unique()->values();
+        $idsGuias = $movimientos->map(fn (MovimientoEnvase $m): ?string => self::guiaDespachoId($m))->filter()->unique()->values();
         $guiasEmitidas = GuiaDespachoEnvase::query()->whereKey($idsGuias)
             ->get(['id', 'numero', 'numero_guia_despacho', 'productor_csg_id', 'productor_snapshot', 'nombre_conductor', 'rut_conductor', 'patente_camion'])->keyBy('id');
         $recepcionesCsg = $this->recepcionesCsg($movimientos);
@@ -290,14 +344,18 @@ class ServicioCuentaCorrienteEnvases
             // Un ajuste de administración sobre una recepción corrige sus recibidos o sus entregados,
             // con signo: −2 recibidos no se lee como 2 entregados.
             $ajusteRecepcion = self::ajusteRecepcion($movimiento);
+            // Una guía reasignada se ve como la guía original, con el productor de destino.
+            $reasignacion = self::reasignacion($movimiento);
+            $tipoVisible = self::tipoVisible($movimiento);
             $esSalida = $ajusteRecepcion !== null ? $ajusteRecepcion['lado'] === 'entregados'
-                : (in_array($movimiento->tipo_movimiento, self::SALIDAS, true)
-                    || (($movimiento->tipo_movimiento->esAjusteCuenta() || in_array($movimiento->id, $historicos, true)) && $impacto < 0));
-            $guia = $movimiento->documento_tipo === self::DOCUMENTO_GUIA
-                ? $guiasEmitidas->get($movimiento->documento_id) : null;
-            $destinatario = $guia?->productorDestino();
+                : ($reasignacion !== null ? $reasignacion['lado'] === 'entregados'
+                    : (in_array($movimiento->tipo_movimiento, self::SALIDAS, true)
+                        || (($movimiento->tipo_movimiento->esAjusteCuenta() || in_array($movimiento->id, $historicos, true)) && $impacto < 0)));
+            $guiaId = self::guiaDespachoId($movimiento);
+            $guia = $guiaId ? $guiasEmitidas->get($guiaId) : null;
+            $destinatario = $reasignacion !== null ? ($reasignacion['productor'] ?? null) : $guia?->productorDestino();
             // La devolución de un productor conserva el CSG declarado en Romana o al asociarla.
-            $devolucion = $movimiento->tipo_movimiento === TipoMovimientoEnvase::DevolucionEnvases
+            $devolucion = $tipoVisible === TipoMovimientoEnvase::DevolucionEnvases
                 ? ($movimiento->datos['devolucion'] ?? null) : null;
             $movimientoCsg = [
                 'recepcion_id' => $movimiento->recepcion_romana_id,
@@ -305,7 +363,7 @@ class ServicioCuentaCorrienteEnvases
                 'tipo_envase' => $tipo, 'nombre_envase' => $movimiento->tipo_envase->etiqueta(),
                 'orden' => $movimiento->tipo_envase->orden(),
                 'entradas' => $esSalida ? 0 : $impacto, 'salidas' => $esSalida ? -$impacto : 0,
-                'csg' => match ($movimiento->tipo_movimiento) {
+                'csg' => $reasignacion !== null ? ($reasignacion['productor'] ?? null) : match ($movimiento->tipo_movimiento) {
                     TipoMovimientoEnvase::DespachoCliente => $destinatario,
                     TipoMovimientoEnvase::SalidaRecepcionFruta => self::csgSalida($recepcionesCsg, $movimiento->recepcion_romana_id),
                     TipoMovimientoEnvase::DevolucionEnvases => $devolucion['productor'] ?? null,
@@ -330,10 +388,11 @@ class ServicioCuentaCorrienteEnvases
             // un mismo envase (FIFO, varias recepciones) no se le muestran al cliente. Una recepción
             // de fruta con varias guías se muestra separada por guía, con lo validado de cada una.
             $partes = $this->partesPorGuia($movimiento, $impacto, $esSalida, $guiasRecepcion) ?? [[
-                // Los ajustes de recibidos y de entregados de una recepción son documentos distintos.
-                'impacto' => $impacto, 'clave' => $ajusteRecepcion['lado'] ?? '',
+                // Los ajustes de recibidos y de entregados de una recepción son documentos distintos; cada
+                // reasignación es su propio documento.
+                'impacto' => $impacto, 'clave' => $reasignacion['documento_clave'] ?? $ajusteRecepcion['lado'] ?? '',
                 'documento' => $guia?->numero_guia_despacho ?: $movimiento->numero_documento,
-                'productor' => match ($movimiento->tipo_movimiento) {
+                'productor' => $reasignacion !== null ? self::etiquetaProductor($reasignacion['productor'] ?? null) : match ($movimiento->tipo_movimiento) {
                     TipoMovimientoEnvase::DespachoCliente => $destinatario
                         ? 'CSG '.$destinatario['codigo'].' · '.$destinatario['nombre'] : 'Sin productor asignado',
                     TipoMovimientoEnvase::RecepcionFruta => $recepcionesCsg[$movimiento->recepcion_romana_id]['productor'] ?? 'Sin productor declarado',
@@ -357,7 +416,7 @@ class ServicioCuentaCorrienteEnvases
                 $clave = $claveDocumento.'|'.$tipo.'|'.$movimiento->propiedad->value;
                 $documentos[$claveDocumento] ??= count($documentos);
                 $porDocumento[$claveDocumento] ??= ['movimiento' => $movimiento, 'parte' => $parte, 'guia' => $guia,
-                    'historico' => in_array($movimiento->id, $historicos, true), 'tipos' => []];
+                    'historico' => in_array($movimiento->id, $historicos, true), 'tipo' => $tipoVisible, 'tipos' => []];
                 $porDocumento[$claveDocumento]['tipos'][$tipo] ??= ['nombre' => $movimiento->tipo_envase->etiqueta(),
                     'orden' => $movimiento->tipo_envase->orden(), 'entradas' => 0, 'salidas' => 0, 'propiedades' => []];
                 $porDocumento[$claveDocumento]['tipos'][$tipo][$esSalida ? 'salidas' : 'entradas'] += $esSalida ? -$parte['impacto'] : $parte['impacto'];
@@ -379,7 +438,7 @@ class ServicioCuentaCorrienteEnvases
                     'movimiento' => match (true) {
                         $ajusteRecepcion !== null => 'Ajuste de '.$ajusteRecepcion['lado'].' de '.$ajusteRecepcion['numero_recepcion'].' (administración)',
                         in_array($movimiento->id, $historicos, true) => 'Saldo anterior corregido',
-                        default => self::etiquetaMovimiento($movimiento->tipo_movimiento),
+                        default => self::etiquetaMovimiento($tipoVisible),
                     },
                     'productor' => $parte['productor'],
                     'tipo_envase' => $movimiento->tipo_envase->etiqueta(),
@@ -459,7 +518,7 @@ class ServicioCuentaCorrienteEnvases
     private function detallePorCsg(array $porDocumento, array $recepcionesCsg, array $anterioresCsg, Collection $movimientos, ?CarbonImmutable $inicio): array
     {
         $recepciones = RecepcionRomana::query()
-            ->whereKey($movimientos->pluck('recepcion_romana_id')->filter()->unique()->values())
+            ->whereKey($movimientos->map(fn (MovimientoEnvase $m): ?string => self::recepcionId($m))->filter()->unique()->values())
             ->get(['id', 'numero_recepcion', 'numero_guia_despacho', 'numero_guia_salida', 'nombre_conductor',
                 'rut_conductor', 'patente_camion', 'patente_carro', 'salida_productor_snapshot'])
             ->keyBy('id');
@@ -467,20 +526,22 @@ class ServicioCuentaCorrienteEnvases
         $documentos = [];
         $asignacionesResumen = [];
         $tipos = [];
-        foreach ($porDocumento as ['movimiento' => $movimiento, 'parte' => $parte, 'guia' => $guia, 'historico' => $historico, 'tipos' => $porTipo]) {
+        foreach ($porDocumento as ['movimiento' => $movimiento, 'parte' => $parte, 'guia' => $guia, 'historico' => $historico, 'tipo' => $tipoVisible, 'tipos' => $porTipo]) {
             foreach ($porTipo as $tipo => $fila) {
                 $tipos[$tipo] = ['nombre' => $fila['nombre'], 'orden' => $fila['orden']];
             }
-            $recepcion = $recepciones->get($movimiento->recepcion_romana_id);
+            $recepcion = $recepciones->get(self::recepcionId($movimiento));
             $opciones = $recepcionesCsg[$movimiento->recepcion_romana_id]['csg'] ?? [];
-            $asignaciones = match ($movimiento->tipo_movimiento) {
+            $reasignacion = self::reasignacion($movimiento);
+            $asignaciones = $reasignacion !== null ? [['csg' => $reasignacion['productor'] ?? null, 'compartido' => null, 'tipos' => $porTipo]] : match ($movimiento->tipo_movimiento) {
                 TipoMovimientoEnvase::DespachoCliente => [['csg' => $guia?->productorDestino(), 'compartido' => null, 'tipos' => $porTipo]],
                 TipoMovimientoEnvase::SalidaRecepcionFruta => [['csg' => self::csgSalida($recepcionesCsg, $movimiento->recepcion_romana_id), 'compartido' => null, 'tipos' => $porTipo]],
                 // La devolución de un productor conserva el CSG declarado en Romana o al asociarla.
                 TipoMovimientoEnvase::DevolucionEnvases => [['csg' => $movimiento->datos['devolucion']['productor'] ?? null, 'compartido' => null, 'tipos' => $porTipo]],
                 // El ajuste de una recepción va al productor indicado al ajustar (o al único de la recepción).
                 TipoMovimientoEnvase::AjusteCuenta => [['csg' => self::ajusteRecepcion($movimiento)['productor'] ?? null, 'compartido' => null, 'tipos' => $porTipo]],
-                TipoMovimientoEnvase::RecepcionFruta => $this->asignarIngreso($porTipo, $opciones,
+                TipoMovimientoEnvase::RecepcionFruta => $this->asignarIngreso($porTipo,
+                    $parte['clave'] !== '' ? $opciones : ($recepcionesCsg[$movimiento->recepcion_romana_id]['csg_ingreso'] ?? $opciones),
                     $parte['clave'] !== '' ? ($repartoGuias[$parte['clave']] ?? []) : ($recepcionesCsg[$movimiento->recepcion_romana_id]['envases'] ?? [])),
                 default => [['csg' => null, 'compartido' => null, 'tipos' => $porTipo]],
             };
@@ -491,7 +552,7 @@ class ServicioCuentaCorrienteEnvases
                 }
             }
             $documentos[] = ['fecha' => $this->local($movimiento->ocurrido_at), 'asignaciones' => $asignaciones, 'guia' => $parte['documento'],
-                ...$this->identidadDocumento($movimiento, $parte, $guia, $recepcion, $historico, $opciones)];
+                ...$this->identidadDocumento($movimiento, $parte, $guia, $recepcion, $historico, $reasignacion !== null ? [] : $opciones, $tipoVisible)];
         }
         $resumen = ResumenEnvasesPorCsg::desdeAsignaciones($asignacionesResumen, $recepcionesCsg, $anterioresCsg);
         foreach ($anterioresCsg as $anterior) {
@@ -633,7 +694,7 @@ class ServicioCuentaCorrienteEnvases
      *
      * @return array{titulo: string, chofer: ?string, referencia: ?string, movimiento: string}
      */
-    private function identidadDocumento(MovimientoEnvase $movimiento, array $parte, ?GuiaDespachoEnvase $guia, ?RecepcionRomana $recepcion, bool $historico, array $opciones): array
+    private function identidadDocumento(MovimientoEnvase $movimiento, array $parte, ?GuiaDespachoEnvase $guia, ?RecepcionRomana $recepcion, bool $historico, array $opciones, ?TipoMovimientoEnvase $tipo = null): array
     {
         $numero = $parte['documento'];
         $vehiculo = fn (?string $camion, ?string $carro): ?string => $camion
@@ -661,7 +722,7 @@ class ServicioCuentaCorrienteEnvases
             ];
         }
 
-        return match ($movimiento->tipo_movimiento) {
+        return match ($tipo ?? $movimiento->tipo_movimiento) {
             TipoMovimientoEnvase::RecepcionFruta => [
                 'titulo' => 'Guía de ingreso N° '.($numero ?: 'sin número'),
                 'chofer' => $chofer($recepcion?->nombre_conductor, $recepcion?->rut_conductor),
@@ -699,7 +760,7 @@ class ServicioCuentaCorrienteEnvases
             default => [
                 'titulo' => 'Documento '.($numero ?: 'sin número'),
                 'chofer' => null,
-                'movimiento' => $historico ? 'Saldo anterior corregido' : self::etiquetaMovimiento($movimiento->tipo_movimiento),
+                'movimiento' => $historico ? 'Saldo anterior corregido' : self::etiquetaMovimiento($tipo ?? $movimiento->tipo_movimiento),
                 'referencia' => $recepcion ? 'Recepción '.$recepcion->numero_recepcion : null,
             ],
         };
@@ -759,9 +820,14 @@ class ServicioCuentaCorrienteEnvases
                 return $codigo ? 'CSG '.$codigo.($nombre ? ' · '.$nombre : '') : null;
             })->filter()->unique()->implode(' / ') ?: null);
 
+        // Una guía reasignada por separado ya no es parte de su recepción: la recepción sigue separada por guía.
+        $reasignadas = array_flip(ServicioReasignacionEnvases::guiasReasignadas($recepciones->all()));
+
         return GuiaRecepcionRomana::query()->whereIn('recepcion_romana_id', $recepciones)->where('vigente', 1)
             ->whereNotNull('envases_validados')->orderBy('secuencia')->get()
             ->groupBy('recepcion_romana_id')->filter(fn (Collection $guias): bool => $guias->count() > 1)
+            ->map(fn (Collection $guias): Collection => $guias->reject(fn (GuiaRecepcionRomana $g): bool => isset($reasignadas[$g->id])))
+            ->filter(fn (Collection $guias): bool => $guias->isNotEmpty())
             ->map(fn (Collection $guias): array => $guias->map(fn (GuiaRecepcionRomana $g): array => [
                 'id' => $g->id, 'numero' => $g->numero_guia_despacho, 'productor' => $productores[$g->id] ?? null,
                 'envases' => collect($g->envases_validados)->mapWithKeys(fn ($e): array => [$e['tipo_envase'] => (int) $e['cantidad']])->all(),
@@ -811,6 +877,8 @@ class ServicioCuentaCorrienteEnvases
         // Productor al que Romana entregó los envases del destare, cuando el camión trae varios CSG.
         $salidas = RecepcionRomana::query()->whereKey($recepciones)->whereNotNull('salida_productor_snapshot')
             ->get(['id', 'salida_productor_snapshot'])->pluck('salida_productor_snapshot', 'id');
+        // Las guías reasignadas por separado ya no reparten el ingreso de su recepción (el destare no cambia).
+        $reasignadas = array_flip(ServicioReasignacionEnvases::guiasReasignadas($recepciones->all()));
 
         return ValidacionMp::query()
             ->whereIn('recepcion_romana_id', $recepciones)
@@ -818,8 +886,9 @@ class ServicioCuentaCorrienteEnvases
             ->with(['segmentos.csg.productor', 'segmentos.envases'])
             ->get(['id', 'recepcion_romana_id'])
             ->keyBy('recepcion_romana_id')
-            ->map(function (ValidacionMp $validacion, string $recepcionId) use ($salidas): array {
+            ->map(function (ValidacionMp $validacion, string $recepcionId) use ($salidas, $reasignadas): array {
                 $csg = [];
+                $ingreso = [];
                 $envases = [];
                 $etiquetas = [];
                 foreach ($validacion->segmentos as $segmento) {
@@ -827,6 +896,10 @@ class ServicioCuentaCorrienteEnvases
                     $nombre = $segmento->csg?->productor?->razon_social ?: $segmento->csg?->predio;
                     $clave = $codigo ? 'csg:'.$codigo : 'sin_csg';
                     $csg[$clave] = ['codigo' => $codigo, 'nombre' => $nombre];
+                    if ($segmento->guia_recepcion_romana_id && isset($reasignadas[$segmento->guia_recepcion_romana_id])) {
+                        continue;
+                    }
+                    $ingreso[$clave] = $csg[$clave];
                     if ($codigo) {
                         $etiquetas[] = 'CSG '.$codigo.($nombre ? ' · '.$nombre : '');
                     }
@@ -838,8 +911,9 @@ class ServicioCuentaCorrienteEnvases
                     }
                 }
 
+                // «csg»: todos los productores del camión (el destare); «csg_ingreso»: los del ingreso que sigue en la recepción.
                 return ['salida' => $salidas[$recepcionId] ?? null, 'productor' => implode(' / ', array_unique($etiquetas)) ?: null,
-                    'csg' => array_values($csg), 'envases' => $envases];
+                    'csg' => array_values($csg), 'csg_ingreso' => array_values($ingreso), 'envases' => $envases];
             })->all();
     }
 
@@ -953,19 +1027,7 @@ class ServicioCuentaCorrienteEnvases
         $netos = [];
         $porId = $movimientos->keyBy('id');
         foreach ($movimientos as $movimiento) {
-            $corrige = match ($movimiento->tipo_movimiento) {
-                TipoMovimientoEnvase::ReversionDespacho => $movimiento->datos['reversa_de_movimiento_id'] ?? null,
-                TipoMovimientoEnvase::ConciliacionSalida => $movimiento->datos['movimiento_conciliado_id'] ?? null,
-                // Un ajuste de recepción reemplazado o revertido no se muestra: queda solo el vigente.
-                TipoMovimientoEnvase::ReversionAjusteCuenta => isset($porId[$movimiento->movimiento_origen_id])
-                    && self::ajusteRecepcion($porId[$movimiento->movimiento_origen_id]) !== null ? $movimiento->movimiento_origen_id : null,
-                TipoMovimientoEnvase::ReversionSalidaRecepcionFruta,
-                TipoMovimientoEnvase::CorreccionCantidad,
-                TipoMovimientoEnvase::CorreccionCuenta,
-                TipoMovimientoEnvase::AnulacionRecepcion,
-                TipoMovimientoEnvase::CorreccionPropiedad => $movimiento->movimiento_origen_id,
-                default => null,
-            };
+            $corrige = self::corrige($movimiento, $porId);
             $impacto = $movimiento->cantidad * $movimiento->signo_cuenta;
             if ($corrige !== null && isset($netos[$corrige])) {
                 $netos[$corrige] += $impacto;

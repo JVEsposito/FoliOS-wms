@@ -1,3 +1,4 @@
+import { createContainerReassignment } from './office-container-reassignment';
 import { createContainerReconciliation } from './office-container-reconciliation';
 
 const byId = (id) => document.getElementById(id);
@@ -82,6 +83,7 @@ const reconciliation = createContainerReconciliation({
     scope: () => ({ temporada_id: elements.filters.elements.temporada_id.value, cliente_id: elements.filters.elements.cliente_id.value }),
     afterApplied: load, toast,
 });
+const reassignment = createContainerReassignment({ api, catalogs: () => state.catalogs, operationId: accountOperationId, toast, afterSaved: load });
 
 function accountOperationId() {
     if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -269,6 +271,10 @@ function typeName(code) {
     return state.catalogs?.tipos_envase?.find((item) => item.codigo === code)?.nombre || label(code);
 }
 
+function placeName(place) {
+    return [place?.nombre, place?.productor?.codigo ? `CSG ${place.productor.codigo}` : 'sin productor'].filter(Boolean).join(' · ');
+}
+
 function signed(value) {
     return `${value > 0 ? '+' : ''}${value}`;
 }
@@ -352,20 +358,26 @@ function render(data) {
                 ? `<button data-correct-historical="${escapeHtml(movement.id)}">Corregir saldo anterior</button>` : '';
             const reverseButton = state.identity?.puede_ajustar_cuenta_envases && movement.puede_revertir_ajuste
                 ? `<button data-reverse-adjustment="${escapeHtml(movement.id)}">Revertir asiento</button>` : '';
+            const reassignButton = state.identity?.puede_ajustar_cuenta_envases && movement.puede_reasignar
+                ? `<button class="property-button" data-reassign="${escapeHtml(movement.id)}">Reasignar guía</button>` : '';
+            // De dónde a dónde se movió la guía: solo en el kardex interno, el estado de cuenta no lo muestra.
+            const reassignNote = movement.reasignacion?.desde_cuenta
+                ? ` · ${movement.reasignacion.deshace ? 'deshace reasignación' : 'reasignada'}: ${escapeHtml(placeName(movement.reasignacion.desde_cuenta))} → ${escapeHtml(placeName(movement.reasignacion.hacia_cuenta))}`
+                : '';
             const returnNote = movement.devolucion ? ` · ${escapeHtml(returnLabel(movement.devolucion))}` : '';
             // Ajuste hecho en Romana solo sobre la cuenta: se corrige o se deshace desde esa recepción.
             const receptionAdjustment = movement.ajuste_recepcion
                 ? ` · ${escapeHtml(movement.ajuste_recepcion.numero_recepcion)}: ${escapeHtml(movement.ajuste_recepcion.lado)} ${movement.ajuste_recepcion.registro} → ${movement.ajuste_recepcion.correcto}`
                 : '';
             const documentNote = movement.cuenta_corregida ? ` · saldo anterior vigente: ${signed(movement.impacto_cuenta_vigente)}` : movement.corregido ? ' · propiedad corregida' : movement.cantidad_corregida ? ' · cantidad corregida' : movement.correccion_propiedad ? ' · ajuste de propiedad' : movement.correccion_cantidad ? ' · ajuste de cantidad' : '';
-            const correction = movement.correccion_propiedad || movement.correccion_cantidad || movement.ajuste_cuenta || movement.correccion_cuenta;
+            const correction = movement.correccion_propiedad || movement.correccion_cantidad || movement.ajuste_cuenta || movement.correccion_cuenta || movement.reasignacion;
             const trace = correction
                 ? `<br><small>Motivo: ${escapeHtml(correction.motivo)} · ${formatDate(correction.corregido_at || correction.registrado_at)} · ${escapeHtml(movement.creado_por?.nombre || '')}</small>`
                 : '';
             const account = movement.impacto_cuenta === 0
                 ? '<td class="impact-none" title="No mueve la cuenta de ningún cliente">—</td>'
                 : `<td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${signed(movement.impacto_cuenta)}</td>`;
-            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${returnNote}${receptionAdjustment}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${returnButton}${quantityButton}${historicalButton}${reverseButton}${!guideButton && !reviewButton && !propertyButton && !returnButton && !quantityButton && !historicalButton && !reverseButton ? '—' : ''}</div></td></tr>`;
+            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${returnNote}${receptionAdjustment}${reassignNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${returnButton}${quantityButton}${historicalButton}${reverseButton}${reassignButton}${!guideButton && !reviewButton && !propertyButton && !returnButton && !quantityButton && !historicalButton && !reverseButton && !reassignButton ? '—' : ''}</div></td></tr>`;
         }).join('')
         : '<tr><td colspan="8">Aún no hay movimientos confirmados.</td></tr>';
 }
@@ -409,6 +421,12 @@ elements.body.addEventListener('click', (event) => {
     updateHistoricalPreview(); elements.historicalDialog.showModal();
 });
 byId('historicalBalanceCancel').addEventListener('click', () => elements.historicalDialog.close());
+elements.body.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-reassign]');
+    if (!button || !state.identity?.puede_ajustar_cuenta_envases) return;
+    const movement = state.movements.find((item) => item.id === button.dataset.reassign);
+    if (movement) void reassignment.open(movement);
+});
 elements.historicalForm.addEventListener('input', updateHistoricalPreview);
 elements.historicalForm.addEventListener('submit', async (event) => {
     event.preventDefault();

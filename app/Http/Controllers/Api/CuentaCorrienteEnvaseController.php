@@ -17,6 +17,7 @@ use App\Models\DetalleEnvaseRecepcionRomana;
 use App\Models\DetalleGuiaDespachoEnvase;
 use App\Models\GuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
+use App\Models\ReasignacionEnvases;
 use App\Models\RevisionMovimientoEnvase;
 use App\Models\Temporada;
 use App\Services\Envases\GeneradorEstadoCuentaEnvasesPdf;
@@ -25,6 +26,7 @@ use App\Services\Envases\ServicioCorreccionCantidadEnvases;
 use App\Services\Envases\ServicioCorreccionPropiedadEnvases;
 use App\Services\Envases\ServicioCorreccionSaldoHistoricoEnvases;
 use App\Services\Envases\ServicioCuentaCorrienteEnvases;
+use App\Services\Envases\ServicioReasignacionEnvases;
 use App\Services\Existencias\GeneradorLibroXlsx;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
@@ -84,6 +86,60 @@ class CuentaCorrienteEnvaseController extends Controller
         $movimiento = $servicio->corregir($movimientoEnvase, $datos, $request->user());
 
         return response()->json(['data' => $this->movimiento($movimiento->load(['cliente', 'temporada', 'creadoPor', 'revisiones']))], 201);
+    }
+
+    /** Guías a las que pertenece el movimiento y dónde están hoy, para reasignarlas. */
+    public function reasignacion(MovimientoEnvase $movimientoEnvase, ServicioReasignacionEnvases $servicio): JsonResponse
+    {
+        Gate::authorize('ajustar-cuenta-envases');
+
+        return response()->json(['data' => $servicio->opciones($movimientoEnvase)]);
+    }
+
+    /** Reasigna una guía completa a otro productor CSG o a otra cuenta corriente, sin tocar kilos ni cantidades. */
+    public function reasignar(Request $request, ServicioReasignacionEnvases $servicio): JsonResponse
+    {
+        Gate::authorize('ajustar-cuenta-envases');
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'],
+            'documento_clave' => ['required', 'string', 'max:120'],
+            'reasignacion_vigente_id' => ['nullable', 'uuid'],
+            'cliente_destino_id' => ['required', 'uuid'],
+            'productor_csg_id' => ['required', 'uuid'],
+            'motivo' => ['required', 'string', 'min:10', 'max:2000'],
+        ], [
+            'cliente_destino_id.required' => 'Selecciona la cuenta corriente de destino.',
+            'productor_csg_id.required' => 'Selecciona el productor CSG de destino.',
+            'motivo.required' => 'Indica el motivo de la reasignación.',
+            'motivo.min' => 'El motivo debe tener al menos 10 caracteres.',
+        ]);
+
+        return response()->json(['data' => $this->reasignacionDatos($servicio->reasignar($datos, $request->user()))], 201);
+    }
+
+    public function deshacerReasignacion(Request $request, ReasignacionEnvases $reasignacionEnvases, ServicioReasignacionEnvases $servicio): JsonResponse
+    {
+        Gate::authorize('ajustar-cuenta-envases');
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'],
+            'motivo' => ['required', 'string', 'min:10', 'max:2000'],
+        ], ['motivo.required' => 'Indica por qué se deshace la reasignación.', 'motivo.min' => 'El motivo debe tener al menos 10 caracteres.']);
+
+        return response()->json(['data' => $this->reasignacionDatos($servicio->deshacer($reasignacionEnvases, $datos, $request->user()))]);
+    }
+
+    /** @return array<string, mixed> */
+    private function reasignacionDatos(ReasignacionEnvases $reasignacion): array
+    {
+        $reasignacion->loadMissing(['clienteOrigen:id,codigo,nombre', 'clienteDestino:id,codigo,nombre']);
+
+        return [
+            'id' => $reasignacion->id, 'documento_clave' => $reasignacion->documento_clave, 'numero_documento' => $reasignacion->numero_documento,
+            'deshace' => $reasignacion->deshace, 'vigente' => $reasignacion->vigente, 'envases' => $reasignacion->envases,
+            'origen' => ['cliente' => $reasignacion->clienteOrigen?->only(['id', 'codigo', 'nombre']), 'productor' => $reasignacion->productor_origen],
+            'destino' => ['cliente' => $reasignacion->clienteDestino?->only(['id', 'codigo', 'nombre']), 'productor' => $reasignacion->productor_destino],
+            'motivo' => $reasignacion->motivo, 'registrado_at' => $reasignacion->registrado_at?->toAtomString(),
+        ];
     }
 
     public function catalogos(): JsonResponse
@@ -561,6 +617,13 @@ class CuentaCorrienteEnvaseController extends Controller
             // Ajuste de administración hecho desde Romana sobre una recepción: lado, lo registrado y lo correcto.
             'ajuste_recepcion' => $movimiento->datos['ajuste_recepcion'] ?? null,
             'movimiento_origen_id' => $movimiento->movimiento_origen_id,
+            // Guías que se pueden mover a otro productor o cuenta; el diálogo explica si hoy no se puede.
+            'puede_reasignar' => $movimiento->temporada?->activa && (in_array($movimiento->tipo_movimiento, [
+                TipoMovimientoEnvase::RecepcionFruta, TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::DevolucionEnvases,
+                TipoMovimientoEnvase::SalidaRecepcionFruta, TipoMovimientoEnvase::DespachoCliente, TipoMovimientoEnvase::ReasignacionEntrada,
+            ], true) || ! empty($movimiento->datos['ajuste_recepcion']['lado'])),
+            'reasignacion' => isset($movimiento->datos['reasignacion']) ? collect($movimiento->datos['reasignacion'])
+                ->only(['id', 'documento_clave', 'deshace', 'motivo', 'usuario', 'registrado_at', 'desde_cuenta', 'hacia_cuenta', 'productor'])->all() : null,
             'puede_revertir_ajuste' => ! $conVinculos && $movimiento->temporada?->activa
                 && in_array($movimiento->tipo_movimiento, [TipoMovimientoEnvase::AperturaCuenta, TipoMovimientoEnvase::AjusteCuenta], true),
             'documento_tipo' => $movimiento->documento_tipo,

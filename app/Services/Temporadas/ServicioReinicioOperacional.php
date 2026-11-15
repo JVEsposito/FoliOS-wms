@@ -568,6 +568,10 @@ class ServicioReinicioOperacional
         $eliminados['detalles_guias_envases'] = DB::table('detalles_guias_despacho_envases')
             ->whereIn('guia_despacho_envase_id', clone $guias)
             ->delete();
+        // Las reasignaciones de cuenta apuntan a despachos y recepciones de la temporada: van antes.
+        $eliminados['reasignaciones_envases'] = DB::table('reasignaciones_envases')
+            ->where('temporada_id', $temporada->id)
+            ->delete();
         $eliminados['guias_envases'] = DB::table('guias_despacho_envases')
             ->where('temporada_id', $temporada->id)
             ->delete();

@@ -25,6 +25,11 @@ enum TipoMovimientoEnvase: string
     // bins. No salen de la planta: el préstamo y su devolución son internos.
     case PrestamoInterno = 'prestamo_interno';
     case DevolucionPrestamoInterno = 'devolucion_prestamo_interno';
+    // Reasignación de una guía completa a otro productor CSG o a otra cuenta, sin efecto en la existencia:
+    // la salida descuenta la guía de donde estaba (se suma al asiento que reasigna) y la entrada la deja
+    // en la cuenta y el productor de destino, con la fecha de la guía.
+    case ReasignacionSalida = 'reasignacion_salida';
+    case ReasignacionEntrada = 'reasignacion_entrada';
 
     public function esAjusteCuenta(): bool
     {
@@ -35,6 +40,11 @@ enum TipoMovimientoEnvase: string
     public static function ingresosSoloEnvases(): array
     {
         return [self::RecepcionArriendo, self::RecepcionCompra, self::DevolucionEnvases];
+    }
+
+    public function esReasignacion(): bool
+    {
+        return in_array($this, [self::ReasignacionSalida, self::ReasignacionEntrada], true);
     }
 
     public function esPrestamoInterno(): bool

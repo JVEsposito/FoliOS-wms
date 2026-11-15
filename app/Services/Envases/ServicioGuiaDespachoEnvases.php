@@ -268,6 +268,8 @@ class ServicioGuiaDespachoEnvases
             if ($guia->estado !== EstadoGuiaDespachoEnvase::Confirmada) {
                 throw new ConflictoOperacion('Solo puedes corregir el productor de una salida confirmada.');
             }
+            // Una guía reasignada en la cuenta corriente lleva el productor de la reasignación.
+            app(ServicioReasignacionEnvases::class)->asegurarDespachoSinReasignacion($guia);
             $acceso = Gate::forUser($usuario);
             if (! $acceso->allows('corregir-productor-despacho-envases')) {
                 $acceso->authorize('gestionar-despacho-envases');
