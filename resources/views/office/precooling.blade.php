@@ -86,7 +86,7 @@
                     <div class="process-detail__metrics" id="processDetailMetrics"></div>
                     <div class="process-detail__layout">
                         <div class="prefrio-detail-panel">
-                            <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">DISTRIBUCIÓN</p><h3>Posiciones del túnel</h3></div></div>
+                            <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">DISTRIBUCIÓN</p><h3 id="processTunnelMapTitle">Posiciones del túnel</h3></div></div>
                             <div class="prefrio-detail-panel__body">
                                 <div class="tunnel-direction"><strong>FONDO</strong><span>Dos lados por profundidad</span></div>
                                 <div class="tunnel-map" id="processTunnelMap"></div>
