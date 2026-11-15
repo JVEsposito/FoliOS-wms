@@ -221,3 +221,76 @@ test('Administración ajusta solo la cuenta de envases cuando el lote ya tiene e
         }
     } finally { await browser.close(); }
 });
+
+// Camión con dos CSG destarado antes de que Romana pidiera el productor de la salida: se declara en «Solo cuenta de envases».
+test('Administración declara a qué CSG se entregaron los envases del destare sin cambiar cantidades', async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
+    try {
+        for (const width of [390, 1280]) {
+            const context = await browser.newContext({ viewport: { width, height: 1000 } });
+            const identity = { id: 1, nombre: 'Administración', rol: 'administrador', puede_consultar_romana: true, puede_operar_romana: true, modulos_acceso: ['materia-prima.romana'] };
+            await context.addInitScript((user) => {
+                localStorage.setItem('estiba_wms_office_token', 'fixture');
+                localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
+            }, identity);
+            const season = { id: 'temporada', nombre: 'Temporada 2026', codigo: 'TEMP-2627', activa: true };
+            const reception = { id: 'recepcion', numero_recepcion: 'REC-2611-0035', temporada: season, cliente: { id: 'cliente', nombre: 'LA AGUADA' },
+                tipo_recepcion: 'fruta_con_envases', estado: 'cerrado', estado_validacion_mp: 'validada', version: 7, numero_guia_despacho: '4446 / 1050',
+                guias: estado.guias, envases: estado.envases, eventos: [], salida_envases: [], inspecciones_envases: [], peso_bruto: 28000, peso_tara: 10000, peso_neto: 18000,
+                ingreso_at: '2026-11-11T17:00:00Z' };
+            const sinProductor = { ...conCuenta, cuenta_envases: { ...conCuenta.cuenta_envases, elige_productor_entregados: true, productor_entregados: null, ajustes: [],
+                productores: [{ codigo: '121328', nombre: 'SOCIEDAD AGROINDUSTRIAL LAS ARAUCARIAS LIMITADA' }, { codigo: '154148', nombre: 'AGROELITE LIMITADA' }] } };
+            const writes = []; const errors = [];
+            await context.route('http://localhost/**', async (route) => {
+                const request = route.request(); const path = new URL(request.url()).pathname;
+                if (path === '/oficina/romana') return route.fulfill({ body: html, contentType: 'text/html' });
+                if (path.startsWith('/build/') || path.startsWith('/brand/')) {
+                    try { return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' })[extname(path)] || 'application/octet-stream' }); }
+                    catch { return route.fulfill({ status: 404, body: '' }); }
+                }
+                if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
+                if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Prueba', temporada: season } } });
+                if (path === '/api/envases/catalogo') return route.fulfill({ json: { data: types } });
+                if (path === '/api/romana/porteria/resumen') return route.fulfill({ json: { data: { pendientes: 0, recientes: [] } } });
+                if (path === '/api/romana/catalogos') return route.fulfill({ json: { temporadas: [season], clientes: [reception.cliente], especies: [], tipos_envase: types, tipos_servicio: [], tipos_recepcion: [], conceptos_envases: [] } });
+                if (path === '/api/romana/recepciones/recepcion/correccion-integral') return route.fulfill({ json: { data: sinProductor } });
+                if (path === '/api/romana/recepciones/recepcion/ajuste-cuenta-envases' && request.method() === 'PUT') {
+                    writes.push(request.postDataJSON());
+                    return route.fulfill({ json: { data: { ...reception, version: 8 } } });
+                }
+                if (path === '/api/romana/recepciones') return route.fulfill({ json: { data: [reception], resumen: {}, meta: { pagina_actual: 1, ultima_pagina: 1, total: 1 } } });
+                if (path === '/api/romana/recepciones/recepcion') return route.fulfill({ json: { data: reception } });
+                return route.fulfill({ json: {} });
+            });
+            const page = await context.newPage(); page.on('pageerror', (error) => errors.push(error.message));
+            await page.goto('http://localhost/oficina/romana');
+            await page.locator('#officeLoading').waitFor({ state: 'hidden' });
+            await page.locator('tr.rec-row[data-reception-id="recepcion"]').click();
+            await page.locator('#integralCorrectionButton').click();
+            const dialog = page.locator('#integralCorrectionDialog');
+            await dialog.locator('#integralForm').waitFor();
+            await dialog.locator('[name="integral_modo"][value="cuenta"]').check();
+            const select = dialog.locator('[name="productor_entregados_csg"]');
+            await select.waitFor();
+            assert.equal(await select.inputValue(), '');
+            assert.match(await dialog.locator('#integralPreview').innerText(), /o el CSG que recibió los entregados/);
+            await select.selectOption('121328');
+            const preview = await dialog.locator('#integralPreview').innerText();
+            assert.match(preview, /Entregados en el destare · Sin productor asociado → CSG 121328 · SOCIEDAD AGROINDUSTRIAL LAS ARAUCARIAS LIMITADA/);
+            assert.match(preview, /las cantidades no cambian/);
+            await dialog.locator('[name="motivo_correccion"]').fill('Los 36 bins de la guía de salida 2345 se entregaron a Las Araucarias.');
+            if (process.env.WMS_REASSIGN_SCREENSHOTS) await page.screenshot({ path: `${process.env.WMS_REASSIGN_SCREENSHOTS}/entregados-csg-${width}.png`, fullPage: false });
+            await dialog.locator('button[type="submit"]').click();
+            await page.waitForFunction(() => !document.getElementById('integralCorrectionDialog').open);
+            assert.equal(writes.length, 1);
+            assert.deepEqual({ ...writes[0], operacion_id: undefined }, {
+                operacion_id: undefined, version_conocida: 7, motivo: 'Los 36 bins de la guía de salida 2345 se entregaron a Las Araucarias.', productor_csg: null,
+                productor_entregados_csg: '121328',
+                envases: [{ tipo_envase: 'bins', recibidos: 4, entregados: 4 }, { tipo_envase: 'totes', recibidos: 97, entregados: 97 }],
+            });
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+            assert.deepEqual(errors, []);
+            await context.close();
+        }
+    } finally { await browser.close(); }
+});

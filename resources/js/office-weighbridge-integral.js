@@ -12,7 +12,7 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
     let tipos = [];
     let mode = 'completa';
     // Lo digitado en «Solo cuenta de envases»: valores correctos por envase y lado, y el CSG de la diferencia.
-    let cuenta = { valores: {}, productor: '' };
+    let cuenta = { valores: {}, productor: '', entregadosA: null };
 
     const number = (value) => Math.max(0, Math.trunc(Number(value) || 0));
     const kg = (value) => `${new Intl.NumberFormat('es-CL', { maximumFractionDigits: 3 }).format(Number(value) || 0)} kg`;
@@ -63,6 +63,8 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
             }));
             const productor = dialog.querySelector('[name="productor_csg"]');
             if (productor) cuenta.productor = productor.value;
+            const entregadosA = dialog.querySelector('[name="productor_entregados_csg"]');
+            if (entregadosA) cuenta.entregadosA = entregadosA.value;
             return;
         }
         const guides = read('guia');
@@ -114,12 +116,28 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
                 <small>Queda un ajuste de ${signed(ajuste)} contra lo registrado (${info[`${side}_registro`]}).</small></li>`);
             efecto[tipo] = (efecto[tipo] || 0) + (correcto - info[`${side}_cuenta`]) * (side === 'recibidos' ? 1 : -1);
         }));
+        const account = estado.cuenta_envases;
+        const nuevoCsg = entregadosElegido();
+        if (account.elige_productor_entregados && nuevoCsg && nuevoCsg !== (account.productor_entregados || '')) {
+            cambios.push(`<li><strong>Entregados en el destare</strong> · ${esc(producerName(account.productor_entregados))} → ${esc(producerName(nuevoCsg))}
+                <small>La salida y sus ajustes pasan a ese productor; las cantidades no cambian.</small></li>`);
+        }
         const saldo = Object.entries(efecto).filter(([, value]) => value !== 0)
             .map(([tipo, value]) => `${esc(typeName(tipo))} ${signed(value)}`).join(' · ');
         dialog.querySelector('#integralPreview').innerHTML = cambios.length
             ? `<ul class="integral-lots">${cambios.join('')}</ul><p class="integral-net">Efecto en el saldo del cliente: <strong>${saldo || 'sin cambio'}</strong>
                 <small>Sin efecto en guías, Validación MP, lotes, destare, kilos ni existencia física.</small></p>`
-            : '<p class="integral-help">Sin cambios: indica los recibidos o entregados correctos.</p>';
+            : '<p class="integral-help">Sin cambios: indica los recibidos o entregados correctos, o el CSG que recibió los entregados.</p>';
+    }
+
+    function entregadosElegido() {
+        const account = estado.cuenta_envases;
+        return cuenta.entregadosA ?? (account.productor_entregados || '');
+    }
+    function producerName(codigo) {
+        if (!codigo) return 'Sin productor asociado';
+        const p = estado.cuenta_envases.productores.find((item) => item.codigo === codigo);
+        return `CSG ${codigo}${p?.nombre ? ` · ${p.nombre}` : ''}`;
     }
 
     function preview() {
@@ -177,11 +195,17 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
 
     function accountBody() {
         const account = estado.cuenta_envases;
+        // Camión con varios CSG: a qué productor se entregaron los envases de la salida, sin tocar cantidades.
+        const entregadosA = account.elige_productor_entregados
+            ? `<label class="field integral-producer"><span>CSG que recibió los entregados</span><select name="productor_entregados_csg">
+                <option value="" ${entregadosElegido() ? '' : 'selected'} disabled>Sin productor asociado: seleccionar…</option>${account.productores.map((p) => `<option value="${esc(p.codigo)}" ${entregadosElegido() === p.codigo ? 'selected' : ''}>CSG ${esc(p.codigo)}${p.nombre ? ` · ${esc(p.nombre)}` : ''}</option>`).join('')}
+            </select><small class="integral-help">El camión trae ${account.productores.length} CSG: declara a cuál se entregó la salida. Para un productor de fuera del camión, usa «Reasignar guía» en Cuenta Envases.</small></label>`
+            : '';
         const entregados = !account.cerrada
             ? '<p class="integral-help">La recepción aún no tiene destare: solo se ajustan los recibidos.</p>'
-            : `${account.salida_conciliada ? '<p class="integral-help">La salida está conciliada con un despacho: sus entregados se corrigen en ese despacho.</p>' : ''}${accountTable('entregados')}`;
+            : `${account.salida_conciliada ? '<p class="integral-help">La salida está conciliada con un despacho: sus entregados se corrigen en ese despacho.</p>' : ''}${accountTable('entregados')}${entregadosA}`;
         const productor = account.exige_productor
-            ? `<label class="field integral-producer"><span>Productor (CSG) de la diferencia de recibidos *</span><select name="productor_csg">
+            ? `<label class="field integral-producer"><span>Productor (CSG) de la diferencia de recibidos · solo si cambias los recibidos</span><select name="productor_csg">
                 <option value="">Seleccionar…</option>${account.productores.map((p) => `<option value="${esc(p.codigo)}" ${cuenta.productor === p.codigo ? 'selected' : ''}>CSG ${esc(p.codigo)}${p.nombre ? ` · ${esc(p.nombre)}` : ''}</option>`).join('')}
             </select></label>` : '';
         const historial = account.ajustes.length
@@ -190,10 +214,9 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
             : '';
         return `<p class="integral-help">Registrado es lo que dejó la recepción (Validación MP y destare). Indica lo correcto: queda un solo ajuste por envase,
                 con la fecha de la recepción, y el estado de cuenta lo muestra en su propia línea con el motivo.</p>
-            <section><h3>Recibidos</h3>${accountTable('recibidos')}</section>
+            <section><h3>Recibidos</h3>${accountTable('recibidos')}${productor}</section>
             <section><h3>Entregados en el destare</h3>${entregados}</section>
             ${addTypeField()}
-            ${productor}
             ${historial}
             <section><h3>Resultado</h3><div id="integralPreview" aria-live="polite"></div></section>`;
     }
@@ -285,6 +308,7 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
         const data = account ? {
             version_conocida: estado.version, motivo: estado.motivo.trim(),
             productor_csg: estado.cuenta_envases.exige_productor ? (cuenta.productor || null) : null,
+            ...(estado.cuenta_envases.elige_productor_entregados ? { productor_entregados_csg: entregadosElegido() || null } : {}),
             envases: tipos.map((tipo) => ({ tipo_envase: tipo, recibidos: accountValue(tipo, 'recibidos'),
                 entregados: sideEditable('entregados') ? accountValue(tipo, 'entregados') : null })),
         } : {
@@ -336,7 +360,7 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
                 ...(base.cuenta_envases?.tipos || []).map((t) => t.tipo_envase)])];
             attempt = null;
             mode = 'completa';
-            cuenta = { valores: {}, productor: '' };
+            cuenta = { valores: {}, productor: '', entregadosA: null };
             render();
             dialog.showModal();
         },

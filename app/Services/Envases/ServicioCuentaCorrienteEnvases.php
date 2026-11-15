@@ -170,6 +170,16 @@ class ServicioCuentaCorrienteEnvases
         return count($datos['csg'] ?? []) === 1 ? $datos['csg'][0] : null;
     }
 
+    /**
+     * CSG de un ajuste de administración de una recepción: los recibidos, al productor indicado al ajustar;
+     * los entregados siguen a la salida del destare (el CSG declarado en Romana o después en el ajuste).
+     */
+    private static function csgAjuste(array $ajuste, array $recepcionesCsg, ?string $recepcionId): ?array
+    {
+        return $ajuste['lado'] === 'entregados' ? (self::csgSalida($recepcionesCsg, $recepcionId) ?? $ajuste['productor'] ?? null)
+            : ($ajuste['productor'] ?? null);
+    }
+
     private static function etiquetaProductor(?array $productor): string
     {
         return empty($productor['codigo']) ? 'Sin productor declarado'
@@ -367,7 +377,8 @@ class ServicioCuentaCorrienteEnvases
                     TipoMovimientoEnvase::DespachoCliente => $destinatario,
                     TipoMovimientoEnvase::SalidaRecepcionFruta => self::csgSalida($recepcionesCsg, $movimiento->recepcion_romana_id),
                     TipoMovimientoEnvase::DevolucionEnvases => $devolucion['productor'] ?? null,
-                    TipoMovimientoEnvase::AjusteCuenta => $ajusteRecepcion['productor'] ?? null,
+                    TipoMovimientoEnvase::AjusteCuenta => $ajusteRecepcion !== null
+                        ? self::csgAjuste($ajusteRecepcion, $recepcionesCsg, $movimiento->recepcion_romana_id) : null,
                     default => null,
                 },
             ];
@@ -397,7 +408,8 @@ class ServicioCuentaCorrienteEnvases
                         ? 'CSG '.$destinatario['codigo'].' · '.$destinatario['nombre'] : 'Sin productor asignado',
                     TipoMovimientoEnvase::RecepcionFruta => $recepcionesCsg[$movimiento->recepcion_romana_id]['productor'] ?? 'Sin productor declarado',
                     TipoMovimientoEnvase::DevolucionEnvases => self::etiquetaDevolucion($devolucion),
-                    TipoMovimientoEnvase::AjusteCuenta => $ajusteRecepcion !== null ? self::etiquetaProductor($ajusteRecepcion['productor'] ?? null) : null,
+                    TipoMovimientoEnvase::AjusteCuenta => $ajusteRecepcion !== null
+                        ? self::etiquetaProductor(self::csgAjuste($ajusteRecepcion, $recepcionesCsg, $movimiento->recepcion_romana_id)) : null,
                     // La entrega en el destare: el CSG elegido en Romana o el único de la recepción.
                     TipoMovimientoEnvase::SalidaRecepcionFruta => ($csgSalida = self::csgSalida($recepcionesCsg, $movimiento->recepcion_romana_id))
                         ? self::etiquetaProductor($csgSalida) : null,
@@ -538,8 +550,10 @@ class ServicioCuentaCorrienteEnvases
                 TipoMovimientoEnvase::SalidaRecepcionFruta => [['csg' => self::csgSalida($recepcionesCsg, $movimiento->recepcion_romana_id), 'compartido' => null, 'tipos' => $porTipo]],
                 // La devolución de un productor conserva el CSG declarado en Romana o al asociarla.
                 TipoMovimientoEnvase::DevolucionEnvases => [['csg' => $movimiento->datos['devolucion']['productor'] ?? null, 'compartido' => null, 'tipos' => $porTipo]],
-                // El ajuste de una recepción va al productor indicado al ajustar (o al único de la recepción).
-                TipoMovimientoEnvase::AjusteCuenta => [['csg' => self::ajusteRecepcion($movimiento)['productor'] ?? null, 'compartido' => null, 'tipos' => $porTipo]],
+                // El ajuste de recibidos va al productor indicado al ajustar (o al único de la recepción); el de
+                // entregados, al CSG de la salida del destare.
+                TipoMovimientoEnvase::AjusteCuenta => [['csg' => ($ajuste = self::ajusteRecepcion($movimiento)) !== null
+                    ? self::csgAjuste($ajuste, $recepcionesCsg, $movimiento->recepcion_romana_id) : null, 'compartido' => null, 'tipos' => $porTipo]],
                 TipoMovimientoEnvase::RecepcionFruta => $this->asignarIngreso($porTipo,
                     $parte['clave'] !== '' ? $opciones : ($recepcionesCsg[$movimiento->recepcion_romana_id]['csg_ingreso'] ?? $opciones),
                     $parte['clave'] !== '' ? ($repartoGuias[$parte['clave']] ?? []) : ($recepcionesCsg[$movimiento->recepcion_romana_id]['envases'] ?? [])),

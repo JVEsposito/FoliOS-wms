@@ -174,6 +174,41 @@ class AjusteCuentaEnvasesRecepcionTest extends TestCase
         $this->assertSame(48, collect($grupo['totales'])->firstWhere('tipo_envase', 'Tote')['entradas']);
     }
 
+    public function test_declara_a_que_csg_se_entregaron_los_envases_sin_cambiar_cantidades(): void
+    {
+        // Recepción con dos CSG destarada antes de que Romana pidiera el productor de la salida (13-11-2026).
+        [$recepcion] = $this->recepcionCerradaConDosGuias(dosCsg: true);
+        $recepcion->update(['salida_productor_snapshot' => null]);
+        $ruta = "/api/romana/recepciones/{$recepcion->id}/ajuste-cuenta-envases";
+        $estado = fn (): array => $this->comoAdministrador()->getJson("/api/romana/recepciones/{$recepcion->id}/correccion-integral")->json('data');
+        $cuenta = fn (): array => app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta($recepcion->cliente, $recepcion->temporada, null, null);
+        $titulos = fn (array $estadoCuenta, ?string $codigo): array => array_column(collect($estadoCuenta['detalle_csg'])->firstWhere('codigo', $codigo)['documentos'] ?? [], 'titulo');
+        $this->assertSame(['Guía de salida N° GS-CORR-1'], $titulos($cuenta(), null));
+        // Un ajuste de entregados hecho sin productor también queda sin productor.
+        $this->putJson($ruta, $this->payload($estado(), ['totes' => ['entregados' => 96]]))->assertOk();
+        $this->assertContains('Ajuste a la guía de salida N° GS-CORR-1', $titulos($cuenta(), null));
+
+        $this->assertTrue($estado()['cuenta_envases']['elige_productor_entregados']);
+        $this->assertNull($estado()['cuenta_envases']['productor_entregados']);
+        $this->putJson($ruta, [...$this->payload($estado(), []), 'productor_entregados_csg' => 'CSG-OTRO'])
+            ->assertUnprocessable()->assertJsonValidationErrors('productor_entregados_csg');
+        // Solo el CSG, sin cambiar cantidades: se guarda.
+        $this->putJson($ruta, [...$this->payload($estado(), []), 'productor_entregados_csg' => 'CSG-CORR-B'])->assertOk()
+            ->assertJsonPath('data.correccion_integral.cuenta_envases.productor_entregados', 'CSG-CORR-B');
+
+        $despues = $cuenta();
+        $this->assertSame(['Guía de ingreso N° 1512', 'Guía de salida N° GS-CORR-1', 'Ajuste a la guía de salida N° GS-CORR-1'], $titulos($despues, 'CSG-CORR-B'));
+        $this->assertNull(collect($despues['detalle_csg'])->firstWhere('codigo', null));
+        $this->assertSame([4, 96], array_map(fn ($t) => $t['salidas'], $despues['tipos']));
+        $evento = EventoRecepcionRomana::where('recepcion_romana_id', $recepcion->id)->where('tipo', 'ajuste_cuenta_envases')->latest('ocurrido_at')->latest('id')->first();
+        $this->assertSame('Entregados del destare al CSG CSG-CORR-B (antes: sin productor)', $evento->datos['resumen']);
+        $this->assertSame(['CSG-CORR-B', 4], [$recepcion->refresh()->salida_productor_snapshot['codigo'], MovimientoEnvase::where('recepcion_romana_id', $recepcion->id)
+            ->where('tipo_movimiento', 'salida_recepcion_fruta')->where('tipo_envase', 'bins')->sole()->cantidad]);
+        // Volver a elegir el mismo CSG no es un cambio.
+        $this->putJson($ruta, [...$this->payload($estado(), []), 'productor_entregados_csg' => 'CSG-CORR-B'])->assertConflict()
+            ->assertJsonPath('message', 'El ajuste no presenta cambios respecto de la cuenta.');
+    }
+
     public function test_solo_administracion_ajusta_y_respeta_version_cambios_y_destare(): void
     {
         [$recepcion] = $this->recepcionCerradaConDosGuias(cerrar: false);
