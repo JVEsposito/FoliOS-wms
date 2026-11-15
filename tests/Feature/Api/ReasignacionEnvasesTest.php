@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Enums\RolUsuario;
 use App\Enums\TipoMovimientoEnvase;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\Cliente;
@@ -10,6 +11,7 @@ use App\Models\GuiaRecepcionRomana;
 use App\Models\LoteMateriaPrima;
 use App\Models\MovimientoEnvase;
 use App\Models\ProductorCsg;
+use App\Models\ReasignacionEnvases;
 use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\User;
@@ -206,6 +208,15 @@ class ReasignacionEnvasesTest extends TestCase
         $this->assertSame(['CSG-DESP-2'], array_column($estado['detalle_csg'], 'codigo'));
         $this->assertSame([-10], array_column($estado['tipos'], 'saldo_final'));
         $this->assertNotContains('7001', array_column($cuenta->estadoCuenta($cliente, $temporada, null, null)['movimientos'], 'documento'));
+
+        // El reinicio operacional de la temporada también limpia las reasignaciones, antes que despachos y recepciones.
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador, 'activo' => true, 'password' => 'password']);
+        $this->actingAs($administrador, 'sanctum')->postJson("/api/administracion/temporadas/{$temporada->id}/reinicio-operacional", [
+            'operacion_id' => (string) Str::uuid(), 'motivo' => 'Cierre controlado de la etapa de pruebas integrales.', 'password' => 'password',
+            'confirmacion' => "REINICIAR {$temporada->codigo}", 'confirmar_exclusion_bodega' => true, 'confirmar_preservar_configuracion' => true,
+        ])->assertCreated();
+        $this->assertSame(0, ReasignacionEnvases::count());
+        $this->assertDatabaseMissing('guias_despacho_envases', ['id' => $despacho->id]);
     }
 
     private function payload(string $clave, Cliente $cliente, ProductorCsg $productor, ?string $vigente = null): array

@@ -22,7 +22,9 @@ return new class extends Migration
             $table->string('documento_clave', 120)->index();
             $table->string('lado', 12);
             $table->foreignUuid('recepcion_romana_id')->nullable()->constrained('recepciones_romana')->restrictOnDelete();
-            $table->foreignUuid('guia_recepcion_romana_id')->nullable()->constrained('guias_recepcion_romana')->restrictOnDelete();
+            // Sin llave foránea: la migración que desglosa las guías de ingreso se puede revertir sola
+            // (sus pruebas lo hacen); las guías no se eliminan físicamente.
+            $table->uuid('guia_recepcion_romana_id')->nullable()->index();
             $table->foreignUuid('guia_despacho_envase_id')->nullable()->constrained('guias_despacho_envases')->restrictOnDelete();
             $table->string('numero_documento', 80);
             $table->foreignUuid('cliente_origen_id')->constrained('clientes')->restrictOnDelete();
