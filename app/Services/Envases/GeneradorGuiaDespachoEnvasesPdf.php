@@ -61,7 +61,7 @@ class GeneradorGuiaDespachoEnvasesPdf
             ['Cliente destino', $snapshot['cliente']['codigo'].' · '.$snapshot['cliente']['nombre']],
             ['Salida física', $horaSalida],
             ['Confirmación sistema', $this->fecha($snapshot['confirmado_at'] ?? null)],
-            ['Patente', $snapshot['patente_camion'] ?: 'No informada'],
+            ['Patente', ($snapshot['patente_camion'] ?: 'No informada').(! empty($snapshot['patente_carro']) ? ' · rampla '.$snapshot['patente_carro'] : '')],
             ['Conductor', $snapshot['conductor']['nombre'] ?: 'No informado'],
             ['RUT conductor', $snapshot['conductor']['rut'] ?: 'No informado'],
         ];
@@ -191,6 +191,7 @@ class GeneradorGuiaDespachoEnvasesPdf
             'salida_at' => $guia->salida_at?->toAtomString(),
             'confirmado_at' => null,
             'patente_camion' => $guia->patente_camion,
+            'patente_carro' => $guia->patente_carro,
             'conductor' => [
                 'rut' => $guia->rut_conductor,
                 'nombre' => $guia->nombre_conductor,

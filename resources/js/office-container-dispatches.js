@@ -500,7 +500,7 @@ function renderGuides(guides) {
             ${guideEffect(guide)}
             ${emittedGuide(guide)}
             <details class="guide-trace"><summary>Ver trazabilidad y responsables</summary><ul>${origins}</ul><p>Preparó: ${escapeHtml(guide.creado_por || '—')} · Confirmó: ${escapeHtml(guide.confirmado_por || '—')}</p>${guide.documento_hash ? `<p>Integridad: <code>${escapeHtml(guide.documento_hash)}</code></p>` : ''}${statusReason ? `<p>Motivo: ${escapeHtml(statusReason)}</p>` : ''}</details>
-            <div class="guide-card__foot"><small>${escapeHtml(guide.patente_camion || 'Sin transporte informado')} · temporada ${escapeHtml(guide.temporada.codigo)}</small><div class="guide-actions">
+            <div class="guide-card__foot"><small>${escapeHtml(guide.patente_camion ? `${guide.patente_camion}${guide.patente_carro ? ` · rampla ${guide.patente_carro}` : ''}` : 'Sin transporte informado')} · temporada ${escapeHtml(guide.temporada.codigo)}</small><div class="guide-actions">
                 <button data-document="${guide.id}">↓ ${guide.estado === 'borrador' ? 'PDF borrador' : 'PDF interno'}</button>
                 ${guide.archivo_guia ? `<button data-emitted-file="${guide.id}">↓ Guía emitida</button>` : ''}
                 ${guide.puede_registrar_guia && canManage ? `<button data-guide-number="${guide.id}">${guide.numero_guia_despacho ? 'Corregir N° de guía' : 'Registrar N° de guía'}</button>` : ''}
@@ -639,6 +639,7 @@ function editGuide(guide) {
     loadProducerOptions(elements.form.elements.productor_csg_id, elements.form.elements.cliente_id.value, guide.productor?.id);
     elements.form.elements.salida_at.value = localDateTime(guide.salida_at);
     elements.form.elements.patente_camion.value = guide.patente_camion || '';
+    elements.form.elements.patente_carro.value = guide.patente_carro || '';
     elements.form.elements.nombre_conductor.value = guide.conductor?.nombre || '';
     elements.form.elements.rut_conductor.value = guide.conductor?.rut || '';
     elements.form.elements.observacion.value = guide.observacion || '';
@@ -664,6 +665,7 @@ function formPayload() {
         productor_csg_id: form.productor_csg_id || null,
         salida_at: new Date(form.salida_at).toISOString(),
         patente_camion: form.patente_camion?.toUpperCase() || null,
+        patente_carro: form.patente_carro?.toUpperCase() || null,
         rut_conductor: form.rut_conductor || null,
         nombre_conductor: form.nombre_conductor || null,
         observacion: form.observacion || null,

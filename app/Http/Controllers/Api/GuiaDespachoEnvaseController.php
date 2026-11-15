@@ -378,6 +378,7 @@ class GuiaDespachoEnvaseController extends Controller
             'salida_at' => ['required', 'date'],
             'productor_csg_id' => ['nullable', 'uuid'],
             'patente_camion' => ['nullable', 'regex:/^[A-Z0-9]{5,8}$/'],
+            'patente_carro' => ['nullable', 'regex:/^[A-Z0-9]{5,8}$/'],
             'rut_conductor' => ['nullable', 'string', 'max:12'],
             'nombre_conductor' => ['nullable', 'string', 'max:150'],
             'observacion' => ['nullable', 'string', 'max:2000'],
@@ -403,6 +404,7 @@ class GuiaDespachoEnvaseController extends Controller
             'salida_at.required' => 'Fecha y hora efectiva de salida: completa la fecha y la hora.',
             'salida_at.date' => 'Fecha y hora efectiva de salida: ingresa una fecha y hora válidas.',
             'patente_camion.regex' => 'Patente: ingresa entre 5 y 8 letras mayúsculas o números, sin espacios ni guiones. Ejemplo: ABCD12.',
+            'patente_carro.regex' => 'Patente rampla: ingresa entre 5 y 8 letras mayúsculas o números, sin espacios ni guiones. Ejemplo: JL4354.',
             'rut_conductor.string' => 'RUT conductor: ingresa el RUT como texto.',
             'rut_conductor.max' => 'RUT conductor: usa como máximo :max caracteres.',
             'nombre_conductor.string' => 'Conductor: ingresa el nombre como texto.',
@@ -498,6 +500,7 @@ class GuiaDespachoEnvaseController extends Controller
             'salida_at' => $guia->salida_at?->toAtomString(),
             ...app(CalendarioOperativo::class)->datos($guia->salida_at),
             'patente_camion' => $guia->patente_camion,
+            'patente_carro' => $guia->patente_carro,
             'conductor' => [
                 'rut' => $guia->rut_conductor,
                 'nombre' => $guia->nombre_conductor,

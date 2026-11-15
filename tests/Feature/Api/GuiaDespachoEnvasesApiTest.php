@@ -235,6 +235,35 @@ class GuiaDespachoEnvasesApiTest extends TestCase
             ->assertOk()->assertJsonPath('inventario.0.reservado', 6);
     }
 
+    public function test_la_patente_de_la_rampla_queda_en_la_guia_y_en_el_excel_de_la_cuenta_corriente(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = Cliente::create(['codigo' => 'CLI-RAMPLA', 'nombre' => 'Cliente rampla', 'activo' => true]);
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $productor = $this->productorCsg($cliente, $admin, '153712');
+        $this->movimientoIngreso($temporada, $cliente, $operador, 'propia', 20);
+        $this->actingAs($operador, 'sanctum');
+        $payload = [...$this->payloadGuia($cliente, (string) Str::uuid(), [['tipo_envase' => 'bins', 'cantidad' => 15, 'propiedad' => 'propia']]),
+            'productor_csg_id' => $productor->id, 'patente_camion' => 'NV6246', 'nombre_conductor' => 'SERGIO ARROS', 'patente_carro' => 'JL-43 54'];
+        $this->postJson('/api/envases/guias-despacho', $payload)->assertUnprocessable()
+            ->assertJsonPath('errors.patente_carro.0', 'Patente rampla: ingresa entre 5 y 8 letras mayúsculas o números, sin espacios ni guiones. Ejemplo: JL4354.');
+        $guia = $this->postJson('/api/envases/guias-despacho', [...$payload, 'patente_carro' => 'JL4354'])->assertCreated()
+            ->assertJsonPath('data.patente_carro', 'JL4354')->json('data');
+        $this->postJson("/api/envases/guias-despacho/{$guia['id']}/confirmar", ['numero_guia_despacho' => '2379'])->assertOk();
+
+        $this->actingAs($admin, 'sanctum');
+        $excel = $this->get('/api/envases/cuenta-corriente/estado-cuenta?formato=xlsx&cliente_id='.$cliente->id)->assertOk();
+        $hoja = simplexml_load_string(file_get_contents('zip://'.$excel->baseResponse->getFile()->getPathname().'#xl/worksheets/sheet1.xml'));
+        $filas = [];
+        foreach ($hoja->sheetData->row as $fila) {
+            $filas[] = array_map(fn ($c) => isset($c->is) ? (string) $c->is->t : (string) $c->v, iterator_to_array($fila->c, false));
+        }
+        $despacho = collect($filas)->first(fn (array $f): bool => ($f[2] ?? null) === '2379');
+        $this->assertSame(['Despacho de envases', '2379', '153712', 'Productor 153712', 'SERGIO ARROS', 'NV6246', 'JL4354', '-15'],
+            [...array_slice($despacho, 1, 7), $despacho[8]]);
+    }
+
     public function test_explica_los_errores_al_editar_y_conserva_el_borrador_hasta_que_se_corrijan(): void
     {
         $temporada = Temporada::query()->where('activa', true)->firstOrFail();

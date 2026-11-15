@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'temporada_codigo_snapshot', 'temporada_nombre_snapshot',
     'cliente_id', 'cliente_codigo_snapshot', 'cliente_nombre_snapshot', 'estado', 'salida_at',
     'productor_csg_id', 'productor_snapshot',
-    'patente_camion', 'rut_conductor', 'nombre_conductor', 'observacion', 'version',
+    'patente_camion', 'patente_carro', 'rut_conductor', 'nombre_conductor', 'observacion', 'version',
     'creado_por_user_id', 'confirmado_por_user_id', 'anulado_por_user_id', 'cancelado_por_user_id',
     'confirmado_at', 'cancelado_at', 'anulado_at', 'motivo_anulacion', 'motivo_cancelacion',
     'documento_snapshot', 'documento_hash', 'documento_generado_at',

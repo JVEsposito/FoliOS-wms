@@ -61,6 +61,7 @@ class ServicioGuiaDespachoEnvases
                 'estado' => EstadoGuiaDespachoEnvase::Borrador,
                 'salida_at' => $salida,
                 'patente_camion' => $payload['patente_camion'],
+                'patente_carro' => $payload['patente_carro'] ?? null,
                 'rut_conductor' => $payload['rut_conductor'],
                 'nombre_conductor' => $payload['nombre_conductor'],
                 'observacion' => $payload['observacion'],
@@ -132,6 +133,7 @@ class ServicioGuiaDespachoEnvases
                 'cliente_nombre_snapshot' => $cliente->nombre,
                 'salida_at' => CarbonImmutable::parse($payload['salida_at']),
                 'patente_camion' => $payload['patente_camion'],
+                'patente_carro' => $payload['patente_carro'] ?? null,
                 'rut_conductor' => $payload['rut_conductor'],
                 'nombre_conductor' => $payload['nombre_conductor'],
                 'observacion' => $payload['observacion'],
@@ -973,6 +975,7 @@ class ServicioGuiaDespachoEnvases
             'salida_at' => $guia->salida_at?->toAtomString(),
             'confirmado_at' => $confirmadoAt->toAtomString(),
             'patente_camion' => $guia->patente_camion,
+            'patente_carro' => $guia->patente_carro,
             'conductor' => [
                 'rut' => $guia->rut_conductor,
                 'nombre' => $guia->nombre_conductor,
@@ -998,6 +1001,7 @@ class ServicioGuiaDespachoEnvases
             'productor' => $guia->productorDestino(),
             'salida_at' => $guia->salida_at?->toAtomString(),
             'patente_camion' => $guia->patente_camion,
+            'patente_carro' => $guia->patente_carro,
             'rut_conductor' => $guia->rut_conductor,
             'nombre_conductor' => $guia->nombre_conductor,
             'observacion' => $guia->observacion,
@@ -1123,7 +1127,8 @@ class ServicioGuiaDespachoEnvases
             'nombre_conductor' => $datos['nombre_conductor'] ?? null,
             'observacion' => $datos['observacion'] ?? null,
             'detalles' => $detalles->all(),
-            ...array_filter(['productor_csg_id' => $datos['productor_csg_id'] ?? null]),
+            // Solo si viene: así el hash de las operaciones ya registradas no cambia.
+            ...array_filter(['productor_csg_id' => $datos['productor_csg_id'] ?? null, 'patente_carro' => $datos['patente_carro'] ?? null]),
         ];
     }
 
@@ -1165,7 +1170,7 @@ class ServicioGuiaDespachoEnvases
                 ]))
                 ->values()
                 ->all(),
-            ...array_filter(['productor_csg_id' => $guia->productor_csg_id]),
+            ...array_filter(['productor_csg_id' => $guia->productor_csg_id, 'patente_carro' => $guia->patente_carro]),
         ];
     }
 

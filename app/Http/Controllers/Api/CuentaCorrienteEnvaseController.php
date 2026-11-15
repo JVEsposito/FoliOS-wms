@@ -514,27 +514,25 @@ class CuentaCorrienteEnvaseController extends Controller
             .($todos ? '' : '-'.implode('-', array_map(fn (string $t): string => Str::slug($t), $tipos)));
 
         if ($request->input('formato') === 'xlsx') {
-            // Una fila por guía, CSG y propiedad, con una columna por envase: cada dato en su columna para filtrar y sumar.
-            $ruta = $excel->generar('Estado de cuenta de envases', [
-                ['clave' => 'fecha', 'titulo' => 'Fecha', 'tipo' => 'fecha_hora', 'ancho' => 18],
-                ['clave' => 'movimiento', 'titulo' => 'Tipo de movimiento', 'ancho' => 30],
-                ['clave' => 'guia', 'titulo' => 'N° guía', 'ancho' => 14],
-                ['clave' => 'csg', 'titulo' => 'CSG', 'ancho' => 12],
-                ['clave' => 'productor', 'titulo' => 'Productor (razón social)', 'ancho' => 36],
-                ...array_map(fn (array $tipo): array => ['clave' => 'envase_'.$tipo['tipo_envase'], 'titulo' => 'Cant. '.$tipo['nombre'],
-                    'tipo' => 'numero', 'ancho' => 14], $estado['tipos']),
-                ['clave' => 'propiedad', 'titulo' => 'Propiedad', 'ancho' => 14],
-            ], $estado['filas_excel'], [
-                'fecha_corte' => now(config('app.operational_timezone'))->format('d-m-Y H:i'),
-                'usuario' => $request->user()->name,
-                'temporada' => $temporada->codigo.' · '.$temporada->nombre,
-                'cliente' => $cliente->codigo.' · '.$cliente->nombre,
-                'periodo' => $this->periodo($filtros) ?? 'Toda la temporada',
-                'adicionales' => [
-                    ['Envases', $estado['envases_incluidos'] ? implode(', ', $estado['envases_incluidos']) : 'Todos'],
-                    ['Cantidades', 'Entradas en positivo y salidas en negativo: la suma de cada columna es el saldo.'],
-                ],
-            ], 'Estado de cuenta');
+            // «CC ENVASES»: una fila por guía y CSG, con chofer y patentes, y cada envase en su columna de
+            // propiedad (requerimiento del 15-11-2026). Se arma con los movimientos vigentes al descargar.
+            $saldoInicial = collect($estado['tipos'])->filter(fn (array $t): bool => $t['saldo_inicial'] !== 0)
+                ->map(fn (array $t): string => $t['nombre'].' '.($t['saldo_inicial'] > 0 ? '+' : '').$t['saldo_inicial'])->implode(' · ');
+            $ruta = $excel->generar('Estado de cuenta de envases', ServicioCuentaCorrienteEnvases::columnasExcel($estado['filas_excel']),
+                $estado['filas_excel'], [
+                    'fecha_corte' => now(config('app.operational_timezone'))->format('d-m-Y H:i'),
+                    'usuario' => $request->user()->name,
+                    'temporada' => $temporada->codigo.' · '.$temporada->nombre,
+                    'cliente' => $cliente->codigo.' · '.$cliente->nombre,
+                    'periodo' => $this->periodo($filtros) ?? 'Toda la temporada',
+                    'adicionales' => [
+                        ['Envases', $estado['envases_incluidos'] ? implode(', ', $estado['envases_incluidos']) : 'Todos'],
+                        ['Cantidades', 'Entradas en positivo y salidas en negativo, con el signo de la cuenta corriente.'],
+                        // El saldo anterior al período va aquí, no como una fila: la hoja de datos solo tiene movimientos.
+                        ...($this->periodo($filtros) !== null ? [['Saldo al inicio del período', $saldoInicial ?: 'Sin saldo']] : []),
+                        ...array_map(fn (string $e): array => ['Sin propiedad identificable (no sumado)', $e], $estado['excepciones_excel']),
+                    ],
+                ], 'CC ENVASES');
 
             return response()->download($ruta, $nombre.'.xlsx')->deleteFileAfterSend();
         }
