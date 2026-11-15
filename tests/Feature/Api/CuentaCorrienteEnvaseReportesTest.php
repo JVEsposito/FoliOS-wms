@@ -310,17 +310,25 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             $this->assertSame(array_column($resumen[$grupo['codigo']]['tipos'], 'saldo_final'), array_column($grupo['totales'], 'saldo_final'));
         }
 
-        // Excel: una fila por guía, CSG y propiedad, cada dato en su columna; las salidas en negativo suman el saldo.
+        // Excel «CC ENVASES»: una fila por guía y CSG, con chofer y patentes, y cada envase en la columna de su
+        // propiedad; los del cliente, en una columna aparte al final. Las salidas en negativo.
         $excel = $this->get($ruta.'&formato=xlsx')->assertOk();
-        $filas = $this->filasExcel($excel->baseResponse->getFile()->getPathname());
-        $this->assertSame(['Fecha', 'Tipo de movimiento', 'N° guía', 'CSG', 'Productor (razón social)', 'Cant. Bins plástico', 'Propiedad'], $filas[0]);
-        $this->assertSame(['Ingreso con fruta', 'REC-1', '122104', 'Agricola Los Robles', '200', 'Del cliente'], array_slice($filas[1], 1));
-        $this->assertSame(['Ingreso con fruta', 'REC-1', '122105', '', '100', 'Del cliente'], array_slice($filas[2], 1));
-        $this->assertSame(['Despacho de envases', 'GDE-1', '', 'Sin productor asociado', '-120', 'Propia'], array_slice($filas[3], 1));
-        $this->assertSame(['200', '100', '-120', '-50', '10', '20'], array_column(array_slice($filas, 1), 5));
-        $this->assertSame(160, array_sum(array_column(array_slice($filas, 1), 5)));
-        $this->assertContains(['Cantidades', 'Entradas en positivo y salidas en negativo: la suma de cada columna es el saldo.'],
-            $this->filasExcel($excel->baseResponse->getFile()->getPathname(), 'sheet2'));
+        $libro = $excel->baseResponse->getFile()->getPathname();
+        $filas = $this->filasExcel($libro);
+        $this->assertSame(['Fecha', 'Tipo de movimiento', 'N.º guía', 'CSG', 'Productor (razón social)', 'Chofer', 'Patente camión', 'Patente rampla',
+            'Bins propios', 'Bins arrendados', 'Totes propios', 'Totes arrendados', 'Esponjas propias', 'Esponjas arrendadas', 'Bins del cliente'], $filas[0]);
+        $this->assertSame(['Ingreso con fruta', 'REC-1', '122104', 'Agricola Los Robles', 'Conductor MP', 'ABCD12', ''], array_slice($filas[1], 1, 7));
+        $this->assertSame(['', '200'], [$filas[1][8], $filas[1][14]]);
+        $this->assertSame(['Ingreso con fruta', 'REC-1', '122105', ''], array_slice($filas[2], 1, 4));
+        $this->assertSame(['Despacho de envases', 'GDE-1', '', 'Sin productor asociado'], array_slice($filas[3], 1, 4));
+        $this->assertSame(['-120', ''], [$filas[3][8], $filas[3][14]]);
+        $bins = array_map(fn (array $f): int => (int) $f[8] + (int) $f[9] + (int) $f[14], array_slice($filas, 1));
+        $this->assertSame([200, 100, -120, -50, 10, 20], $bins);
+        $this->assertSame(160, array_sum($bins));
+        $this->assertStringContainsString('<sheet name="CC ENVASES"', file_get_contents('zip://'.$libro.'#xl/workbook.xml'));
+        // Fecha en dd-mm-aaaa y cantidades con miles y negativos en rojo.
+        $this->assertStringContainsString('formatCode="dd-mm-yyyy"', file_get_contents('zip://'.$libro.'#xl/styles.xml'));
+        $this->assertStringContainsString('formatCode="#,##0;[Red]-#,##0"', file_get_contents('zip://'.$libro.'#xl/styles.xml'));
 
         $this->movimiento($this->productor, 'salida_recepcion_fruta', 35, -1, -1, 'cliente', '2026-10-14 10:00', 'DEV-PERIODO')
             ->update(['recepcion_romana_id' => $recepcionId]);
@@ -340,13 +348,13 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $this->assertMatchesRegularExpression('/\(RESUMEN POR PRODUCTOR\).*?\(Saldo final\).*?CSG 122104\).*?\(\+200\).*?CSG 122105\).*?\(\+100\).*?\(Sin productor asociado\).*?\(-175\)/s', $pdfPeriodo);
         $this->assertStringNotContainsString('REC-POSTERIOR', $pdfPeriodo);
 
-        // Con un período, cada CSG parte con su saldo al inicio: la suma sigue siendo el saldo final.
+        // Con un período, la hoja de datos solo tiene los movimientos del período; el saldo anterior va en Corte.
         $excelPeriodo = $this->get($ruta.'&formato=xlsx&desde=2026-10-14&hasta=2026-10-14')->assertOk();
-        $filas = array_slice($this->filasExcel($excelPeriodo->baseResponse->getFile()->getPathname()), 1);
-        $this->assertSame(['Saldo al inicio del período', 'Saldo al inicio del período', 'Saldo al inicio del período', 'Entregados en el destare'], array_column($filas, 1));
-        $this->assertSame(['122104', '122105', '', ''], array_column($filas, 3));
-        $this->assertSame(['200', '100', '-140', '-35'], array_column($filas, 5));
-        $this->assertSame(125, array_sum(array_column($filas, 5)));
+        $libro = $excelPeriodo->baseResponse->getFile()->getPathname();
+        $filas = array_slice($this->filasExcel($libro), 1);
+        $this->assertSame(['Entregados en el destare'], array_column($filas, 1));
+        $this->assertSame(['-35'], array_column($filas, 14));
+        $this->assertContains(['Saldo al inicio del período', 'Bins plástico +160'], $this->filasExcel($libro, 'sheet2'));
     }
 
     public function test_los_csg_de_una_misma_razon_social_van_juntos_en_pdf_y_excel(): void
@@ -372,8 +380,9 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $excel = $this->get($ruta.'&formato=xlsx')->assertOk();
         $filas = array_slice($this->filasExcel($excel->baseResponse->getFile()->getPathname()), 1);
         $this->assertSame(['200', '100', '300'], array_slice(array_column($filas, 3), 0, 3));
-        $this->assertSame(['Devolución de envases', 'DEV-200', '200', 'Alfa Agrícola', '30', 'Arrendada'], array_slice($filas[0], 1));
-        $this->assertSame(250, array_sum(array_column($filas, 5)));
+        $this->assertSame(['Devolución de envases', 'DEV-200', '200', 'Alfa Agrícola'], array_slice($filas[0], 1, 4));
+        $this->assertSame('30', $filas[0][9]);
+        $this->assertSame(250, array_sum(array_map(fn (array $f): int => (int) $f[8] + (int) $f[9] + (int) ($f[14] ?? 0), $filas)));
     }
 
     /**
@@ -495,9 +504,11 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $excel = $this->get($ruta.'&formato=xlsx&tipos_envase[]=esponjas')->assertOk()
             ->assertDownload('estado-cuenta-envases-prb-'.$this->temporada->codigo.'-esponjas.xlsx');
         $archivo = $excel->baseResponse->getFile()->getPathname();
-        // Solo la columna de esponjas: las de bins y totes no aparecen.
-        $this->assertSame(['Fecha', 'Tipo de movimiento', 'N° guía', 'CSG', 'Productor (razón social)', 'Cant. Esponja de bins', 'Propiedad'], $this->filasExcel($archivo)[0]);
-        $this->assertSame(['40', '-15'], array_column(array_slice($this->filasExcel($archivo), 1), 5));
+        // Las 14 columnas de siempre y, como son del cliente, «Esponjas del cliente» al final; solo vienen las esponjas.
+        $datos = array_slice($this->filasExcel($archivo), 1);
+        $this->assertSame(['Esponjas arrendadas', 'Esponjas del cliente'], array_slice($this->filasExcel($archivo)[0], 13));
+        $this->assertSame([array_fill(0, 6, ''), array_fill(0, 6, '')], array_map(fn (array $f): array => array_slice($f, 8, 6), $datos));
+        $this->assertSame(['40', '-15'], array_column($datos, 14));
         $this->assertContains(['Envases', 'Esponja de bins'], $this->filasExcel($archivo, 'sheet2'));
 
         // Marcar todos es el estado de cuenta completo, con el nombre de siempre.
