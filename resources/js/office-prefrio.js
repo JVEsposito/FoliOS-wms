@@ -165,9 +165,11 @@ function renderProcessFormOptions() {
     if ([...select.options].some((option) => option.value === current)) select.value = current;
 }
 function foliosDelPlano(process) {
-    const folios = process.folios || [];
-    const historical = !activeStates.has(process.estado) && !folios.some((item) => item.finalizado_parcial_at);
-    return folios.filter((item) => (historical ? null : item.en_tunel) ?? !['retirado', 'cancelado'].includes(item.estado));
+    const active = activeStates.has(process.estado);
+    return (process.folios || []).filter((item) => {
+        const asignado = !['retirado', 'cancelado'].includes(item.estado);
+        return active ? (item.en_tunel ?? asignado) : asignado;
+    });
 }
 
 function renderProcesses() {
@@ -203,13 +205,15 @@ function renderProcessDetail() {
     const process = state.selectedProcess; if (!process) { elements.detail.classList.add('is-hidden'); return; }
     elements.detail.classList.remove('is-hidden'); elements.detailTitle.textContent = `${process.codigo} · ${process.tunel?.codigo || 'Sin túnel'}`;
     elements.detailSubtitle.textContent = `${process.tunel?.nombre || ''} · ${statusText(process.estado)} · setpoint ${process.setpoint} °C · versión ${process.version}`;
+    const historical = !activeStates.has(process.estado);
     const occupied = foliosDelPlano(process);
     const occupiedPositions = new Set(occupied.map((item) => item.posicion?.id).filter(Boolean)).size;
     elements.detailMetrics.innerHTML = [
-        ['ESTADO', statusText(process.estado)], ['POSICIONES', `${occupiedPositions}/${process.tunel?.capacidad_posiciones || '—'}`], ['FOLIOS', occupied.length], ['INICIO', formatDate(process.iniciado_at, 'No iniciado')], ['FINAL', formatDate(process.finalizado_at, 'Pendiente')],
+        ['ESTADO', statusText(process.estado)], [historical ? 'POSICIONES REGISTRADAS' : 'POSICIONES', `${occupiedPositions}/${process.tunel?.capacidad_posiciones || '—'}`], [historical ? 'FOLIOS REGISTRADOS' : 'FOLIOS', occupied.length], ['INICIO', formatDate(process.iniciado_at, 'No iniciado')], ['FINAL', formatDate(process.finalizado_at, 'Pendiente')],
     ].map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join('');
     elements.correctProcess.classList.toggle('is-hidden', state.identity?.rol !== 'administrador');
-    renderTunnelMap(process, occupied);
+    byId('processTunnelMapTitle').textContent = historical ? 'Distribución histórica del ciclo' : 'Posiciones del túnel';
+    renderTunnelMap(process, occupied, historical);
     renderTimeline(process);
     renderR41(process);
     renderOperationalPanel(process);
@@ -382,7 +386,7 @@ function r41GridValues() {
     }
     return { sectors, filled, total: r41Sectors.length * r41Points.length };
 }
-function renderTunnelMap(process, occupied) {
+function renderTunnelMap(process, occupied, historical) {
     const byPosition = new Map();
     occupied.forEach((item) => {
         const number = item.posicion?.numero;
@@ -395,7 +399,7 @@ function renderTunnelMap(process, occupied) {
         const reprocess = items.some((item) => item.estado === 'requiere_reproceso');
         const boxes = items.reduce((total, item) => total + Number(item.folio?.cantidad_cajas || 0), 0);
         const summary = items.length === 0
-            ? 'Libre'
+            ? (historical ? 'Sin folio registrado' : 'Libre')
             : items.length === 1
                 ? items[0].folio?.numero_folio || 'Ocupado'
                 : `${items.length} saldos${boxes > 0 ? ` · ${boxes} cajas` : ''}`;

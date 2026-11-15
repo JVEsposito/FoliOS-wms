@@ -109,6 +109,7 @@ test('la oficina finaliza folios por separado y mantiene el R-41 operativo', asy
             await page.locator('#partialHistory').getByText('Retirado', { exact: true }).waitFor();
             assert.deepEqual(writes.at(-1).body.folios, ['f2']);
             assert.equal(await page.locator('#processTunnelMap').getByText('R41-0002').count(), 0);
+            assert.equal(await page.locator('#processTunnelMap').getByText('R41-0001').isVisible(), true);
 
             // Lectura horaria parcial.
             await page.locator('#operationalActionSelect').selectOption('lectura');
@@ -141,6 +142,19 @@ test('la oficina finaliza folios por separado y mantiene el R-41 operativo', asy
             const download = page.waitForEvent('download');
             await page.locator('#r41DownloadButton').click();
             assert.equal((await download).suggestedFilename(), 'R-41_PF-2026-000041.xlsx');
+
+            // Al terminar, el servidor informa que ambas posiciones dejaron de estar ocupadas.
+            Object.assign(process, { estado: 'aprobado', finalizado_at: '2026-11-12T20:00:00Z' });
+            Object.assign(process.folios[0], { estado: 'aprobado', en_tunel: false });
+            await page.locator('#refreshProcessButton').click();
+            await page.getByRole('heading', { name: 'Distribución histórica del ciclo' }).waitFor();
+            const map = page.locator('#processTunnelMap');
+            assert.equal(await map.getByText('R41-0001').isVisible(), true);
+            assert.equal(await map.getByText('R41-0002').isVisible(), true);
+            assert.equal(await map.getByText('Sin folio registrado', { exact: true }).count(), 2);
+            assert.match(await page.locator('#processDetailMetrics').innerText(), /POSICIONES REGISTRADAS\s+2\/4/);
+            assert.match(await page.locator('#processDetailMetrics').innerText(), /FOLIOS REGISTRADOS\s+2/);
+            assert.match(await page.locator('#partialHistory').innerText(), /Retirado/);
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
             assert.deepEqual(errors, []);
             await context.close();
