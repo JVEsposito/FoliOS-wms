@@ -4,6 +4,8 @@ En PDA y tablet, completa el producto del pallet y agrega una línea por cada co
 
 Por ejemplo, un pallet de 120 cajas puede contener 80 cajas 2J y 40 cajas 3J, incluso del mismo CSG, lote y proceso. La suma debe ser 120. El folio queda con calibre MIX y conserva el detalle de ambos calibres con sus cajas para etiquetas y operaciones posteriores.
 
+La conciliación con packing compara las cajas por calibre; una mezcla que coincide no se marca como diferencia.
+
 Las correcciones de Oficina permiten modificar el desglose. Al abrir o retomar un registro pendiente se conservan los calibres de cada línea. Una corrección simple de un pallet mixto conserva su composición; cambiar su producto requiere enviar el detalle completo.
 
 ## Compatibilidad de la API

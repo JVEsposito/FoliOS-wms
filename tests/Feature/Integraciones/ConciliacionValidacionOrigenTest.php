@@ -117,6 +117,38 @@ class ConciliacionValidacionOrigenTest extends TestCase
         return ConciliacionValidacionOrigen::sole();
     }
 
+    public function test_un_pallet_mixto_correcto_no_genera_diferencias_y_se_detectan_cambios_en_su_reparto(): void
+    {
+        $this->filas = [
+            $this->coincidente(['cantidad' => 160, 'cod_calibre' => '2J']),
+            $this->coincidente(['cantidad' => 76, 'cod_calibre' => '3J']),
+        ];
+        $this->leer();
+        $articulo = ArticuloValidacion::where('temporada_id', $this->catalogo['temporada_id'])->where('calibre', '3J')->firstOrFail();
+        $linea = ['origen_validacion_id' => $this->catalogo['origen_validacion_id'], 'lote_materia_prima' => 'L-1', 'proceso_packing' => 'P-1'];
+        $this->postJson('/api/validacion/pallets', [
+            'operacion_id' => (string) Str::uuid(), 'numero_folio' => '000123', 'tipo_bulto' => 'pallet', 'cantidad_cajas' => 236,
+            'linea_proceso' => 1, 'turno' => 'A', ...$this->catalogo, 'resultado' => 'aprobado', 'generado_dispositivo_at' => now()->toAtomString(),
+            'composicion' => [
+                [...$linea, 'articulo_validacion_id' => $this->catalogo['articulo_validacion_id'], 'cantidad_cajas' => 160],
+                [...$linea, 'articulo_validacion_id' => $articulo->id, 'cantidad_cajas' => 76],
+            ],
+        ])->assertCreated();
+        $caso = ConciliacionValidacionOrigen::sole();
+        $this->assertSame('sin_diferencias', $caso->estado);
+        $this->assertSame('coincide', $caso->comparacion['calibre']['estado']);
+        $servicio = app(ServicioConciliacionValidacion::class);
+        $validacion = $caso->validacion()->firstOrFail();
+        $datos = $caso->validacion_actual['datos'];
+        $this->assertSame('vigente', $servicio->contexto($validacion, $datos));
+        $folio = $validacion->folio;
+        $externos = $folio->datos_externos;
+        $externos['composicion'][0]['cantidad_cajas'] = 150;
+        $externos['composicion'][1]['cantidad_cajas'] = 86;
+        $folio->forceFill(['datos_externos' => $externos])->save();
+        $this->assertSame('folio_modificado', $servicio->contexto($validacion->fresh(), $datos));
+    }
+
     public function test_registra_cuatro_diferencias_y_respalda_la_copia_sin_duplicar_reintentos(): void
     {
         $this->leer();
