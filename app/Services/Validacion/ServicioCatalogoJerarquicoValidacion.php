@@ -11,6 +11,7 @@ use App\Models\EspecieValidacion;
 use App\Models\MarcaValidacion;
 use App\Models\Temporada;
 use App\Models\VariedadValidacion;
+use Closure;
 use DomainException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -170,27 +171,44 @@ class ServicioCatalogoJerarquicoValidacion
             throw new DomainException('No se puede mover un envase a otra temporada.');
         }
 
-        $nombre = $this->texto($datos['nombre']);
-        $this->asegurarUnico(
-            EnvaseValidacion::query()
-                ->where('especie_validacion_id', $especie->id)
-                ->where('cliente_validacion_id', $cliente->id)
-                ->where('nombre', $nombre),
-            $modelo,
-            'Ese envase ya existe para el cliente y la especie.',
-        );
-
-        /** @var EnvaseValidacion $envase */
         $envase = $this->guardar($modelo ?? new EnvaseValidacion, [
             'especie_validacion_id' => $especie->id,
             'cliente_validacion_id' => $cliente->id,
-            'nombre' => $nombre,
+            'nombre' => $this->texto($datos['nombre']),
             'codigo_externo' => $this->codigo($datos['codigo_externo'] ?? null),
             'kilos_netos_por_caja' => array_key_exists('kilos_netos_por_caja', $datos) ? $datos['kilos_netos_por_caja'] : $modelo?->kilos_netos_por_caja,
             'activo' => (bool) ($datos['activo'] ?? true),
-        ], $especie->temporada_id);
+        ], $especie->temporada_id, $this->validarEnvase(...));
 
         return $envase->load('cliente:id,nombre,codigo_externo');
+    }
+
+    public function restaurarEnvase(EnvaseValidacion $envase): EnvaseValidacion
+    {
+        return $this->guardar($envase, ['activo' => true], $envase->especie()->value('temporada_id'), $this->validarEnvase(...))
+            ->load('cliente:id,nombre,codigo_externo');
+    }
+
+    private function validarEnvase(EnvaseValidacion $envase): void
+    {
+        $duplicado = EnvaseValidacion::query()
+            ->where('especie_validacion_id', $envase->especie_validacion_id)
+            ->where('cliente_validacion_id', $envase->cliente_validacion_id)
+            ->where('nombre', $envase->nombre)
+            ->when($envase->exists, fn ($q) => $q->whereKeyNot($envase->id))
+            ->lockForUpdate()
+            ->first(['activo']);
+
+        if ($duplicado !== null) {
+            throw new DomainException($duplicado->activo
+                ? 'Ese envase ya existe para el cliente y la especie. En Envases, selecciona Todos para encontrarlo y editarlo.'
+                : 'Ya existe un envase eliminado con ese nombre para el cliente y la especie. En Envases, filtra por Eliminados para editarlo o restaurarlo.');
+        }
+
+        if ($envase->exists && $envase->activo && $envase->isDirty('activo')
+            && (! $envase->especie()->where('activo', true)->exists() || ! $envase->cliente()->where('activo', true)->exists())) {
+            throw new DomainException('Para restaurar el envase, el cliente y la especie deben estar activos. Actívalos primero o corrige la asociación del envase.');
+        }
     }
 
     /** @param array<string, mixed> $datos */
@@ -317,15 +335,17 @@ class ServicioCatalogoJerarquicoValidacion
      * @template T of Model
      *
      * @param  T  $modelo
+     * @param  (Closure(T): void)|null  $validar
      * @return T
      */
-    private function guardar(Model $modelo, array $atributos, string $temporadaId): Model
+    private function guardar(Model $modelo, array $atributos, string $temporadaId, ?Closure $validar = null): Model
     {
-        return DB::transaction(function () use ($modelo, $atributos, $temporadaId): Model {
+        return DB::transaction(function () use ($modelo, $atributos, $temporadaId, $validar): Model {
             $temporada = Temporada::lockForUpdate()->findOrFail($temporadaId);
             $desde = $temporada->version_catalogo;
             $modelo = $modelo->exists ? $modelo->newQuery()->lockForUpdate()->findOrFail($modelo->id) : $modelo;
             $modelo->fill($atributos);
+            $validar?->__invoke($modelo);
             $cambio = ! $modelo->exists || $modelo->isDirty();
             $modelo->save();
 

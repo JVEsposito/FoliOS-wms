@@ -95,7 +95,7 @@ class EliminacionCatalogoValidacionApiTest extends TestCase
         $this->assertSame($versionInicial + 7, $temporada->refresh()->version_catalogo);
     }
 
-    public function test_eliminar_un_envase_despublica_su_proyeccion_pda_y_conserva_trazabilidad(): void
+    public function test_envase_eliminado_se_puede_encontrar_editar_y_restaurar_sin_duplicar_la_proyeccion(): void
     {
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
         $temporada = $this->crearTemporadaActivaPrueba([
@@ -144,10 +144,14 @@ class EliminacionCatalogoValidacionApiTest extends TestCase
 
         $this->assertSame(1, ArticuloValidacion::query()->where('activo', true)->count());
         $this->assertSame(1, CombinacionValidacion::query()->where('activo', true)->count());
+        $articulo = ArticuloValidacion::query()->where('activo', true)->sole();
+        $combinacion = CombinacionValidacion::query()->where('activo', true)->sole();
         $versionInicial = $temporada->refresh()->version_catalogo;
+        $ruta = '/api/administracion/validacion/envases';
+        $payload = ['especie_validacion_id' => $especie->id, 'cliente_validacion_id' => $cliente->id, 'nombre' => '5 KG', 'activo' => true];
 
         $this->actingAs($administrador, 'sanctum')
-            ->deleteJson("/api/administracion/validacion/envases/{$envase->id}")
+            ->deleteJson("{$ruta}/{$envase->id}")
             ->assertOk()
             ->assertJsonPath('data.activo', false);
 
@@ -164,5 +168,41 @@ class EliminacionCatalogoValidacionApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(0, 'articulos')
             ->assertJsonCount(0, 'combinaciones');
+
+        $this->getJson("/api/administracion/validacion/temporadas/{$temporada->id}/catalogo")
+            ->assertOk()
+            ->assertJsonPath('especies.0.envases.0.id', $envase->id)
+            ->assertJsonPath('especies.0.envases.0.activo', false);
+        $this->postJson($ruta, $payload)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Ya existe un envase eliminado con ese nombre para el cliente y la especie. En Envases, filtra por Eliminados para editarlo o restaurarlo.');
+
+        $this->putJson("{$ruta}/{$envase->id}", [...$payload, 'activo' => false, 'codigo_externo' => 'CJ-5', 'kilos_netos_por_caja' => 5.2])
+            ->assertOk()->assertJsonPath('data.activo', false);
+        $this->assertSame(0, ArticuloValidacion::query()->where('activo', true)->count());
+
+        $this->actingAs(User::factory()->create(['rol' => RolUsuario::Validador]), 'sanctum')
+            ->postJson("{$ruta}/{$envase->id}/restaurar")->assertForbidden();
+        $this->actingAs($administrador, 'sanctum');
+        $versionAntesDeRestaurar = $temporada->refresh()->version_catalogo;
+        for ($intento = 0; $intento < 2; $intento++) {
+            $this->postJson("{$ruta}/{$envase->id}/restaurar")->assertOk()
+                ->assertJsonPath('data.id', $envase->id)
+                ->assertJsonPath('data.activo', true)
+                ->assertJsonPath('data.codigo_externo', 'CJ-5')
+                ->assertJsonPath('data.kilos_netos_por_caja', '5.2000')
+                ->assertJsonPath('publicacion.version_catalogo', $versionAntesDeRestaurar + 1);
+        }
+        $this->assertSame($articulo->id, ArticuloValidacion::query()->where('activo', true)->sole()->id);
+        $this->assertSame($combinacion->id, CombinacionValidacion::query()->where('activo', true)->sole()->id);
+        $this->assertDatabaseCount('envases_validacion', 1);
+
+        $this->postJson($ruta, $payload)->assertUnprocessable()
+            ->assertJsonPath('message', 'Ese envase ya existe para el cliente y la especie. En Envases, selecciona Todos para encontrarlo y editarlo.');
+        $this->deleteJson("{$ruta}/{$envase->id}")->assertOk();
+        $this->deleteJson("/api/administracion/validacion/especies/{$especie->id}")->assertOk();
+        $this->postJson("{$ruta}/{$envase->id}/restaurar")->assertUnprocessable();
+        $this->putJson("{$ruta}/{$envase->id}", $payload)->assertUnprocessable();
+        $this->assertFalse($envase->fresh()->activo);
     }
 }

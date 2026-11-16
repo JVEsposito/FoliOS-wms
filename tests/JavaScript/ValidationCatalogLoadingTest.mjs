@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import { optionMatches } from '../../resources/js/shared/validation-correction-logic.js';
 
-const source = readFileSync(new URL('../../resources/js/office-validation-catalog.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../../resources/js/office-validation-catalog.js', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '');
 
 function harness(responses) {
     const nodes = new Map();
@@ -18,7 +19,7 @@ function harness(responses) {
                 toggle: (name, force) => force ? classes.add(name) : classes.delete(name),
             },
             elements: new Proxy({}, { get: (_, key) => {
-                if (!fields.has(key)) fields.set(key, { value: '', checked: true });
+                if (!fields.has(key)) fields.set(key, { value: '', checked: true, options: [] });
                 return fields.get(key);
             } }),
             addEventListener() {}, setAttribute() {}, reset() {}, remove() {},
@@ -34,6 +35,7 @@ function harness(responses) {
     const timeouts = [];
     const context = vm.createContext({
         Headers,
+        optionMatches,
         FormData: class {
             constructor(form) { this.data = form.data; }
             [Symbol.iterator]() { return this.data[Symbol.iterator](); }
