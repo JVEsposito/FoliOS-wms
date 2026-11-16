@@ -1,4 +1,5 @@
 import { showOfficeToast } from './office-toast.js';
+import { createUuid } from './shared/uuid.js';
 
 const keys = {
     token: 'estiba_wms_office_token',
@@ -16,6 +17,7 @@ const state = {
     selectedFolioIds: new Set(),
     selectedDestinationValues: new Set(),
     selectedLot: null,
+    editingLot: false,
 };
 
 const elements = {
@@ -362,12 +364,22 @@ async function searchSingleFolio() {
     }
 }
 
+function formatBoxes(boxes) {
+    return boxes === null || boxes === undefined ? '—' : Number(boxes).toLocaleString('es-CL');
+}
+
+function folioLocation(folio) {
+    if (folio.camara) return `${escapeHtml(folio.camara)}<br><small>${escapeHtml(folio.posicion || 'Sin posición')}</small>`;
+    if (folio.tunel) return `<span class="sag-pill">En túnel ${escapeHtml(folio.tunel.codigo || folio.tunel.nombre)}</span><br><small>Posición ${escapeHtml(folio.tunel.posicion ?? 'sin registrar')} · ${escapeHtml(folio.tunel.proceso)} · ${escapeHtml(humanize(folio.tunel.estado))}</small>`;
+    return '<span class="sag-pill sag-pill--warning">Sin ubicación</span>';
+}
+
 function renderEligibleFolios() {
     const body = elements.eligibleBody;
     if (!state.eligibleFolios.length) {
-        body.innerHTML = '<tr><td colspan="8" class="empty-cell">No se encontraron pallets elegibles con estos filtros.</td></tr>';
+        body.innerHTML = '<tr><td colspan="9" class="empty-cell">No se encontraron pallets elegibles con estos filtros.</td></tr>';
     } else {
-        body.innerHTML = state.eligibleFolios.map((folio) => `<tr><td><input type="checkbox" data-folio-id="${folio.id}" ${state.selectedFolioIds.has(folio.id) ? 'checked' : ''}></td><td><strong>${escapeHtml(folio.folio)}</strong><br><small>${escapeHtml(folio.cliente)}</small></td><td>${escapeHtml(folio.variedad || '—')}</td><td>${escapeHtml(folio.csg || '—')}</td><td>${escapeHtml(humanize(folio.condicion_termica))}</td><td>${folio.camara ? `${escapeHtml(folio.camara)}<br><small>${escapeHtml(folio.posicion || 'Sin posición')}</small>` : '<span class="sag-pill sag-pill--warning">Sin ubicación</span>'}</td><td>${folio.sag.en_inspeccion ? '<span class="sag-pill sag-pill--warning">En inspección</span>' : ''}<span class="sag-pill sag-pill--active">${escapeHtml(folio.sag.estado)}</span></td><td>${(folio.sag.destinos || []).map((destination) => `<span class="sag-pill">${escapeHtml(destination)}</span>`).join('') || '—'}</td></tr>`).join('');
+        body.innerHTML = state.eligibleFolios.map((folio) => `<tr><td><input type="checkbox" data-folio-id="${folio.id}" ${state.selectedFolioIds.has(folio.id) ? 'checked' : ''}></td><td><strong>${escapeHtml(folio.folio)}</strong><br><small>${escapeHtml(folio.cliente)}</small></td><td>${escapeHtml(folio.variedad || '—')}</td><td>${formatBoxes(folio.cantidad_cajas)}</td><td>${escapeHtml(folio.csg || '—')}</td><td>${escapeHtml(humanize(folio.condicion_termica))}</td><td>${folioLocation(folio)}</td><td>${folio.sag.en_inspeccion ? '<span class="sag-pill sag-pill--warning">En inspección</span>' : ''}<span class="sag-pill sag-pill--active">${escapeHtml(folio.sag.estado)}</span></td><td>${(folio.sag.destinos || []).map((destination) => `<span class="sag-pill">${escapeHtml(destination)}</span>`).join('') || '—'}</td></tr>`).join('');
     }
     document.getElementById('folioSelectionTitle').textContent = `${state.eligibleFolios.length} pallets encontrados`;
     updateBuilderSummary();
@@ -436,6 +448,7 @@ async function openLot(id) {
     document.getElementById('sagDetailSubtitle').textContent = `${humanize(lot.estado)} · ${lot.cantidad_folios} pallets · SAG ${lot.numero_inspeccion_sag || 'sin número'} · creado ${dateTime(lot.creado_at)}`;
     document.getElementById('sagDetailDestinations').innerHTML = destinationPills(lot.destinos);
     renderDetailActions(lot);
+    renderLotMembershipControls(lot);
     renderResults(lot);
     elements.detail.classList.remove('is-hidden');
     elements.detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -457,7 +470,8 @@ function renderResults(lot) {
     const approvalOptions = state.catalogs.tipos_aprobacion.map((type) => `<option value="${type.value}">${escapeHtml(type.value)} · ${escapeHtml(type.label)}</option>`).join('');
     document.getElementById('sagResultList').innerHTML = lot.folios.map((entry) => `<article class="sag-result-card">
         <div class="sag-result-card__heading">
-            <div><strong>${escapeHtml(entry.folio.numero)}</strong><p>${escapeHtml(entry.folio.cliente || '—')} · ${escapeHtml(entry.folio.especie || '—')} · ${escapeHtml(entry.folio.variedad || '—')} · ${escapeHtml(entry.folio.camara || '—')} / ${escapeHtml(entry.folio.posicion || 'Sin posición')}</p></div>
+            <div><strong>${escapeHtml(entry.folio.numero)}</strong><p>${escapeHtml(entry.folio.cliente || '—')} · ${escapeHtml(entry.folio.especie || '—')} · ${escapeHtml(entry.folio.variedad || '—')}</p><p>${formatBoxes(entry.folio.cantidad_cajas)} cajas · CSG ${escapeHtml(entry.folio.csg || '—')}</p><div>${folioLocation(entry.folio)}</div><p>Condición térmica: ${escapeHtml(humanize(entry.folio.condicion_termica) || '—')}</p></div>
+            ${canManage() && lot.estado === 'preparacion' ? `<button class="secondary-button" type="button" data-remove-sag-folio="${escapeHtml(entry.folio.id)}" ${state.editingLot || lot.folios.length < 2 ? 'disabled' : ''}>Quitar del lote</button>` : ''}
             <span class="sag-pill ${entry.estado === 'resuelto' ? 'sag-pill--active' : 'sag-pill--warning'}">${escapeHtml(humanize(entry.estado))}</span>
         </div>
         <div class="sag-result-grid">${entry.resultados.map((result) => {
@@ -496,6 +510,44 @@ async function executeLotAction(id, action) {
         await openLot(id);
         toast(action === 'start' ? 'Inspección iniciada.' : action === 'finish' ? 'Lote finalizado.' : 'Lote cancelado.');
     } catch (error) { elements.detailError.textContent = error.message; toast(error.message, true); }
+}
+
+function renderLotMembershipControls(lot) {
+    document.getElementById('editSagLotFoliosForm').classList.toggle('is-hidden', !canManage() || lot.estado !== 'preparacion');
+    document.getElementById('addSagLotFolioButton').disabled = state.editingLot;
+    document.querySelectorAll('[data-remove-sag-folio]').forEach((button) => {
+        button.disabled = state.editingLot || lot.folios.length < 2;
+    });
+}
+
+async function editLotFolios({ numero = '', quitar = [] }) {
+    if (state.editingLot || !canManage() || state.selectedLot?.estado !== 'preparacion') return;
+    const lot = state.selectedLot;
+    state.editingLot = true;
+    elements.detailError.textContent = '';
+    renderLotMembershipControls(lot);
+    try {
+        const agregar = [];
+        if (numero) {
+            if (lot.folios.some((entry) => entry.folio.numero.toUpperCase() === numero.toUpperCase())) throw new Error('El pallet ya pertenece al lote.');
+            const payload = await api(`/inspeccion-sag/folios?${new URLSearchParams({ folio: numero })}`);
+            const folio = payload.data?.[0];
+            if (!folio) throw new Error('El folio no está disponible para agregarlo a una inspección.');
+            agregar.push(folio.id);
+        }
+        await api(`/inspeccion-sag/lotes/${lot.id}/folios`, {
+            method: 'PATCH', body: JSON.stringify({ operacion_id: createUuid(), agregar, quitar }),
+        });
+        document.getElementById('addSagLotFolio').value = '';
+        await loadWorkspace();
+        if (state.selectedLot?.id === lot.id) await openLot(lot.id);
+        toast('Pallets del lote actualizados.');
+    } catch (error) {
+        elements.detailError.textContent = error.message;
+    } finally {
+        state.editingLot = false;
+        if (state.selectedLot) renderLotMembershipControls(state.selectedLot);
+    }
 }
 
 async function saveResult(button) {
@@ -567,3 +619,13 @@ if (state.token && state.identity) {
     showApp();
     loadWorkspace().catch((error) => renderLoadErrors([{ label: 'la pantalla', message: error.message }]));
 }
+
+document.getElementById('editSagLotFoliosForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const numero = document.getElementById('addSagLotFolio').value.trim();
+    if (numero) editLotFolios({ numero });
+});
+document.getElementById('sagResultList').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-remove-sag-folio]');
+    if (button) editLotFolios({ quitar: [button.dataset.removeSagFolio] });
+});

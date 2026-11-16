@@ -98,7 +98,7 @@
                                     <input id="singleFolioSearch" type="search" maxlength="100" autocomplete="off" placeholder="Número de folio">
                                     <button class="secondary-button" id="searchSingleFolioButton" type="button">Buscar y agregar</button>
                                 </div>
-                                <div class="table-scroll sag-folio-scroll"><table><thead><tr><th></th><th>Folio</th><th>Variedad</th><th>CSG</th><th>Condición térmica</th><th>Ubicación</th><th>Estado SAG</th><th>Destinos aprobados</th></tr></thead><tbody id="eligibleFoliosBody"><tr><td colspan="8" class="empty-cell">Usa los filtros para listar pallets o busca un folio individual.</td></tr></tbody></table></div>
+                                <div class="table-scroll sag-folio-scroll"><table><thead><tr><th></th><th>Folio</th><th>Variedad</th><th>Cajas</th><th>CSG</th><th>Condición térmica</th><th>Ubicación</th><th>Estado SAG</th><th>Destinos aprobados</th></tr></thead><tbody id="eligibleFoliosBody"><tr><td colspan="9" class="empty-cell">Usa los filtros para listar pallets o busca un folio individual.</td></tr></tbody></table></div>
                             </section>
                             <aside class="sag-destinations"><div><p class="eyebrow">MERCADO DE INSPECCIÓN</p><h3>Destino país o bloque</h3><p>UE reemplaza automáticamente selecciones individuales de sus miembros.</p></div><input id="destinationSearch" type="search" placeholder="Buscar país o bloque"><div class="sag-destination-options" id="destinationOptions" role="group" aria-label="Destinos de inspección"></div><div class="sag-selected-destinations" id="selectedDestinationPills"></div><small>Marca uno o varios destinos; no necesitas mantener Ctrl/Cmd.</small></aside>
                         </div>
@@ -118,6 +118,11 @@
                 <section class="panel sag-detail is-hidden" id="sagLotDetail">
                     <div class="sag-panel-heading"><div><p class="eyebrow">DETALLE DEL LOTE</p><h2 id="sagDetailTitle">Lote</h2><p id="sagDetailSubtitle"></p></div><div class="sag-detail-actions"><select id="detailActionSelect" aria-label="Acciones del lote"><option value="">Seleccionar acción</option></select><a class="secondary-button is-hidden" id="sagDocumentLink">Formulario cambio de mercado</a><button class="secondary-button" id="closeSagDetailButton" type="button">Cerrar</button></div></div>
                     <div class="sag-detail-destinations" id="sagDetailDestinations"></div>
+                    <form class="sag-direct-search is-hidden" id="editSagLotFoliosForm">
+                        <label for="addSagLotFolio"><span>Agregar pallet al lote</span><small>Disponible mientras el lote esté en preparación. Se reajustan sus reservas y traslados pendientes.</small></label>
+                        <input id="addSagLotFolio" type="search" maxlength="100" autocomplete="off" placeholder="Escribir o escanear folio" required>
+                        <button class="secondary-button" id="addSagLotFolioButton" type="submit">Buscar y agregar</button>
+                    </form>
                     <div class="sag-result-list" id="sagResultList"></div>
                     <p class="form-error" id="detailError" role="alert"></p>
                 </section>

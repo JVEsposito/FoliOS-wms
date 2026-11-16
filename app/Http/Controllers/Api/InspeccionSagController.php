@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\CondicionTermicaFolio;
 use App\Enums\EstadoLoteInspeccionSag;
 use App\Enums\EstadoOperacionalFolio;
+use App\Enums\EstadoProcesoPrefrio;
 use App\Enums\EstadoValidacionPallet;
 use App\Enums\ResultadoInspeccionSag;
 use App\Enums\ResultadoValidacionPallet;
@@ -272,6 +273,21 @@ class InspeccionSagController extends Controller
         return response()->json($this->serializarLote($servicio->iniciar($loteInspeccionSag, $request->user()), true));
     }
 
+    public function actualizarFolios(Request $request, LoteInspeccionSag $loteInspeccionSag, ServicioInspeccionSag $servicio): JsonResponse
+    {
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'],
+            'agregar' => ['required_without:quitar', 'array', 'max:1000'],
+            'agregar.*' => ['required', 'uuid', 'distinct'],
+            'quitar' => ['required_without:agregar', 'array', 'max:1000'],
+            'quitar.*' => ['required', 'uuid', 'distinct'],
+        ]);
+
+        return response()->json($this->serializarLote($servicio->cargar(
+            $servicio->actualizarFolios($loteInspeccionSag, $datos, $request->user()),
+        ), true));
+    }
+
     public function resolver(
         Request $request,
         LoteInspeccionSag $loteInspeccionSag,
@@ -332,6 +348,8 @@ class InspeccionSagController extends Controller
             'condicionSag:id,codigo,nombre',
             'ubicacionActual.camara:id,codigo,nombre',
             'ubicacionActual.posicion:id,etiqueta',
+            'ultimoPrefrio.proceso.tunel',
+            'ultimoPrefrio.posicion',
             'autorizacionesSagActivas',
             'inspeccionesSag.lote',
             'inspeccionesSag.resultados.destino',
@@ -361,13 +379,38 @@ class InspeccionSagController extends Controller
             'variedad' => $articulo?->variedadCatalogo?->nombre ?? $folio->variedad,
             'condicion_sag_origen' => $folio->condicionSag?->nombre,
             'csg_id' => $origen?->csgCatalogo?->id,
-            'csg' => $origen?->csgCatalogo?->codigo ?? ($datos['csg'] ?? null),
+            ...$this->contextoFolio($folio),
             'fecha_ingreso' => $folio->fecha_ingreso?->toDateString(),
             'condicion_termica' => $folio->condicion_termica->value,
-            'cantidad_cajas' => $datos['cantidad_cajas'] ?? null,
             'camara' => $folio->ubicacionActual?->camara?->codigo,
             'posicion' => $folio->ubicacionActual?->posicion?->etiqueta,
             'sag' => $estadoSag->resumir($folio),
+        ];
+    }
+
+    private function contextoFolio(Folio $folio): array
+    {
+        $datos = $folio->datos_externos ?? [];
+        $csg = collect($datos['composicion'] ?? [])->pluck('csg')->filter(fn ($v) => filled($v))->unique()->values();
+        if ($csg->isEmpty()) {
+            $csg = collect([$folio->validacionPallet?->origen?->csgCatalogo?->codigo ?? ($datos['csg'] ?? null)])->filter(fn ($v) => filled($v))->values();
+        }
+        $prefrio = $folio->ultimoPrefrio;
+        $enTunel = ! $folio->ubicacionActual && $prefrio?->ocupaPosicion()
+            && $prefrio->proceso?->temporada_id === $folio->temporada_id
+            && $prefrio->proceso->estado !== EstadoProcesoPrefrio::Cancelado;
+        $cajas = $datos['cantidad_cajas'] ?? $folio->validacionPallet?->cantidad_cajas;
+
+        return [
+            'cantidad_cajas' => $cajas === null ? null : (int) $cajas,
+            'csg' => $csg->isEmpty() ? null : $csg->implode(' · '),
+            'tunel' => $enTunel ? [
+                'codigo' => $prefrio->proceso->tunel?->codigo,
+                'nombre' => $prefrio->proceso->tunel?->nombre,
+                'posicion' => $prefrio->posicion?->etiqueta ?? $prefrio->posicion?->numero,
+                'proceso' => $prefrio->proceso->codigo,
+                'estado' => $prefrio->proceso->estado->value,
+            ] : null,
         ];
     }
 
@@ -428,6 +471,8 @@ class InspeccionSagController extends Controller
                     'cliente' => $asignacion->folio->exportadora,
                     'especie' => $asignacion->folio->datos_externos['especie'] ?? null,
                     'variedad' => $asignacion->folio->variedad,
+                    ...$this->contextoFolio($asignacion->folio),
+                    'condicion_termica' => $asignacion->folio->condicion_termica?->value,
                     'camara' => $asignacion->folio->ubicacionActual?->camara?->codigo,
                     'posicion' => $asignacion->folio->ubicacionActual?->posicion?->etiqueta,
                 ],

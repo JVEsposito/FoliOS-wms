@@ -1,6 +1,6 @@
 :root { --sag-green: #33d6a6; --sag-gold: #f5b94c; --sag-red: #ff7272; --sag-blue: #2ea8ff; }
 .sag-access-brand .office-logo { width: 4.8rem; border-radius: 1rem; font-size: 1rem; font-weight: 900; letter-spacing: .08em; }
-.sag-workspace { display: grid; gap: 1rem; padding: 1rem; }
+.sag-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; }
 .sag-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem; border-top: 3px solid var(--sag-green); }
 .sag-heading h1 { margin: .15rem 0; font-size: clamp(1.7rem, 3vw, 2.55rem); }
 .sag-heading p, .sag-rule-card p, .sag-panel-heading p, .sag-destinations p { color: var(--muted, #96afbe); }
@@ -11,7 +11,7 @@
 .sag-switcher { display: flex; overflow-x: auto; gap: .25rem; padding: .35rem; background: var(--panel, #111f29); border: 1px solid var(--line, #29404e); border-radius: .75rem; }
 .sag-switcher button { min-width: max-content; padding: .75rem 1rem; color: var(--muted, #96afbe); background: transparent; border: 1px solid transparent; border-radius: .55rem; font-weight: 800; }
 .sag-switcher button.is-active { color: #fff; background: #12364b; border-color: var(--sag-blue); }
-.sag-panel { display: grid; gap: 1rem; }
+.sag-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
 .sag-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
 .sag-rule-card { min-height: 10rem; padding: 1rem; }
 .sag-rule-card h2 { margin: .25rem 0 .6rem; font-size: 1rem; }
@@ -33,6 +33,7 @@
 .sag-filter-fieldset { margin: 1rem 0; padding: 1rem; border: 1px solid var(--line, #29404e); border-radius: .65rem; }
 .sag-filter-fieldset legend { padding: 0 .45rem; color: var(--sag-green); font-size: .75rem; font-weight: 850; letter-spacing: .06em; }
 .sag-selection-layout { display: grid; grid-template-columns: minmax(0, 1fr) 20rem; gap: 1rem; }
+.sag-selection-layout > section { min-width: 0; }
 .sag-direct-search { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(13rem, .8fr) auto; align-items: end; gap: .65rem; margin-bottom: .75rem; padding: .75rem; background: var(--surface-muted, var(--raised, #192630)); border: 1px solid var(--corporate-border, var(--line, #29404e)); border-radius: .55rem; }
 .sag-direct-search label { display: grid; gap: .15rem; }
 .sag-direct-search label span { color: var(--text-strong, var(--text, #f4f8fa)); font-size: .76rem; font-weight: 800; }
@@ -68,14 +69,15 @@
 .sag-load-error span { font-size: .85rem; }
 .sag-builder-actions { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
 .sag-builder-actions span { margin-right: auto; color: var(--muted, #96afbe); }
-.sag-detail { position: relative; border-top: 3px solid var(--sag-gold); }
+.sag-detail { position: relative; scroll-margin-top: calc(var(--office-header-height, 72px) + 1rem); border-top: 3px solid var(--sag-gold); }
 .sag-detail-actions { display: flex; align-items: center; gap: .5rem; }
 .sag-detail-destinations { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .8rem; }
 .sag-result-list { display: grid; gap: .65rem; }
 .sag-result-card { padding: .85rem; border: 1px solid var(--line, #29404e); border-radius: .6rem; }
-.sag-result-card__heading { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .6rem; }
+.sag-result-card__heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .6rem; }
+.sag-result-card__heading > div { flex: 1 1 18rem; min-width: 0; }
 .sag-result-card__heading p { margin: .2rem 0 0; color: var(--muted, #96afbe); font-size: .74rem; }
-.sag-result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .5rem; }
+.sag-result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); gap: .5rem; }
 .sag-resolution { display: grid; grid-template-columns: minmax(8rem, 1.2fr) minmax(7rem, 1fr) minmax(8rem, 1fr) auto; gap: .45rem; align-items: end; padding: .55rem; background: rgba(255,255,255,.02); border: 1px solid var(--line, #29404e); border-radius: .5rem; }
 .sag-resolution label { display: grid; gap: .25rem; color: var(--muted, #96afbe); font-size: .68rem; }
 .is-hidden { display: none !important; }

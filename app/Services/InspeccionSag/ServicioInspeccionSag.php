@@ -6,6 +6,7 @@ use App\Enums\DominioTransicionOperacional;
 use App\Enums\EstadoFolioInspeccionSag;
 use App\Enums\EstadoLoteInspeccionSag;
 use App\Enums\EstadoOperacionalFolio;
+use App\Enums\EstadoTransicionOperacional;
 use App\Enums\ResultadoInspeccionSag;
 use App\Enums\TipoAprobacionSag;
 use App\Enums\TipoBulto;
@@ -19,6 +20,7 @@ use App\Models\Folio;
 use App\Models\LoteInspeccionSag;
 use App\Models\Pais;
 use App\Models\ResultadoDestinoInspeccionSag;
+use App\Models\TransicionOperacional;
 use App\Models\User;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
@@ -170,6 +172,88 @@ class ServicioInspeccionSag
             $accion,
             operacionId: $operacionId,
         );
+    }
+
+    /** Agrega o retira miembros sin reemplazar la selección de otro operador. */
+    public function actualizarFolios(LoteInspeccionSag $lote, array $datos, User $usuario): LoteInspeccionSag
+    {
+        $operacionId = $datos['operacion_id'];
+        $agregar = collect($datos['agregar'] ?? [])->unique()->sort()->values();
+        $quitar = collect($datos['quitar'] ?? [])->unique()->sort()->values();
+        if ($agregar->isEmpty() && $quitar->isEmpty()) {
+            throw new DomainException('Indica al menos un pallet para agregar o quitar.');
+        }
+        if ($agregar->intersect($quitar)->isNotEmpty()) {
+            throw new DomainException('Un pallet no puede agregarse y quitarse en la misma operación.');
+        }
+
+        return $this->transicionar('lote.editar_folios', $usuario,
+            ['lote_id' => $lote->id, 'agregar' => $agregar->all(), 'quitar' => $quitar->all()],
+            function () use ($lote, $agregar, $quitar, $usuario, $operacionId): LoteInspeccionSag {
+                // El motor reejecuta la acción para rehidratar un UUID ya aplicado.
+                if (TransicionOperacional::where('operacion_id', $operacionId)
+                    ->where('tipo', 'lote.editar_folios')->where('estado', EstadoTransicionOperacional::Aplicada)->exists()) {
+                    return $this->cargar($lote->refresh());
+                }
+                $temporada = app(ServicioTemporadaActiva::class)->buscar(bloquear: true);
+                $lote = LoteInspeccionSag::lockForUpdate()->findOrFail($lote->id);
+                if ($lote->temporada_id !== $temporada?->id) {
+                    throw new ConflictoOperacion('El lote no pertenece a la temporada activa.');
+                }
+                $this->exigirEstado($lote, [EstadoLoteInspeccionSag::Preparacion]);
+                $miembros = $lote->folios()->with('resultados')->lockForUpdate()->get();
+                $actuales = $miembros->pluck('folio_id');
+                if ($quitar->diff($actuales)->isNotEmpty()) {
+                    throw new ConflictoOperacion('Uno de los pallets ya no pertenece a este lote. Actualiza el detalle.');
+                }
+                $nuevos = $agregar->diff($actuales);
+                $total = $actuales->diff($quitar)->count() + $nuevos->count();
+                if ($total < 1 || $total > 1000) {
+                    throw new DomainException('El lote debe conservar entre 1 y 1000 pallets.');
+                }
+                if ($miembros->flatMap->resultados->contains(fn ($r) => $r->resultado !== ResultadoInspeccionSag::Pendiente)) {
+                    throw new ConflictoOperacion('El lote ya posee resultados y no puede cambiar sus pallets.');
+                }
+                if ($nuevos->isEmpty() && $quitar->isEmpty()) {
+                    return $this->cargar($lote);
+                }
+                // Mismo mutex que la creación: no asignar un folio a dos inspecciones simultáneas.
+                Folio::whereIn('id', $actuales->merge($nuevos))->orderBy('id')->lockForUpdate()->get();
+                $folios = $this->consultaFoliosElegibles()->whereIn('id', $nuevos)
+                    ->with('validacionPallet.origen.clienteCatalogo.cliente')->lockForUpdate()->get();
+                if ($folios->count() !== $nuevos->count()) {
+                    throw new ConflictoOperacion('Uno o más pallets ya no están disponibles para esta inspección.');
+                }
+                if ($folios->contains(fn ($f) => $f->validacionPallet?->origen?->clienteCatalogo?->cliente?->id !== $lote->cliente_id)) {
+                    throw new DomainException('Los pallets agregados deben pertenecer al mismo cliente/exportadora del lote.');
+                }
+                if ($lote->planPreparacion?->estado->esFinal()) {
+                    throw new ConflictoOperacion('La preparación física ya está cerrada y requiere revisión antes de editar el lote.');
+                }
+                // Libera reservas y cancela sólo trabajo reversible; una maniobra iniciada rechaza toda la edición.
+                $this->preparacionFisica->liberar($lote, $usuario, 'Ajuste de pallets del lote SAG en preparación.');
+                foreach ($miembros->whereIn('folio_id', $quitar) as $miembro) {
+                    foreach ($miembro->resultados as $resultado) {
+                        $resultado->delete();
+                    }
+                    $miembro->delete();
+                }
+                $destinos = $lote->destinos()->get();
+                foreach ($folios as $folio) {
+                    $miembro = $lote->folios()->create(['folio_id' => $folio->id,
+                        'estado' => EstadoFolioInspeccionSag::Pendiente, 'estado_sag_anterior' => $this->estadoSag->resumir($folio)]);
+                    foreach ($destinos as $destino) {
+                        $miembro->resultados()->create(['destino_lote_inspeccion_sag_id' => $destino->id,
+                            'resultado' => ResultadoInspeccionSag::Pendiente]);
+                    }
+                }
+                $lote->update(['cantidad_solicitada' => $total]);
+                $this->preparacionFisica->sincronizar($lote, $usuario);
+                $this->preparacionFisica->restaurarFolios($quitar, $usuario, $lote->temporada_id);
+                app(ServicioExistenciasSag::class)->sincronizar($quitar->all(), 'edicion_lote', $lote->codigo);
+
+                return $this->cargar($lote);
+            }, $lote, $operacionId);
     }
 
     public function iniciar(LoteInspeccionSag $lote, User $usuario): LoteInspeccionSag
@@ -390,6 +474,9 @@ class ServicioInspeccionSag
             'destinos',
             'folios.folio.ubicacionActual.camara',
             'folios.folio.ubicacionActual.posicion',
+            'folios.folio.ultimoPrefrio.proceso.tunel',
+            'folios.folio.ultimoPrefrio.posicion',
+            'folios.folio.validacionPallet.origen.csgCatalogo',
             'folios.folio.autorizacionesSagActivas',
             'folios.folio.inspeccionesSag.lote',
             'folios.resultados.destino',
