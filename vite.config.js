@@ -50,6 +50,7 @@ export default defineConfig({
                 'resources/js/office-material-consumptions.js',
                 'resources/js/office-material-standards.js',
                 'resources/css/office-material-standards.css',
+                'resources/js/office-material-standard-consumption.js',
                 'resources/js/office-material-labels.js',
                 'resources/js/office-material-receptions.js',
                 'resources/js/office-material-warehouses.js',
