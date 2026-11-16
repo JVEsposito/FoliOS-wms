@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 
-import { articlesForOrigins, catalogCombinationCount, compactCatalogCompatibility, createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins, validateCatalogCompatibility } from '../src/domain/validationCatalogIndex.ts';
+import { articlesForOriginProducts, articlesForOrigins, catalogCombinationCount, compactCatalogCompatibility, createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins, validateCatalogCompatibility } from '../src/domain/validationCatalogIndex.ts';
 import { resolveAppVariant } from '../src/config/resolveAppVariant.ts';
 
 test('pda y pda-pruebas conservan la variante PDA del binario', () => {
@@ -116,4 +116,26 @@ test('el índice numérico conserva exactamente opciones, intersecciones y restr
   }
   compact.compatibilidad.indices[0] = 999999;
   assert.throws(() => validateCatalogCompatibility(compact), /inválidos/);
+});
+
+test('calibres por línea mantienen el producto común y las restricciones de variedad en ambos formatos', () => {
+  const catalog = {
+    articulos: [
+      { id: '2j', especie: 'Cereza', variedad: 'Santina', calibre: '2J', envase: '5 kg', variedad_validacion_id: 'v1', activo: true },
+      { id: '3j', especie: 'Cereza', variedad: 'Santina', calibre: '3J', envase: '5 kg', variedad_validacion_id: 'v1', activo: true },
+      { id: 'otro', especie: 'Cereza', variedad: 'Lapins', calibre: '3J', envase: '5 kg', variedad_validacion_id: 'v2', activo: true },
+    ],
+    origenes: [{ id: 'o1', activo: true, variedad_ids: ['v1'] }, { id: 'o2', activo: true, variedad_ids: ['v1'] }],
+    combinaciones: [
+      { articulo_validacion_id: '2j', origen_validacion_id: 'o1' },
+      { articulo_validacion_id: '3j', origen_validacion_id: 'o2' },
+      { articulo_validacion_id: 'otro', origen_validacion_id: 'o2' },
+    ],
+  };
+  for (const data of [catalog, compactCatalogCompatibility(catalog)]) {
+    const index = indexValidationCatalog(data);
+    assert.deepEqual(articlesForOrigins(index, ['o1', 'o2']), []);
+    assert.deepEqual(articlesForOriginProducts(index, ['o1', 'o2']).map((row) => row.id), ['2j', '3j']);
+    assert.deepEqual(articlesForOriginProducts(index, ['o1', 'desconocido']), []);
+  }
 });

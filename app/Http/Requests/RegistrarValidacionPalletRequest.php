@@ -54,6 +54,7 @@ class RegistrarValidacionPalletRequest extends FormRequest
                 'uuid',
                 'exists:origenes_validacion,id',
             ],
+            'composicion.*.articulo_validacion_id' => ['nullable', 'uuid', 'exists:articulos_validacion,id'],
             'composicion.*.cantidad_cajas' => [
                 'required_with:composicion',
                 'integer',
@@ -106,6 +107,7 @@ class RegistrarValidacionPalletRequest extends FormRequest
             $claves = collect($this->input('composicion', []))
                 ->filter(fn (mixed $linea): bool => is_array($linea))
                 ->map(fn (array $linea): string => implode('|', [
+                    (string) ($linea['articulo_validacion_id'] ?? $this->input('articulo_validacion_id')),
                     (string) ($linea['origen_validacion_id'] ?? ''),
                     ProyeccionTrazabilidadFolio::normalizarCodigo($linea['lote_materia_prima'] ?? null),
                     ProyeccionTrazabilidadFolio::normalizarCodigo($linea['proceso_packing'] ?? null),

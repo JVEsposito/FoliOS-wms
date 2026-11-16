@@ -42,11 +42,11 @@
                     <div class="vc-field"><span id="vcBrandLabel">Marca</span><div data-vc-picker="marca"></div></div>
                 </div>
                 <div class="vc-lines-heading">
-                    <div><strong>Composición por CSG</strong><small>Una línea por cada CSG, lote o proceso distinto. Las cajas del bulto son la suma.</small></div>
+                    <div><strong>Composición por CSG y calibre</strong><small>Una línea por cada calibre, CSG, lote o proceso distinto. Las cajas del bulto son la suma.</small></div>
                     <output class="vc-total" id="vcTotal" aria-live="polite">0 cajas</output>
                 </div>
                 <div class="vc-lines" id="vcLines"></div>
-                <button class="vc-add-line" id="vcAddLine" type="button">+ Agregar línea (otro CSG, lote o proceso)</button>
+                <button class="vc-add-line" id="vcAddLine" type="button">+ Agregar línea (otro calibre, CSG, lote o proceso)</button>
             </section>
 
             <section class="vc-section" aria-labelledby="vcProductTitle">

@@ -33,6 +33,8 @@ class ContextoCorreccionValidacion
         $composicion = collect($snapshot['composicion'] ?? [])
             ->filter(fn (mixed $linea): bool => is_array($linea) && filled($linea['origen_validacion_id'] ?? null))
             ->map(fn (array $linea): array => [
+                'articulo_validacion_id' => $linea['articulo_validacion_id'] ?? $validacion->articulo_validacion_id,
+                'calibre' => $linea['calibre'] ?? ($snapshot['articulo']['calibre'] ?? null),
                 'origen_validacion_id' => $linea['origen_validacion_id'],
                 'csg' => $linea['csg'] ?? null,
                 'predio' => $linea['predio'] ?? null,
@@ -44,6 +46,8 @@ class ContextoCorreccionValidacion
         if ($composicion->isEmpty()) {
             // Validaciones antiguas, anteriores a la composición por CSG.
             $composicion = collect([[
+                'articulo_validacion_id' => $validacion->articulo_validacion_id,
+                'calibre' => $snapshot['articulo']['calibre'] ?? null,
                 'origen_validacion_id' => $validacion->origen_validacion_id,
                 'csg' => $snapshot['origen']['csg'] ?? null,
                 'predio' => $snapshot['origen']['predio'] ?? null,

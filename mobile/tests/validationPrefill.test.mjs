@@ -254,8 +254,8 @@ test('al ingresar el folio la PDA replica los datos de planta y el validador sol
     assert.equal(h.registered[0].tipo_bulto, 'saldo');
     assert.equal(h.registered[0].fecha_embalaje, '2026-10-07');
     assert.deepEqual(h.registered[0].composicion, [
-      { origen_validacion_id: 'csg-1', cantidad_cajas: 70, lote_materia_prima: 'L-1', proceso_packing: 'P-1' },
-      { origen_validacion_id: 'csg-2', cantidad_cajas: 50, lote_materia_prima: 'L-2', proceso_packing: 'P-2' },
+      { articulo_validacion_id: 'santina', origen_validacion_id: 'csg-1', cantidad_cajas: 70, lote_materia_prima: 'L-1', proceso_packing: 'P-1' },
+      { articulo_validacion_id: 'santina', origen_validacion_id: 'csg-2', cantidad_cajas: 50, lote_materia_prima: 'L-2', proceso_packing: 'P-2' },
     ]);
   } finally { await h.unmount(); }
 });

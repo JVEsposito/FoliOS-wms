@@ -79,9 +79,9 @@ class PrecargaValidacionOrigenTest extends TestCase
         $this->assertSame($catalogo['articulo']->id, $datos['articulo_validacion_id']);
         $this->assertSame($catalogo['categoria'], $datos['categoria_validacion_id']);
         $this->assertSame([
-            ['csg' => '100001', 'predio' => 'PREDIO DE PRUEBA', 'origen_validacion_id' => $catalogo['origenes']['100001'], 'cantidad_cajas' => 100, 'lote_materia_prima' => '11462', 'proceso_packing' => 'AR01STD10000'],
-            ['csg' => '100002', 'predio' => 'PREDIO DE PRUEBA', 'origen_validacion_id' => $catalogo['origenes']['100002'], 'cantidad_cajas' => 20, 'lote_materia_prima' => '11463', 'proceso_packing' => 'AR01STD10001'],
-            ['csg' => '999999', 'predio' => 'PREDIO DE PRUEBA', 'origen_validacion_id' => null, 'cantidad_cajas' => 10, 'lote_materia_prima' => '11464', 'proceso_packing' => 'AR01STD10002'],
+            ['articulo_validacion_id' => $catalogo['articulo']->id, 'calibre' => 'JD', 'csg' => '100001', 'predio' => 'PREDIO DE PRUEBA', 'origen_validacion_id' => $catalogo['origenes']['100001'], 'cantidad_cajas' => 100, 'lote_materia_prima' => '11462', 'proceso_packing' => 'AR01STD10000'],
+            ['articulo_validacion_id' => $catalogo['articulo']->id, 'calibre' => 'JD', 'csg' => '100002', 'predio' => 'PREDIO DE PRUEBA', 'origen_validacion_id' => $catalogo['origenes']['100002'], 'cantidad_cajas' => 20, 'lote_materia_prima' => '11463', 'proceso_packing' => 'AR01STD10001'],
+            ['articulo_validacion_id' => $catalogo['articulo']->id, 'calibre' => 'JD', 'csg' => '999999', 'predio' => 'PREDIO DE PRUEBA', 'origen_validacion_id' => null, 'cantidad_cajas' => 10, 'lote_materia_prima' => '11464', 'proceso_packing' => 'AR01STD10002'],
         ], $datos['composicion']);
         $this->assertSame(['CSG sin equivalencia en el catálogo de validación.'], $datos['pendientes']);
         $this->assertSame(['Exportadora Prueba', 'MARCA PRUEBA', 'SANTINA', 'JD'], [$datos['origen']['cliente'], $datos['origen']['marca'], $datos['origen']['variedad'], $datos['origen']['calibre']]);
@@ -94,6 +94,32 @@ class PrecargaValidacionOrigenTest extends TestCase
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::CamareroMateriales]), 'sanctum')
             ->getJson('/api/validacion/precarga-origen?numero_folio=P-PRECARGA')
             ->assertForbidden();
+    }
+
+    public function test_precarga_conserva_las_cajas_de_cada_calibre_del_mismo_csg_lote_y_proceso(): void
+    {
+        $catalogo = $this->catalogo();
+        $servicio = app(ServicioCatalogoJerarquicoValidacion::class);
+        $servicio->guardarCalibre(['especie_validacion_id' => $catalogo['articulo']->especie_validacion_id, 'nombre' => '3J']);
+        $articulo = ArticuloValidacion::query()->where('temporada_id', $catalogo['temporada']->id)->where('calibre', '3J')->sole();
+        CombinacionValidacion::query()->firstOrCreate(
+            ['temporada_id' => $catalogo['temporada']->id, 'articulo_validacion_id' => $articulo->id, 'origen_validacion_id' => $catalogo['origenes']['100001']],
+            ['activo' => true],
+        );
+        $this->leer([
+            $this->fila('P-CALIBRES', ['cantidad' => 80]),
+            $this->fila('P-CALIBRES', ['cantidad' => 40, 'cod_calibre' => '3J']),
+        ]);
+        [, $token] = $this->validador('PDA-CALIBRES');
+        $datos = $this->conToken($token)->getJson('/api/validacion/precarga-origen?numero_folio=P-CALIBRES')
+            ->assertOk()->json('data');
+
+        $lineas = collect($datos['composicion'])->keyBy('calibre');
+        $this->assertCount(2, $lineas);
+        $this->assertSame(80, $lineas['JD']['cantidad_cajas']);
+        $this->assertSame(40, $lineas['3J']['cantidad_cajas']);
+        $this->assertSame($articulo->id, $lineas['3J']['articulo_validacion_id']);
+        $this->assertSame($datos['composicion'][0]['articulo_validacion_id'], $datos['articulo_validacion_id']);
     }
 
     public function test_la_validacion_deja_constancia_de_la_copia_mostrada_y_de_lo_corregido(): void

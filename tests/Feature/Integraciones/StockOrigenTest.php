@@ -101,8 +101,8 @@ class StockOrigenTest extends TestCase
         $this->assertSame(['EMP', 'CER', 'CEREZAS', 'SAN', '5.000'], [$pallet->empresa, $pallet->especie_codigo, $pallet->especie, $pallet->variedad_codigo, $pallet->envase_kilos]);
         $this->assertSame([], $pallet->mezclados);
         $this->assertEquals([
-            ['csg' => '100001', 'predio' => 'PREDIO DE PRUEBA', 'variedad' => 'SANTINA', 'lote' => '11462', 'proceso' => 'AR01STD10000', 'productor_codigo' => '11111111-1P', 'productor' => 'PRODUCTOR DE PRUEBA SPA', 'cajas' => 100, 'kilos' => 500],
-            ['csg' => '100002', 'predio' => 'PREDIO DE PRUEBA', 'variedad' => 'SANTINA', 'lote' => '11463', 'proceso' => 'AR01STD10001', 'productor_codigo' => '11111111-1P', 'productor' => 'PRODUCTOR DE PRUEBA SPA', 'cajas' => 20, 'kilos' => 100],
+            ['csg' => '100001', 'predio' => 'PREDIO DE PRUEBA', 'variedad' => 'SANTINA', 'calibre' => 'JD', 'lote' => '11462', 'proceso' => 'AR01STD10000', 'productor_codigo' => '11111111-1P', 'productor' => 'PRODUCTOR DE PRUEBA SPA', 'cajas' => 100, 'kilos' => 500],
+            ['csg' => '100002', 'predio' => 'PREDIO DE PRUEBA', 'variedad' => 'SANTINA', 'calibre' => 'JD', 'lote' => '11463', 'proceso' => 'AR01STD10001', 'productor_codigo' => '11111111-1P', 'productor' => 'PRODUCTOR DE PRUEBA SPA', 'cajas' => 20, 'kilos' => 100],
         ], array_map(fn (array $linea): array => [...$linea, 'kilos' => (int) $linea['kilos']], $pallet->composicion));
         // 11:59 en planta es 14:59 UTC.
         $this->assertSame('2026-10-05 14:59:00', $pallet->recibido_origen_at->format('Y-m-d H:i:s'));
@@ -113,6 +113,9 @@ class StockOrigenTest extends TestCase
         $this->assertNull($saldo->composicion[0]['lote']);
         $this->assertNull($saldo->composicion[0]['proceso']);
         $this->assertSame(['calibre'], PalletStockOrigen::query()->where('numero_pallet', '1000000003')->sole()->mezclados);
+        $mixto = PalletStockOrigen::query()->where('numero_pallet', '1000000003')->sole();
+        $this->assertSame(['J', 'JD'], array_column($mixto->composicion, 'calibre'));
+        $this->assertSame([10, 5], array_column($mixto->composicion, 'cajas'));
     }
 
     public function test_una_nueva_lectura_registra_cambios_y_pallets_que_salieron_de_bodega(): void

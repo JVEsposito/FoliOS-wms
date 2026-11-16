@@ -60,7 +60,7 @@ import { operatorTheme as o } from '../theme/operatorTheme';
 import { isPdaBuild } from '../config/appVariant';
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
 import { LabelCell, LabelCounters, LabelRow, LabelSection, ResultTalon, SignalMark, StatusChip, TalonRow, type LabelTone } from '../components/validation/ValidationLabel';
-import { articlesForOrigins, createOriginArticleSelector, indexValidationCatalog, productCompatibleWithOrigins } from '../domain/validationCatalogIndex';
+import { articlesForOrigins, articlesForOriginProducts, createOriginArticleSelector, indexValidationCatalog, productFamilyCompatibleWithOrigins } from '../domain/validationCatalogIndex';
 import { PREFILL_FIELD_LABELS, prefillChanges, prefillProductFields } from '../domain/validationPrefill';
 
 type ValidationScreenProps = {
@@ -85,7 +85,7 @@ type FolioReview = {
 };
 
 // Cada línea del bulto: CSG, cajas y, cuando la etiqueta los trae, lote MP y proceso de packing.
-type OriginDraft = { key: string; originId: string; boxes: string; lot: string; process: string };
+type OriginDraft = { key: string; originId: string; boxes: string; lot: string; process: string; caliber: string };
 
 // Último pallet registrado: se muestra como talón junto al folio hasta la siguiente lectura.
 type LastResult = {
@@ -188,7 +188,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const observedAttempt = folioReview?.status === 'observado' ? folioReview.attempt : null;
 
   const catalogIndex = useMemo(() => catalog ? indexValidationCatalog(catalog) : null, [catalog]);
-  const selectOriginArticles = useMemo(() => catalogIndex ? createOriginArticleSelector(catalogIndex) : null, [catalogIndex]);
+  const selectOriginArticles = useMemo(() => catalogIndex ? createOriginArticleSelector(catalogIndex, articlesForOriginProducts) : null, [catalogIndex]);
   // La identidad de esta clave cambia solo al seleccionar/quitar CSG, no al digitar cajas, lote o proceso.
   const originSelectionKey = originDrafts.map((draft) => draft.originId).join('|');
   const selectedOriginIds = useMemo(() => originSelectionKey.split('|').filter(Boolean), [originSelectionKey]);
@@ -253,16 +253,25 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     }),
     [catalogIndex, client, brand, originDrafts],
   );
+  // Indexar los artículos de cada CSG solo al cambiar el producto o sus orígenes.
+  const lineArticleOptions = useMemo(() => selectedOriginIds.map((id) => [id,
+    catalogIndex ? articlesForOrigins(catalogIndex, [id]).filter((article) =>
+      article.especie === species && article.variedad === variety && article.envase === packageName) : [],
+  ] as const), [catalogIndex, selectedOriginIds, species, variety, packageName]);
+  const articlesByLineOrigin = useMemo(() => new Map(lineArticleOptions), [lineArticleOptions]);
+  const lineArticles = useMemo(() => originDrafts.map((draft) =>
+    articlesByLineOrigin.get(draft.originId)?.find((article) => article.calibre === (draft.caliber || caliber)) ?? null,
+  ), [originDrafts, articlesByLineOrigin, caliber]);
+  const compositionCalibers = [...new Set(lineArticles.flatMap((article) => article ? [article.calibre] : []))].join(' + ');
   const selectedCombinations = useMemo(
-    () => selectedOrigins.map((origin) => Boolean(origin && selectedArticle && catalogIndex?.articlesByOrigin.get(origin.id)?.has(selectedArticle.id)
-      && (origin.variedad_ids === null || (selectedArticle.variedad_validacion_id !== null && origin.variedad_ids.includes(selectedArticle.variedad_validacion_id))))),
-    [catalogIndex, selectedArticle, selectedOrigins],
+    () => selectedOrigins.map((origin, index) => Boolean(origin && lineArticles[index])),
+    [lineArticles, selectedOrigins],
   );
   const compositionBoxes = originDrafts.reduce((sum, draft) => sum + Number(draft.boxes || 0), 0);
   const prefillDiff = useMemo(() => prefill ? prefillChanges(prefill, {
-    packageType, boxes, packingDate, articleId: selectedArticle?.id ?? null, categoryId, drafts: originDrafts,
+    packageType, boxes, packingDate, articleId: lineArticles[0]?.id ?? null, categoryId, drafts: originDrafts,
     product: { especie: species, variedad: variety, calibre: caliber, envase: packageName },
-  }) : [], [prefill, packageType, boxes, packingDate, selectedArticle, categoryId, originDrafts, species, variety, caliber, packageName]);
+  }) : [], [prefill, packageType, boxes, packingDate, selectedArticle, lineArticles, categoryId, originDrafts, species, variety, caliber, packageName]);
   const selectedCombination = originDrafts.length > 0
     && selectedOrigins.every(Boolean)
     && selectedCombinations.every(Boolean);
@@ -279,7 +288,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     // Comprueba el conjunto antes de reemplazar la captura: una intersección
     // vacía dejaría sin opciones todos los selectores de producto.
     if (choosingOrigin && catalogIndex && nextOriginIds.length > 1
-      && !articlesForOrigins(catalogIndex, nextOriginIds).length) {
+      && !articlesForOriginProducts(catalogIndex, nextOriginIds).length) {
       const csgs = [...new Set(nextOriginIds.map((id) => catalogIndex.originById.get(id)?.csg ?? id))];
       setOriginError(`Los CSG ${csgs.join(' + ')} no tienen un producto habilitado en común. Selecciona otro CSG o revisa sus variedades y combinaciones en el catálogo.`);
       return;
@@ -287,7 +296,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     if (originError && error === originError) setError('');
     setOriginError('');
     setOriginDrafts(nextDrafts);
-    if (catalogIndex && !productCompatibleWithOrigins(
+    if (catalogIndex && !productFamilyCompatibleWithOrigins(
       catalogIndex,
       nextOriginIds,
       { especie: species, variedad: variety, calibre: caliber, envase: packageName },
@@ -544,6 +553,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
     setOriginDrafts(savedComposition.map((line) => ({
       key: newOriginDraft().key,
       originId: line.origen_validacion_id,
+      caliber: ('calibre' in line ? line.calibre : null) || ('articulo_validacion_id' in line && line.articulo_validacion_id ? catalogIndex?.articleById.get(line.articulo_validacion_id)?.calibre : null) || article.calibre,
       boxes: String(line.cantidad_cajas),
       lot: 'lote_materia_prima' in line ? line.lote_materia_prima ?? '' : '',
       process: 'proceso_packing' in line ? line.proceso_packing ?? '' : '',
@@ -707,6 +717,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         key: newOriginDraft().key,
         originId: origin?.activo && origin.cliente === prefillClient && origin.marca === prefillBrand ? origin.id : '',
         boxes: String(line.cantidad_cajas),
+        caliber: line.calibre || (line.articulo_validacion_id ? catalogIndex.articleById.get(line.articulo_validacion_id)?.calibre : '') || '',
         lot: line.lote_materia_prima ?? '',
         process: line.proceso_packing ?? '',
       };
@@ -735,8 +746,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       return `La fecha de embalaje está fuera de la temporada activa ${codigo}. Revisa la etiqueta del pallet.`;
     }
     if (selectedOrigins.some((origin) => !origin)) return 'Completa todos los CSG del bulto.';
-    if (new Set(originDrafts.map(compositionKey)).size !== originDrafts.length) return 'No repitas la misma combinación de CSG, lote y proceso.';
-    if (!selectedCombination) return 'Una combinación artículo–CSG no está habilitada.';
+    if (new Set(originDrafts.map((draft) => compositionKey(draft, caliber))).size !== originDrafts.length) return 'No repitas la misma combinación de calibre, CSG, lote y proceso.';
+    if (!selectedCombination) return 'Elige un calibre habilitado para el producto y el CSG de cada línea.';
     if (originDrafts.some((draft) => !Number.isInteger(Number(draft.boxes)) || Number(draft.boxes) < 1)) return 'Ingresa las cajas de cada CSG.';
     // Lote MP y proceso de packing son obligatorios para trazar el pallet (salvo un rechazo).
     if (result !== 'rechazado' && originDrafts.some((draft) => !normalizeCode(draft.lot) || !normalizeCode(draft.process))) {
@@ -758,7 +769,8 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       return;
     }
     const primaryOrigin = selectedOrigins[0];
-    if (!catalog || !selectedArticle || !primaryOrigin || !selectedCategory || !line || !shift) return;
+    const primaryArticle = lineArticles[0];
+    if (!catalog || !selectedArticle || !primaryArticle || !primaryOrigin || !selectedCategory || !line || !shift) return;
 
     const payload: RegisterValidationPayload = {
       operacion_id: Crypto.randomUUID(),
@@ -769,10 +781,11 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       turno: shift,
       temporada_id: catalog.temporada.id,
       catalogo_version: catalog.temporada.version_catalogo,
-      articulo_validacion_id: selectedArticle.id,
+      articulo_validacion_id: primaryArticle.id,
       origen_validacion_id: primaryOrigin.id,
       fecha_embalaje: packingDate,
-      composicion: originDrafts.map((draft) => ({
+      composicion: originDrafts.map((draft, index) => ({
+        articulo_validacion_id: lineArticles[index]!.id,
         origen_validacion_id: draft.originId,
         cantidad_cajas: Number(draft.boxes),
         ...(normalizeCode(draft.lot) ? { lote_materia_prima: normalizeCode(draft.lot) } : {}),
@@ -931,6 +944,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       setOriginDrafts(composition.map((entry) => ({
         key: newOriginDraft().key, originId: entry.origen_validacion_id,
         boxes: String(entry.cantidad_cajas),
+        caliber: ('articulo_validacion_id' in entry && entry.articulo_validacion_id ? catalogIndex?.articleById.get(entry.articulo_validacion_id)?.calibre : null) || article?.calibre || '',
         lot: 'lote_materia_prima' in entry ? entry.lote_materia_prima ?? '' : '',
         process: 'proceso_packing' in entry ? entry.proceso_packing ?? '' : '',
       })));
@@ -1234,11 +1248,12 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         aside={<StatusChip small label={sumLabel} tone={sumTone} />}
         hint={wide ? 'La suma debe coincidir con las cajas del bulto' : undefined}
         index={3}
-        title="Composición por CSG"
+        title="Composición por CSG y calibre"
       >
         {wide ? (
           <View style={styles.compositionHead}>
             <Text style={[styles.compositionHeadText, { flex: 1.5 }]}>CSG / Predio</Text>
+            <Text style={[styles.compositionHeadText, { flex: 1 }]}>Calibre</Text>
             <Text style={[styles.compositionHeadText, { flex: 0.6 }]}>Cajas</Text>
             <Text style={[styles.compositionHeadText, { flex: 1.1 }]}>Lote MP</Text>
             <Text style={[styles.compositionHeadText, { flex: 1.1 }]}>Proceso packing</Text>
@@ -1260,6 +1275,19 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
               onChange={(value) => updateOriginDrafts(originDrafts.map((item) => item.key === draft.key ? { ...item, originId: value } : item))}
             />
           );
+          const caliberPicker = (
+            <SelectField
+              disabled={captureLocked || !packageName || !draft.originId}
+              divider={wide}
+              emptyLabel={packageName ? 'Seleccionar calibre' : 'Primero completa el producto'}
+              flex={1}
+              hideLabel={wide}
+              label={`Calibre de la línea ${index + 1}`}
+              options={uniqueOptions((articlesByLineOrigin.get(draft.originId) ?? []).map((article) => article.calibre))}
+              value={draft.caliber || caliber}
+              onChange={(value) => setOriginDrafts((current) => current.map((item) => item.key === draft.key ? { ...item, caliber: value } : item))}
+            />
+          );
           const remove = originDrafts.length > 1 ? (
             <Pressable
               accessibilityLabel={`Quitar la línea ${index + 1}`}
@@ -1276,6 +1304,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
           return wide ? (
             <View key={draft.key} style={styles.compositionRow}>
               {csg}
+              {caliberPicker}
               <View style={[styles.compositionCell, { flex: 0.6 }]}>{boxesInput}</View>
               <View style={[styles.compositionCell, { flex: 1.1 }]}>{lotInput}</View>
               <View style={[styles.compositionCell, { flex: 1.1 }]}>{processInput}</View>
@@ -1288,6 +1317,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
                 <LabelCell label="Cajas" width={86}>{boxesInput}</LabelCell>
                 {remove}
               </View>
+              <LabelRow>{caliberPicker}</LabelRow>
               <View style={styles.compositionBlockBottom}>
                 <LabelCell divider label="Lote MP">{lotInput}</LabelCell>
                 <LabelCell label="Proceso packing">{processInput}</LabelCell>
@@ -1297,8 +1327,9 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
         })}
         <View style={styles.compositionFoot}>
           <Pressable disabled={captureLocked || !brand} onPress={() => updateOriginDrafts([...originDrafts, newOriginDraft()])} style={[styles.addButton, (captureLocked || !brand) && styles.disabled]}>
-            <Text style={styles.linkText}>+ Agregar línea (otro CSG, lote o proceso)</Text>
+            <Text style={styles.linkText}>+ Agregar línea (otro calibre, CSG, lote o proceso)</Text>
           </Pressable>
+          <Text style={styles.sectionNote}>Completa el producto y elige el calibre de cada línea. Repite el CSG si aporta más de un calibre.</Text>
           {originError ? <Text accessibilityRole="alert" style={styles.originError}>{originError}</Text> : null}
         </View>
       </LabelSection>
@@ -1346,7 +1377,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
       <View style={styles.decisionSummary}>
         <StatusChip label={ready ? 'Combinación habilitada' : 'Faltan datos obligatorios'} tone={ready ? 'success' : 'neutral'} />
         <View style={styles.decisionSummaryCopy}>
-          <Text style={styles.summaryText}>{selectedCategory ? `Categoría ${selectedCategory.nombre}` : 'Categoría pendiente'} · {selectedArticle ? `${selectedArticle.especie} ${selectedArticle.variedad} · ${selectedArticle.calibre} · ${selectedArticle.envase}` : 'artículo pendiente'}</Text>
+          <Text style={styles.summaryText}>{selectedCategory ? `Categoría ${selectedCategory.nombre}` : 'Categoría pendiente'} · {selectedArticle ? `${selectedArticle.especie} ${selectedArticle.variedad} · ${compositionCalibers || selectedArticle.calibre} · ${selectedArticle.envase}` : 'artículo pendiente'}</Text>
           <Text style={styles.summaryText}>{selectedOrigins.every(Boolean) ? `${client} · ${brand} · ${selectedOrigins.map((origin) => `CSG ${origin?.csg}`).join(' + ')} · ${packingDate}` : 'Origen pendiente'}</Text>
         </View>
       </View>
@@ -1718,9 +1749,9 @@ function ObservationModal({ catalog, draft, onCancel, onConfirm }: { catalog: Va
 function uniqueOptions(values: string[]): Option[] {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')).map((value) => ({ value, label: value }));
 }
-function newOriginDraft(): OriginDraft { return { key: `${Date.now()}-${Math.random()}`, originId: '', boxes: '', lot: '', process: '' }; }
+function newOriginDraft(): OriginDraft { return { key: `${Date.now()}-${Math.random()}`, originId: '', boxes: '', lot: '', process: '', caliber: '' }; }
 function normalizeCode(value: string) { return value.trim().toUpperCase(); }
-function compositionKey(draft: OriginDraft) { return `${draft.originId}|${normalizeCode(draft.lot)}|${normalizeCode(draft.process)}`; }
+function compositionKey(draft: OriginDraft, baseCaliber: string) { return `${normalizeCode(draft.caliber || baseCaliber)}|${draft.originId}|${normalizeCode(draft.lot)}|${normalizeCode(draft.process)}`; }
 function todayLocal(): string {
   const now = new Date();
   const offset = now.getTimezoneOffset() * 60000;

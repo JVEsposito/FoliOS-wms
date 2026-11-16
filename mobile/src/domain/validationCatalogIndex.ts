@@ -164,3 +164,23 @@ export function createOriginArticleSelector(
     return previousArticles;
   };
 }
+
+/** Los CSG pueden aportar calibres distintos del mismo producto. Cada par se valida por línea. */
+export function articlesForOriginProducts(index: ValidationCatalogIndex, originIds: readonly string[]): ValidationArticle[] {
+  const ids = [...new Set(originIds.filter(Boolean))];
+  if (!ids.length) return [];
+  const groups = ids.map((id) => articlesForOrigins(index, [id]));
+  const family = (article: ValidationArticle) => JSON.stringify([article.especie, article.variedad, article.envase]);
+  const families = groups.map((group) => new Set(group.map(family)));
+  const common = new Set([...families[0]].filter((key) => families.every((keys) => keys.has(key))));
+  return [...new Map(groups.flat().filter((article) => common.has(family(article))).map((article) => [article.id, article])).values()];
+}
+
+export function productFamilyCompatibleWithOrigins(
+  index: ValidationCatalogIndex, originIds: readonly string[],
+  selection: Pick<ValidationArticle, 'especie' | 'variedad' | 'calibre' | 'envase'>,
+): boolean {
+  const fields = ['especie', 'variedad', 'envase'] as const;
+  if (fields.every((field) => !selection[field])) return true;
+  return articlesForOriginProducts(index, originIds).some((article) => fields.every((field) => !selection[field] || article[field] === selection[field]));
+}

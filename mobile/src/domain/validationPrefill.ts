@@ -25,7 +25,7 @@ export type ValidationPrefillForm = {
   articleId: string | null;
   product?: { especie: string; variedad: string; calibre: string; envase: string };
   categoryId: string;
-  drafts: Array<{ originId: string; boxes: string; lot: string; process: string }>;
+  drafts: Array<{ originId: string; boxes: string; lot: string; process: string; caliber?: string }>;
 };
 
 export const PREFILL_FIELD_LABELS: Record<ValidationPrefillField, string> = {
@@ -66,7 +66,8 @@ function sameComposition(prefill: AvailableValidationPrefill, drafts: Validation
     const index = remaining.findIndex((draft) => (!line.origen_validacion_id || draft.originId === line.origen_validacion_id)
       && Number(draft.boxes) === line.cantidad_cajas
       && code(draft.lot) === code(line.lote_materia_prima)
-      && code(draft.process) === code(line.proceso_packing));
+      && code(draft.process) === code(line.proceso_packing)
+      && (!line.calibre || code(draft.caliber) === code(line.calibre)));
     if (index < 0) return false;
     remaining.splice(index, 1);
   }

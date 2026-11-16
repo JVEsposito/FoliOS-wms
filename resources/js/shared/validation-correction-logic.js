@@ -87,6 +87,26 @@ export function articlesForOrigins(index, originIds) {
     return result;
 }
 
+/** Producto común, permitiendo que cada CSG aporte un calibre diferente. */
+export function articlesForOriginProducts(index, originIds) {
+    const ids = [...new Set(originIds.filter(Boolean))];
+    if (!ids.length) return [];
+    const groups = ids.map((id) => articlesForOrigins(index, [id]));
+    const family = (article) => JSON.stringify([article.especie, article.variedad, article.envase]);
+    const families = groups.map((group) => new Set(group.map(family)));
+    const common = new Set([...families[0]].filter((key) => families.every((keys) => keys.has(key))));
+    return [...new Map(groups.flat().filter((article) => common.has(family(article))).map((article) => [article.id, article])).values()];
+}
+
+export function lineArticles(index, draft, line) {
+    return articlesForOrigins(index, [line.originId]).filter((article) =>
+        article.especie === draft.especie && article.variedad === draft.variedad && article.envase === draft.envase);
+}
+
+export function lineArticle(index, draft, line) {
+    return lineArticles(index, draft, line).find((article) => article.calibre === (line.caliber || draft.calibre)) || null;
+}
+
 export function clientOptions(index) {
     return uniqueSorted(index.origins.map((origin) => origin.cliente)).map((value) => ({ value, label: value }));
 }
@@ -112,7 +132,7 @@ export function categoryOptions(index) {
 
 /** Opciones de cada paso del producto, filtradas por los CSG y por lo ya elegido. */
 export function productChoices(index, draft) {
-    const eligible = articlesForOrigins(index, draft.lines.map((line) => line.originId));
+    const eligible = articlesForOriginProducts(index, draft.lines.map((line) => line.originId));
     const bySpecies = eligible.filter((article) => !draft.especie || article.especie === draft.especie);
     const byVariety = bySpecies.filter((article) => !draft.variedad || article.variedad === draft.variedad);
     const byCaliber = byVariety.filter((article) => !draft.calibre || article.calibre === draft.calibre);
@@ -135,7 +155,7 @@ export function productChoices(index, draft) {
 
 /** Si el producto elegido ya no está habilitado en los CSG, se vacía desde el primer paso que no calza. */
 export function keepCompatibleProduct(index, draft) {
-    const eligible = articlesForOrigins(index, draft.lines.map((line) => line.originId));
+    const eligible = articlesForOriginProducts(index, draft.lines.map((line) => line.originId));
     const next = { ...draft };
     const fields = ['especie', 'variedad', 'calibre', 'envase'];
     for (let position = 0; position < fields.length; position += 1) {
@@ -152,7 +172,7 @@ export function keepCompatibleProduct(index, draft) {
 let lineCounter = 0;
 export function newLine(values = {}) {
     lineCounter += 1;
-    return { key: `linea-${lineCounter}`, originId: '', boxes: '', lot: '', process: '', ...values };
+    return { key: `linea-${lineCounter}`, originId: '', boxes: '', lot: '', process: '', caliber: '', ...values };
 }
 
 /** El borrador parte de lo validado: mismas líneas, mismo producto y categoría. */
@@ -162,6 +182,7 @@ export function draftFromValidation(validation, index) {
         boxes: String(line.cantidad_cajas ?? ''),
         lot: line.lote_materia_prima || '',
         process: line.proceso_packing || '',
+        caliber: line.calibre || index.articleById.get(line.articulo_validacion_id)?.calibre || '',
     }));
     const firstOrigin = lines.map((line) => index.originById.get(line.originId)).find(Boolean);
     const article = index.articleById.get(validation.articulo_validacion_id) || validation.articulo || {};
@@ -194,8 +215,8 @@ export function totalBoxes(draft) {
     return draft.lines.reduce((sum, line) => sum + (Number.isInteger(Number(line.boxes)) && Number(line.boxes) > 0 ? Number(line.boxes) : 0), 0);
 }
 
-function lineKey(line) {
-    return [line.originId, codeKey(line.lot), codeKey(line.process)].join('|');
+function lineKey(line, baseCaliber) {
+    return [codeKey(line.caliber || baseCaliber), line.originId, codeKey(line.lot), codeKey(line.process)].join('|');
 }
 
 /** Lo que falta o no calza, en el orden del formulario. Vacío: se puede guardar. */
@@ -228,12 +249,15 @@ export function draftIssues(draft, index, { requireLotAndProcess = false, datesO
         if (requireLotAndProcess && !String(line.lot).trim()) issues.push(`Ingresa el lote de materia prima${number}.`);
         if (requireLotAndProcess && !String(line.process).trim()) issues.push(`Ingresa el proceso de packing${number}.`);
     });
-    if (new Set(draft.lines.map(lineKey)).size !== draft.lines.length) issues.push('No repitas la misma combinación de CSG, lote y proceso.');
+    if (new Set(draft.lines.map((line) => lineKey(line, draft.calibre))).size !== draft.lines.length) issues.push('No repitas la misma combinación de calibre, CSG, lote y proceso.');
     const choices = productChoices(index, draft);
     if (draft.lines.every((line) => index.originById.has(line.originId)) && !choices.eligible.length) {
         issues.push('Estos CSG no tienen un producto habilitado en común.');
     } else if (!choices.article) {
         issues.push(!draft.especie ? 'Elige la especie.' : !draft.variedad ? 'Elige la variedad.' : !draft.calibre ? 'Elige el calibre.' : 'Elige el embalaje.');
+    }
+    if (choices.article && draft.lines.some((line) => !lineArticle(index, draft, line))) {
+        issues.push('Elige un calibre habilitado para el producto y el CSG de cada línea.');
     }
     if (!draft.categoriaId) issues.push('Elige la categoría.');
     if (String(draft.motivo).trim().length < 5) issues.push('Explica el motivo de la corrección.');
@@ -246,7 +270,7 @@ function changedDates(draft) {
         .map(([field]) => [field, draft[field]]));
 }
 
-export function correctionPayload(draft, article, operationId, datesOnly = false) {
+export function correctionPayload(draft, article, operationId, datesOnly = false, index = null) {
     const common = {
         operacion_id: operationId,
         motivo_correccion: String(draft.motivo).trim(),
@@ -261,9 +285,10 @@ export function correctionPayload(draft, article, operationId, datesOnly = false
         cantidad_cajas: totalBoxes(draft),
         linea_proceso: Number(draft.linea_proceso),
         turno: draft.turno,
-        articulo_validacion_id: article?.id || null,
+        articulo_validacion_id: (index ? lineArticle(index, draft, draft.lines[0])?.id : article?.id) || null,
         categoria_validacion_id: draft.categoriaId,
         composicion: draft.lines.map((line) => ({
+            ...(index ? { articulo_validacion_id: lineArticle(index, draft, line)?.id || null } : {}),
             origen_validacion_id: line.originId,
             cantidad_cajas: Number(line.boxes),
             lote_materia_prima: String(line.lot).trim() || null,
@@ -275,7 +300,7 @@ export function correctionPayload(draft, article, operationId, datesOnly = false
 function compositionText(lines, index) {
     return lines.map((line) => {
         const csg = index.originById.get(line.originId)?.csg || line.csg || '—';
-        const extra = [line.lot && `lote ${codeKey(line.lot)}`, line.process && `proceso ${codeKey(line.process)}`].filter(Boolean).join(', ');
+        const extra = [line.caliber && `calibre ${line.caliber}`, line.lot && `lote ${codeKey(line.lot)}`, line.process && `proceso ${codeKey(line.process)}`].filter(Boolean).join(', ');
         return `${csg}: ${line.boxes}${extra ? ` (${extra})` : ''}`;
     }).join(' · ');
 }
@@ -305,10 +330,12 @@ export function draftChanges(validation, draft, index) {
     add('Turno', `Turno ${validation.turno}`, `Turno ${draft.turno}`);
     add('Cajas', validation.cantidad_cajas, totalBoxes(draft));
     add('Cliente y marca', [validation.origen?.cliente, validation.origen?.marca].filter(Boolean).join(' · '), [draft.cliente, draft.marca].filter(Boolean).join(' · '));
-    const before = (validation.composicion || []).map((line) => ({ originId: line.origen_validacion_id, csg: line.csg, boxes: line.cantidad_cajas, lot: line.lote_materia_prima, process: line.proceso_packing }));
-    add('Composición', compositionText(before, index), compositionText(draft.lines, index));
+    const before = (validation.composicion || []).map((line) => ({ originId: line.origen_validacion_id, csg: line.csg, boxes: line.cantidad_cajas, lot: line.lote_materia_prima, process: line.proceso_packing, caliber: line.calibre || index.articleById.get(line.articulo_validacion_id || validation.articulo_validacion_id)?.calibre || validation.articulo?.calibre || '' }));
+    add('Composición', compositionText(before, index), compositionText(draft.lines.map((line) => ({ ...line, caliber: line.caliber || draft.calibre })), index));
     const article = validation.articulo || index.articleById.get(validation.articulo_validacion_id) || {};
-    add('Producto', [article.especie, article.variedad, article.calibre, article.envase].filter(Boolean).join(' · '), [draft.especie, draft.variedad, draft.calibre, draft.envase].filter(Boolean).join(' · '));
+    const calibers = uniqueSorted(draft.lines.map((line) => line.caliber || draft.calibre));
+    const caliberSummary = calibers.length > 1 ? 'MIX' : calibers[0] || draft.calibre;
+    add('Producto', [article.especie, article.variedad, article.calibre, article.envase].filter(Boolean).join(' · '), [draft.especie, draft.variedad, caliberSummary, draft.envase].filter(Boolean).join(' · '));
     const category = index.categories.find((item) => item.id === draft.categoriaId)?.nombre;
     add('Categoría', validation.categoria, category);
     return changes;

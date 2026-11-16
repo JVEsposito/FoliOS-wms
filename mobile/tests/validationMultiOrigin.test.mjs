@@ -13,9 +13,9 @@ import ts from 'typescript';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const require = createRequire(import.meta.url);
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src');
-const addLine = '+ Agregar línea (otro CSG, lote o proceso)';
+const addLine = '+ Agregar línea (otro calibre, CSG, lote o proceso)';
 
-function harness() {
+function harness({ mixed = false, width = 360 } = {}) {
   let renderer; let sequence = 0;
   const queued = [];
   const catalog = {
@@ -37,11 +37,15 @@ function harness() {
     ],
     motivos: [],
   };
+  if (mixed) {
+    catalog.articulos.push({ ...catalog.articulos[0], id: 'santina-3j', calibre: '3J' });
+    catalog.combinaciones.push({ origen_validacion_id: 'csg-1', articulo_validacion_id: 'santina-3j' });
+  }
   const cache = new Map();
   const native = {
     ActivityIndicator: 'ActivityIndicator', Image: 'Image', Pressable: 'Pressable', ScrollView: 'ScrollView',
     Text: 'Text', TextInput: 'TextInput', View: 'View', StyleSheet: { create: (styles) => styles },
-    useWindowDimensions: () => ({ width: 360, height: 720 }),
+    useWindowDimensions: () => ({ width, height: 720 }),
     Alert: { alert: () => {} },
     FlatList: ({ data, renderItem, ListEmptyComponent }) => React.createElement('FlatList', null,
       ...data.map((item) => React.createElement('Row', { key: item.value }, renderItem({ item }))),
@@ -89,6 +93,9 @@ function harness() {
   const field = (label) => renderer.root.find((node) => typeof node.type === 'function' && node.props.label === label);
   return {
     queued,
+    async input(label, value) {
+      await flush(() => renderer.root.findAllByType('TextInput').find((node) => node.props.accessibilityLabel === label).props.onChangeText(value));
+    },
     async mount() { await flush(() => { renderer = create(React.createElement(ValidationScreen, { auth, baseUrl: null, onLogout: () => {} })); }); },
     async unmount() { await flush(() => renderer.unmount()); },
     field,
@@ -143,8 +150,8 @@ test('PDA conserva producto y categoría con una fila vacía y con dos CSG compa
     assert.match(h.message(), /2610160001[\s\S]*Guardado en la PDA · se enviará al sincronizar/);
     assert.equal(h.queued[0].articulo_validacion_id, 'santina');
     assert.deepEqual(h.queued[0].composicion, [
-      { origen_validacion_id: 'csg-1', cantidad_cajas: 70, lote_materia_prima: 'L-1', proceso_packing: 'P-1' },
-      { origen_validacion_id: 'csg-2', cantidad_cajas: 50, lote_materia_prima: 'L-2', proceso_packing: 'P-2' },
+      { articulo_validacion_id: 'santina', origen_validacion_id: 'csg-1', cantidad_cajas: 70, lote_materia_prima: 'L-1', proceso_packing: 'P-1' },
+      { articulo_validacion_id: 'santina', origen_validacion_id: 'csg-2', cantidad_cajas: 50, lote_materia_prima: 'L-2', proceso_packing: 'P-2' },
     ]);
   } finally { await h.unmount(); }
 });
@@ -216,5 +223,21 @@ test('PDA exige resolver el CSG incompatible antes de aprobar una composición a
     assert.doesNotMatch(h.message(), /no tienen un producto habilitado en común/);
     await h.press('Aprobar');
     assert.equal(h.queued.length, 1);
+  } finally { await h.unmount(); }
+});
+
+for (const width of [360, 1200]) test(`PDA/tablet ${width}: valida dos calibres del mismo CSG, lote y proceso con sus cajas`, async () => {
+  const h = harness({ mixed: true, width });
+  try {
+    await h.mount(); await h.product(); await h.press(addLine);
+    await h.select('CSG / Predio 2', '11111');
+    await h.select('Calibre de la línea 2', '3J');
+    await h.capture();
+    await h.input('Lote MP de la línea 2', 'L-1');
+    await h.input('Proceso packing de la línea 2', 'P-1');
+    await h.press('Aprobar');
+    assert.equal(h.queued.length, 1);
+    assert.equal(h.queued[0].articulo_validacion_id, 'santina');
+    assert.deepEqual(h.queued[0].composicion.map((line) => [line.articulo_validacion_id, line.cantidad_cajas]), [['santina', 70], ['santina-3j', 50]]);
   } finally { await h.unmount(); }
 });

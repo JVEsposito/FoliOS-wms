@@ -183,7 +183,7 @@
 
 .vc-line {
     display: grid;
-    grid-template-columns: 28px minmax(180px, 2fr) minmax(80px, .8fr) minmax(100px, 1fr) minmax(100px, 1fr) 36px;
+    grid-template-columns: 28px minmax(140px, 1.5fr) minmax(90px, 1fr) minmax(70px, .7fr) minmax(100px, 1fr) minmax(100px, 1fr) 36px;
     align-items: end;
     gap: 8px;
     padding: 10px;
