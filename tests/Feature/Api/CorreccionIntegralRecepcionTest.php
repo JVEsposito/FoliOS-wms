@@ -118,6 +118,10 @@ class CorreccionIntegralRecepcionTest extends TestCase
             ['1522', 'Bins plástico', 2, 4, 'CSG CSG-CORR'], ['1522', 'Tote', 45, 93, 'CSG CSG-CORR'],
         ], $entradas($cuenta()));
         $this->assertSame(0, collect($cuenta()['tipos'])->sum('saldo_final'));
+        $vigentes = app(ServicioCuentaCorrienteEnvases::class)->operacionesPorProductor($recepcion->cliente, $recepcion->temporada, []);
+        $xlsx = collect($vigentes[0]['movimientos'])->keyBy('guia');
+        $this->assertCount(3, $xlsx);
+        $this->assertSame([48, 45, -93], [$xlsx['1511']['totes'], $xlsx['1522']['totes'], $xlsx['GS-CORR-1']['totes']]);
     }
 
     public function test_corrige_una_recepcion_solo_de_envases_sin_mover_la_cuenta_de_envases_comprados(): void

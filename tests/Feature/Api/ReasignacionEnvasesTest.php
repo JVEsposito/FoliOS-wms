@@ -119,6 +119,13 @@ class ReasignacionEnvasesTest extends TestCase
             ->mapWithKeys(fn ($b) => [$b['cliente']['codigo'].'|'.$b['tipo_envase'] => $b['saldo']]);
         $this->assertSame([-2, -48, 2, 48], [$saldos['CLI-CORR|bins'], $saldos['CLI-CORR|totes'], $saldos['CLI-OTRA|bins'], $saldos['CLI-OTRA|totes']]);
 
+        $origenExcel = $cuenta->operacionesPorProductor($cliente, $recepcion->temporada, []);
+        $destinoExcel = $cuenta->operacionesPorProductor($otra, $recepcion->temporada, []);
+        $this->assertSame(['1512', 'GS-CORR-1'], array_column($origenExcel[0]['movimientos'], 'guia'));
+        $this->assertSame('CSG-OTRA', $destinoExcel[0]['codigo']);
+        $entradaExcel = $destinoExcel[0]['movimientos'][0];
+        $this->assertSame(['1511', 'Ingreso con fruta', 2, 48], [$entradaExcel['guia'], $entradaExcel['movimiento'], $entradaExcel['bins'], $entradaExcel['totes']]);
+
         // Mientras está reasignada, la recepción no se corrige, ajusta ni anula.
         $mensaje = 'La guía 1511 está reasignada a Exportadora otra · CSG CSG-OTRA.';
         $estado = $this->getJson("/api/romana/recepciones/{$recepcion->id}/correccion-integral")->json('data');
@@ -145,6 +152,8 @@ class ReasignacionEnvasesTest extends TestCase
         $this->assertSame([0, 0], array_column($origen['tipos'], 'saldo_final'));
         $this->assertContains('1511', array_column($origen['movimientos'], 'documento'));
         $this->assertSame([], $cuenta->estadoCuenta($otra, $recepcion->temporada, null, null)['movimientos']);
+        $this->assertSame([], $cuenta->operacionesPorProductor($otra, $recepcion->temporada, []));
+        $this->assertContains('1511', array_column($cuenta->operacionesPorProductor($cliente, $recepcion->temporada, [])[0]['movimientos'], 'guia'));
         $this->putJson("/api/romana/recepciones/{$recepcion->id}/ajuste-cuenta-envases", ['operacion_id' => (string) Str::uuid(),
             'version_conocida' => $recepcion->refresh()->version, 'motivo' => 'Conteo real de bins: 3.',
             'envases' => [['tipo_envase' => 'bins', 'recibidos' => 3]]])->assertOk();

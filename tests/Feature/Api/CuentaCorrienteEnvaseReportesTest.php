@@ -274,6 +274,7 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             'peso_bruto' => 28000,
         ])->assertCreated()->json('data.id');
         $recepcion = RecepcionRomana::findOrFail($recepcionId);
+        $recepcion->update(['ingreso_at' => CarbonImmutable::parse('2026-10-02 09:00', 'America/Santiago')->utc()]);
         $validacion = $recepcion->validacionesMp()->create([
             'temporada_id' => $this->temporada->id,
             'operacion_toma_id' => (string) Str::uuid(),
@@ -563,8 +564,7 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         }
         $this->movimiento($this->productor, 'ajuste_cuenta', 99, 1, 0, 'propia', '2026-10-14 11:30', 'AJUSTE')
             ->update(['datos' => ['ajuste_recepcion' => ['lado' => 'recibidos']]]);
-        $this->movimiento($this->productor, 'devolucion_envases', 60, 1, 1, 'propia', '2026-10-14 11:00', 'CORRECCION')
-            ->update(['datos' => ['correccion_propiedad' => ['motivo' => 'Corrección'], 'devolucion' => ['productor' => ['codigo' => '153712']]]]);
+        $this->movimiento($this->productor, 'apertura_cuenta', 60, 1, 0, 'propia', '2026-10-14 11:00', 'APERTURA');
         // Un segundo productor debe estar en su propio subtotal y contar una sola vez en el total general.
         $this->movimiento($this->productor, 'devolucion_envases', 4, 1, 1, 'propia', '2026-10-14 11:00', '00234')
             ->update(['datos' => ['devolucion' => ['productor' => ['codigo' => '153713', 'nombre' => 'Otro productor']]]]);
@@ -585,6 +585,16 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $filas = $this->filasExcel($filtrado->baseResponse->getFile()->getPathname());
         $this->assertCount(8, $filas);
         $this->assertSame(['0', '0', '0'], array_slice(end($filas), 8));
+
+        // Una corrección posterior afecta el corte del día del movimiento, y el total se recalcula al descargar.
+        $entrada = MovimientoEnvase::query()->where('documento_id', $idDevolucion)->where('tipo_envase', 'esponjas')->sole();
+        $this->movimiento($this->productor, 'correccion_cantidad', 3, -1, -1, 'propia', '2026-10-15 10:00', '0002379', $entrada, 'esponjas');
+        $excelCorregido = $this->get($ruta.'&productor=153712')->assertOk();
+        $filas = $this->filasExcel($excelCorregido->baseResponse->getFile()->getPathname());
+        $this->assertCount(8, $filas);
+        $this->assertSame(['0002379', '', '', '', '15', '360', '12'], array_slice($filas[5], 4));
+        $this->assertSame(['0', '0', '-3'], array_slice($filas[6], 8));
+        $this->assertSame(['0', '0', '-3'], array_slice(end($filas), 8));
     }
 
     private function movimiento(

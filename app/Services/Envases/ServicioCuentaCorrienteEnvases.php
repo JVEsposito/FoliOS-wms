@@ -8,6 +8,7 @@ use App\Enums\EstadoValidacionMp;
 use App\Enums\PropiedadEnvase;
 use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoMovimientoEnvase;
+use App\Enums\TipoRecepcionRomana;
 use App\Models\Cliente;
 use App\Models\DetalleEnvaseRecepcionRomana;
 use App\Models\DetalleGuiaDespachoEnvase;
@@ -24,6 +25,7 @@ use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -582,57 +584,83 @@ class ServicioCuentaCorrienteEnvases
         return [$detalle, $resumen];
     }
 
-    /** Importes de la operación original, por documento y productor. */
+    /** @return list<array{codigo: ?string, nombre: ?string, movimientos: list<array>}> */
     public function operacionesPorProductor(Cliente $cliente, Temporada $temporada, array $filtros): array
     {
+        return DB::transaction(fn (): array => $this->exportarOperacionesVigentes($cliente, $temporada, $filtros));
+    }
+
+    private function exportarOperacionesVigentes(Cliente $cliente, Temporada $temporada, array $filtros): array
+    {
         $columnas = ['bins' => 'bins', 'totes' => 'totes', 'esponjas' => 'esponjas', 'esponja_tote' => 'esponjas'];
-        $consulta = MovimientoEnvase::query()
+        $tipos = [
+            TipoMovimientoEnvase::RecepcionFruta, TipoMovimientoEnvase::SalidaRecepcionFruta,
+            TipoMovimientoEnvase::DevolucionEnvases, TipoMovimientoEnvase::DespachoCliente,
+            TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::RecepcionCompra,
+        ];
+        // La fecha del asiento de corrección puede quedar fuera del período de la operación.
+        $asientos = MovimientoEnvase::query()
             ->where('temporada_id', $temporada->id)
             ->where('cliente_id', $cliente->id)
             ->where('signo_cuenta', '!=', 0)
-            ->whereIn('tipo_envase', array_intersect(array_keys($columnas), $filtros['tipos_envase'] ?? array_keys($columnas)))
-            ->whereIn('tipo_movimiento', [
-                TipoMovimientoEnvase::RecepcionFruta, TipoMovimientoEnvase::SalidaRecepcionFruta,
-                TipoMovimientoEnvase::DevolucionEnvases, TipoMovimientoEnvase::DespachoCliente,
-                TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::RecepcionCompra,
-            ])
-            // Los reemplazos de una corrección pueden llevar el mismo código que la operación original.
-            ->whereNull('datos->correccion_propiedad')
-            ->whereNull('datos->correccion_integral')
-            ->whereNull('datos->motivo_correccion');
-        $this->filtrarDiasOperacionales($consulta, 'ocurrido_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null);
-        $movimientos = $consulta->orderBy('ocurrido_at')->orderBy('id')->get();
+            ->whereIn('tipo_envase', array_keys($columnas))
+            ->whereNotIn('tipo_movimiento', [...self::PRESTAMO_INTERNO, TipoMovimientoEnvase::AperturaCuenta])
+            ->orderBy('ocurrido_at')->orderBy('id')->get()->keyBy('id');
+        $netos = $asientos->map(fn (MovimientoEnvase $m): int => $m->cantidad * $m->signo_cuenta);
+        foreach ($asientos as $asiento) {
+            $origenId = self::corrige($asiento, $asientos);
+            if ($origenId !== null && $netos->has($origenId)) {
+                $netos[$origenId] += $asiento->cantidad * $asiento->signo_cuenta;
+            }
+        }
+        $movimientos = $asientos->filter(fn (MovimientoEnvase $m): bool => $netos[$m->id] !== 0
+            && in_array(self::tipoVisible($m), $tipos, true));
+        $ajustes = $asientos->filter(fn (MovimientoEnvase $m): bool => $netos[$m->id] !== 0 && self::ajusteRecepcion($m) !== null);
+
         $guias = GuiaDespachoEnvase::query()
             ->whereKey($movimientos->map(self::guiaDespachoId(...))->filter()->unique()->values())
-            ->get(['id', 'estado', 'numero_guia_despacho', 'productor_csg_id', 'productor_snapshot', 'nombre_conductor', 'patente_camion', 'patente_carro'])->keyBy('id');
-        $recepciones = RecepcionRomana::query()->whereKey($movimientos->pluck('recepcion_romana_id')->filter()->unique()->values())
-            ->get(['id', 'estado', 'nombre_conductor', 'patente_camion', 'patente_carro',
+            ->get(['id', 'estado', 'numero_guia_despacho', 'productor_csg_id', 'productor_snapshot', 'salida_at',
+                'nombre_conductor', 'patente_camion', 'patente_carro'])->keyBy('id');
+        $recepciones = RecepcionRomana::query()
+            ->whereKey($movimientos->concat($ajustes)->map(self::recepcionId(...))->filter()->unique()->values())
+            ->get(['id', 'estado', 'eliminada_at', 'ingreso_at', 'salida_at', 'numero_guia_despacho', 'numero_guia_salida',
+                'nombre_conductor', 'patente_camion', 'patente_carro', 'salida_productor_snapshot',
                 'tipo_recepcion', 'concepto_envases', 'devolucion_guia_salida', 'devolucion_productor_csg_id', 'devolucion_productor_snapshot'])->keyBy('id');
-        $csgRecepcion = $this->recepcionesCsg($movimientos, incluirReasignadas: true);
-        $guiasRecepcion = $this->guiasRecepcion($movimientos, incluirReasignadas: true);
+        $csgRecepcion = $this->recepcionesCsg($movimientos->concat($ajustes));
+        $guiasRecepcion = $this->guiasRecepcion($movimientos);
         $repartos = $this->repartoGuias($movimientos);
 
-        $documentos = $movimientos->groupBy(fn (MovimientoEnvase $m): string => implode('|', [
-            $m->documento_tipo, $m->documento_id ?? $m->recepcion_romana_id ?? $m->id,
-            $m->tipo_movimiento->value, $m->numero_documento, $m->ocurrido_at->format('U.u'), $m->signo_cuenta,
-        ]));
+        $documentos = $movimientos->groupBy(function (MovimientoEnvase $m): string {
+            // Las líneas con documento vinculado comparten la guía y fecha vigentes de ese documento.
+            $vinculado = self::recepcionId($m) !== null || self::guiaDespachoId($m) !== null;
+
+            return implode('|', [$m->documento_tipo, $m->documento_id ?? $m->recepcion_romana_id ?? $m->id,
+                $m->tipo_movimiento->value, $m->signo_cuenta, $vinculado ? '' : $m->numero_documento,
+                $vinculado ? '' : $m->ocurrido_at->format('U.u')]);
+        });
         $filas = [];
-        foreach ($documentos as $asientos) {
-            $origen = $asientos->first();
-            $tipo = $origen->tipo_movimiento;
-            $recepcionId = $origen->recepcion_romana_id;
+        $porRecepcion = [];
+        foreach ($documentos as $asientosDocumento) {
+            $origen = $asientosDocumento->first();
+            $tipo = self::tipoVisible($origen);
+            $reasignacion = self::reasignacion($origen);
+            $recepcionId = self::recepcionId($origen);
             $guiaDespacho = $guias->get(self::guiaDespachoId($origen));
             $recepcion = $recepciones->get($recepcionId);
-            if ($guiaDespacho?->estado === EstadoGuiaDespachoEnvase::Anulada || $recepcion?->estado === EstadoRecepcionRomana::Anulada) {
+            if ($guiaDespacho?->estado === EstadoGuiaDespachoEnvase::Anulada || $recepcion?->estado === EstadoRecepcionRomana::Anulada
+                || $recepcion?->eliminada_at !== null) {
                 continue;
             }
-            $viaje = $guiaDespacho ?? $recepcion;
-            $numero = $guiaDespacho ? $guiaDespacho->numero_guia_despacho : $origen->numero_documento;
+            $esSalida = in_array($tipo, self::SALIDAS, true);
+            $documento = $this->documentoExcel($origen, $tipo, $guiaDespacho, $recepcion);
             $porGuia = [];
-            foreach ($asientos->groupBy(fn (MovimientoEnvase $m): string => $m->tipo_envase->value) as $envase => $lineas) {
-                $cantidad = $lineas->sum(fn (MovimientoEnvase $m): int => $m->cantidad * $m->signo_cuenta);
-                foreach ($this->partesPorGuia($lineas->first(), $cantidad, $cantidad < 0, $guiasRecepcion)
-                    ?? [['clave' => '', 'documento' => $numero, 'impacto' => $cantidad]] as $parte) {
+            foreach ($asientosDocumento->groupBy(fn (MovimientoEnvase $m): string => $m->tipo_envase->value) as $envase => $lineas) {
+                $cantidad = $lineas->sum(fn (MovimientoEnvase $m): int => $netos[$m->id]);
+                if ($cantidad === 0) {
+                    continue;
+                }
+                $partes = $reasignacion === null ? $this->partesPorGuia($lineas->first(), $cantidad, $esSalida, $guiasRecepcion) : null;
+                foreach ($partes ?? [['clave' => '', 'documento' => $documento['guia'], 'impacto' => $cantidad]] as $parte) {
                     $clave = $parte['clave'];
                     $porGuia[$clave]['numero'] = $parte['documento'];
                     $porGuia[$clave]['tipos'][$envase] = [
@@ -641,49 +669,54 @@ class ServicioCuentaCorrienteEnvases
                 }
             }
 
-            $productor = match ($tipo) {
+            $productor = $reasignacion['productor'] ?? match ($tipo) {
                 TipoMovimientoEnvase::DespachoCliente => $guiaDespacho?->productorDestino(),
-                TipoMovimientoEnvase::SalidaRecepcionFruta => self::csgSalida($csgRecepcion, $recepcionId),
-                TipoMovimientoEnvase::DevolucionEnvases => $origen->datos['devolucion']['productor'] ?? $recepcion?->datosDevolucion()['productor'] ?? null,
+                TipoMovimientoEnvase::SalidaRecepcionFruta => $recepcion?->salida_productor_snapshot ?? self::csgSalida($csgRecepcion, $recepcionId),
+                TipoMovimientoEnvase::DevolucionEnvases => $recepcion?->datosDevolucion()['productor'] ?? $origen->datos['devolucion']['productor'] ?? null,
                 default => null,
             };
             foreach ($porGuia as $clave => $parte) {
-                $asignaciones = $tipo === TipoMovimientoEnvase::RecepcionFruta
-                    ? $this->asignarIngreso($parte['tipos'], $csgRecepcion[$recepcionId]['csg'] ?? [],
+                $asignaciones = $tipo === TipoMovimientoEnvase::RecepcionFruta && $reasignacion === null
+                    ? $this->asignarIngreso($parte['tipos'], $clave !== '' ? ($csgRecepcion[$recepcionId]['csg'] ?? []) : ($csgRecepcion[$recepcionId]['csg_ingreso'] ?? []),
                         $clave !== '' ? ($repartos[$clave] ?? []) : ($csgRecepcion[$recepcionId]['envases'] ?? []))
                     : [['csg' => $productor, 'tipos' => $parte['tipos']]];
                 foreach ($asignaciones as $asignacion) {
                     $cantidades = [];
                     foreach ($asignacion['tipos'] as $envase => $linea) {
-                        $columna = $columnas[$envase];
-                        $cantidades[$columna] = ($cantidades[$columna] ?? 0) + $linea['entradas'] - $linea['salidas'];
+                        $cantidades[$envase] = $linea['entradas'] - $linea['salidas'];
                     }
                     $csg = $asignacion['csg']['codigo'] ?? null;
-                    $filas[] = [
-                        'codigo' => $csg ? (string) $csg : null,
-                        // Los snapshots de despacho/devolución vienen del productor elegido en el maestro.
-                        'nombre_snapshot' => match ($tipo) {
-                            TipoMovimientoEnvase::DespachoCliente, TipoMovimientoEnvase::DevolucionEnvases => $productor['nombre'] ?? null,
-                            TipoMovimientoEnvase::SalidaRecepcionFruta => $csgRecepcion[$recepcionId]['salida']['nombre'] ?? null,
-                            default => null,
-                        },
-                        'fecha' => $this->local($origen->ocurrido_at),
-                        'guia' => $parte['numero'],
-                        'movimiento' => $this->identidadDocumento($origen, ['documento' => $parte['numero']], null, null, false, [])['movimiento'],
-                        'chofer' => $viaje?->nombre_conductor,
-                        'patente_camion' => $viaje?->patente_camion,
-                        'patente_rampla' => $viaje?->patente_carro,
-                        ...$cantidades,
-                    ];
+                    if ($recepcionId !== null && $reasignacion === null) {
+                        $indice = $recepcionId.'|'.($esSalida ? 'entregados' : 'recibidos').'|'.$csg;
+                        $porRecepcion[$indice][] = count($filas);
+                    }
+                    $filas[] = [...$documento, 'codigo' => $csg ? (string) $csg : null, 'guia' => $parte['numero'],
+                        'nombre_snapshot' => $productor['nombre'] ?? null, 'cantidades' => $cantidades];
                 }
             }
         }
 
+        $this->aplicarAjustesRecepcionExcel($filas, $porRecepcion, $ajustes, $netos, $recepciones, $csgRecepcion);
+
         $nombres = ProductorCsg::query()->whereIn('codigo', collect($filas)->pluck('codigo')->filter()->unique()->values())
             ->pluck('razon_social', 'codigo');
+        [$inicio, $fin] = $this->rangoOperacional($filtros['desde'] ?? null, $filtros['hasta'] ?? null);
+        $envasesIncluidos = array_intersect_key($columnas, array_fill_keys($filtros['tipos_envase'] ?? array_keys($columnas), true));
         $grupos = [];
         $productorBuscado = Str::lower(Str::ascii(trim($filtros['productor'] ?? '')));
         foreach ($filas as $fila) {
+            if (($inicio !== null && $fila['fecha'] < $inicio) || ($fin !== null && $fila['fecha'] >= $fin)) {
+                continue;
+            }
+            $cantidadPorColumna = [];
+            foreach (array_intersect_key($fila['cantidades'], $envasesIncluidos) as $tipo => $cantidad) {
+                $columna = $envasesIncluidos[$tipo];
+                $cantidadPorColumna[$columna] = ($cantidadPorColumna[$columna] ?? 0) + $cantidad;
+            }
+            $cantidadPorColumna = array_filter($cantidadPorColumna);
+            if ($cantidadPorColumna === []) {
+                continue;
+            }
             $codigo = $fila['codigo'];
             $nombre = $nombres->get($codigo) ?: $fila['nombre_snapshot'];
             if ($productorBuscado !== '' && ! Str::contains(Str::lower(Str::ascii($codigo.' '.$nombre)), $productorBuscado)) {
@@ -691,7 +724,9 @@ class ServicioCuentaCorrienteEnvases
             }
             $clave = json_encode([$codigo, $nombre], JSON_THROW_ON_ERROR);
             $grupos[$clave] ??= ['codigo' => $codigo, 'nombre' => $nombre, 'movimientos' => []];
-            $grupos[$clave]['movimientos'][] = $fila;
+            unset($fila['cantidades'], $fila['nombre_snapshot'], $fila['codigo']);
+            $fila['fecha'] = $this->local($fila['fecha']);
+            $grupos[$clave]['movimientos'][] = [...$fila, ...$cantidadPorColumna];
         }
         usort($grupos, [ResumenEnvasesPorCsg::class, 'comparar']);
         foreach ($grupos as &$grupo) {
@@ -700,6 +735,80 @@ class ServicioCuentaCorrienteEnvases
         unset($grupo);
 
         return $grupos;
+    }
+
+    private function documentoExcel(MovimientoEnvase $asiento, TipoMovimientoEnvase $tipo, ?GuiaDespachoEnvase $despacho, ?RecepcionRomana $recepcion): array
+    {
+        $salida = $tipo === TipoMovimientoEnvase::SalidaRecepcionFruta;
+        $viaje = $despacho ?? $recepcion;
+        $guia = match (true) {
+            $despacho !== null => $despacho->numero_guia_despacho,
+            ! empty(self::reasignacion($asiento)['guia_recepcion_id']) => $asiento->numero_documento,
+            $salida => $recepcion?->numero_guia_salida ?? $asiento->numero_documento,
+            default => $recepcion?->numero_guia_despacho ?? $asiento->numero_documento,
+        };
+
+        return [
+            'fecha' => $despacho?->salida_at ?? ($salida ? $recepcion?->salida_at : $recepcion?->ingreso_at) ?? $asiento->ocurrido_at,
+            'guia' => $guia,
+            'movimiento' => match ($tipo) {
+                TipoMovimientoEnvase::RecepcionFruta => 'Ingreso con fruta',
+                TipoMovimientoEnvase::SalidaRecepcionFruta => 'Entregados en el destare',
+                TipoMovimientoEnvase::DevolucionEnvases => 'Devolución de envases',
+                TipoMovimientoEnvase::DespachoCliente => 'Despacho de envases',
+                default => self::etiquetaMovimiento($tipo),
+            },
+            'chofer' => $viaje?->nombre_conductor,
+            'patente_camion' => $viaje?->patente_camion,
+            'patente_rampla' => $viaje?->patente_carro,
+        ];
+    }
+
+    private function aplicarAjustesRecepcionExcel(array &$filas, array $porRecepcion, Collection $ajustes, Collection $netos, Collection $recepciones, array $csgRecepcion): void
+    {
+        foreach ($ajustes as $asiento) {
+            $recepcion = $recepciones->get($asiento->recepcion_romana_id);
+            if ($recepcion === null || $recepcion->estado === EstadoRecepcionRomana::Anulada || $recepcion->eliminada_at !== null) {
+                continue;
+            }
+
+            $ajuste = self::ajusteRecepcion($asiento);
+            $productor = self::csgAjuste($ajuste, $csgRecepcion, $recepcion->id);
+            $csg = $productor['codigo'] ?? null;
+            $clave = $recepcion->id.'|'.$ajuste['lado'].'|'.$csg;
+            $envase = $asiento->tipo_envase->value;
+            $indices = array_values(array_filter($porRecepcion[$clave] ?? [], fn (int $i): bool => isset($filas[$i])));
+            $delEnvase = array_values(array_filter($indices, fn (int $i): bool => isset($filas[$i]['cantidades'][$envase])));
+            $relacionadas = $delEnvase ?: $indices;
+            $principal = $relacionadas[0] ?? null;
+            $resto = array_slice($relacionadas, 1);
+
+            if ($principal === null) {
+                $tipo = match (true) {
+                    $ajuste['lado'] === 'entregados' => TipoMovimientoEnvase::SalidaRecepcionFruta,
+                    $recepcion->esDevolucionEnvases() => TipoMovimientoEnvase::DevolucionEnvases,
+                    $recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases => TipoMovimientoEnvase::RecepcionArriendo,
+                    default => TipoMovimientoEnvase::RecepcionFruta,
+                };
+                $filas[] = [...$this->documentoExcel($asiento, $tipo, null, $recepcion),
+                    'codigo' => $csg, 'nombre_snapshot' => $productor['nombre'] ?? null, 'cantidades' => []];
+                $principal = array_key_last($filas);
+                $porRecepcion[$clave][] = $principal;
+            }
+            // Un ajuste sin guía explícita puede abarcar varias guías del mismo productor.
+            $guias = [$filas[$principal]['guia']];
+            foreach ($resto as $i) {
+                $guias[] = $filas[$i]['guia'];
+                foreach ($filas[$i]['cantidades'] as $tipo => $cantidad) {
+                    $filas[$principal]['cantidades'][$tipo] = ($filas[$principal]['cantidades'][$tipo] ?? 0) + $cantidad;
+                }
+                unset($filas[$i]);
+            }
+            if ($resto !== []) {
+                $filas[$principal]['guia'] = implode(' / ', array_unique(array_filter($guias)));
+            }
+            $filas[$principal]['cantidades'][$envase] = ($filas[$principal]['cantidades'][$envase] ?? 0) + $netos[$asiento->id];
+        }
     }
 
     /**
@@ -863,7 +972,7 @@ class ServicioCuentaCorrienteEnvases
      * @param  Collection<int, MovimientoEnvase>  $movimientos
      * @return array<string, list<array{id: string, numero: string, envases: array<string, int>, productor: ?string}>>
      */
-    private function guiasRecepcion(Collection $movimientos, bool $incluirReasignadas = false): array
+    private function guiasRecepcion(Collection $movimientos): array
     {
         $recepciones = $movimientos->where('tipo_movimiento', TipoMovimientoEnvase::RecepcionFruta)
             ->pluck('recepcion_romana_id')->filter()->unique()->values();
@@ -881,7 +990,7 @@ class ServicioCuentaCorrienteEnvases
             })->filter()->unique()->implode(' / ') ?: null);
 
         // Una guía reasignada por separado ya no es parte de su recepción: la recepción sigue separada por guía.
-        $reasignadas = $incluirReasignadas ? [] : array_flip(ServicioReasignacionEnvases::guiasReasignadas($recepciones->all()));
+        $reasignadas = array_flip(ServicioReasignacionEnvases::guiasReasignadas($recepciones->all()));
 
         return GuiaRecepcionRomana::query()->whereIn('recepcion_romana_id', $recepciones)->where('vigente', 1)
             ->whereNotNull('envases_validados')->orderBy('secuencia')->get()
@@ -926,7 +1035,7 @@ class ServicioCuentaCorrienteEnvases
      * @param  Collection<int, MovimientoEnvase>  $movimientos
      * @return array<string, array{productor: ?string, csg: array, envases: array}>
      */
-    private function recepcionesCsg(Collection $movimientos, bool $incluirReasignadas = false): array
+    private function recepcionesCsg(Collection $movimientos): array
     {
         $recepciones = $movimientos
             ->pluck('recepcion_romana_id')->filter()->unique()->values();
@@ -938,7 +1047,7 @@ class ServicioCuentaCorrienteEnvases
         $salidas = RecepcionRomana::query()->whereKey($recepciones)->whereNotNull('salida_productor_snapshot')
             ->get(['id', 'salida_productor_snapshot'])->pluck('salida_productor_snapshot', 'id');
         // Las guías reasignadas por separado ya no reparten el ingreso de su recepción (el destare no cambia).
-        $reasignadas = $incluirReasignadas ? [] : array_flip(ServicioReasignacionEnvases::guiasReasignadas($recepciones->all()));
+        $reasignadas = array_flip(ServicioReasignacionEnvases::guiasReasignadas($recepciones->all()));
 
         return ValidacionMp::query()
             ->whereIn('recepcion_romana_id', $recepciones)
