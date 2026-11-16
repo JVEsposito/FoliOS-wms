@@ -96,6 +96,7 @@ class IdentidadOficina
             'puede_administrar_recetas_materiales' => $usuario->can('administrar-recetas-materiales'),
             'puede_consultar_estandares_materiales' => $usuario->can('consultar-estandares-materiales'),
             'puede_administrar_estandares_materiales' => $usuario->can('administrar-estandares-materiales'),
+            'puede_rebajar_estandares_materiales' => $usuario->can('rebajar-estandares-materiales'),
             'puede_gestionar_despachos_materiales' => $capacidades['puede_gestionar_despachos_materiales'],
             'puede_retirar_materiales' => $capacidades['puede_retirar_materiales'],
             'puede_consultar_despachos_materiales' => $capacidades['puede_consultar_despachos_materiales'],

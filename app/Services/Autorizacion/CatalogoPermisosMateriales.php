@@ -46,6 +46,7 @@ class CatalogoPermisosMateriales
             ]),
             $this->grupo('estandares', 'Estándares de consumo', [CatalogoModulosAcceso::OFICINA_ESTANDARES_MATERIALES], [
                 'estandares.administrar' => 'Crear y versionar estándares de consumo',
+                'estandares.rebajar' => 'Rebajar materiales por estándar desde Validación PT',
             ]),
             $this->grupo('transformaciones', 'Transformaciones', ['materiales.ordenes'], [
                 'transformaciones.planificar' => 'Planificar órdenes',

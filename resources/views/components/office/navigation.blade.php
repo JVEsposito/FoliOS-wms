@@ -60,6 +60,7 @@
             ['key' => 'despachos', 'module' => 'materiales.despachos', 'label' => 'Despachos', 'href' => '/oficina/materiales/despachos', 'permissions' => ['puede_consultar_despachos_materiales']],
             ['key' => 'recetas', 'module' => 'materiales.recetas', 'label' => 'Recetas', 'href' => '/oficina/materiales/recetas', 'permissions' => ['puede_consultar_transformaciones_materiales']],
             ['key' => 'estandares', 'module' => 'materiales.estandares', 'label' => 'Estándares de consumo', 'href' => '/oficina/materiales/estandares', 'permissions' => ['puede_consultar_estandares_materiales']],
+            ['key' => 'rebajas-estandar', 'module' => 'materiales.estandares', 'label' => 'Rebaja por estándar', 'href' => '/oficina/materiales/rebajas-estandar', 'permissions' => ['puede_consultar_estandares_materiales']],
             ['key' => 'consumos', 'module' => 'materiales.ordenes', 'label' => 'Consumos por OT', 'href' => '/oficina/materiales/consumos', 'permissions' => ['puede_consultar_transformaciones_materiales']],
             ['key' => 'ordenes', 'module' => 'materiales.ordenes', 'label' => 'Órdenes', 'href' => '/oficina/materiales/ordenes', 'permissions' => ['puede_consultar_transformaciones_materiales']],
             ['key' => 'exportaciones', 'module' => 'materiales.exportaciones', 'label' => 'Existencias', 'href' => '/oficina/materiales/exportaciones', 'permissions' => ['puede_consultar_despachos_materiales']],

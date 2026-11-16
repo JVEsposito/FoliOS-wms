@@ -36,6 +36,7 @@ class PermisosAccionesMaterialesTest extends TestCase
         'capacidad.medir' => 'medir-cargas-materiales',
         'recetas.administrar' => 'administrar-recetas-materiales',
         'estandares.administrar' => 'administrar-estandares-materiales',
+        'estandares.rebajar' => 'rebajar-estandares-materiales',
         'transformaciones.planificar' => 'gestionar-transformaciones-materiales',
         'transformaciones.operar' => 'operar-transformaciones-materiales',
         'transformaciones.revertir' => 'revertir-transformaciones-materiales',

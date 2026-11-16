@@ -165,6 +165,19 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_rebaja_por_estandar_tiene_vista_previa_materiales_y_confirmacion(): void
+    {
+        $html = $this->get('/oficina/materiales/rebajas-estandar')->assertOk()->getContent();
+        foreach (['rebateFilters', 'rebateGroups', 'rebateMaterials', 'rebateConfirm', 'rebateHistory'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        $this->assertStringContainsString('aria-current="page"', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/rebaja-estandar.html'), $html);
+        }
+    }
+
     public function test_tomas_inventario_conserva_cierre_historial_y_filtros(): void
     {
         $html = $this->get('/oficina/materiales/tomas')->assertOk()->getContent();

@@ -100,6 +100,54 @@ variación, la lectura podrá usarlas sin depender de la fecha de creación.
   La primera rige desde la **creación** en planta. Las siguientes rigen desde la
   **edición** en planta, nunca antes que la versión anterior.
 
+## Rebaja por estándar
+
+**Materiales → Rebaja por estándar** (`/oficina/materiales/rebajas-estandar`) descuenta del
+almacén de Packing lo que lleva la producción validada en PT.
+
+### Qué se rebaja
+
+- Cada línea de composición de un pallet **aceptado y aprobado** en Validación PT que creó
+  folio. El día de proceso es su fecha de embalaje (la que imprime la etiqueta).
+- Se agrupa por **día de proceso · cliente · marca · proceso de packing · embalaje**, y
+  además variedad, calibre y categoría, que deciden las variaciones del estándar. El proceso
+  viene de la precarga de planta; sin él, la línea queda «Sin proceso».
+- El repaletizaje no crea validaciones, así que mover cajas entre folios no las vuelve a
+  contar. Las correcciones modifican la misma validación. Un pallet incluido en una rebaja
+  confirmada no vuelve a aparecer.
+- Un grupo sin estándar vigente en su día de proceso, o con insumos sin homologar, no se
+  puede rebajar hasta resolverlo.
+- Se consultan hasta 31 días de proceso por vez.
+
+### Cómo se descuenta
+
+- El origen es un **almacén virtual** (centro de costo) al que bodega entregó los
+  materiales: el de Packing. Cada descuento es un consumo normal de ese almacén, en orden
+  FIFO, con el código REB como documento y el mismo kardex que el resto de Materiales.
+- **Entero** descuenta unidades completas y **arrastra la fracción** al siguiente descuento
+  del mismo ítem en el mismo almacén. Por ejemplo, 188 cajas × 0,0062 = 1,1656 pallets: se
+  descuenta 1 y quedan 0,1656 para la próxima rebaja. **Decimal** descuenta hasta milésimas,
+  que es la precisión del inventario, y arrastra el resto.
+- **Sin saldo suficiente** se descuenta lo que hay y el resto queda **pendiente**. Cada rebaja
+  siguiente de ese almacén reintenta los pendientes, aunque no traiga producción nueva.
+  FoliOS no deja saldos negativos por folio.
+- La fracción y el pendiente viven en `saldos_rebaja_estandar`, por almacén e ítem.
+
+### Confirmación
+
+La vista previa muestra los grupos y, por ítem: teórico, fracción y pendiente anteriores, a
+descontar, disponible, lo que se descuenta y lo que queda pendiente (en rojo). Se pueden
+quitar grupos antes de confirmar.
+
+La confirmación usa `operacion_id`: repetirla con los mismos datos devuelve la misma rebaja
+y con otros datos responde 409. Si la producción cambió desde la vista previa (cajas de un
+grupo) responde 409 y hay que actualizarla.
+
+Tablas: `rebajas_estandar_materiales` (documento REB-000001, secuencia
+`rebajas_estandar_materiales`), `producciones_rebaja_estandar` (cada línea de validación
+rebajada, sin FK a la operación de frío), `consumos_rebaja_estandar` y
+`saldos_rebaja_estandar`.
+
 ## Permisos
 
 Módulo de oficina `materiales.estandares` y acción `estandares.administrar`.
@@ -109,6 +157,7 @@ Módulo de oficina `materiales.estandares` y acción `estandares.administrar`.
 | Consultar y exportar | `consultar-estandares-materiales` | Administrador, supervisor de materiales, despachador, consulta |
 | Crear, versionar, copiar, activar; leer planta, vincular e incorporar | `administrar-estandares-materiales` | Administrador y supervisor de materiales (acción `estandares.administrar`) |
 | Configurar la lectura de planta | `administrar-accesos` | Administrador de accesos |
+| Confirmar rebajas | `rebajar-estandares-materiales` (acción `estandares.rebajar`) y además `gestionar-despachos-materiales` | Administrador y supervisor de materiales |
 
 La migración `2026_11_16_120100_habilitar_estandares_materiales_en_perfiles` agrega el
 módulo a esos perfiles predeterminados. Los perfiles personalizados lo reciben desde
@@ -134,6 +183,13 @@ POST /api/materiales/estandares/planta/vinculos/clientes        (cod_empresa, cl
 POST /api/materiales/estandares/planta/vinculos/embalajes       (estandar_origen_id, envase_validacion_id)
 POST /api/materiales/estandares/planta/vinculos/insumos         (cod_empresa, cod_insumo, item_material_id)
 POST /api/materiales/estandares/planta/incorporar               (ids? opcional)
+
+GET  /api/materiales/rebajas-estandar/opciones                  almacenes de Packing, clientes, puede_rebajar
+POST /api/materiales/rebajas-estandar/previsualizar             (desde, hasta, almacen_id, cliente_id?, marca?, proceso?, grupos? claves)
+POST /api/materiales/rebajas-estandar                           (…mismos filtros…, operacion_id, grupos[{clave, cajas}], observacion?)
+GET  /api/materiales/rebajas-estandar?almacen_id=               historial
+GET  /api/materiales/rebajas-estandar/{rebaja}                  producción, consumos y movimientos
+GET  /api/materiales/rebajas-estandar/saldos?almacen_id=        fracciones y pendientes
 ```
 
 Cada línea lleva `item_material_id`, `cantidad_por_caja`, `redondeo` (`entero`|`decimal`)

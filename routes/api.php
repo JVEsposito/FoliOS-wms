@@ -91,6 +91,7 @@ use App\Http\Controllers\Api\ProcesoPrefrioController;
 use App\Http\Controllers\Api\ProductoHidrocoolerController;
 use App\Http\Controllers\Api\ProveedorMaterialController;
 use App\Http\Controllers\Api\PuntoRocioPrefrioController;
+use App\Http\Controllers\Api\RebajaEstandarController;
 use App\Http\Controllers\Api\RecepcionFrutaEmbaladaController;
 use App\Http\Controllers\Api\RecepcionMaterialController;
 use App\Http\Controllers\Api\RecepcionRomanaController;
@@ -787,6 +788,17 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/planta/vinculos/insumos', [EstandarOrigenController::class, 'vincularInsumo']);
             Route::post('/planta/incorporar', [EstandarOrigenController::class, 'incorporar']);
         });
+    });
+
+    Route::prefix('materiales/rebajas-estandar')->group(function () {
+        Route::middleware('can:consultar-estandares-materiales')->group(function () {
+            Route::get('/', [RebajaEstandarController::class, 'index']);
+            Route::get('/opciones', [RebajaEstandarController::class, 'opciones']);
+            Route::get('/saldos', [RebajaEstandarController::class, 'saldos']);
+            Route::post('/previsualizar', [RebajaEstandarController::class, 'previsualizar']);
+            Route::get('/{rebajaEstandarMaterial}', [RebajaEstandarController::class, 'show']);
+        });
+        Route::post('/', [RebajaEstandarController::class, 'store'])->middleware('can:rebajar-estandares-materiales');
     });
 
     Route::prefix('materiales/transformaciones')->group(function () {
