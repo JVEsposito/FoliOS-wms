@@ -44,6 +44,9 @@ class CatalogoPermisosMateriales
             $this->grupo('recetas', 'Recetas', ['materiales.recetas'], [
                 'recetas.administrar' => 'Crear y editar recetas',
             ]),
+            $this->grupo('estandares', 'Estándares de consumo', [CatalogoModulosAcceso::OFICINA_ESTANDARES_MATERIALES], [
+                'estandares.administrar' => 'Crear y versionar estándares de consumo',
+            ]),
             $this->grupo('transformaciones', 'Transformaciones', ['materiales.ordenes'], [
                 'transformaciones.planificar' => 'Planificar órdenes',
                 'transformaciones.operar' => 'Operar órdenes y registrar consumos',

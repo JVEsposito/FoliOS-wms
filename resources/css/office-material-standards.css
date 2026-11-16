@@ -1,0 +1,51 @@
+/* Estándares de consumo: lista, detalle por versión y editor de insumos por caja. */
+#standardsApp .custody-card { min-width: 0; margin-bottom: 18px; }
+.standards-heading-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.standards-filters { grid-template-columns: minmax(220px, 1.4fr) repeat(4, minmax(140px, 1fr)) auto auto; }
+.standards-table { min-width: 900px; }
+.standards-table td small { display: block; margin-top: 3px; color: var(--muted); font-size: .72rem; }
+.standards-table button { min-height: 32px; padding: 5px 10px; }
+.standards-badge { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; font-size: .66rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.standards-badge--propio { border-color: var(--info-text); color: var(--cyan-light); }
+.standards-badge--planta { border-color: var(--warning-text); color: var(--warning-text); }
+.standards-badge--inactivo { border-color: var(--danger-text); color: var(--danger-text); }
+.standards-warning { color: var(--warning-text); font-weight: 700; }
+.standards-pages { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 12px; color: var(--muted); }
+.standards-detail { display: grid; gap: 14px; }
+.standards-detail td small { display: block; margin-top: 3px; color: var(--muted); font-size: .72rem; }
+.standards-detail__heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.standards-detail__heading h2 { margin: 2px 0 4px; font-size: 1.15rem; }
+.standards-detail__heading p { margin: 0; color: var(--muted); font-size: .8rem; }
+.standards-detail__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.standards-versions { display: flex; flex-wrap: wrap; gap: 6px; }
+.standards-versions button { min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); color: var(--text); padding: 6px 10px; font: inherit; font-size: .78rem; }
+.standards-versions button[aria-pressed="true"] { border-color: var(--cyan); background: var(--soft); }
+.standards-version-note { margin: 0; color: var(--muted); font-size: .8rem; }
+.standards-dialog { margin: auto; width: min(1080px, calc(100vw - 24px)); max-height: calc(100vh - 24px); border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); padding: 0; box-shadow: var(--corporate-shadow-raised); }
+.standards-dialog::backdrop { background: var(--overlay); }
+.standards-form { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; max-height: calc(100vh - 26px); }
+.standards-dialog__header { display: flex; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.standards-dialog__header h2 { margin: 3px 0 4px; }
+.standards-dialog__header p:not(.eyebrow) { margin: 0; color: var(--muted); font-size: .78rem; }
+.standards-dialog__close { width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 9px; background: var(--raised); color: var(--text); font-size: 1.25rem; }
+.standards-form__body { display: grid; gap: 14px; overflow: auto; padding: 16px 20px; }
+.standards-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.standards-form label { display: grid; gap: 5px; color: var(--muted); font-size: .74rem; font-weight: 700; min-width: 0; }
+.standards-form input, .standards-form select { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: var(--deep); color: var(--text); padding: 8px; font: inherit; }
+.standards-lines-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.standards-lines-heading h3 { margin: 0; font-size: 1rem; }
+.standards-lines-heading p { margin: 4px 0 0; color: var(--muted); font-size: .74rem; line-height: 1.45; max-width: 760px; }
+.standards-lines { display: grid; gap: 8px; }
+.standards-line { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(110px, .8fr) minmax(110px, .8fr) minmax(120px, .9fr) minmax(130px, 1fr) 40px; align-items: end; gap: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--deep); padding: 10px; }
+.standards-line > button { min-height: 40px; border: 1px solid var(--danger-text); border-radius: 8px; background: transparent; color: var(--danger-text); font-weight: 900; }
+.standards-item-picker { position: relative; display: grid; gap: 4px; min-width: 0; }
+.standards-item-picker small { min-height: 14px; color: var(--muted); font-size: .68rem; overflow-wrap: anywhere; }
+.standards-item-results { position: absolute; z-index: 30; top: 62px; left: 0; right: 0; max-height: 260px; overflow: auto; border: 1px solid var(--cyan); border-radius: 9px; background: var(--panel); box-shadow: var(--corporate-shadow-raised); padding: 4px; }
+.standards-item-results button { display: grid; width: 100%; gap: 2px; border: 0; border-radius: 7px; background: transparent; color: var(--text); padding: 8px; text-align: left; font: inherit; font-size: .78rem; }
+.standards-item-results button:hover, .standards-item-results button:focus { outline: none; background: var(--surface-selected); }
+.standards-item-results button small { color: var(--muted); }
+.standards-item-results p { margin: 0; padding: 8px; color: var(--muted); font-size: .75rem; }
+.standards-form__error { min-height: 18px; margin: 0; color: var(--danger-text); font-weight: 700; }
+.standards-form__footer { display: flex; justify-content: flex-end; gap: 9px; border-top: 1px solid var(--line); padding: 14px 20px; }
+@media (max-width: 1100px) { .standards-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .standards-line { grid-template-columns: repeat(2, minmax(0, 1fr)); } .standards-line .standards-item-picker { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .standards-filters, .standards-form__grid, .standards-line { grid-template-columns: 1fr; } .standards-lines-heading { flex-direction: column; align-items: stretch; } .standards-form__footer { flex-direction: column-reverse; } .standards-form__footer button { width: 100%; } }

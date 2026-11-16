@@ -21,6 +21,8 @@ class CatalogoModulosAcceso
 
     public const OFICINA_ORDENES_PROCESO = 'materia-prima.ordenes-proceso';
 
+    public const OFICINA_ESTANDARES_MATERIALES = 'materiales.estandares';
+
     public const FINANZAS_PAGOS_PROVEEDORES = 'finanzas.pagos-proveedores';
 
     public const OFICINA_FINANZAS_PROVEEDORES = 'finanzas.proveedores';
@@ -129,6 +131,7 @@ class CatalogoModulosAcceso
                     $this->modulo('materiales.inventario', 'Inventario', 'Existencias, posiciones, kardex y correcciones.'),
                     $this->modulo('materiales.despachos', 'Despachos', 'Reservas, retiros y despachos internos.'),
                     $this->modulo('materiales.recetas', 'Recetas', 'Configuración de transformaciones internas.'),
+                    $this->modulo(self::OFICINA_ESTANDARES_MATERIALES, 'Estándares de consumo', 'Materiales por caja de cada embalaje PT, de planta o propios.'),
                     $this->modulo('materiales.ordenes', 'Órdenes', 'Planificación y ejecución de transformaciones.'),
                     $this->modulo('materiales.exportaciones', 'Exportaciones', 'Descarga de inventarios autorizados.'),
                 ],
@@ -430,6 +433,7 @@ class CatalogoModulosAcceso
                 'materiales.inventario',
                 'materiales.despachos',
                 'materiales.recetas',
+                self::OFICINA_ESTANDARES_MATERIALES,
                 'materiales.ordenes',
                 'materiales.exportaciones',
             ],
@@ -444,6 +448,7 @@ class CatalogoModulosAcceso
                 'materiales.inventario',
                 'materiales.despachos',
                 'materiales.recetas',
+                self::OFICINA_ESTANDARES_MATERIALES,
                 'materiales.ordenes',
                 'materiales.exportaciones',
             ],
@@ -511,6 +516,7 @@ class CatalogoModulosAcceso
                 'materiales.inventario',
                 'materiales.despachos',
                 'materiales.recetas',
+                self::OFICINA_ESTANDARES_MATERIALES,
                 'materiales.ordenes',
                 'materiales.exportaciones',
             ],

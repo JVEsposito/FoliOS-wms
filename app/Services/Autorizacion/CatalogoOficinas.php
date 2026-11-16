@@ -91,6 +91,7 @@ class CatalogoOficinas
         ['materiales', 'Inventario CC', '/oficina/materiales/almacenes', 'materiales.inventario', ['puede_consultar_despachos_materiales']],
         ['materiales', 'Despachos', '/oficina/materiales/despachos', 'materiales.despachos', ['puede_consultar_despachos_materiales']],
         ['materiales', 'Recetas', '/oficina/materiales/recetas', 'materiales.recetas', ['puede_consultar_transformaciones_materiales']],
+        ['materiales', 'Estándares de consumo', '/oficina/materiales/estandares', 'materiales.estandares', ['puede_consultar_estandares_materiales']],
         ['materiales', 'Consumos por OT', '/oficina/materiales/consumos', 'materiales.ordenes', ['puede_consultar_transformaciones_materiales']],
         ['materiales', 'Órdenes', '/oficina/materiales/ordenes', 'materiales.ordenes', ['puede_consultar_transformaciones_materiales']],
         ['materiales', 'Existencias', '/oficina/materiales/exportaciones', 'materiales.exportaciones', ['puede_consultar_despachos_materiales']],

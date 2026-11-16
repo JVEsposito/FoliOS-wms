@@ -51,6 +51,7 @@ use App\Http\Controllers\Api\DisponibilidadCamarerosController;
 use App\Http\Controllers\Api\DocumentoRecepcionEmbaladaController;
 use App\Http\Controllers\Api\EliminacionFolioManualController;
 use App\Http\Controllers\Api\EmbarqueController;
+use App\Http\Controllers\Api\EstandarMaterialController;
 use App\Http\Controllers\Api\EtiquetaPtController;
 use App\Http\Controllers\Api\EvacuacionEmergenciaController;
 use App\Http\Controllers\Api\FolioPrefrioController;
@@ -761,6 +762,22 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('can:administrar-recepciones-materiales');
         Route::delete('/{recepcionMaterial}', [RecepcionMaterialController::class, 'destroy'])
             ->middleware('can:eliminar-recepciones-materiales');
+    });
+
+    Route::prefix('materiales/estandares')->group(function () {
+        Route::middleware('can:consultar-estandares-materiales')->group(function () {
+            Route::get('/', [EstandarMaterialController::class, 'index']);
+            Route::get('/opciones', [EstandarMaterialController::class, 'opciones']);
+            Route::get('/items', [EstandarMaterialController::class, 'items']);
+            Route::get('/excel', [EstandarMaterialController::class, 'excel']);
+            Route::get('/{estandarMaterial}', [EstandarMaterialController::class, 'show']);
+        });
+        Route::middleware('can:administrar-estandares-materiales')->group(function () {
+            Route::post('/', [EstandarMaterialController::class, 'store']);
+            Route::post('/{estandarMaterial}/versiones', [EstandarMaterialController::class, 'versionar']);
+            Route::post('/{estandarMaterial}/copiar', [EstandarMaterialController::class, 'copiar']);
+            Route::put('/{estandarMaterial}/estado', [EstandarMaterialController::class, 'estado']);
+        });
     });
 
     Route::prefix('materiales/transformaciones')->group(function () {

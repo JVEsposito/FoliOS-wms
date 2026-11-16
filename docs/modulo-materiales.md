@@ -534,3 +534,7 @@ Las devoluciones y reversas de transformación reducen el consumo neto; la produ
 Al consumir insumos desde Inventario, un supervisor con gestión de transformaciones puede repartir un único consumo entre órdenes en ejecución del mismo cliente y temporada. La cantidad distribuida debe coincidir exactamente con el consumo físico. No genera transferencias ficticias, stock en centros de costo ni nuevos descuentos por cada orden. Las cantidades, merma incluida, contexto, operador y registrador quedan congelados en cada imputación; un insumo ajeno a la receta aparece **sin estándar**, sin inventar un consumo esperado. Esta distribución describe un consumo definitivo: no es un préstamo ni material sin utilizar pendiente de devolución.
 
 Detalles, fórmulas, API y despliegue en [Consumos por OT](CONSUMOS_POR_OT_MATERIALES.md).
+
+### Estándares de consumo
+
+**Materiales → Estándares de consumo** define cuánto material lleva cada caja de un embalaje PT de un cliente: estándares de planta o propios, con versiones que rigen desde una fecha de proceso, insumos con rebaja «Entero» o «Decimal» y variaciones por marca, variedad, calibre o categoría. El propio manda sobre el de planta. Es la base de la rebaja por estándar desde Validación PT. Detalle en [Estándares de consumo](ESTANDARES_MATERIALES.md).
