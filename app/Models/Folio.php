@@ -134,6 +134,11 @@ class Folio extends Model implements PerteneceATemporada
         return $this->hasMany(ProcesoPrefrioFolio::class);
     }
 
+    public function ultimoPrefrio(): HasOne
+    {
+        return $this->hasOne(ProcesoPrefrioFolio::class)->ofMany(['created_at' => 'max', 'id' => 'max']);
+    }
+
     public function validacionPallet(): HasOne
     {
         return $this->hasOne(ValidacionPallet::class)

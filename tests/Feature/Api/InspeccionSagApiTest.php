@@ -39,6 +39,7 @@ use App\Models\ProcesoPrefrioFolio;
 use App\Models\ReservaCargaFolio;
 use App\Models\ReservaPosicionInspeccionSag;
 use App\Models\TareaMovimiento;
+use App\Models\TransicionOperacional;
 use App\Models\TunelPrefrio;
 use App\Models\UbicacionActual;
 use App\Models\User;
@@ -1160,6 +1161,120 @@ class InspeccionSagApiTest extends TestCase
     }
 
     /** @param array<int, Folio> $folios */
+    public function test_armado_y_detalle_muestran_tunel_posicion_cajas_y_csg_sin_confundir_historia(): void
+    {
+        $usuario = $this->administradorConTemporada();
+        $folio = $this->crearFolioUbicado('SAG-CONTEXTO', ['datos_externos' => ['especie' => 'Cereza', 'cantidad_cajas' => 120,
+            'composicion' => [['csg' => '89868', 'cantidad_cajas' => 80], ['csg' => '152223', 'cantidad_cajas' => 40]]]]);
+        $posicion = $folio->ubicacionActual->posicion;
+        $this->crearPrefrioSag($usuario, [$folio]);
+        $this->actingAs($usuario, 'sanctum')->getJson('/api/inspeccion-sag/folios?folio=SAG-CONTEXTO')
+            ->assertOk()->assertJsonPath('data.0.tunel.codigo', 'TUN-SAG')
+            ->assertJsonPath('data.0.tunel.posicion', 'TUN-SAG-P1')->assertJsonPath('data.0.cantidad_cajas', 120)
+            ->assertJsonPath('data.0.csg', '89868 · 152223');
+        $lote = $this->crearLoteEnPreparacion($usuario, [$folio], Pais::where('iso_alpha2', 'US')->firstOrFail());
+        $this->getJson('/api/inspeccion-sag/lotes/'.$lote['id'])->assertOk()
+            ->assertJsonPath('folios.0.folio.tunel.codigo', 'TUN-SAG')->assertJsonPath('folios.0.folio.cantidad_cajas', 120)
+            ->assertJsonPath('folios.0.folio.csg', '89868 · 152223');
+        $folio->update(['condicion_termica' => 'prefrio_aprobado', 'habilitacion_almacenamiento' => 'habilitado', 'estado_operacional' => 'disponible']);
+        UbicacionActual::create(['folio_id' => $folio->id, 'camara_id' => $posicion->camara_id,
+            'posicion_id' => $posicion->id, 'ubicado_at' => now()]);
+        $this->getJson('/api/inspeccion-sag/lotes/'.$lote['id'])->assertOk()->assertJsonPath('folios.0.folio.tunel', null)
+            ->assertJsonPath('folios.0.folio.posicion', $posicion->etiqueta);
+        $folio->ubicacionActual()->delete();
+        $folio->procesosPrefrio()->update(['estado' => 'retirado', 'retirado_at' => now()]);
+        $this->getJson('/api/inspeccion-sag/lotes/'.$lote['id'])->assertOk()->assertJsonPath('folios.0.folio.tunel', null);
+    }
+
+    public function test_edita_pallets_del_lote_preparado_con_auditoria_destinos_y_reintento(): void
+    {
+        $usuario = $this->administradorConTemporada();
+        $a = $this->crearFolioUbicado('SAG-EDIT-A');
+        $b = $this->crearFolioUbicado('SAG-EDIT-B');
+        $c = $this->crearFolioUbicado('SAG-EDIT-C');
+        $lote = $this->crearLoteEnPreparacion($usuario, [$a, $b], Pais::where('iso_alpha2', 'US')->firstOrFail());
+        $resultadoA = collect($lote['folios'])->firstWhere('folio.id', $a->id)['resultados'][0]['id'];
+        $payload = ['operacion_id' => (string) Str::uuid(), 'agregar' => [$c->id], 'quitar' => [$b->id]];
+        $respuesta = $this->patchJson('/api/inspeccion-sag/lotes/'.$lote['id'].'/folios', $payload)
+            ->assertOk()->assertJsonPath('cantidad_solicitada', 2)->assertJsonCount(2, 'folios')->json();
+        $this->assertEqualsCanonicalizing([$a->id, $c->id], array_column(array_column($respuesta['folios'], 'folio'), 'id'));
+        $this->assertSame($resultadoA, collect($respuesta['folios'])->firstWhere('folio.id', $a->id)['resultados'][0]['id']);
+        $this->assertSame($lote['destinos'], $respuesta['destinos']);
+        $this->assertDatabaseMissing('lotes_inspeccion_sag_folios', ['lote_inspeccion_sag_id' => $lote['id'], 'folio_id' => $b->id]);
+        $this->getJson('/api/inspeccion-sag/folios?folio=SAG-EDIT-B')->assertOk()->assertJsonPath('data.0.id', $b->id);
+        $this->patchJson('/api/inspeccion-sag/lotes/'.$lote['id'].'/folios', $payload)->assertOk()->assertJsonCount(2, 'folios');
+        $this->patchJson('/api/inspeccion-sag/lotes/'.$lote['id'].'/folios', [
+            ...$payload, 'agregar' => [], 'quitar' => [$c->id],
+        ])->assertConflict();
+        $this->assertSame(1, TransicionOperacional::where('tipo', 'lote.editar_folios')->count());
+        $this->assertGreaterThan(0, TransicionOperacional::where('tipo', 'lote.editar_folios')->sole()->cantidad_cambios);
+    }
+
+    public static function cambiosPalletsInvalidos(): array
+    {
+        return ['lote vacío' => ['ultimo', 422], 'otro cliente' => ['cliente', 422],
+            'otra inspección' => ['ocupado', 409], 'despachado' => ['despachado', 409],
+            'saldo' => ['saldo', 409], 'inspección iniciada' => ['iniciado', 422],
+            'agregar y quitar mismo folio' => ['solapado', 422], 'quitar ajeno' => ['ajeno', 409]];
+    }
+
+    #[DataProvider('cambiosPalletsInvalidos')]
+    public function test_edicion_rechaza_pallets_invalidos_sin_cambiar_el_lote(string $caso, int $status): void
+    {
+        $usuario = $this->administradorConTemporada();
+        $a = $this->crearFolioUbicado('SAG-FIJO');
+        $b = $this->crearFolioUbicado('SAG-CANDIDATO', $caso === 'cliente' ? ['exportadora' => 'OTRO-CLIENTE'] : []);
+        $pais = Pais::where('iso_alpha2', 'US')->firstOrFail();
+        $lote = $this->crearLoteEnPreparacion($usuario, [$a], $pais);
+        $payload = ['operacion_id' => (string) Str::uuid(), 'agregar' => [$b->id]];
+        if ($caso === 'ultimo') {
+            $payload = ['operacion_id' => (string) Str::uuid(), 'quitar' => [$a->id]];
+        }
+        if ($caso === 'ocupado') {
+            $this->crearLoteEnPreparacion($usuario, [$b], $pais);
+        }
+        if ($caso === 'despachado') {
+            $b->update(['estado_operacional' => 'despachado', 'activo' => false]);
+        }
+        if ($caso === 'saldo') {
+            $b->update(['tipo_bulto' => 'saldo']);
+        }
+        if ($caso === 'iniciado') {
+            LoteInspeccionSag::findOrFail($lote['id'])->update(['estado' => 'en_inspeccion']);
+        }
+        if ($caso === 'solapado') {
+            $payload['quitar'] = [$b->id];
+        }
+        if ($caso === 'ajeno') {
+            $payload = ['operacion_id' => (string) Str::uuid(), 'quitar' => [$b->id]];
+        }
+        $this->patchJson('/api/inspeccion-sag/lotes/'.$lote['id'].'/folios', $payload)->assertStatus($status);
+        $this->assertSame([$a->id], LoteInspeccionSag::findOrFail($lote['id'])->folios()->pluck('folio_id')->all());
+        $this->assertDatabaseHas('lotes_inspeccion_sag', ['id' => $lote['id'], 'cantidad_solicitada' => 1]);
+    }
+
+    public function test_editar_lote_recalcula_espacio_y_no_abandona_una_maniobra_iniciada(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, 12);
+        $a = $this->crearFolioUbicado('SAG-RES-A');
+        $b = $this->crearFolioUbicado('SAG-RES-B');
+        $c = $this->crearFolioUbicado('SAG-RES-C');
+        $lote = $this->crearLoteEnPreparacion($usuario, [$a, $b], Pais::where('iso_alpha2', 'US')->firstOrFail());
+        $this->patchJson('/api/inspeccion-sag/lotes/'.$lote['id'].'/folios', ['operacion_id' => (string) Str::uuid(), 'agregar' => [$c->id]])
+            ->assertOk()->assertJsonPath('cantidad_folios', 3);
+        $this->assertSame(5, ReservaPosicionInspeccionSag::where('lote_inspeccion_sag_id', $lote['id'])->whereNotNull('clave_bloqueo')->count());
+        $modelo = LoteInspeccionSag::findOrFail($lote['id']);
+        $tarea = $modelo->planPreparacion->tareas()->where('estado', 'pendiente')->firstOrFail();
+        $tarea->update(['estado' => 'en_proceso']);
+        $this->patchJson('/api/inspeccion-sag/lotes/'.$lote['id'].'/folios', ['operacion_id' => (string) Str::uuid(), 'quitar' => [$c->id]])
+            ->assertUnprocessable();
+        $this->assertSame(3, $modelo->folios()->count());
+        $this->assertSame(5, ReservaPosicionInspeccionSag::where('lote_inspeccion_sag_id', $lote['id'])->whereNotNull('clave_bloqueo')->count());
+        $this->assertSame('en_proceso', $tarea->refresh()->estado->value);
+    }
+
     private function crearPrefrioSag(User $usuario, array $folios, bool $aprobado = false, string $sufijo = ''): ProcesoPrefrio
     {
         $tunel = TunelPrefrio::create([

@@ -351,6 +351,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::middleware('can:gestionar-inspeccion-sag')->prefix('inspeccion-sag')->group(function () {
         Route::post('/lotes', [InspeccionSagController::class, 'store']);
+        Route::patch('/lotes/{loteInspeccionSag}/folios', [InspeccionSagController::class, 'actualizarFolios']);
         Route::post('/lotes/{loteInspeccionSag}/iniciar', [InspeccionSagController::class, 'iniciar']);
         Route::post('/lotes/{loteInspeccionSag}/resultados/{resultado}/resolver', [InspeccionSagController::class, 'resolver']);
         Route::post('/lotes/{loteInspeccionSag}/finalizar', [InspeccionSagController::class, 'finalizar']);

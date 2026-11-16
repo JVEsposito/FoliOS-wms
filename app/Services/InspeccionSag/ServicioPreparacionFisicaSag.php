@@ -242,7 +242,14 @@ class ServicioPreparacionFisicaSag
 
     private function restaurarRecepciones(LoteInspeccionSag $lote, User $usuario): void
     {
-        $folioIds = $lote->folios()->pluck('folio_id');
+        $this->restaurarFolios($lote->folios()->pluck('folio_id'), $usuario, $lote->temporada_id);
+    }
+
+    public function restaurarFolios(Collection $folioIds, User $usuario, string $temporadaId): void
+    {
+        if ($folioIds->isEmpty()) {
+            return;
+        }
         $procesoIds = ProcesoPrefrioFolio::query()
             ->whereIn('folio_id', $folioIds)
             ->latest('created_at')
@@ -251,7 +258,7 @@ class ServicioPreparacionFisicaSag
             ->unique('folio_id')
             ->pluck('proceso_prefrio_id');
         $procesos = ProcesoPrefrio::query()
-            ->where('temporada_id', $lote->temporada_id)
+            ->where('temporada_id', $temporadaId)
             ->where('estado', 'aprobado')
             ->whereIn('id', $procesoIds)
             ->orderBy('id')
@@ -504,16 +511,19 @@ class ServicioPreparacionFisicaSag
 
         $ahora = now();
         foreach ($tramo->values() as $indice => $posicion) {
-            ReservaPosicionInspeccionSag::query()->create([
+            ReservaPosicionInspeccionSag::query()->updateOrCreate([
                 'lote_inspeccion_sag_id' => $lote->id,
-                'plan_operacional_id' => $plan->id,
                 'posicion_id' => $posicion->id,
+            ], [
+                'plan_operacional_id' => $plan->id,
                 'tipo_espacio' => $posicionesPallet->has($posicion->id)
                     ? TipoEspacioPreparacionSag::Pallet
                     : TipoEspacioPreparacionSag::Separacion,
                 'orden' => $indice + 1,
                 'clave_bloqueo' => $posicion->id,
                 'reservada_at' => $ahora,
+                'liberada_at' => null,
+                'motivo_liberacion' => null,
             ]);
         }
 
