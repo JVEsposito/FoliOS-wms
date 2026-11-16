@@ -794,6 +794,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/', [RebajaEstandarController::class, 'index']);
             Route::get('/opciones', [RebajaEstandarController::class, 'opciones']);
             Route::get('/saldos', [RebajaEstandarController::class, 'saldos']);
+            Route::get('/excel', [RebajaEstandarController::class, 'excel']);
             Route::post('/previsualizar', [RebajaEstandarController::class, 'previsualizar']);
             Route::get('/{rebajaEstandarMaterial}', [RebajaEstandarController::class, 'show']);
         });

@@ -167,6 +167,46 @@ class RebajaEstandarApiTest extends TestCase
         $this->assertSame(0, MovimientoAlmacenMaterial::query()->where('documento_relacionado', 'like', 'REB-%')->count());
     }
 
+    public function test_correcciones_y_anulaciones_posteriores_generan_ajustes_que_compensan_pendientes_y_quedan_a_favor(): void
+    {
+        $vista = $this->postJson(self::RUTA.'/previsualizar', $this->filtros())->json();
+        $listos = collect($vista['grupos'])->whereNull('problema')->map(fn ($grupo) => ['clave' => $grupo['clave'], 'cajas' => $grupo['cajas']])->values()->all();
+        $this->postJson(self::RUTA, [...$this->filtros(), 'operacion_id' => (string) Str::uuid(), 'grupos' => $listos])->assertCreated();
+
+        // El pallet de 98 cajas se corrige a 90 y el de la otra marca se anula después de rebajar.
+        $corregido = ValidacionPallet::query()->where('cantidad_cajas', 98)->firstOrFail();
+        $snapshot = $corregido->snapshot;
+        $snapshot['composicion'][0]['cantidad_cajas'] = 90;
+        $corregido->forceFill(['cantidad_cajas' => 90, 'snapshot' => $snapshot])->save();
+        ValidacionPallet::query()->where('cantidad_cajas', 30)->firstOrFail()->forceFill(['estado' => 'anulada'])->save();
+
+        $ajustes = $this->postJson(self::RUTA.'/previsualizar', $this->filtros())->assertOk()->assertJsonPath('totales.ajustes', 2)->json();
+        $porMarca = collect($ajustes['grupos'])->where('tipo', 'ajuste')->keyBy('marca');
+        $this->assertSame([-8, 'Corregidos'], [$porMarca['FALCO FRUIT']['cajas'], $porMarca['FALCO FRUIT']['motivo']]);
+        $this->assertSame([-30, 'Anulados'], [$porMarca['OTRA MARCA']['cajas'], $porMarca['OTRA MARCA']['motivo']]);
+        $materiales = collect($ajustes['materiales'])->keyBy('codigo');
+        // 38 cajas de menos compensan las 38 tapas que faltaban; el pallet queda a favor.
+        $this->assertSame([-38.0, 0.0, 0.0], [(float) $materiales['031026']['teorico'], (float) $materiales['031026']['a_descontar'], (float) $materiales['031026']['faltante']]);
+        $this->assertSame([-1.0, 0.0], [(float) $materiales['031000']['faltante'], (float) $materiales['031000']['a_descontar_ahora']]);
+
+        $seleccion = collect($ajustes['grupos'])->where('tipo', 'ajuste')->map(fn ($grupo) => ['clave' => $grupo['clave'], 'cajas' => $grupo['cajas']])->values()->all();
+        $this->postJson(self::RUTA, [...$this->filtros(), 'operacion_id' => (string) Str::uuid(), 'grupos' => $seleccion])->assertCreated()
+            ->assertJsonPath('data.codigo', 'REB-000002')->assertJsonPath('data.cajas', -38)->assertJsonPath('data.movimientos', 0);
+        $saldos = SaldoRebajaEstandar::query()->where('almacen_material_id', $this->packing->id)->get()->keyBy('item_material_id');
+        $this->assertSame('0.000000', (string) $saldos[$this->tapa->id]->pendiente);
+        $this->assertSame(['-1.000000', '0.930000'], [(string) $saldos[$this->pallet->id]->pendiente, (string) $saldos[$this->pallet->id]->fraccion]);
+        $this->assertSame('150.000000', (string) $saldos[$this->etiqueta->id]->pendiente);
+        $this->postJson(self::RUTA.'/previsualizar', $this->filtros())->assertOk()->assertJsonPath('totales.ajustes', 0);
+
+        $respuesta = $this->get(self::RUTA.'/excel?desde='.now(config('app.operational_timezone'))->toDateString().'&hasta='.now(config('app.operational_timezone'))->toDateString())->assertOk();
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($respuesta->baseResponse->getFile()->getPathname()));
+        $contenido = $zip->getFromName('xl/worksheets/sheet1.xml').$zip->getFromName('xl/sharedStrings.xml');
+        $zip->close();
+        $this->assertStringContainsString('REB-000002', $contenido);
+        $this->get(self::RUTA.'/excel?detalle=produccion&desde=2026-01-01&hasta=2026-12-31')->assertOk();
+    }
+
     private function filtros(): array
     {
         return ['desde' => '2026-11-10', 'hasta' => '2026-11-11', 'almacen_id' => $this->packing->id];

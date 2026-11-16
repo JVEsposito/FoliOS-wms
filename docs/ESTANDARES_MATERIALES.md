@@ -10,7 +10,7 @@ Entregas del plan:
 1. Estándares propios con versiones.
 2. Importación desde la vista de planta `odbc_estandar_materiales` y homologación de insumos.
 3. Rebaja por estándar desde Validación PT, contra el saldo entregado a Packing.
-4. Diferencias por correcciones posteriores y reportes.
+4. Ajustes por correcciones posteriores y reportes.
 
 ## Modelo
 
@@ -148,6 +148,38 @@ Tablas: `rebajas_estandar_materiales` (documento REB-000001, secuencia
 rebajada, sin FK a la operación de frío), `consumos_rebaja_estandar` y
 `saldos_rebaja_estandar`.
 
+## Ajustes por correcciones y reportes
+
+### Ajustes
+
+Un pallet rebajado puede corregirse o anularse después. La vista previa compara lo rebajado
+de cada pallet con lo que hoy dice Validación PT (cajas, embalaje, marca, fecha) y muestra la
+diferencia como **ajuste**, con el mismo estándar del día de proceso:
+
+- **positivo** si hoy hay más cajas que las rebajadas: falta descontar;
+- **negativo** si hay menos o el pallet se anuló: se descontó de más.
+
+Un ajuste negativo no devuelve existencias. Resta del total del ítem: primero compensa lo
+pendiente y, si sobra, queda **a favor** (pendiente negativo) para descontar menos en las
+próximas rebajas de ese almacén. Ejemplo: se rebajaron 188 cajas con 38 tapas faltantes; un
+pallet se corrige de 98 a 90 cajas y otro de 30 se anula (−38 cajas). Las 38 tapas
+pendientes quedan en cero sin mover inventario.
+
+Los ajustes se registran como líneas de producción con cajas negativas o positivas en la
+misma rebaja, así que un pallet corregido deja de aparecer como diferencia en cuanto se
+confirma.
+
+### Reportes
+
+- **Pendientes y fracciones del almacén**: lo que falta descontar, lo que está a favor y la
+  fracción que se arrastra por ítem.
+- **Excel de materiales**: una fila por rebaja e ítem (teórico, fracción y pendiente
+  anteriores, a descontar, descontado, pendiente y fracción que sigue), filtrado por fecha de
+  confirmación y almacén.
+- **Excel de producción**: una fila por pallet rebajado (día de proceso, cliente, marca,
+  proceso, embalaje, variedad, calibre, categoría, folio, cajas con signo y estándar con su
+  versión).
+
 ## Permisos
 
 Módulo de oficina `materiales.estandares` y acción `estandares.administrar`.
@@ -189,7 +221,8 @@ POST /api/materiales/rebajas-estandar/previsualizar             (desde, hasta, a
 POST /api/materiales/rebajas-estandar                           (…mismos filtros…, operacion_id, grupos[{clave, cajas}], observacion?)
 GET  /api/materiales/rebajas-estandar?almacen_id=               historial
 GET  /api/materiales/rebajas-estandar/{rebaja}                  producción, consumos y movimientos
-GET  /api/materiales/rebajas-estandar/saldos?almacen_id=        fracciones y pendientes
+GET  /api/materiales/rebajas-estandar/saldos?almacen_id=        fracciones, pendientes y saldos a favor
+GET  /api/materiales/rebajas-estandar/excel?desde=&hasta=&almacen_id=&detalle=consumos|produccion
 ```
 
 Cada línea lleva `item_material_id`, `cantidad_por_caja`, `redondeo` (`entero`|`decimal`)

@@ -12,6 +12,7 @@ use App\Models\ProduccionRebajaEstandar;
 use App\Models\RebajaEstandarMaterial;
 use App\Models\SaldoMaterialAlmacen;
 use App\Models\SaldoRebajaEstandar;
+use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Secuencias\ServicioSecuenciaDocumento;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -46,6 +47,7 @@ class ServicioRebajaEstandarMaterial
     public function __construct(
         private readonly ServicioTemporadaActiva $temporadas,
         private readonly ProduccionValidadaEstandar $produccion,
+        private readonly DiferenciasRebajaEstandar $diferencias,
         private readonly ServicioMovimientoAlmacenMaterial $movimientos,
         private readonly ServicioSecuenciaDocumento $secuencias,
     ) {}
@@ -58,7 +60,7 @@ class ServicioRebajaEstandarMaterial
     {
         $temporada = $this->temporadas->obtener();
         $almacen = $this->almacen($filtros['almacen_id']);
-        $grupos = $this->produccion->grupos($temporada, $filtros['desde'], $filtros['hasta'], $filtros);
+        $grupos = $this->todos($temporada, $filtros);
         $seleccion = collect($grupos)->whereNull('problema')
             ->when(isset($filtros['grupos']), fn (Collection $listos) => $listos->whereIn('clave', $filtros['grupos']))
             ->values();
@@ -72,6 +74,7 @@ class ServicioRebajaEstandarMaterial
                 'grupos' => count($grupos),
                 'cajas' => collect($grupos)->sum('cajas'),
                 'cajas_seleccionadas' => $seleccion->sum('cajas'),
+                'ajustes' => collect($grupos)->where('tipo', 'ajuste')->count(),
                 'cajas_sin_estandar' => collect($grupos)->whereNotNull('problema')->sum('cajas'),
                 'faltantes' => collect($materiales)->where('faltante', '>', 0)->count(),
             ],
@@ -91,7 +94,7 @@ class ServicioRebajaEstandarMaterial
                 }
                 $temporada = $this->temporadas->obtener(bloquear: true);
                 $almacen = $this->almacen($datos['almacen_id'], bloquear: true);
-                $grupos = collect($this->produccion->grupos($temporada, $datos['desde'], $datos['hasta'], $datos))->keyBy('clave');
+                $grupos = collect($this->todos($temporada, $datos))->keyBy('clave');
                 $seleccion = collect($datos['grupos'] ?? [])->map(function (array $elegido) use ($grupos): array {
                     $grupo = $grupos->get($elegido['clave']);
                     if (! $grupo || $grupo['cajas'] !== (int) $elegido['cajas']) {
@@ -188,7 +191,8 @@ class ServicioRebajaEstandarMaterial
                 : floor($total * 1000 + self::EPSILON * 1000) / 1000;
             $requerido = round($nuevo + $pendiente, 3);
             $disponible = floor(($disponibles[$itemId] ?? 0) * 1000 + 0.0005) / 1000;
-            $ahora = round(min($requerido, $disponible), 3);
+            // Un requerido negativo (ajustes a favor) no descuenta nada y queda como crédito.
+            $ahora = round(max(0, min($requerido, $disponible)), 3);
             $porItem[$itemId] = [
                 ...$material,
                 'dueno' => $duenos->get($itemId)?->cliente?->cliente?->nombre,
@@ -198,12 +202,27 @@ class ServicioRebajaEstandarMaterial
                 'disponible' => round($disponibles[$itemId] ?? 0, 3),
                 'a_descontar_ahora' => $ahora,
                 'faltante' => round($requerido - $ahora, 3),
+                // floor deja el resto en [0, 1) también con ajustes negativos.
                 'fraccion_resultante' => round(max(0, $total - $nuevo), 6),
             ];
         }
         uasort($porItem, fn (array $a, array $b): int => strnatcasecmp((string) $a['codigo'], (string) $b['codigo']));
 
         return $porItem;
+    }
+
+    /**
+     * Producción validada sin rebajar y ajustes por correcciones posteriores, con una sola clave.
+     *
+     * @param  array<string, mixed>  $filtros
+     * @return list<array<string, mixed>>
+     */
+    private function todos(Temporada $temporada, array $filtros): array
+    {
+        return [
+            ...$this->produccion->grupos($temporada, $filtros['desde'], $filtros['hasta'], $filtros),
+            ...$this->diferencias->grupos($temporada, $filtros['desde'], $filtros['hasta'], $filtros),
+        ];
     }
 
     /** @param Collection<int, array<string, mixed>> $grupos */

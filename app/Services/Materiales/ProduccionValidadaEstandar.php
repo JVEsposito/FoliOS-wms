@@ -89,9 +89,10 @@ class ProduccionValidadaEstandar
                 'calibre' => ServicioEstandarMaterial::normalizarVariacion($snapshot['articulo']['calibre'] ?? null),
                 'categoria' => ServicioEstandarMaterial::normalizarVariacion($snapshot['categoria']['nombre'] ?? null),
             ];
-            $clave = substr(hash('sha256', json_encode(array_values($atributos), JSON_THROW_ON_ERROR)), 0, 24);
+            $clave = self::clave($atributos);
             $grupos[$clave] ??= [
                 'clave' => $clave,
+                'tipo' => 'produccion',
                 ...$atributos,
                 'cliente' => $clienteId ? ['id' => $clienteId, 'nombre' => $clientes->get($clienteId)] : null,
                 'envase' => ($envase = $envases->get($atributos['envase_validacion_id'] ?? '')) ? ['id' => $envase->id, 'nombre' => $envase->nombre, 'codigo' => $envase->codigo_externo] : null,
@@ -110,8 +111,26 @@ class ProduccionValidadaEstandar
             ->values()->all();
     }
 
-    /** @param array<string, mixed> $grupo */
-    private function conEstandar(Temporada $temporada, array $grupo): array
+    /**
+     * Identifica una combinación de día, cliente, marca, proceso, embalaje, variedad, calibre y
+     * categoría. La usan la producción y los ajustes por corrección.
+     *
+     * @param  array<string, ?string>  $atributos
+     */
+    public static function clave(array $atributos): string
+    {
+        $orden = ['fecha', 'cliente_id', 'marca', 'proceso', 'envase_validacion_id', 'variedad', 'calibre', 'categoria'];
+
+        return substr(hash('sha256', json_encode(array_map(fn (string $campo): ?string => $atributos[$campo] ?? null, $orden), JSON_THROW_ON_ERROR)), 0, 24);
+    }
+
+    /**
+     * Estándar aplicable al grupo y lo que lleva por ítem; el teórico conserva el signo de las
+     * cajas (un ajuste negativo resta).
+     *
+     * @param  array<string, mixed>  $grupo
+     */
+    public function conEstandar(Temporada $temporada, array $grupo): array
     {
         if (! $grupo['cliente_id'] || ! $grupo['envase_validacion_id']) {
             return [...$grupo, 'estandar' => null, 'consumo' => [], 'problema' => $grupo['cliente_id'] ? 'sin_embalaje' : 'sin_cliente'];

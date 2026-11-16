@@ -13,11 +13,16 @@ use App\Models\MovimientoAlmacenMaterial;
 use App\Models\ProduccionRebajaEstandar;
 use App\Models\RebajaEstandarMaterial;
 use App\Models\SaldoRebajaEstandar;
+use App\Models\VersionEstandarMaterial;
+use App\Services\Existencias\GeneradorLibroXlsx;
 use App\Services\Materiales\ServicioRebajaEstandarMaterial;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /** Rebaja por estándar desde Validación PT (Materiales → Rebaja por estándar). */
 class RebajaEstandarController extends Controller
@@ -74,6 +79,85 @@ class RebajaEstandarController extends Controller
         return response()->json(['data' => $this->detalle($rebajaEstandarMaterial)]);
     }
 
+    /** Excel de rebajas confirmadas: una fila por ítem descontado o, con detalle=produccion, por pallet rebajado. */
+    public function excel(Request $request, GeneradorLibroXlsx $excel): BinaryFileResponse
+    {
+        $datos = $request->validate([
+            'desde' => ['required', 'date_format:Y-m-d'],
+            'hasta' => ['required', 'date_format:Y-m-d', 'after_or_equal:desde'],
+            'almacen_id' => ['nullable', 'uuid'],
+            'detalle' => ['nullable', Rule::in(['consumos', 'produccion'])],
+        ]);
+        $zona = (string) config('app.operational_timezone');
+        $rebajas = RebajaEstandarMaterial::query()
+            ->with(['almacen:id,codigo,nombre', 'usuario:id,name'])
+            ->whereBetween('confirmada_at', [
+                CarbonImmutable::parse($datos['desde'], $zona)->startOfDay()->utc(),
+                CarbonImmutable::parse($datos['hasta'], $zona)->endOfDay()->utc(),
+            ])
+            ->when($datos['almacen_id'] ?? null, fn ($consulta, string $almacen) => $consulta->where('almacen_material_id', $almacen))
+            ->orderBy('confirmada_at')
+            ->get()->keyBy('id');
+        $produccion = ($datos['detalle'] ?? 'consumos') === 'produccion';
+        $base = fn (RebajaEstandarMaterial $rebaja): array => [
+            'codigo' => $rebaja->codigo,
+            'confirmada' => $rebaja->confirmada_at?->setTimezone($zona)->format('Y-m-d H:i:s'),
+            'almacen' => $rebaja->almacen?->nombre,
+            'usuario' => $rebaja->usuario?->name,
+        ];
+        if ($produccion) {
+            $filas = ProduccionRebajaEstandar::query()->whereIn('rebaja_estandar_material_id', $rebajas->keys())->orderBy('fecha_proceso')->orderBy('numero_folio')->get();
+            $clientes = Cliente::query()->whereIn('id', $filas->pluck('cliente_id')->unique())->pluck('nombre', 'id');
+            $envases = EnvaseValidacion::query()->whereIn('id', $filas->pluck('envase_validacion_id')->unique())->pluck('nombre', 'id');
+            $versiones = VersionEstandarMaterial::query()->with('estandar:id,codigo,origen')->whereIn('id', $filas->pluck('version_estandar_material_id')->unique())->get()->keyBy('id');
+            $columnas = [
+                ['clave' => 'codigo', 'titulo' => 'Rebaja'], ['clave' => 'confirmada', 'titulo' => 'Confirmada', 'tipo' => 'fecha_hora'],
+                ['clave' => 'almacen', 'titulo' => 'Almacén'], ['clave' => 'fecha', 'titulo' => 'Día de proceso', 'tipo' => 'fecha_dma'],
+                ['clave' => 'cliente', 'titulo' => 'Cliente'], ['clave' => 'marca', 'titulo' => 'Marca'], ['clave' => 'proceso', 'titulo' => 'Proceso'],
+                ['clave' => 'embalaje', 'titulo' => 'Embalaje'], ['clave' => 'variedad', 'titulo' => 'Variedad'], ['clave' => 'calibre', 'titulo' => 'Calibre'],
+                ['clave' => 'categoria', 'titulo' => 'Categoría'], ['clave' => 'folio', 'titulo' => 'Folio'], ['clave' => 'cajas', 'titulo' => 'Cajas', 'tipo' => 'cantidad'],
+                ['clave' => 'estandar', 'titulo' => 'Estándar'], ['clave' => 'usuario', 'titulo' => 'Usuario'],
+            ];
+            $registros = $filas->map(fn (ProduccionRebajaEstandar $fila): array => [
+                ...$base($rebajas->get($fila->rebaja_estandar_material_id)),
+                'fecha' => $fila->fecha_proceso->toDateString(), 'cliente' => $clientes->get($fila->cliente_id), 'marca' => $fila->marca,
+                'proceso' => $fila->proceso, 'embalaje' => $envases->get($fila->envase_validacion_id), 'variedad' => $fila->variedad,
+                'calibre' => $fila->calibre, 'categoria' => $fila->categoria, 'folio' => $fila->numero_folio, 'cajas' => $fila->cajas,
+                'estandar' => ($version = $versiones->get($fila->version_estandar_material_id))
+                    ? $version->estandar?->codigo.' v'.$version->numero.' ('.$version->estandar?->origen->etiqueta().')' : null,
+            ]);
+        } else {
+            $columnas = [
+                ['clave' => 'codigo', 'titulo' => 'Rebaja'], ['clave' => 'confirmada', 'titulo' => 'Confirmada', 'tipo' => 'fecha_hora'],
+                ['clave' => 'almacen', 'titulo' => 'Almacén'], ['clave' => 'item_codigo', 'titulo' => 'Código ítem'], ['clave' => 'item', 'titulo' => 'Ítem'],
+                ['clave' => 'unidad', 'titulo' => 'Unidad'], ['clave' => 'redondeo', 'titulo' => 'Rebaja'], ['clave' => 'teorico', 'titulo' => 'Teórico', 'tipo' => 'decimal'],
+                ['clave' => 'fraccion_anterior', 'titulo' => 'Fracción anterior', 'tipo' => 'decimal'], ['clave' => 'pendiente_anterior', 'titulo' => 'Pendiente anterior', 'tipo' => 'decimal'],
+                ['clave' => 'a_descontar', 'titulo' => 'A descontar', 'tipo' => 'decimal'], ['clave' => 'descontado', 'titulo' => 'Descontado', 'tipo' => 'decimal'],
+                ['clave' => 'pendiente', 'titulo' => 'Pendiente (negativo: a favor)', 'tipo' => 'decimal'], ['clave' => 'fraccion_resultante', 'titulo' => 'Fracción que sigue', 'tipo' => 'decimal'],
+                ['clave' => 'usuario', 'titulo' => 'Usuario'],
+            ];
+            $registros = ConsumoRebajaEstandar::query()->with('item:id,codigo,nombre')->whereIn('rebaja_estandar_material_id', $rebajas->keys())->get()
+                ->sortBy(fn (ConsumoRebajaEstandar $consumo): string => $rebajas->get($consumo->rebaja_estandar_material_id)->codigo.'|'.$consumo->item?->codigo)
+                ->map(fn (ConsumoRebajaEstandar $consumo): array => [
+                    ...$base($rebajas->get($consumo->rebaja_estandar_material_id)),
+                    'item_codigo' => $consumo->item?->codigo, 'item' => $consumo->item?->nombre, 'unidad' => $consumo->unidad_medida,
+                    'redondeo' => $consumo->redondeo === 'entero' ? 'Entero' : 'Decimal',
+                    ...collect(['teorico', 'fraccion_anterior', 'pendiente_anterior', 'a_descontar', 'descontado', 'pendiente', 'fraccion_resultante'])
+                        ->mapWithKeys(fn (string $campo): array => [$campo => (float) $consumo->{$campo}])->all(),
+                ]);
+        }
+        $ruta = $excel->generar($produccion ? 'Producción rebajada por estándar' : 'Rebajas por estándar', $columnas, $registros->values()->all(), [
+            'fecha_corte' => now($zona)->format('d-m-Y H:i'),
+            'usuario' => $request->user()->name,
+            'periodo' => CarbonImmutable::parse($datos['desde'])->format('d-m-Y').' al '.CarbonImmutable::parse($datos['hasta'])->format('d-m-Y').' (fecha de confirmación)',
+        ], $produccion ? 'Produccion' : 'Rebajas');
+
+        return response()->download($ruta, ($produccion ? 'produccion-rebajada-' : 'rebajas-estandar-').$datos['desde'].'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'no-store, private',
+        ])->deleteFileAfterSend();
+    }
+
     /** Fracciones arrastradas y faltantes por descontar de un almacén. */
     public function saldos(Request $request): JsonResponse
     {
@@ -107,7 +191,8 @@ class RebajaEstandarController extends Controller
                 'operacion_id' => ['required', 'uuid'],
                 'grupos' => ['present', 'array', 'max:2000'],
                 'grupos.*.clave' => ['required', 'string', 'max:40'],
-                'grupos.*.cajas' => ['required', 'integer', 'min:1'],
+                // Un ajuste por corrección puede ser negativo.
+                'grupos.*.cajas' => ['required', 'integer', 'not_in:0'],
             ] : [
                 'grupos' => ['nullable', 'array', 'max:2000'],
                 'grupos.*' => ['string', 'max:40'],
