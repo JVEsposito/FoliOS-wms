@@ -20,6 +20,7 @@ use App\Models\MovimientoEnvase;
 use App\Models\ReasignacionEnvases;
 use App\Models\RevisionMovimientoEnvase;
 use App\Models\Temporada;
+use App\Services\Envases\GeneradorCuentaEnvasesProductorXlsx;
 use App\Services\Envases\GeneradorEstadoCuentaEnvasesPdf;
 use App\Services\Envases\ServicioAjustesCuentaEnvases;
 use App\Services\Envases\ServicioCorreccionCantidadEnvases;
@@ -494,12 +495,13 @@ class CuentaCorrienteEnvaseController extends Controller
         ServicioTemporadaActiva $temporadaActiva,
         ServicioCuentaCorrienteEnvases $cuenta,
         GeneradorEstadoCuentaEnvasesPdf $pdf,
-        GeneradorLibroXlsx $excel,
+        GeneradorCuentaEnvasesProductorXlsx $excel,
     ): Response|BinaryFileResponse {
         Gate::authorize('consultar-cuenta-envases');
         $datos = $request->validate([
             'cliente_id' => ['required', 'uuid', 'exists:clientes,id'],
             'formato' => ['nullable', Rule::in(['pdf', 'xlsx'])],
+            'productor' => ['nullable', 'string', 'max:140'],
             // Solo los envases elegidos (por ejemplo, solo esponjas o bins y totes); sin indicar, todos.
             'tipos_envase' => ['nullable', 'array', 'max:'.count(TipoEnvaseRomana::cases())],
             'tipos_envase.*' => ['distinct', Rule::enum(TipoEnvaseRomana::class)],
@@ -509,33 +511,21 @@ class CuentaCorrienteEnvaseController extends Controller
         $temporada = Temporada::query()->findOrFail($filtros['temporada_id']);
         $tipos = collect($datos['tipos_envase'] ?? [])->sortBy(fn (string $t): int => TipoEnvaseRomana::from($t)->orden())->values()->all();
         $todos = $tipos === [] || count($tipos) === count(TipoEnvaseRomana::cases());
-        $estado = $cuenta->estadoCuenta($cliente, $temporada, $filtros['desde'] ?? null, $filtros['hasta'] ?? null, $todos ? null : $tipos);
         $nombre = 'estado-cuenta-envases-'.Str::slug($cliente->codigo ?: $cliente->nombre).'-'.$temporada->codigo
             .($todos ? '' : '-'.implode('-', array_map(fn (string $t): string => Str::slug($t), $tipos)));
 
-        if ($request->input('formato') === 'xlsx') {
-            // «CC ENVASES»: una fila por guía y CSG, con chofer y patentes, y cada envase en su columna de
-            // propiedad (requerimiento del 15-11-2026). Se arma con los movimientos vigentes al descargar.
-            $saldoInicial = collect($estado['tipos'])->filter(fn (array $t): bool => $t['saldo_inicial'] !== 0)
-                ->map(fn (array $t): string => $t['nombre'].' '.($t['saldo_inicial'] > 0 ? '+' : '').$t['saldo_inicial'])->implode(' · ');
-            $ruta = $excel->generar('Estado de cuenta de envases', ServicioCuentaCorrienteEnvases::columnasExcel($estado['filas_excel']),
-                $estado['filas_excel'], [
-                    'fecha_corte' => now(config('app.operational_timezone'))->format('d-m-Y H:i'),
-                    'usuario' => $request->user()->name,
-                    'temporada' => $temporada->codigo.' · '.$temporada->nombre,
-                    'cliente' => $cliente->codigo.' · '.$cliente->nombre,
-                    'periodo' => $this->periodo($filtros) ?? 'Toda la temporada',
-                    'adicionales' => [
-                        ['Envases', $estado['envases_incluidos'] ? implode(', ', $estado['envases_incluidos']) : 'Todos'],
-                        ['Cantidades', 'Entradas en positivo y salidas en negativo, con el signo de la cuenta corriente.'],
-                        // El saldo anterior al período va aquí, no como una fila: la hoja de datos solo tiene movimientos.
-                        ...($this->periodo($filtros) !== null ? [['Saldo al inicio del período', $saldoInicial ?: 'Sin saldo']] : []),
-                        ...array_map(fn (string $e): array => ['Sin propiedad identificable (no sumado)', $e], $estado['excepciones_excel']),
-                    ],
-                ], 'CC ENVASES');
+        if (($datos['formato'] ?? null) === 'xlsx') {
+            $ruta = $excel->generar($cuenta->operacionesPorProductor($cliente, $temporada, [
+                ...$filtros, 'productor' => $datos['productor'] ?? null, 'tipos_envase' => $todos ? null : $tipos,
+            ]));
 
-            return response()->download($ruta, $nombre.'.xlsx')->deleteFileAfterSend();
+            return response()->download($ruta, $nombre.'.xlsx', [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Cache-Control' => 'no-store, private',
+            ])->deleteFileAfterSend();
         }
+
+        $estado = $cuenta->estadoCuenta($cliente, $temporada, $filtros['desde'] ?? null, $filtros['hasta'] ?? null, $todos ? null : $tipos);
 
         return response($pdf->generar($estado), 200, [
             'Content-Type' => 'application/pdf',

@@ -52,7 +52,7 @@ async function setup(browser, manage, width = 390, historical = false, reconcili
         if (path.endsWith('/cuenta-corriente/catalogos')) return route.fulfill({ json: { clientes: reassign ? [client, other] : [client], temporadas: [{ id: 'temporada', codigo: '2026', nombre: '2026', activa: true }], tipos_envase: statement?.types || [{ codigo: 'bins', nombre: 'Bins' }], hoy: '2026-10-21', puede_ajustar: manage } });
         if (path.endsWith('/cuenta-corriente/estado-cuenta')) {
             const query = new URL(request.url()).searchParams;
-            statements.push({ formato: query.get('formato'), cliente: query.get('cliente_id'), tipos: query.getAll('tipos_envase[]') });
+            statements.push({ formato: query.get('formato'), cliente: query.get('cliente_id'), tipos: query.getAll('tipos_envase[]'), productor: query.get('productor') });
             return route.fulfill({ body: '%PDF-1.4', contentType: 'application/pdf', headers: { 'Content-Disposition': 'attachment; filename="estado-cuenta.pdf"' } });
         }
         if (path.endsWith('/conciliaciones-salida')) {
@@ -379,18 +379,20 @@ test('el estado de cuenta se descarga solo con los envases marcados, en PDF o Ex
             assert.ok(box.x >= 0 && box.x + box.width <= width, 'el diálogo cabe en la pantalla');
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
 
-            // Solo esponjas, en Excel.
+            // Solo esponjas de un CSG, en Excel.
+            await dialog.getByLabel('CSG o razón social').fill('153712');
             await dialog.getByLabel('Bins plástico').uncheck();
             await dialog.locator('#statementSubmit').click();
             await page.waitForFunction(() => !document.getElementById('statementDialog').open);
-            assert.deepEqual(statements.at(-1), { formato: 'xlsx', cliente: 'cliente', tipos: ['esponjas'] });
+            assert.deepEqual(statements.at(-1), { formato: 'xlsx', cliente: 'cliente', tipos: ['esponjas'], productor: '153712' });
 
             // Todos los envases es el estado de cuenta completo: no envía filtro.
             await choose('Estado de cuenta en PDF');
+            assert.equal(await dialog.getByLabel('CSG o razón social').isVisible(), false);
             await dialog.getByRole('button', { name: 'Marcar todos' }).click();
             await dialog.locator('#statementSubmit').click();
             await page.waitForFunction(() => !document.getElementById('statementDialog').open);
-            assert.deepEqual(statements.at(-1), { formato: 'pdf', cliente: 'cliente', tipos: [] });
+            assert.deepEqual(statements.at(-1), { formato: 'pdf', cliente: 'cliente', tipos: [], productor: null });
 
             // Sin envases marcados no descarga; bins y totes, cambiando a Excel en el mismo diálogo.
             await choose('Estado de cuenta en PDF');
@@ -403,7 +405,7 @@ test('el estado de cuenta se descarga solo con los envases marcados, en PDF o Ex
             await dialog.getByLabel('Excel').check();
             await dialog.locator('#statementSubmit').click();
             await page.waitForFunction(() => !document.getElementById('statementDialog').open);
-            assert.deepEqual(statements.at(-1), { formato: 'xlsx', cliente: 'cliente', tipos: ['bins', 'totes'] });
+            assert.deepEqual(statements.at(-1), { formato: 'xlsx', cliente: 'cliente', tipos: ['bins', 'totes'], productor: null });
 
             // Cancelar no descarga nada.
             await choose('Estado de cuenta en PDF');

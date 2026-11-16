@@ -7,6 +7,7 @@ use App\Enums\TipoEnvaseRomana;
 use App\Models\Cliente;
 use App\Models\CsgValidacion;
 use App\Models\EspecieValidacion;
+use App\Models\GuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
 use App\Models\ProductorCsg;
 use App\Models\RecepcionRomana;
@@ -233,6 +234,13 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $this->assertCount(2, $estado['grupos_documentos'][0]['lineas']);
         $this->assertStringNotContainsString('Anulaci', $pdf);
 
+        $excel = $this->get('/api/envases/cuenta-corriente/estado-cuenta?formato=xlsx&desde=2026-10-14&cliente_id='.$this->productor->id)->assertOk();
+        $libro = $excel->baseResponse->getFile()->getPathname();
+        $filas = $this->filasExcel($libro);
+        $this->assertSame(['5501', '', '', '', '-10', '-5', ''], array_slice($filas[4], 4));
+        $this->assertNotContains('5502', array_column($filas, 4));
+        $this->assertMatchesRegularExpression('/<(?:\w+:)?c r="E8"[^>]*t="inlineStr"/', file_get_contents('zip://'.$libro.'#xl/worksheets/sheet1.xml'));
+
         // La trazabilidad interna conserva todo: despacho, anulación y número emitido.
         $kardex = $this->get('/api/envases/cuenta-corriente/movimientos/excel?cliente_id='.$this->productor->id.'&desde=2026-10-14')->assertOk();
         $filas = array_slice($this->filasExcel($kardex->baseResponse->getFile()->getPathname()), 1);
@@ -310,25 +318,24 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             $this->assertSame(array_column($resumen[$grupo['codigo']]['tipos'], 'saldo_final'), array_column($grupo['totales'], 'saldo_final'));
         }
 
-        // Excel «CC ENVASES»: una fila por guía y CSG, con chofer y patentes, y cada envase en la columna de su
-        // propiedad; los del cliente, en una columna aparte al final. Las salidas en negativo.
         $excel = $this->get($ruta.'&formato=xlsx')->assertOk();
         $libro = $excel->baseResponse->getFile()->getPathname();
         $filas = $this->filasExcel($libro);
-        $this->assertSame(['Fecha', 'Tipo de movimiento', 'N.º guía', 'CSG', 'Productor (razón social)', 'Chofer', 'Patente camión', 'Patente rampla',
-            'Bins propios', 'Bins arrendados', 'Totes propios', 'Totes arrendados', 'Esponjas propias', 'Esponjas arrendadas', 'Bins del cliente'], $filas[0]);
-        $this->assertSame(['Ingreso con fruta', 'REC-1', '122104', 'Agricola Los Robles', 'Conductor MP', 'ABCD12', ''], array_slice($filas[1], 1, 7));
-        $this->assertSame(['', '200'], [$filas[1][8], $filas[1][14]]);
-        $this->assertSame(['Ingreso con fruta', 'REC-1', '122105', ''], array_slice($filas[2], 1, 4));
-        $this->assertSame(['Despacho de envases', 'GDE-1', '', 'Sin productor asociado'], array_slice($filas[3], 1, 4));
-        $this->assertSame(['-120', ''], [$filas[3][8], $filas[3][14]]);
-        $bins = array_map(fn (array $f): int => (int) $f[8] + (int) $f[9] + (int) $f[14], array_slice($filas, 1));
-        $this->assertSame([200, 100, -120, -50, 10, 20], $bins);
-        $this->assertSame(160, array_sum($bins));
-        $this->assertStringContainsString('<sheet name="CC ENVASES"', file_get_contents('zip://'.$libro.'#xl/workbook.xml'));
-        // Fecha en dd-mm-aaaa y cantidades con miles y negativos en rojo.
+        $this->assertSame(['CSG', 'Productor / Razón social', 'Tipo de movimiento', 'Fecha', 'N.º guía', 'Chofer',
+            'Patente camión', 'Patente rampla', 'BINS', 'TOTES', 'ESPONJAS'], $filas[2]);
+        $this->assertSame(['122104', 'Agricola Los Robles'], array_slice($filas[3], 0, 2));
+        $this->assertSame(['', '', 'Ingreso con fruta'], array_slice($filas[4], 0, 3));
+        $this->assertSame(['REC-1', 'Conductor MP', 'ABCD12', '', '200'], array_slice($filas[4], 4, 5));
+        $this->assertSame(['TOTAL PRODUCTOR', '122105'], array_slice(array_column($filas, 0), 5, 2));
+        $this->assertSame(['REC-1', 'GDE-1', 'GDE-2', 'REC-NOCHE'], array_values(array_unique(array_filter(array_column(array_slice($filas, 3), 4)))));
+        $this->assertSame(['200', '100', '-160'], array_column(array_filter($filas, fn (array $f): bool => $f[0] === 'TOTAL PRODUCTOR'), 8));
+        $this->assertSame(['140', '0', '0'], array_slice(end($filas), 8));
+        $this->assertSame(1, preg_match_all('/<(?:\w+:)?sheet /', file_get_contents('zip://'.$libro.'#xl/workbook.xml')));
+        $hoja = file_get_contents('zip://'.$libro.'#xl/worksheets/sheet1.xml');
+        $this->assertStringContainsString('topLeftCell="A7"', $hoja);
+        $this->assertMatchesRegularExpression('/<(?:\w+:)?f>SUBTOTAL\(9,I8:I8\)<\/(?:\w+:)?f>/', $hoja);
         $this->assertStringContainsString('formatCode="dd-mm-yyyy"', file_get_contents('zip://'.$libro.'#xl/styles.xml'));
-        $this->assertStringContainsString('formatCode="#,##0;[Red]-#,##0"', file_get_contents('zip://'.$libro.'#xl/styles.xml'));
+        $this->assertStringContainsString('formatCode="#,##0;[Red]-#,##0;0"', file_get_contents('zip://'.$libro.'#xl/styles.xml'));
 
         $this->movimiento($this->productor, 'salida_recepcion_fruta', 35, -1, -1, 'cliente', '2026-10-14 10:00', 'DEV-PERIODO')
             ->update(['recepcion_romana_id' => $recepcionId]);
@@ -348,13 +355,12 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $this->assertMatchesRegularExpression('/\(RESUMEN POR PRODUCTOR\).*?\(Saldo final\).*?CSG 122104\).*?\(\+200\).*?CSG 122105\).*?\(\+100\).*?\(Sin productor asociado\).*?\(-175\)/s', $pdfPeriodo);
         $this->assertStringNotContainsString('REC-POSTERIOR', $pdfPeriodo);
 
-        // Con un período, la hoja de datos solo tiene los movimientos del período; el saldo anterior va en Corte.
         $excelPeriodo = $this->get($ruta.'&formato=xlsx&desde=2026-10-14&hasta=2026-10-14')->assertOk();
-        $libro = $excelPeriodo->baseResponse->getFile()->getPathname();
-        $filas = array_slice($this->filasExcel($libro), 1);
-        $this->assertSame(['Entregados en el destare'], array_column($filas, 1));
-        $this->assertSame(['-35'], array_column($filas, 14));
-        $this->assertContains(['Saldo al inicio del período', 'Bins plástico +160'], $this->filasExcel($libro, 'sheet2'));
+        $filas = $this->filasExcel($excelPeriodo->baseResponse->getFile()->getPathname());
+        $this->assertCount(7, $filas);
+        $this->assertSame('Entregados en el destare', $filas[4][2]);
+        $this->assertSame('-35', $filas[4][8]);
+        $this->assertSame(['-35', '-35'], array_column(array_slice($filas, 5), 8));
     }
 
     public function test_los_csg_de_una_misma_razon_social_van_juntos_en_pdf_y_excel(): void
@@ -378,11 +384,19 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
             .$win('(CSG 200 · Alfa Agrícola)').'.*?'.$win('(CSG 100 · Zeta Frutícola SpA)').'.*?'.$win('(CSG 300 · ZETA FRUTICOLA SPA.)').'/s', $pdf);
 
         $excel = $this->get($ruta.'&formato=xlsx')->assertOk();
-        $filas = array_slice($this->filasExcel($excel->baseResponse->getFile()->getPathname()), 1);
-        $this->assertSame(['200', '100', '300'], array_slice(array_column($filas, 3), 0, 3));
-        $this->assertSame(['Devolución de envases', 'DEV-200', '200', 'Alfa Agrícola'], array_slice($filas[0], 1, 4));
-        $this->assertSame('30', $filas[0][9]);
-        $this->assertSame(250, array_sum(array_map(fn (array $f): int => (int) $f[8] + (int) $f[9] + (int) ($f[14] ?? 0), $filas)));
+        $filas = $this->filasExcel($excel->baseResponse->getFile()->getPathname());
+        $cabeceras = array_filter(array_column($filas, 0), fn (string $valor): bool => ctype_digit($valor));
+        $this->assertSame(['200', '100', '300'], array_values($cabeceras));
+        $this->assertSame(['200', 'Alfa Agrícola'], array_slice($filas[3], 0, 2));
+        $this->assertSame('Devolución de envases', $filas[4][2]);
+        $this->assertSame('30', $filas[4][8]);
+        $this->assertSame('230', end($filas)[8]);
+
+        $filtrado = $this->get($ruta.'&formato=xlsx&productor=alfa+agricola')->assertOk();
+        $filas = $this->filasExcel($filtrado->baseResponse->getFile()->getPathname());
+        $this->assertCount(7, $filas);
+        $this->assertSame(['200', 'Alfa Agrícola'], array_slice($filas[3], 0, 2));
+        $this->assertSame(['30', '30', '30'], array_column(array_slice($filas, 4), 8));
     }
 
     /**
@@ -504,20 +518,73 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $excel = $this->get($ruta.'&formato=xlsx&tipos_envase[]=esponjas')->assertOk()
             ->assertDownload('estado-cuenta-envases-prb-'.$this->temporada->codigo.'-esponjas.xlsx');
         $archivo = $excel->baseResponse->getFile()->getPathname();
-        // Las 14 columnas de siempre y, como son del cliente, «Esponjas del cliente» al final; solo vienen las esponjas.
-        $datos = array_slice($this->filasExcel($archivo), 1);
-        $this->assertSame(['Esponjas arrendadas', 'Esponjas del cliente'], array_slice($this->filasExcel($archivo)[0], 13));
-        $this->assertSame([array_fill(0, 6, ''), array_fill(0, 6, '')], array_map(fn (array $f): array => array_slice($f, 8, 6), $datos));
-        $this->assertSame(['40', '-15'], array_column($datos, 14));
-        $this->assertContains(['Envases', 'Esponja de bins'], $this->filasExcel($archivo, 'sheet2'));
+        $filas = $this->filasExcel($archivo);
+        $this->assertSame(['BINS', 'TOTES', 'ESPONJAS'], array_slice($filas[2], 8));
+        $this->assertSame(['', '', '40'], array_slice($filas[4], 8));
+        $this->assertSame(['', '', '-15'], array_slice($filas[5], 8));
+        $this->assertSame(['0', '0', '25'], array_slice(end($filas), 8));
 
         // Marcar todos es el estado de cuenta completo, con el nombre de siempre.
-        $completo = $this->get($ruta.'&formato=xlsx&'.http_build_query(['tipos_envase' => array_column(TipoEnvaseRomana::catalogo(), 'codigo')]))
+        $this->get($ruta.'&formato=xlsx&'.http_build_query(['tipos_envase' => array_column(TipoEnvaseRomana::catalogo(), 'codigo')]))
             ->assertOk()->assertDownload('estado-cuenta-envases-prb-'.$this->temporada->codigo.'.xlsx');
-        $this->assertContains(['Envases', 'Todos'], $this->filasExcel($completo->baseResponse->getFile()->getPathname(), 'sheet2'));
 
         $this->getJson($ruta.'&tipos_envase[]=cajones')->assertUnprocessable()->assertJsonValidationErrors('tipos_envase.0');
         $this->getJson($ruta.'&tipos_envase[]=bins&tipos_envase[]=bins')->assertUnprocessable()->assertJsonValidationErrors('tipos_envase.0');
+    }
+
+    public function test_excel_compensa_despachos_y_devoluciones_sin_duplicar_datos_de_transporte(): void
+    {
+        $this->actingAs($this->administrador, 'sanctum');
+        $productor = ProductorCsg::create([
+            'codigo' => '153712', 'razon_social' => 'KOWLOON OPERACIONES Y LOGISTICA SPA', 'predio' => 'Un predio distinto',
+            'estado_sag' => 'activo', 'fuente_url' => 'https://sag.example.test',
+            'primera_verificacion_at' => now(), 'ultima_verificacion_at' => now(),
+            'ultima_consulta_user_id' => $this->administrador->id, 'respuesta_hash' => hash('sha256', '153712'),
+        ]);
+        $productor->clientes()->attach($this->productor->id, ['id' => Str::uuid(), 'activo' => true, 'asociado_por_user_id' => $this->administrador->id, 'actualizado_por_user_id' => $this->administrador->id]);
+        foreach (['totes' => 360, 'esponjas' => 10, 'esponja_tote' => 5] as $envase => $cantidad) {
+            $this->movimiento($this->planta, 'recepcion_compra', $cantidad, 0, 1, 'propia', '2026-10-03 10:00', 'COMPRA-'.$envase, envase: $envase);
+        }
+        $despacho = $this->postJson('/api/envases/guias-despacho', [
+            'operacion_id' => (string) Str::uuid(), 'cliente_id' => $this->productor->id, 'productor_csg_id' => $productor->id,
+            'salida_at' => '2026-10-14T10:00:00-03:00', 'nombre_conductor' => 'Chofer de despacho',
+            'patente_camion' => 'ABCD12', 'patente_carro' => 'XY3456',
+            'detalles' => collect(['bins' => 15, 'totes' => 360, 'esponjas' => 10, 'esponja_tote' => 5])
+                ->map(fn (int $cantidad, string $tipo): array => ['tipo_envase' => $tipo, 'cantidad' => $cantidad, 'propiedad' => 'propia'])
+                ->values()->all(),
+        ])->assertCreated()->json('data');
+        $this->postJson("/api/envases/guias-despacho/{$despacho['id']}/confirmar", ['numero_guia_despacho' => '0002379'])->assertOk();
+        // Un documento histórico puede traer ceros que el ingreso manual normaliza.
+        GuiaDespachoEnvase::query()->whereKey($despacho['id'])->update(['numero_guia_despacho' => '0002379']);
+        $idDevolucion = (string) Str::uuid();
+        foreach (['bins' => 15, 'totes' => 360, 'esponjas' => 15] as $envase => $cantidad) {
+            $this->movimiento($this->productor, 'devolucion_envases', $cantidad, 1, 1, 'propia', '2026-10-14 11:00', '0002379', envase: $envase)
+                ->update(['documento_id' => $idDevolucion, 'datos' => ['devolucion' => ['productor' => ['codigo' => '153712', 'nombre' => 'Nombre de snapshot']]]]);
+        }
+        $this->movimiento($this->productor, 'ajuste_cuenta', 99, 1, 0, 'propia', '2026-10-14 11:30', 'AJUSTE')
+            ->update(['datos' => ['ajuste_recepcion' => ['lado' => 'recibidos']]]);
+        $this->movimiento($this->productor, 'devolucion_envases', 60, 1, 1, 'propia', '2026-10-14 11:00', 'CORRECCION')
+            ->update(['datos' => ['correccion_propiedad' => ['motivo' => 'Corrección'], 'devolucion' => ['productor' => ['codigo' => '153712']]]]);
+        // Un segundo productor debe estar en su propio subtotal y contar una sola vez en el total general.
+        $this->movimiento($this->productor, 'devolucion_envases', 4, 1, 1, 'propia', '2026-10-14 11:00', '00234')
+            ->update(['datos' => ['devolucion' => ['productor' => ['codigo' => '153713', 'nombre' => 'Otro productor']]]]);
+        $cantidadAntes = MovimientoEnvase::query()->count();
+
+        $ruta = '/api/envases/cuenta-corriente/estado-cuenta?formato=xlsx&desde=2026-10-14&hasta=2026-10-14&cliente_id='.$this->productor->id;
+        $excel = $this->get($ruta)->assertOk();
+        $filas = $this->filasExcel($excel->baseResponse->getFile()->getPathname());
+        $this->assertSame(['153712', 'KOWLOON OPERACIONES Y LOGISTICA SPA'], array_slice($filas[3], 0, 2));
+        $this->assertSame(['0002379', 'Chofer de despacho', 'ABCD12', 'XY3456', '-15', '-360', '-15'], array_slice($filas[4], 4));
+        $this->assertSame(['0002379', '', '', '', '15', '360', '15'], array_slice($filas[5], 4));
+        $this->assertSame(['TOTAL PRODUCTOR', '153713', '', 'TOTAL PRODUCTOR', 'TOTAL GENERAL'], array_column(array_slice($filas, 6), 0));
+        $this->assertSame(['0', '0', '0'], array_slice($filas[6], 8));
+        $this->assertSame(['4', '0', '0'], array_slice(end($filas), 8));
+        $this->assertSame($cantidadAntes, MovimientoEnvase::query()->count());
+
+        $filtrado = $this->get($ruta.'&productor=153712')->assertOk();
+        $filas = $this->filasExcel($filtrado->baseResponse->getFile()->getPathname());
+        $this->assertCount(8, $filas);
+        $this->assertSame(['0', '0', '0'], array_slice(end($filas), 8));
     }
 
     private function movimiento(
@@ -559,10 +626,12 @@ class CuentaCorrienteEnvaseReportesTest extends TestCase
         $hoja = simplexml_load_string((string) $zip->getFromName("xl/worksheets/{$hoja}.xml"));
         $zip->close();
         $filas = [];
-        foreach ($hoja->sheetData->row as $fila) {
+        $ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+        foreach ($hoja->children($ns)->sheetData->children($ns)->row as $fila) {
             $valores = [];
-            foreach ($fila->c as $celda) {
-                $valores[] = isset($celda->is) ? (string) $celda->is->t : (string) $celda->v;
+            foreach ($fila->children($ns)->c as $celda) {
+                $contenido = $celda->children($ns);
+                $valores[] = isset($contenido->is) ? (string) $contenido->is->children($ns)->t : (string) $contenido->v;
             }
             $filas[] = $valores;
         }
