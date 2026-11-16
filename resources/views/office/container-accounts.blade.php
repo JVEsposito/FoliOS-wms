@@ -102,6 +102,7 @@
                 <fieldset class="statement-dialog__types" id="statementTypes"><legend>Envases que incluye el documento</legend></fieldset>
                 <div class="statement-dialog__quick"><button class="secondary-button" type="button" data-statement-select="all">Marcar todos</button><button class="secondary-button" type="button" data-statement-select="none">Quitar todos</button></div>
                 <fieldset class="statement-dialog__format"><legend>Formato</legend><label class="statement-dialog__option"><input type="radio" name="formato" value="pdf" required><span>PDF</span></label><label class="statement-dialog__option"><input type="radio" name="formato" value="xlsx" required><span>Excel</span></label></fieldset>
+                <label id="statementProducer" class="is-hidden"><span>CSG o razón social</span><input name="productor" type="search" maxlength="140" placeholder="Todos los productores"></label>
                 <p class="property-dialog__help" id="statementHelp">Cada envase lleva su propia cuenta: el documento trae los movimientos, saldos y el detalle por CSG solo de los envases marcados.</p>
                 <p class="form-error" id="statementError" role="alert"></p>
                 <footer class="dialog-actions"><button class="secondary-button" id="statementCancel" type="button">Cancelar</button><button class="primary-button" id="statementSubmit" type="submit">Descargar</button></footer>

@@ -255,13 +255,19 @@ class GuiaDespachoEnvasesApiTest extends TestCase
         $this->actingAs($admin, 'sanctum');
         $excel = $this->get('/api/envases/cuenta-corriente/estado-cuenta?formato=xlsx&cliente_id='.$cliente->id)->assertOk();
         $hoja = simplexml_load_string(file_get_contents('zip://'.$excel->baseResponse->getFile()->getPathname().'#xl/worksheets/sheet1.xml'));
-        $filas = [];
-        foreach ($hoja->sheetData->row as $fila) {
-            $filas[] = array_map(fn ($c) => isset($c->is) ? (string) $c->is->t : (string) $c->v, iterator_to_array($fila->c, false));
+        $ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+        $hoja->registerXPathNamespace('s', $ns);
+        $celdas = [];
+        foreach ($hoja->xpath('//s:sheetData/s:row[@r="7" or @r="8"]/s:c') as $celda) {
+            $contenido = $celda->children($ns);
+            $celdas[(string) $celda['r']] = isset($contenido->is) ? (string) $contenido->is->children($ns)->t : (string) $contenido->v;
         }
-        $despacho = collect($filas)->first(fn (array $f): bool => ($f[2] ?? null) === '2379');
-        $this->assertSame(['Despacho de envases', '2379', '153712', 'Productor 153712', 'SERGIO ARROS', 'NV6246', 'JL4354', '-15'],
-            [...array_slice($despacho, 1, 7), $despacho[8]]);
+        $this->assertSame(['153712', 'Productor 153712'], [$celdas['A7'], $celdas['B7']]);
+        $despacho = [
+            'A8' => '', 'B8' => '', 'C8' => 'Despacho de envases', 'E8' => '2379',
+            'F8' => 'SERGIO ARROS', 'G8' => 'NV6246', 'H8' => 'JL4354', 'I8' => '-15',
+        ];
+        $this->assertSame($despacho, array_intersect_key($celdas, $despacho));
     }
 
     public function test_explica_los_errores_al_editar_y_conserva_el_borrador_hasta_que_se_corrijan(): void

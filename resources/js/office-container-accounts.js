@@ -187,11 +187,12 @@ function downloadGuide(guideId, number) {
  * Temporada y fechas aplicadas: el estado de cuenta es de un cliente, sin los demás filtros.
  * Con solo algunos envases marcados (por ejemplo, solo esponjas), el documento trae solo esos.
  */
-function statementPath(clientId, format, types = []) {
+function statementPath(clientId, format, types = [], producer = '') {
     const parameters = new URLSearchParams({ cliente_id: clientId, formato: format });
     ['temporada_id', 'desde', 'hasta'].forEach((key) => {
         if (state.parameters.get(key)) parameters.set(key, state.parameters.get(key));
     });
+    if (format === 'xlsx' && producer.trim()) parameters.set('productor', producer.trim());
     const all = state.catalogs?.tipos_envase?.length || 0;
     if (types.length && types.length < all) types.forEach((type) => parameters.append('tipos_envase[]', type));
     return `/api/envases/cuenta-corriente/estado-cuenta?${parameters}`;
@@ -204,6 +205,13 @@ function statementPeriod() {
     if (from) return `Desde el ${date(from)}`;
     if (to) return `Hasta el ${date(to)}`;
     return 'Toda la temporada';
+}
+
+function showStatementFormat(format) {
+    byId('statementProducer').classList.toggle('is-hidden', format !== 'xlsx');
+    byId('statementHelp').textContent = format === 'xlsx'
+        ? 'Movimientos operativos agrupados por productor, con subtotales y total general del período.'
+        : 'El documento incluye los movimientos, saldos y el detalle por CSG de los envases marcados.';
 }
 
 /** Marca de entrada los envases del cliente que se ven en los saldos (respetan el filtro de envase). */
@@ -220,6 +228,7 @@ function openStatement(clientId, format) {
     elements.statementError.textContent = '';
     elements.statementSubmit.disabled = false;
     elements.statementSubmit.textContent = 'Descargar';
+    showStatementFormat(format);
     elements.statementDialog.showModal();
 }
 
@@ -487,6 +496,9 @@ elements.statementDialog.addEventListener('click', (event) => {
     elements.statementError.textContent = '';
 });
 elements.statementDialog.addEventListener('cancel', (event) => { if (elements.statementSubmit.disabled) event.preventDefault(); });
+elements.statementForm.addEventListener('change', (event) => {
+    if (event.target.name === 'formato') showStatementFormat(event.target.value);
+});
 elements.statementForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = elements.statementForm;
@@ -501,7 +513,7 @@ elements.statementForm.addEventListener('submit', async (event) => {
     elements.statementSubmit.textContent = 'Generando…';
     try {
         await download(
-            statementPath(form.elements.cliente_id.value, format, types),
+            statementPath(form.elements.cliente_id.value, format, types, form.elements.productor.value),
             `estado-cuenta-envases.${format}`,
             'No fue posible generar el estado de cuenta.',
         );
