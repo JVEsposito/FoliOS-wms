@@ -70,7 +70,8 @@ class ServicioTrasladosPreparacionSag
             ->orderBy('id')
             ->lockForUpdate()
             ->get();
-        $posiciones = $reservas->pluck('posicion')->sortBy('posicion')->keyBy('id');
+        // El orden de la reserva recorre cada banda del sector desde su fondo.
+        $posiciones = $reservas->pluck('posicion')->keyBy('id');
         $destinos = $this->asignarDestinos($folios, $posiciones, $plan);
         $preparados = 0;
 

@@ -447,11 +447,32 @@ async function openLot(id) {
     document.getElementById('sagDetailTitle').textContent = `${lot.codigo} · ${humanize(lot.tipo)}`;
     document.getElementById('sagDetailSubtitle').textContent = `${humanize(lot.estado)} · ${lot.cantidad_folios} pallets · SAG ${lot.numero_inspeccion_sag || 'sin número'} · creado ${dateTime(lot.creado_at)}`;
     document.getElementById('sagDetailDestinations').innerHTML = destinationPills(lot.destinos);
+    renderPreparation(lot);
     renderDetailActions(lot);
     renderLotMembershipControls(lot);
     renderResults(lot);
     elements.detail.classList.remove('is-hidden');
     elements.detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function preparationSector(sector) {
+    const bands = (sector?.bandas?.length ? sector.bandas : [{ banda: sector?.banda, posicion_desde: sector?.posicion_desde, posicion_hasta: sector?.posicion_hasta }])
+        .filter((band) => band.banda)
+        .map((band) => `B${String(band.banda).padStart(2, '0')} · P${String(band.posicion_desde).padStart(2, '0')} a P${String(band.posicion_hasta).padStart(2, '0')}${band.pallets ? ` (${band.pallets} ${band.pallets === 1 ? 'pallet' : 'pallets'}, ${band.separacion} de separación)` : ''}`);
+    return `${escapeHtml(sector?.camara_codigo || 'Cámara reservada')} · ${bands.map(escapeHtml).join(' · ')}`;
+}
+
+function renderPreparation(lot) {
+    const box = document.getElementById('sagDetailPreparation');
+    const capacity = lot.preparacion_fisica?.capacidad;
+    const visible = Boolean(capacity) && lot.estado === 'preparacion';
+    box.classList.toggle('is-hidden', !visible);
+    box.classList.toggle('sag-preparation--pending', visible && capacity.capacidad_estado !== 'reservada');
+    if (!visible) { box.innerHTML = ''; return; }
+    const target = capacity.pallets_objetivo ?? lot.cantidad_folios;
+    box.innerHTML = capacity.capacidad_estado === 'reservada'
+        ? `<strong>Sector SAG reservado</strong><span>${preparationSector(capacity.sector)}</span><span>${capacity.pallets_preparados ?? 0} de ${target} ${target === 1 ? 'pallet' : 'pallets'} en su posición. Los traslados pendientes se publican a los camareros; los pallets en prefrío, al aprobarse su proceso.</span>`
+        : `<strong>Sector SAG pendiente: no se publican traslados</strong><span>${escapeHtml(capacity.motivo_capacidad_pendiente || 'Aún no hay espacio reservado para este lote.')}</span><span>Se vuelve a intentar cada minuto. Libera espacio en las bandas de inspección o ajusta los pallets del lote.</span>`;
 }
 
 function renderDetailActions(lot) {

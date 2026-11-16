@@ -20,7 +20,11 @@ async function open(browser, width, consulta = false) {
     }, { readOnly: consulta, theme: width === 1366 ? 'dark-industrial' : 'light-professional' });
     let members = ['p1']; let estado = 'preparacion'; const patches = [];
     const destination = { id: 'd1', tipo: 'pais', codigo: 'US', nombre: 'Estados Unidos' };
-    const lot = () => ({ id: 'l1', codigo: 'AG-0001', tipo: 'inspeccion_origen', estado, cantidad_folios: members.length, cantidad_solicitada: members.length, destinos: [destination], creado_at: '2026-11-16T16:00:00Z', folios: members.map((id) => ({ id: `a-${id}`, estado: 'pendiente', folio: pallets.find((p) => p.id === id), resultados: [{ id: `r-${id}`, destino: destination, resultado: 'pendiente' }] })) });
+    // Con un pallet el sector aún no tiene espacio; al agregar otro queda repartido en dos bandas.
+    const preparation = () => ({ plan_id: 'plan-1', estado: 'programado', capacidad: members.length === 1
+        ? { capacidad_estado: 'pendiente', pallets_objetivo: 1, motivo_capacidad_pendiente: 'No hay espacio libre y accesible en bandas de inspección de nivel 1 de una misma cámara para 1 pallet y 1 espacio de separación.' }
+        : { capacidad_estado: 'reservada', pallets_objetivo: members.length, pallets_preparados: 1, sector: { camara_codigo: 'CAM-09', banda: 15, posicion_desde: 1, posicion_hasta: 12, bandas: [{ banda: 15, posicion_desde: 1, posicion_hasta: 12, pallets: 8, separacion: 4 }, { banda: 16, posicion_desde: 1, posicion_hasta: 5, pallets: 3, separacion: 2 }] } } });
+    const lot = () => ({ id: 'l1', codigo: 'AG-0001', tipo: 'inspeccion_origen', estado, cantidad_folios: members.length, cantidad_solicitada: members.length, destinos: [destination], preparacion_fisica: preparation(), creado_at: '2026-11-16T16:00:00Z', folios: members.map((id) => ({ id: `a-${id}`, estado: 'pendiente', folio: pallets.find((p) => p.id === id), resultados: [{ id: `r-${id}`, destino: destination, resultado: 'pendiente' }] })) });
     const html = readFileSync(resolve(root, 'storage/app/ui/oficina/inspeccion-sag.html'), 'utf8');
     await context.route('http://localhost/**', (route) => {
         const url = new URL(route.request().url()); const path = url.pathname;
@@ -67,9 +71,17 @@ for (const width of [1366, 390]) test(`SAG muestra contexto y permite agregar y 
         await page.locator('#editSagLotFoliosForm').waitFor();
         assert.match(await page.locator('#sagResultList').innerText(), /120 cajas · CSG 89868 · 152223/);
         assert.equal(await page.locator('[data-remove-sag-folio="p1"]').isDisabled(), true);
+        const pending = await page.locator('#sagDetailPreparation').innerText();
+        assert.match(pending, /Sector SAG pendiente: no se publican traslados/);
+        assert.match(pending, /para 1 pallet y 1 espacio de separación/);
         await page.locator('#addSagLotFolio').fill('6000002256');
         await page.locator('#addSagLotFolioButton').click();
         await page.waitForFunction(() => document.querySelectorAll('#sagResultList .sag-result-card').length === 2 && !document.querySelector('[data-remove-sag-folio="p1"]').disabled);
+        const reserved = await page.locator('#sagDetailPreparation').innerText();
+        assert.match(reserved, /Sector SAG reservado/);
+        assert.match(reserved, /CAM-09 · B15 · P01 a P12 \(8 pallets, 4 de separación\) · B16 · P01 a P05 \(3 pallets, 2 de separación\)/);
+        assert.match(reserved, /1 de 2 pallets en su posición/);
+        assert.equal(await page.locator('#sagDetailPreparation.sag-preparation--pending').count(), 0);
         if (process.env.FOLIOS_UI_CAPTURE_DIR) await page.locator('#sagLotDetail').screenshot({ path: resolve(process.env.FOLIOS_UI_CAPTURE_DIR, `sag-lote-${width}.png`) });
         await page.locator('[data-remove-sag-folio="p1"]').click();
         await page.waitForFunction(() => document.querySelectorAll('#sagResultList .sag-result-card').length === 1 && document.querySelector('[data-remove-sag-folio="p2"]').disabled);
@@ -78,6 +90,7 @@ for (const width of [1366, 390]) test(`SAG muestra contexto y permite agregar y 
         await page.locator('#detailActionSelect').selectOption('start');
         await page.waitForFunction(() => document.querySelector('#editSagLotFoliosForm').classList.contains('is-hidden'));
         assert.equal(await page.locator('[data-remove-sag-folio]').count(), 0);
+        assert.equal(await page.locator('#sagDetailPreparation').isVisible(), false);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, JSON.stringify(await page.evaluate(() => ({ viewport: innerWidth, scroll: document.documentElement.scrollWidth, offset: scrollX, overflows: [...document.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > innerWidth).map((el) => [el.tagName, el.id || el.className, Math.round(el.getBoundingClientRect().right)]).slice(-15) }))));
         assert.deepEqual(errors, []);
         await context.close();

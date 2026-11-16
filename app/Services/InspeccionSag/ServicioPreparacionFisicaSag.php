@@ -67,28 +67,22 @@ class ServicioPreparacionFisicaSag
             }
 
             $plan = $this->asegurarPlan($lote, $usuario);
-            $requeridos = $this->espaciosRequeridos($lote->folios->count());
+            $folioIds = $lote->folios->pluck('folio_id');
+            $requeridos = $this->espaciosRequeridos($folioIds->count());
             $reservas = $this->reservasActivas($lote->id, bloquear: true);
 
-            if ($reservas->isNotEmpty() && $reservas->count() !== $requeridos) {
+            if ($reservas->isNotEmpty()
+                && ! $this->reservaCompleta($reservas, $folioIds->count(), $requeridos)) {
                 throw new DomainException(
                     'La preparación SAG posee una reserva física incompleta y requiere revisión.',
                 );
             }
 
             if ($reservas->isEmpty()) {
-                $tramo = $this->seleccionarTramo(
-                    $lote->folios->pluck('folio_id'),
-                    $requeridos,
-                );
+                $sector = $this->seleccionarSector($folioIds);
 
-                if ($tramo !== null) {
-                    $this->reservarTramo(
-                        $lote,
-                        $plan,
-                        $tramo,
-                        $lote->folios->pluck('folio_id'),
-                    );
+                if ($sector !== null) {
+                    $this->reservarSector($lote, $plan, $sector);
                     $reservas = $this->reservasActivas($lote->id, bloquear: true);
                 }
             }
@@ -322,15 +316,18 @@ class ServicioPreparacionFisicaSag
     }
 
     /**
+     * Elige el sector dentro de una sola cámara. Si el lote no cabe en una banda, lo
+     * reparte en bandas de esa cámara: en cada una sus pallets van al fondo, delante de
+     * cualquier pallet ajeno, y su separación queda al frente.
+     *
      * @param  Collection<int, string>  $folioIds
-     * @return Collection<int, Posicion>|null
+     * @return list<array{posiciones: Collection<int, Posicion>, pallets: array<string, true>}>|null
      */
-    private function seleccionarTramo(
-        Collection $folioIds,
-        int $requeridos,
-    ): ?Collection {
-        if ($requeridos === 0) {
-            return collect();
+    private function seleccionarSector(Collection $folioIds): ?array
+    {
+        $pallets = $folioIds->count();
+        if ($pallets === 0) {
+            return [];
         }
         $camarasDirigidas = $this->despliegue->idsCamarasDirigidas();
         if ($camarasDirigidas === []) {
@@ -367,10 +364,11 @@ class ServicioPreparacionFisicaSag
             ->mapWithKeys(fn (BandaOperacional $banda): array => [
                 $this->claveBanda($banda->camara_id, $banda->numero) => true,
             ]);
+        // También se leen las posiciones fuera de servicio: un pallet ajeno sobre ellas
+        // sigue tapando el fondo de la banda.
         $posiciones = Posicion::query()
             ->whereIn('camara_id', $camaras->keys())
             ->where('nivel', self::NIVEL_RESERVADO)
-            ->where('estado', EstadoPosicion::Activa->value)
             ->orderBy('camara_id')
             ->orderBy('banda')
             ->orderBy('posicion')
@@ -389,10 +387,6 @@ class ServicioPreparacionFisicaSag
             })
             ->values();
 
-        if ($posiciones->count() < $requeridos) {
-            return null;
-        }
-
         $posicionIds = $posiciones->pluck('id');
         $ocupaciones = UbicacionActual::query()
             ->whereIn('posicion_id', $posicionIds)
@@ -410,124 +404,229 @@ class ServicioPreparacionFisicaSag
             ->pluck('clave_bloqueo')
             ->flip();
         $folios = $folioIds->flip();
-        $disponibles = $posiciones
-            ->filter(function (Posicion $posicion) use (
+
+        $candidatos = collect();
+        $analisis = $posiciones
+            ->groupBy(fn (Posicion $posicion): string => $this->claveBanda(
+                $posicion->camara_id,
+                $posicion->banda,
+            ))
+            ->map(fn (Collection $grupo): ?array => $this->analizarBanda(
+                $grupo,
                 $ocupaciones,
                 $reservadasPorTarea,
                 $reservadasPorSag,
                 $folios,
-            ): bool {
-                if ($reservadasPorTarea->has($posicion->id)
-                    || $reservadasPorSag->has($posicion->id)) {
-                    return false;
+            ))
+            ->filter()
+            ->groupBy('camara_id');
+
+        foreach ($analisis as $camaraId => $bandasCamara) {
+            $ordenadas = $bandasCamara->sortBy('numero')->values();
+            $total = $ordenadas->count();
+
+            for ($inicio = 0; $inicio < $total; $inicio++) {
+                $capacidad = 0;
+                $fin = $inicio;
+                while ($fin < $total && $capacidad < $pallets) {
+                    $capacidad += $ordenadas[$fin]['capacidad'];
+                    $fin++;
+                }
+                if ($capacidad < $pallets) {
+                    break;
                 }
 
-                $ocupantes = $ocupaciones->get($posicion->id, collect());
-
-                return $ocupantes->isEmpty()
-                    || $ocupantes->every(
-                        fn (UbicacionActual $ubicacion): bool => $folios->has($ubicacion->folio_id),
-                    );
-            })
-            ->groupBy(fn (Posicion $posicion): string => $this->claveBanda(
-                $posicion->camara_id,
-                $posicion->banda,
-            ));
-
-        $candidatos = collect();
-        foreach ($disponibles as $grupo) {
-            $corrida = collect();
-            $anterior = null;
-
-            foreach ($grupo->sortBy('posicion') as $posicion) {
-                if ($anterior !== null && $posicion->posicion !== $anterior + 1) {
-                    $corrida = collect();
-                }
-                $corrida->push($posicion);
-                $anterior = $posicion->posicion;
-
-                if ($corrida->count() < $requeridos) {
-                    continue;
-                }
-
-                /** @var Collection<int, Posicion> $ventana */
-                $ventana = $corrida->slice(-$requeridos)->values();
-                $palletsPresentes = $ventana->filter(
-                    fn (Posicion $candidata): bool => $ocupaciones
-                        ->get($candidata->id, collect())
-                        ->contains(fn (UbicacionActual $ubicacion): bool => $folios
-                            ->has($ubicacion->folio_id)),
-                )->count();
-                $camara = $camaras->get($posicion->camara_id);
+                /** @var Collection<int, array<string, mixed>> $grupo */
+                $grupo = $ordenadas->slice($inicio, $fin - $inicio)->values();
                 $candidatos->push([
-                    'tramo' => $ventana,
-                    'pallets_presentes' => $palletsPresentes,
-                    'camara_codigo' => $camara->codigo,
-                    'banda' => $posicion->banda,
-                    'inicio' => $ventana->first()->posicion,
+                    'bandas' => $grupo,
+                    'presentes' => $grupo->sum(fn (array $banda): int => count($banda['presentes'])),
+                    'extension' => $grupo->last()['numero'] - $grupo->first()['numero'],
+                    'camara_codigo' => $camaras->get($camaraId)->codigo,
+                    'banda' => $grupo->first()['numero'],
                 ]);
             }
         }
 
         $seleccionado = $candidatos
             ->sort(function (array $izquierda, array $derecha): int {
-                return ($derecha['pallets_presentes'] <=> $izquierda['pallets_presentes'])
+                return ($izquierda['bandas']->count() <=> $derecha['bandas']->count())
+                    ?: ($derecha['presentes'] <=> $izquierda['presentes'])
+                    ?: ($izquierda['extension'] <=> $derecha['extension'])
                     ?: strcmp($izquierda['camara_codigo'], $derecha['camara_codigo'])
-                    ?: ($izquierda['banda'] <=> $derecha['banda'])
-                    ?: ($izquierda['inicio'] <=> $derecha['inicio']);
+                    ?: ($izquierda['banda'] <=> $derecha['banda']);
             })
             ->first();
 
-        return $seleccionado['tramo'] ?? null;
+        return $seleccionado === null
+            ? null
+            : $this->distribuirSector($seleccionado['bandas'], $pallets);
     }
 
     /**
-     * @param  Collection<int, Posicion>  $tramo
-     * @param  Collection<int, string>  $folioIds
+     * Lo utilizable de una banda es lo que se alcanza desde el frente sin mover pallets
+     * ajenos. Los pallets del lote que ya están ahí se conservan y los nuevos van delante
+     * de ellos, porque una banda no se carga detrás de un pallet.
+     *
+     * @param  Collection<int, Posicion>  $grupo
+     * @return array<string, mixed>|null
      */
-    private function reservarTramo(
-        LoteInspeccionSag $lote,
-        PlanOperacional $plan,
-        Collection $tramo,
-        Collection $folioIds,
-    ): void {
-        $ocupaciones = UbicacionActual::query()
-            ->whereIn('posicion_id', $tramo->pluck('id'))
-            ->whereIn('folio_id', $folioIds)
-            ->get(['folio_id', 'posicion_id'])
-            ->keyBy('posicion_id');
-        $palletsPorReservar = $folioIds->count();
-        $posicionesPallet = $tramo
-            ->filter(fn (Posicion $posicion): bool => $ocupaciones->has($posicion->id))
-            ->pluck('id')
-            ->flip();
-
-        foreach ($tramo as $posicion) {
-            if ($posicionesPallet->count() >= $palletsPorReservar) {
+    private function analizarBanda(
+        Collection $grupo,
+        Collection $ocupaciones,
+        Collection $reservadasPorTarea,
+        Collection $reservadasPorSag,
+        Collection $folios,
+    ): ?array {
+        $tramo = [];
+        $anterior = null;
+        foreach ($grupo->sortByDesc('posicion') as $posicion) {
+            /** @var Posicion $posicion */
+            $ocupantes = $ocupaciones->get($posicion->id, collect());
+            if ($reservadasPorTarea->has($posicion->id)
+                || $reservadasPorSag->has($posicion->id)
+                || $ocupantes->contains(
+                    fn (UbicacionActual $ubicacion): bool => ! $folios->has($ubicacion->folio_id),
+                )) {
                 break;
             }
-            $posicionesPallet->put($posicion->id, true);
+            if ($posicion->estado !== EstadoPosicion::Activa) {
+                // Una posición fuera de servicio y vacía al frente se cruza, pero no se usa.
+                if ($tramo === [] && $ocupantes->isEmpty()) {
+                    continue;
+                }
+                break;
+            }
+            if ($anterior !== null && $posicion->posicion !== $anterior - 1) {
+                break;
+            }
+            $tramo[] = $posicion;
+            $anterior = $posicion->posicion;
         }
 
+        $tramo = array_reverse($tramo);
+        $presentes = [];
+        foreach ($tramo as $indice => $posicion) {
+            if ($ocupaciones->get($posicion->id, collect())->isNotEmpty()) {
+                $presentes[] = $indice;
+            }
+        }
+        $desde = $presentes[0] ?? 0;
+        $ultimo = $presentes === [] ? -1 : $presentes[count($presentes) - 1];
+        $ocupado = $ultimo < 0 ? 0 : $ultimo - $desde + 1;
+        $libres = count($tramo) - $ultimo - 1;
+        $capacidad = min(
+            count($presentes) + $libres,
+            intdiv(2 * ($ocupado + $libres), 3),
+        );
+
+        if ($capacidad < max(1, count($presentes))) {
+            return null;
+        }
+
+        return [
+            'camara_id' => $tramo[0]->camara_id,
+            'numero' => $tramo[0]->banda,
+            'tramo' => $tramo,
+            'presentes' => $presentes,
+            'desde' => $desde,
+            'ultimo' => $ultimo,
+            'ocupado' => $ocupado,
+            'capacidad' => $capacidad,
+        ];
+    }
+
+    /**
+     * Cada banda conserva primero los pallets del lote que ya tiene; el resto se asigna a
+     * las bandas con más pallets presentes y, entre ellas, a la de menor número.
+     *
+     * @param  Collection<int, array<string, mixed>>  $bandas
+     * @return list<array{posiciones: Collection<int, Posicion>, pallets: array<string, true>}>
+     */
+    private function distribuirSector(Collection $bandas, int $pallets): array
+    {
+        $asignados = $bandas->map(fn (array $banda): int => count($banda['presentes']))->all();
+        $restantes = $pallets - array_sum($asignados);
+        $prioridad = $bandas->keys()->all();
+        usort($prioridad, fn (int $izquierda, int $derecha): int => (count($bandas[$derecha]['presentes'])
+            <=> count($bandas[$izquierda]['presentes']))
+            ?: ($bandas[$izquierda]['numero'] <=> $bandas[$derecha]['numero']));
+        foreach ($prioridad as $indice) {
+            $agregar = min($bandas[$indice]['capacidad'] - $asignados[$indice], $restantes);
+            $asignados[$indice] += $agregar;
+            $restantes -= $agregar;
+        }
+
+        $sector = [];
+        foreach ($bandas as $indice => $banda) {
+            $palletsBanda = $asignados[$indice];
+            if ($palletsBanda === 0) {
+                continue;
+            }
+            $nuevos = $palletsBanda - count($banda['presentes']);
+            $espacios = max(
+                $banda['ocupado'] + $nuevos,
+                $this->espaciosRequeridos($palletsBanda),
+            );
+            $ventana = array_slice($banda['tramo'], $banda['desde'], $espacios);
+            $posicionesPallet = [];
+            $nuevasPosiciones = $nuevos > 0
+                ? range($banda['ultimo'] + 1, $banda['ultimo'] + $nuevos)
+                : [];
+            foreach ([...$banda['presentes'], ...$nuevasPosiciones] as $indiceTramo) {
+                $posicionesPallet[$banda['tramo'][$indiceTramo]->id] = true;
+            }
+            $sector[] = [
+                'posiciones' => collect($ventana),
+                'pallets' => $posicionesPallet,
+            ];
+        }
+
+        return $sector;
+    }
+
+    /**
+     * @param  list<array{posiciones: Collection<int, Posicion>, pallets: array<string, true>}>  $sector
+     */
+    private function reservarSector(
+        LoteInspeccionSag $lote,
+        PlanOperacional $plan,
+        array $sector,
+    ): void {
         $ahora = now();
-        foreach ($tramo->values() as $indice => $posicion) {
-            ReservaPosicionInspeccionSag::query()->updateOrCreate([
-                'lote_inspeccion_sag_id' => $lote->id,
-                'posicion_id' => $posicion->id,
-            ], [
-                'plan_operacional_id' => $plan->id,
-                'tipo_espacio' => $posicionesPallet->has($posicion->id)
-                    ? TipoEspacioPreparacionSag::Pallet
-                    : TipoEspacioPreparacionSag::Separacion,
-                'orden' => $indice + 1,
-                'clave_bloqueo' => $posicion->id,
-                'reservada_at' => $ahora,
-                'liberada_at' => null,
-                'motivo_liberacion' => null,
-            ]);
+        $orden = 0;
+        $camaraIds = collect();
+        foreach ($sector as $banda) {
+            foreach ($banda['posiciones'] as $posicion) {
+                ReservaPosicionInspeccionSag::query()->updateOrCreate([
+                    'lote_inspeccion_sag_id' => $lote->id,
+                    'posicion_id' => $posicion->id,
+                ], [
+                    'plan_operacional_id' => $plan->id,
+                    'tipo_espacio' => isset($banda['pallets'][$posicion->id])
+                        ? TipoEspacioPreparacionSag::Pallet
+                        : TipoEspacioPreparacionSag::Separacion,
+                    'orden' => ++$orden,
+                    'clave_bloqueo' => $posicion->id,
+                    'reservada_at' => $ahora,
+                    'liberada_at' => null,
+                    'motivo_liberacion' => null,
+                ]);
+                $camaraIds->push($posicion->camara_id);
+            }
         }
 
-        $this->incrementarRevisionReservas($tramo->pluck('camara_id')->unique()->values());
+        $this->incrementarRevisionReservas($camaraIds->unique()->values());
+    }
+
+    /** @param  Collection<int, ReservaPosicionInspeccionSag>  $reservas */
+    private function reservaCompleta(Collection $reservas, int $pallets, int $requeridos): bool
+    {
+        return $pallets > 0
+            && $reservas->count() >= $requeridos
+            && $reservas->filter(
+                fn (ReservaPosicionInspeccionSag $reserva): bool => $reserva->tipo_espacio === TipoEspacioPreparacionSag::Pallet,
+            )->count() === $pallets;
     }
 
     /**
@@ -538,31 +637,56 @@ class ServicioPreparacionFisicaSag
         LoteInspeccionSag $lote,
         Collection $reservas,
     ): void {
-        $reservas->loadMissing('posicion:id,camara_id,banda,posicion,nivel');
-        $posiciones = $reservas
-            ->pluck('posicion')
-            ->filter()
-            ->sortBy('posicion')
-            ->values();
-        $requeridos = $this->espaciosRequeridos($lote->folios->count());
-        $completa = $reservas->count() === $requeridos;
+        $reservas->loadMissing('posicion:id,camara_id,banda,posicion,nivel', 'posicion.camara:id,codigo');
+        $pallets = $lote->folios->count();
+        $requeridos = $this->espaciosRequeridos($pallets);
+        $completa = $this->reservaCompleta($reservas, $pallets, $requeridos);
+        $conPosicion = $reservas->filter(fn (ReservaPosicionInspeccionSag $reserva): bool => $reserva->posicion !== null);
+        $separacion = $conPosicion->filter(
+            fn (ReservaPosicionInspeccionSag $reserva): bool => $reserva->tipo_espacio === TipoEspacioPreparacionSag::Separacion,
+        )->count();
+        $bandas = $conPosicion
+            ->groupBy(fn (ReservaPosicionInspeccionSag $reserva): int => $reserva->posicion->banda)
+            ->sortKeys()
+            ->map(fn (Collection $grupo, int $banda): array => [
+                'banda' => $banda,
+                'posicion_desde' => $grupo->min('posicion.posicion'),
+                'posicion_hasta' => $grupo->max('posicion.posicion'),
+                'pallets' => $grupo->filter(
+                    fn (ReservaPosicionInspeccionSag $reserva): bool => $reserva->tipo_espacio === TipoEspacioPreparacionSag::Pallet,
+                )->count(),
+                'separacion' => $grupo->filter(
+                    fn (ReservaPosicionInspeccionSag $reserva): bool => $reserva->tipo_espacio === TipoEspacioPreparacionSag::Separacion,
+                )->count(),
+            ])
+            ->values()
+            ->all();
+        $primera = $conPosicion->first()?->posicion;
         $contexto = [
             ...($plan->contexto ?? []),
-            'pallets_objetivo' => $lote->folios->count(),
+            'pallets_objetivo' => $pallets,
             'espacios_requeridos' => $requeridos,
-            'espacios_pallet' => $lote->folios->count(),
-            'espacios_separacion' => $requeridos - $lote->folios->count(),
+            'espacios_pallet' => $pallets,
+            'espacios_separacion' => $completa ? $separacion : $requeridos - $pallets,
             'espacios_reservados' => $reservas->count(),
             'capacidad_estado' => $completa ? 'reservada' : 'pendiente',
             'motivo_capacidad_pendiente' => $completa
                 ? null
-                : 'No existe un tramo contiguo suficiente en bandas de inspección de nivel 1.',
+                : sprintf(
+                    'No hay espacio libre y accesible en bandas de inspección de nivel 1 de una misma cámara para %d %s y %d %s de separación.',
+                    $pallets,
+                    $pallets === 1 ? 'pallet' : 'pallets',
+                    $requeridos - $pallets,
+                    $requeridos - $pallets === 1 ? 'espacio' : 'espacios',
+                ),
             'sector' => $completa ? [
-                'camara_id' => $posiciones->first()?->camara_id,
-                'banda' => $posiciones->first()?->banda,
+                'camara_id' => $primera?->camara_id,
+                'camara_codigo' => $primera?->camara?->codigo,
+                'banda' => $bandas[0]['banda'] ?? null,
                 'nivel' => self::NIVEL_RESERVADO,
-                'posicion_desde' => $posiciones->min('posicion'),
-                'posicion_hasta' => $posiciones->max('posicion'),
+                'posicion_desde' => $conPosicion->min('posicion.posicion'),
+                'posicion_hasta' => $conPosicion->max('posicion.posicion'),
+                'bandas' => $bandas,
             ] : null,
         ];
 

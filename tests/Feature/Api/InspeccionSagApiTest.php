@@ -51,6 +51,7 @@ use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Estiba\ServicioSesionEstiba;
 use App\Services\Existencias\ServicioExistencias;
+use App\Services\Planificador\ServicioDestinosServidor;
 use App\Services\Prefrio\ServicioGeneracionRecepcionTunel;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -476,6 +477,163 @@ class InspeccionSagApiTest extends TestCase
             'programado',
             PlanOperacional::query()->findOrFail($lote['preparacion_fisica']['plan_id'])->estado->value,
         );
+    }
+
+    public function test_muestreo_usda_que_supera_una_banda_reparte_su_sector_y_publica_traslados_alcanzables(): void
+    {
+        $this->activarPlanificadorDirigido();
+        config(['planificador.compute' => 'server']);
+        $usuario = $this->administradorConTemporada();
+        $zona = $this->crearZonaInspeccion($usuario, posiciones: 13, bandas: 3);
+        // La banda 1 queda tapada por un pallet ajeno en su posición 10.
+        $this->ubicar($this->crearFolioUbicado('SAG-AJENO-001', ['exportadora' => 'OTRO-CLIENTE']), $zona, 1, 10);
+        $presentes = collect(range(1, 6))->map(function (int $numero) use ($zona): Folio {
+            $folio = $this->crearFolioUbicado(sprintf('SAG-BANDA-%02d', $numero));
+            $this->ubicar($folio, $zona, 2, $numero);
+
+            return $folio;
+        });
+        $origen = $this->camaraOrigen(5);
+        $trasladados = collect(range(1, 5))->map(function (int $numero) use ($origen): Folio {
+            $folio = $this->crearFolioUbicado(sprintf('SAG-TRASLADO-%02d', $numero));
+            $this->ubicar($folio, $origen, $numero, 1);
+
+            return $folio;
+        });
+        $usa = Pais::query()->where('iso_alpha2', 'US')->firstOrFail();
+
+        // Seis pallets caben en la banda donde ya están: no se mueve ninguno.
+        $lote = $this->crearLoteEnPreparacion($usuario, $presentes->all(), $usa, 'muestreo_usda');
+        $this->assertSame('reservada', $lote['preparacion_fisica']['capacidad']['capacidad_estado']);
+        $this->assertSame([2, 1, 9], [
+            $lote['preparacion_fisica']['capacidad']['sector']['banda'],
+            $lote['preparacion_fisica']['capacidad']['sector']['posicion_desde'],
+            $lote['preparacion_fisica']['capacidad']['sector']['posicion_hasta'],
+        ]);
+        $this->assertSame(100, $lote['preparacion_fisica']['capacidad']['porcentaje_preparado']);
+        $this->assertDatabaseCount('tareas_movimiento', 0);
+
+        // Con once pallets se necesitan 17 espacios y ninguna banda tiene más de 13.
+        $editado = $this->actingAs($usuario, 'sanctum')
+            ->patchJson("/api/inspeccion-sag/lotes/{$lote['id']}/folios", [
+                'operacion_id' => (string) Str::uuid(),
+                'agregar' => $trasladados->pluck('id')->all(),
+            ])
+            ->assertOk()
+            ->assertJsonPath('cantidad_folios', 11)
+            ->json('preparacion_fisica.capacidad');
+
+        $this->assertSame('reservada', $editado['capacidad_estado'], (string) $editado['motivo_capacidad_pendiente']);
+        $this->assertNull($editado['motivo_capacidad_pendiente']);
+        $this->assertSame(17, $editado['espacios_requeridos']);
+        $this->assertSame(17, $editado['espacios_reservados']);
+        $this->assertSame(6, $editado['espacios_separacion']);
+        $this->assertSame('CAM-INSPECCION', $editado['sector']['camara_codigo']);
+        $this->assertEquals([
+            ['banda' => 2, 'posicion_desde' => 1, 'posicion_hasta' => 12, 'pallets' => 8, 'separacion' => 4],
+            ['banda' => 3, 'posicion_desde' => 1, 'posicion_hasta' => 5, 'pallets' => 3, 'separacion' => 2],
+        ], $editado['sector']['bandas']);
+        $this->assertSame(6, $editado['pallets_preparados']);
+        $this->assertSame(0, ReservaPosicionInspeccionSag::query()
+            ->whereNotNull('clave_bloqueo')
+            ->whereHas('posicion', fn ($consulta) => $consulta->where('banda', 1))
+            ->count());
+
+        $tareas = TareaMovimiento::query()
+            ->where('plan_operacional_id', $lote['preparacion_fisica']['plan_id'])
+            ->where('estado', 'pendiente')
+            ->with(['posicionDestino', 'maniobraOperacional'])
+            ->get();
+        $this->assertCount(5, $tareas);
+        $this->assertEqualsCanonicalizing(
+            $trasladados->pluck('id')->all(),
+            $tareas->pluck('folio_id')->all(),
+        );
+        $this->assertEqualsCanonicalizing(
+            ['B02-P07-N1', 'B02-P08-N1', 'B03-P01-N1', 'B03-P02-N1', 'B03-P03-N1'],
+            $tareas->pluck('posicionDestino.etiqueta')->all(),
+        );
+        foreach ($tareas as $tarea) {
+            $this->assertSame('pallet', ReservaPosicionInspeccionSag::query()
+                ->where('clave_bloqueo', $tarea->posicion_destino_id)
+                ->sole()
+                ->tipo_espacio
+                ->value);
+            $evaluacion = app(ServicioDestinosServidor::class)->evaluar($tarea->maniobraOperacional);
+            $this->assertTrue($evaluacion['posible'], $evaluacion['detalle']);
+        }
+
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $this->assertSame(17, ReservaPosicionInspeccionSag::query()->whereNotNull('clave_bloqueo')->count());
+        $this->assertSame(5, TareaMovimiento::query()->where('estado', 'pendiente')->count());
+    }
+
+    public function test_no_reserva_detras_de_un_pallet_ajeno_que_tapa_la_banda(): void
+    {
+        $this->activarPlanificadorDirigido();
+        config(['planificador.compute' => 'server']);
+        $usuario = $this->administradorConTemporada();
+        $zona = $this->crearZonaInspeccion($usuario, posiciones: 6, bandas: 2);
+        $this->ubicar($this->crearFolioUbicado('SAG-TAPA-001', ['exportadora' => 'OTRO-CLIENTE']), $zona, 1, 5);
+        $origen = $this->camaraOrigen(2);
+        $folios = collect([1, 2])->map(function (int $numero) use ($origen): Folio {
+            $folio = $this->crearFolioUbicado("SAG-ACCESO-00{$numero}");
+            $this->ubicar($folio, $origen, $numero, 1);
+
+            return $folio;
+        });
+
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            $folios->all(),
+            Pais::query()->where('iso_alpha2', 'US')->firstOrFail(),
+            'muestreo_usda',
+        );
+
+        $this->assertSame(0, ReservaPosicionInspeccionSag::query()
+            ->whereHas('posicion', fn ($consulta) => $consulta->where('banda', 1))
+            ->count());
+        $this->assertEquals([[
+            'banda' => 2, 'posicion_desde' => 1, 'posicion_hasta' => 3, 'pallets' => 2, 'separacion' => 1,
+        ]], $lote['preparacion_fisica']['capacidad']['sector']['bandas']);
+        $tareas = TareaMovimiento::query()->with(['posicionDestino', 'maniobraOperacional'])->get();
+        $this->assertEqualsCanonicalizing(
+            ['B02-P01-N1', 'B02-P02-N1'],
+            $tareas->pluck('posicionDestino.etiqueta')->all(),
+        );
+        foreach ($tareas as $tarea) {
+            $evaluacion = app(ServicioDestinosServidor::class)->evaluar($tarea->maniobraOperacional);
+            $this->assertTrue($evaluacion['posible'], $evaluacion['detalle']);
+        }
+    }
+
+    public function test_sector_repartido_con_separacion_propia_por_banda_no_se_declara_incompleto(): void
+    {
+        $this->activarPlanificadorDirigido();
+        $usuario = $this->administradorConTemporada();
+        $this->crearZonaInspeccion($usuario, posiciones: 5, bandas: 2);
+        $folios = collect(range(1, 4))->map(fn (int $numero): Folio => $this->crearFolioUbicado("SAG-REPARTO-00{$numero}"));
+
+        $lote = $this->crearLoteEnPreparacion(
+            $usuario,
+            $folios->all(),
+            Pais::query()->where('iso_alpha2', 'US')->firstOrFail(),
+        );
+
+        // Cada banda lleva su propia separación: 5 + 2 espacios para los 6 mínimos.
+        $capacidad = $lote['preparacion_fisica']['capacidad'];
+        $this->assertSame('reservada', $capacidad['capacidad_estado'], (string) $capacidad['motivo_capacidad_pendiente']);
+        $this->assertSame(6, $capacidad['espacios_requeridos']);
+        $this->assertSame(7, $capacidad['espacios_reservados']);
+        $this->assertEquals([
+            ['banda' => 1, 'posicion_desde' => 1, 'posicion_hasta' => 5, 'pallets' => 3, 'separacion' => 2],
+            ['banda' => 2, 'posicion_desde' => 1, 'posicion_hasta' => 2, 'pallets' => 1, 'separacion' => 1],
+        ], $capacidad['sector']['bandas']);
+
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $this->artisan('sag:preparar-traslados')->assertSuccessful();
+        $this->assertSame(7, ReservaPosicionInspeccionSag::query()->whereNotNull('clave_bloqueo')->count());
+        $this->assertSame(4, TareaMovimiento::query()->where('estado', 'pendiente')->count());
     }
 
     public function test_preparacion_fisica_solo_reserva_en_modo_guided_tablet_rolling(): void
@@ -1347,12 +1505,13 @@ class InspeccionSagApiTest extends TestCase
         User $usuario,
         int $posiciones,
         int $niveles = 1,
+        int $bandas = 1,
     ): Camara {
         $camara = Camara::create([
             'codigo' => 'CAM-INSPECCION',
             'nombre' => 'Zona de inspección SAG',
             'contenido' => ContenidoCamara::Productos,
-            'cantidad_bandas' => 1,
+            'cantidad_bandas' => $bandas,
             'posiciones_por_banda' => $posiciones,
             'cantidad_niveles' => $niveles,
             'creado_por_user_id' => $usuario->id,
@@ -1364,19 +1523,50 @@ class InspeccionSagApiTest extends TestCase
             ->where('numero', 1)
             ->firstOrFail();
 
-        for ($nivel = 1; $nivel <= $niveles; $nivel++) {
-            for ($numero = 1; $numero <= $posiciones; $numero++) {
-                Posicion::create([
-                    'camara_id' => $camara->id,
-                    'banda' => 1,
-                    'posicion' => $numero,
-                    'nivel' => $nivel,
-                    'etiqueta' => sprintf('B01-P%02d-N%d', $numero, $nivel),
-                ]);
+        for ($banda = 1; $banda <= $bandas; $banda++) {
+            for ($nivel = 1; $nivel <= $niveles; $nivel++) {
+                for ($numero = 1; $numero <= $posiciones; $numero++) {
+                    Posicion::create([
+                        'camara_id' => $camara->id,
+                        'banda' => $banda,
+                        'posicion' => $numero,
+                        'nivel' => $nivel,
+                        'etiqueta' => sprintf('B%02d-P%02d-N%d', $banda, $numero, $nivel),
+                    ]);
+                }
             }
         }
 
         return $camara;
+    }
+
+    /** Ubica el folio en una posición, creándola si la cámara auxiliar aún no la tiene. */
+    private function ubicar(Folio $folio, Camara $camara, int $banda, int $posicion): void
+    {
+        $destino = Posicion::query()->firstOrCreate([
+            'camara_id' => $camara->id,
+            'banda' => $banda,
+            'posicion' => $posicion,
+            'nivel' => 1,
+        ], ['etiqueta' => sprintf('B%02d-P%02d-N1', $banda, $posicion)]);
+        $folio->ubicacionActual()->update([
+            'camara_id' => $camara->id,
+            'posicion_id' => $destino->id,
+            'ubicado_at' => now(),
+        ]);
+    }
+
+    /** Cámara sin bandas de inspección: cada pallet queda solo en su banda y sale libremente. */
+    private function camaraOrigen(int $bandas): Camara
+    {
+        return Camara::create([
+            'codigo' => 'CAM-ORIGEN',
+            'nombre' => 'Cámara de origen',
+            'contenido' => ContenidoCamara::Productos,
+            'cantidad_bandas' => $bandas,
+            'posiciones_por_banda' => 1,
+            'cantidad_niveles' => 1,
+        ]);
     }
 
     /**
@@ -1387,11 +1577,12 @@ class InspeccionSagApiTest extends TestCase
         User $usuario,
         array $folios,
         Pais $destino,
+        string $tipo = 'inspeccion_origen',
     ): array {
         return $this->actingAs($usuario, 'sanctum')
             ->postJson('/api/inspeccion-sag/lotes', [
                 'operacion_id' => (string) Str::uuid(),
-                'tipo' => 'inspeccion_origen',
+                'tipo' => $tipo,
                 'folios' => collect($folios)->pluck('id')->all(),
                 'destinos' => [['tipo' => 'pais', 'id' => $destino->id]],
             ])

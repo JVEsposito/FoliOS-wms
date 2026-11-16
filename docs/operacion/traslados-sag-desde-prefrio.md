@@ -2,9 +2,19 @@
 
 Las inspecciones Origen y los muestreos USDA pueden incluir pallets pendientes de prefrío. El objetivo de preparación reserva su sector de inspección de nivel 1 y mantiene los espacios de separación fuera de los destinos de traslado.
 
+## Sector reservado
+
+El sector necesita 1,5 espacios por pallet (redondeado hacia arriba) en posiciones de nivel 1 de bandas operativas con uso de inspección, dentro de una misma cámara. Si el lote cabe en una banda, se usa una sola; si no, se reparte en varias bandas de la cámara, cada una con sus pallets al fondo y su propia separación al frente. Se prefiere el reparto con menos bandas, luego el que conserva más pallets del lote ya ubicados en su banda y luego el más compacto. Al llevar separación por banda, un sector repartido puede reservar uno o dos espacios más que el mínimo.
+
+En cada banda solo se usa lo que se alcanza desde el frente sin mover pallets ajenos ni pasar por posiciones reservadas para otra labor o inspección. Los pallets del lote que ya están en la banda se conservan y los nuevos se ubican delante de ellos.
+
+Mientras no haya espacio, el lote queda con el sector pendiente, no se publican traslados y el detalle del lote en Oficina muestra el motivo. El scheduler vuelve a intentarlo cada minuto.
+
+## Traslados
+
 Al aprobar el proceso de prefrío, cada pallet habilitado recibe una maniobra para llevarlo directamente del túnel a su posición SAG. La recepción normal de ese pallet se reemplaza si todavía es reversible. Los demás pallets del túnel mantienen su recepción habitual.
 
-Se ocupa primero el espacio libre más profundo. Si los pallets salen de túneles distintos, el que está listo se planifica sin apartar el fondo para uno que aún espera prefrío.
+Se ocupa primero el espacio libre más profundo de cada banda del sector, banda por banda. Si los pallets salen de túneles distintos, el que está listo se planifica sin apartar el fondo para uno que aún espera prefrío.
 
 El camarero toma la maniobra desde su bandeja habitual. Su destino se reserva automáticamente al asumirla y no puede cambiarse por otra posición. Al liberar la maniobra o vencer el claim antes del retiro, vuelve a la bandeja conservando ese destino para poder retomarla. El registro del movimiento confirma la llegada; iniciar la inspección sigue exigiendo que todos sus pallets estén físicamente en el sector reservado.
 
