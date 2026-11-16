@@ -22,6 +22,25 @@
 <div class="custody-card"><div class="custody-table-wrap"><table class="custody-table standards-table"><thead><tr><th>Código</th><th>Cliente</th><th>Embalaje PT</th><th>Origen</th><th>Versión vigente</th><th>Insumos</th><th>Estado</th><th></th></tr></thead><tbody id="standardsRows"></tbody></table></div>
 <nav class="standards-pages" aria-label="Páginas de estándares"><button id="standardsPrevious" type="button" class="secondary-button">Anterior</button><span id="standardsPage"></span><button id="standardsNext" type="button" class="secondary-button">Siguiente</button></nav></div>
 <section id="standardDetail" class="custody-card standards-detail" hidden aria-live="polite"></section>
+<details id="plantStandards" class="custody-card standards-plant">
+<summary><span>Estándares de planta</span> <small id="plantSummary">Se leen desde la vista del sistema de planta</small></summary>
+<div class="standards-plant__body">
+<p class="materials-help">La vista no trae el identificador del estándar ni sus variaciones. Si un artículo trae varias cabeceras se toma la creada más tarde, y un insumo repetido dentro de ella se suma. Cliente y embalaje se reconocen igual que en Pendientes por validar; cada insumo, por el código o código externo de un ítem de Materiales.</p>
+<p id="plantStatus" class="standards-plant__status"></p>
+<div class="standards-detail__actions"><button id="plantConfigure" type="button" class="secondary-button" hidden>Configurar lectura</button><button id="plantRead" type="button" class="secondary-button" hidden>Leer ahora</button><button id="plantIncorporate" type="button" class="primary-button" hidden>Incorporar listos</button></div>
+<form id="plantConfig" class="standards-form__grid standards-plant__config" hidden>
+<label>Conexión externa<select name="conexion_id" required></select></label>
+<label>Tabla o vista<input name="tabla" maxlength="64" pattern="[A-Za-z0-9_]+" required></label>
+<label>Temporada en planta<input name="temporada_origen" maxlength="40" placeholder="T2627" required></label>
+<label>Empresas (opcional)<input name="empresas" maxlength="400" placeholder="FCO, FLA"></label>
+<label class="standards-plant__check"><input type="checkbox" name="habilitada"> Lectura habilitada</label>
+<div class="standards-detail__actions"><button type="submit" class="primary-button">Guardar configuración</button></div>
+</form>
+<p id="plantNotice" role="status" aria-live="polite"></p>
+<div id="plantPending"></div>
+<div id="plantRows"></div>
+</div>
+</details>
 </div>
 
 <dialog id="standardDialog" class="standards-dialog" aria-labelledby="standardDialogTitle">

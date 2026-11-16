@@ -52,6 +52,7 @@ use App\Http\Controllers\Api\DocumentoRecepcionEmbaladaController;
 use App\Http\Controllers\Api\EliminacionFolioManualController;
 use App\Http\Controllers\Api\EmbarqueController;
 use App\Http\Controllers\Api\EstandarMaterialController;
+use App\Http\Controllers\Api\EstandarOrigenController;
 use App\Http\Controllers\Api\EtiquetaPtController;
 use App\Http\Controllers\Api\EvacuacionEmergenciaController;
 use App\Http\Controllers\Api\FolioPrefrioController;
@@ -770,13 +771,20 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/opciones', [EstandarMaterialController::class, 'opciones']);
             Route::get('/items', [EstandarMaterialController::class, 'items']);
             Route::get('/excel', [EstandarMaterialController::class, 'excel']);
+            Route::get('/planta', [EstandarOrigenController::class, 'index']);
             Route::get('/{estandarMaterial}', [EstandarMaterialController::class, 'show']);
         });
+        Route::put('/planta/configuracion', [EstandarOrigenController::class, 'configurar'])->middleware('can:administrar-accesos');
         Route::middleware('can:administrar-estandares-materiales')->group(function () {
             Route::post('/', [EstandarMaterialController::class, 'store']);
             Route::post('/{estandarMaterial}/versiones', [EstandarMaterialController::class, 'versionar']);
             Route::post('/{estandarMaterial}/copiar', [EstandarMaterialController::class, 'copiar']);
             Route::put('/{estandarMaterial}/estado', [EstandarMaterialController::class, 'estado']);
+            Route::post('/planta/lecturas', [EstandarOrigenController::class, 'leer']);
+            Route::post('/planta/vinculos/clientes', [EstandarOrigenController::class, 'vincularCliente']);
+            Route::post('/planta/vinculos/embalajes', [EstandarOrigenController::class, 'vincularEmbalaje']);
+            Route::post('/planta/vinculos/insumos', [EstandarOrigenController::class, 'vincularInsumo']);
+            Route::post('/planta/incorporar', [EstandarOrigenController::class, 'incorporar']);
         });
     });
 

@@ -7,7 +7,7 @@ cliente, marca, proceso y cajas).
 
 Entregas del plan:
 
-1. Estándares propios con versiones (esta entrega).
+1. Estándares propios con versiones.
 2. Importación desde la vista de planta `odbc_estandar_materiales` y homologación de insumos.
 3. Rebaja por estándar desde Validación PT, contra el saldo entregado a Packing.
 4. Diferencias por correcciones posteriores y reportes.
@@ -47,6 +47,59 @@ nombre: en la muestra de planta hay códigos que cubren dos artículos.
   variación sin línea general solo se consume en las cajas que calzan. Los valores se
   comparan en mayúsculas y sin espacios repetidos.
 
+## Estándares de planta
+
+La sección **Estándares de planta** de la misma pantalla lee la vista
+`odbc_estandar_materiales` del sistema de planta y la convierte en estándares de origen
+`planta`.
+
+### Configuración y lectura
+
+- Un administrador de accesos elige la conexión externa, la tabla o vista
+  (`odbc_estandar_materiales` por defecto), la **temporada de planta** (`cod_temporada`,
+  por ejemplo `T2627`) y, si quiere, una lista de empresas. Se guarda cifrado en
+  `configuraciones_origen` (clave `estandares_materiales`).
+- **Leer ahora** encola una operación `estandares` en la cola exclusiva `integraciones`,
+  igual que la lectura de stock. Solo hace un SELECT de columnas fijas: empresa, temporada,
+  código y descripción del estándar, artículo, insumo, tipo de rebaja, cantidad, especie y
+  fechas de creación y edición. Las columnas de creador y modificador (correos) no se leen.
+- Una lectura con error, vacía o de más de 50.000 filas conserva la última copia correcta.
+  La copia vive en `lecturas_estandares_origen` y `estandares_origen`, y solo se guarda la
+  de la última lectura correcta.
+
+### Cómo se interpreta la vista
+
+La vista no trae el identificador del estándar ni sus variaciones. En la muestra de
+noviembre de 2026, 14 artículos aparecían con 2 o 3 cabeceras que solo se distinguen por la
+fecha de creación (6 con cantidades distintas) y había 3 filas repetidas exactas. Por eso:
+
+- una fila repetida exacta se cuenta una vez;
+- de las cabeceras de un mismo artículo se toma la creada más tarde (a igual creación, la
+  editada más tarde) y se informa cuántas se descartaron;
+- un insumo repetido dentro de la cabecera elegida se **suma** (por ejemplo, etiqueta 1 +
+  0,01 por caja) y se marca como sumado;
+- las cantidades llegan como flotantes (0,004900000058) y se guardan con 6 decimales;
+- `tipo_rebaja_insumo` Entero o Decimal se conserva; un valor distinto se toma como Decimal.
+
+Cuando TI agregue a la vista el identificador del estándar, su vigencia y las columnas de
+variación, la lectura podrá usarlas sin depender de la fecha de creación.
+
+### Vínculos e incorporación
+
+- **Cliente** (`cod_empresa`) y **embalaje** (`cod_articulo`) se reconocen igual que en
+  Pendientes por validar, con sus mismos vínculos. Si falta, se vinculan desde esta sección:
+  el cliente crea el alias en el maestro y el embalaje queda reconocido también para el stock.
+- **Insumo** (`cod_insumo`): un vínculo guardado por empresa o, si no hay, el ítem de
+  Materiales de la temporada cuyo código o código externo coincide. Primero se busca en el
+  catálogo del cliente; si hay varios candidatos, se elige uno y queda vinculado
+  (`homologaciones_stock_origen`, dimensión `insumo_material`).
+- **Incorporar listos** crea o actualiza los estándares de planta con cliente y embalaje
+  reconocidos. Un insumo sin ítem se incorpora sin ítem: la rebaja no podrá descontarlo y
+  no se puede copiar como propio hasta vincularlo.
+- Una versión nueva se crea solo si cambió el estándar en planta o se vinculó un insumo.
+  La primera rige desde la **creación** en planta. Las siguientes rigen desde la
+  **edición** en planta, nunca antes que la versión anterior.
+
 ## Permisos
 
 Módulo de oficina `materiales.estandares` y acción `estandares.administrar`.
@@ -54,7 +107,8 @@ Módulo de oficina `materiales.estandares` y acción `estandares.administrar`.
 | Capacidad | Gate | Perfiles predeterminados |
 |---|---|---|
 | Consultar y exportar | `consultar-estandares-materiales` | Administrador, supervisor de materiales, despachador, consulta |
-| Crear, versionar, copiar, activar | `administrar-estandares-materiales` | Administrador y supervisor de materiales (acción `estandares.administrar`) |
+| Crear, versionar, copiar, activar; leer planta, vincular e incorporar | `administrar-estandares-materiales` | Administrador y supervisor de materiales (acción `estandares.administrar`) |
+| Configurar la lectura de planta | `administrar-accesos` | Administrador de accesos |
 
 La migración `2026_11_16_120100_habilitar_estandares_materiales_en_perfiles` agrega el
 módulo a esos perfiles predeterminados. Los perfiles personalizados lo reciben desde
@@ -72,6 +126,14 @@ POST /api/materiales/estandares                       (cliente_id, envase_valida
 POST /api/materiales/estandares/{estandar}/versiones  (version, vigente_desde?, motivo?, codigo?, descripcion?, lineas[])
 POST /api/materiales/estandares/{estandar}/copiar     (vigente_desde?, motivo?)
 PUT  /api/materiales/estandares/{estandar}/estado     (activo, version)
+
+GET  /api/materiales/estandares/planta                          estado, última lectura, revisión e insumos pendientes
+PUT  /api/materiales/estandares/planta/configuracion            (conexion_id, tabla, temporada_origen, empresas[], habilitada, version_conocida)
+POST /api/materiales/estandares/planta/lecturas                 202 con la operación en cola
+POST /api/materiales/estandares/planta/vinculos/clientes        (cod_empresa, cliente_id)
+POST /api/materiales/estandares/planta/vinculos/embalajes       (estandar_origen_id, envase_validacion_id)
+POST /api/materiales/estandares/planta/vinculos/insumos         (cod_empresa, cod_insumo, item_material_id)
+POST /api/materiales/estandares/planta/incorporar               (ids? opcional)
 ```
 
 Cada línea lleva `item_material_id`, `cantidad_por_caja`, `redondeo` (`entero`|`decimal`)
@@ -85,5 +147,7 @@ en formato de hasta 6 decimales (tipo de columna `decimal` del generador XLSX).
 ## Despliegue
 
 `php artisan migrate --force` (crea las tablas y habilita el módulo) y `npm run build`.
-No requiere OTA. El reinicio operacional de temporada conserva los estándares, igual que
-el resto de los catálogos de Bodega.
+No requiere OTA. La lectura de planta usa el proceso exclusivo de la cola `integraciones`
+([Integraciones en cola](INTEGRACIONES_EN_COLA.md)); reiniciarlo después de actualizar.
+El reinicio operacional de temporada conserva los estándares, igual que el resto de los
+catálogos de Bodega.

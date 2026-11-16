@@ -10,6 +10,8 @@ class ConfiguracionOrigen extends Model
 {
     public const STOCK = 'stock_pt';
 
+    public const ESTANDARES = 'estandares_materiales';
+
     protected $table = 'configuraciones_origen';
 
     protected $primaryKey = 'clave';

@@ -444,6 +444,27 @@ class ServicioCatalogoStockOrigen
     }
 
     /**
+     * Vincula un valor de otra vista del origen (por ejemplo, la de estándares de materiales)
+     * con el mismo registro que Pendientes por validar: el vínculo sirve para ambas.
+     *
+     * @return array{dimension: string, accion: string, entidad: string, mensaje: string}
+     */
+    public function vincularValor(string $dimension, string $valor, string $entidadId, User $usuario, ?string $especieId = null, ?string $clienteValidacionId = null): array
+    {
+        if (! in_array($dimension, ['cliente', 'especie', 'envase'], true) || ($valor = $this->texto($valor)) === null) {
+            throw new DomainException('Ese valor no se puede vincular desde aquí.');
+        }
+        $temporada = $this->preparar() ?? throw new DomainException('No hay temporada activa.');
+        $item = ['dimension' => $dimension, 'valor' => $valor, 'etiqueta' => $valor, 'especie_validacion_id' => $especieId, 'cliente_validacion_id' => $clienteValidacionId];
+
+        try {
+            return DB::transaction(fn (): array => $this->vincular($temporada, $item, $entidadId, $usuario), attempts: 3);
+        } finally {
+            $this->preparar(forzar: true);
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $item
      * @return array{dimension: string, accion: string, entidad: string, mensaje: string}
      */
