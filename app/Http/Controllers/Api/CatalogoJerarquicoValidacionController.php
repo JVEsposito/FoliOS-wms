@@ -122,6 +122,13 @@ class CatalogoJerarquicoValidacionController extends Controller
         ));
     }
 
+    public function restoreEnvase(
+        EnvaseValidacion $envaseValidacion,
+        ServicioCatalogoJerarquicoValidacion $servicio,
+    ): JsonResponse {
+        return $this->actualizado($servicio->restaurarEnvase($envaseValidacion));
+    }
+
     public function storeCsg(Request $request, ServicioCatalogoJerarquicoValidacion $servicio): JsonResponse
     {
         return $this->creado($servicio->guardarCsg($this->datosCsg($request)));

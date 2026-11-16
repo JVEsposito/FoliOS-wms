@@ -135,3 +135,11 @@
         flex-direction: column-reverse;
     }
 }
+.catalog-inline-form.catalog-package-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+}
+@media (max-width: 440px) {
+    .catalog-inline-form.catalog-package-filters {
+        grid-template-columns: 1fr;
+    }
+}

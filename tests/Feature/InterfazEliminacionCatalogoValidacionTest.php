@@ -14,6 +14,8 @@ class InterfazEliminacionCatalogoValidacionTest extends TestCase
             ->assertSee('Maestros de temporada')
             ->assertSee('id="catalogToggleInactive"', false)
             ->assertSee('Mostrar eliminados')
+            ->assertSee('id="packageSearch"', false)
+            ->assertSee('<option value="removed">Eliminados</option>', false)
             ->assertSee('se conserva su trazabilidad histórica');
 
         $javascript = file_get_contents(resource_path('js/office-validation-catalog.js'));
@@ -22,6 +24,7 @@ class InterfazEliminacionCatalogoValidacionTest extends TestCase
         $this->assertStringContainsString('data-delete-type', $javascript);
         $this->assertStringContainsString("method: 'DELETE'", $javascript);
         $this->assertStringContainsString('¿Eliminar', $javascript);
+        $this->assertStringContainsString('data-restore-package', $javascript);
     }
 
     public function test_catalogo_maestro_deja_validacion_y_se_ubica_en_administracion(): void

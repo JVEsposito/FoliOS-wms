@@ -597,6 +597,7 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::delete('/calibres/{calibreValidacion}', [CatalogoJerarquicoValidacionController::class, 'destroyCalibre']);
                 Route::post('/envases', [CatalogoJerarquicoValidacionController::class, 'storeEnvase']);
                 Route::put('/envases/{envaseValidacion}', [CatalogoJerarquicoValidacionController::class, 'updateEnvase']);
+                Route::post('/envases/{envaseValidacion}/restaurar', [CatalogoJerarquicoValidacionController::class, 'restoreEnvase']);
                 Route::delete('/envases/{envaseValidacion}', [CatalogoJerarquicoValidacionController::class, 'destroyEnvase']);
                 Route::post('/csg', [CatalogoJerarquicoValidacionController::class, 'storeCsg']);
                 Route::put('/csg/{csgValidacion}', [CatalogoJerarquicoValidacionController::class, 'updateCsg']);

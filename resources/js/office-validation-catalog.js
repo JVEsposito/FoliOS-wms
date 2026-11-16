@@ -1,3 +1,5 @@
+import { optionMatches } from './shared/validation-correction-logic.js';
+
 const byId = (id) => document.getElementById(id);
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
 const state = {
@@ -19,6 +21,7 @@ const elements = {
     user: byId('officeUserName'), initials: byId('officeInitials'), logout: byId('officeLogoutButton'),
     selector: byId('catalogSeasonSelector'), reload: byId('catalogReload'),
     toggleInactive: byId('catalogToggleInactive'),
+    packageSearch: byId('packageSearch'), packageStatus: byId('packageStatus'),
     importForm: byId('importForm'), importError: byId('importError'), importPreview: byId('importPreview'), importList: byId('importList'),
     loading: byId('catalogLoading'), loadingText: byId('catalogLoadingText'), toasts: byId('catalogToasts'),
     loadError: byId('catalogLoadError'),
@@ -137,7 +140,9 @@ function deleteButton(type, id) {
 }
 function row(title, detail, type, item) {
     const status = item.activo ? '' : ' · ELIMINADO';
-    const actions = `${editButton(type, item.id)}${item.activo ? deleteButton(type, item.id) : ''}`;
+    const restore = type === 'package' && !item.activo && state.identity?.puede_administrar_catalogos_validacion === true
+        ? `<button data-restore-package="${escapeHtml(item.id)}" type="button">Restaurar</button>` : '';
+    const actions = `${editButton(type, item.id)}${item.activo ? deleteButton(type, item.id) : restore}`;
     return `<article class="validation-row${activeClass(item)}"><div><strong>${escapeHtml(title)}<span class="catalog-status-removed">${status}</span></strong><small>${escapeHtml(detail)}</small></div><div class="validation-row__actions">${actions}</div></article>`;
 }
 
@@ -153,10 +158,10 @@ function render() {
 
     const clientOptions = '<option value="">Selecciona un cliente</option>' + active(state.clients).map((item) => option(item.id, `${item.codigo_externo || 'SIN-CÓDIGO'} · ${item.nombre}`)).join('');
     byId('brandForm').elements.cliente_validacion_id.innerHTML = clientOptions;
-    byId('packageForm').elements.cliente_validacion_id.innerHTML = clientOptions;
+    renderPackageParents(itemFor('package', byId('packageForm').elements.id.value));
 
     const speciesOptions = '<option value="">Selecciona una especie</option>' + active(state.species).map((item) => option(item.id, item.nombre)).join('');
-    for (const formId of ['varietyForm', 'caliberForm', 'packageForm']) byId(formId).elements.especie_validacion_id.innerHTML = speciesOptions;
+    for (const formId of ['varietyForm', 'caliberForm']) byId(formId).elements.especie_validacion_id.innerHTML = speciesOptions;
 
     const varieties = active(state.species).flatMap((species) => active(species.variedades || []).map((item) => ({ ...item, species: species.nombre })));
     byId('csgVarietyOptions').innerHTML = varieties.map((item) => `<label><input name="variedad_ids" type="checkbox" value="${item.id}"><span>${escapeHtml(item.species)} · ${escapeHtml(item.nombre)}</span></label>`).join('') || '<p class="empty-validation">Crea variedades antes de registrar un CSG.</p>';
@@ -179,7 +184,7 @@ function render() {
 
     renderChildren('variety', 'varietyCount', 'varietyList', 'variedades');
     renderChildren('caliber', 'caliberCount', 'caliberList', 'calibres');
-    renderChildren('package', 'packageCount', 'packageList', 'envases');
+    renderPackages();
 
     const csg = visible(state.csg);
     byId('csgCount').textContent = String(csg.length);
@@ -200,16 +205,42 @@ function render() {
 function renderChildren(type, countId, listId, relation) {
     const items = visible(state.species).flatMap((species) => visible(species[relation] || []).map((item) => ({ ...item, speciesId: species.id, species: species.nombre })));
     byId(countId).textContent = String(items.length);
-    byId(listId).innerHTML = items.map((item) => {
-        const clientLabel = item.cliente
-            ? `${item.cliente.codigo_externo || 'SIN-CÓDIGO'} · ${item.cliente.nombre}`
-            : 'Sin cliente asignado';
-        const client = type === 'package'
-            ? ` · Cliente: ${clientLabel}`
-            : '';
-        const kilos = type === 'package' ? ` · ${item.kilos_netos_por_caja ?? 'Sin configurar'} kg/caja` : '';
-        return row(item.nombre, `Especie: ${item.species}${client}${kilos}`, type, item);
-    }).join('') || '<p class="empty-validation">Sin registros.</p>';
+    byId(listId).innerHTML = items.map((item) => row(item.nombre, `Especie: ${item.species}`, type, item)).join('') || '<p class="empty-validation">Sin registros.</p>';
+}
+
+function renderPackageParents(item) {
+    const form = byId('packageForm');
+    const options = [
+        ['cliente_validacion_id', state.clients, 'Selecciona un cliente', (client) => `${client.codigo_externo || 'SIN-CÓDIGO'} · ${client.nombre}`],
+        ['especie_validacion_id', state.species, 'Selecciona una especie', (species) => species.nombre],
+    ];
+    for (const [name, items, placeholder, label] of options) {
+        const field = form.elements[name];
+        const previous = field.value;
+        field.innerHTML = option('', placeholder) + items.filter((parent) => parent.activo || parent.id === item?.[name])
+            .map((parent) => option(parent.id, `${label(parent)}${parent.activo ? '' : ' · Inactivo'}`)).join('');
+        if ([...field.options].some((entry) => entry.value === previous)) field.value = previous;
+    }
+}
+
+function renderPackages() {
+    const status = elements.packageStatus.value;
+    const query = elements.packageSearch.value;
+    const clients = new Map(state.clients.map((client) => [client.id, client]));
+    const rows = [];
+    for (const species of state.species) {
+        for (const item of species.envases || []) {
+            if (status === 'active' && (!item.activo || !species.activo)) continue;
+            if (status === 'removed' && item.activo) continue;
+            const client = clients.get(item.cliente_validacion_id);
+            if (!optionMatches({ label: item.nombre, search: [item.codigo_externo, client?.nombre, client?.codigo_externo, species.nombre].filter(Boolean).join(' ') }, query)) continue;
+            const clientLabel = client ? `${client.codigo_externo || 'SIN-CÓDIGO'} · ${client.nombre}${client.activo ? '' : ' (inactivo)'}` : 'Sin cliente asignado';
+            const detail = `${item.codigo_externo ? `${item.codigo_externo} · ` : ''}Especie: ${species.nombre}${species.activo ? '' : ' (inactiva)'} · Cliente: ${clientLabel} · ${item.kilos_netos_por_caja ?? 'Sin configurar'} kg/caja`;
+            rows.push(row(item.nombre, detail, 'package', item));
+        }
+    }
+    byId('packageCount').textContent = String(rows.length);
+    byId('packageList').innerHTML = rows.join('') || '<p class="empty-validation">Sin envases que coincidan con los filtros.</p>';
 }
 
 function resetForm(form) {
@@ -218,6 +249,7 @@ function resetForm(form) {
     if (form.elements.activo) form.elements.activo.checked = true;
     form.querySelectorAll('input[name="variedad_ids"]').forEach((input) => { input.checked = false; });
     const formId = form.getAttribute('id') || '';
+    if (formId === 'packageForm') renderPackageParents();
     const error = byId(formId.replace('Form', 'Error'));
     if (error) error.textContent = '';
 }
@@ -237,6 +269,7 @@ function edit(type, id) {
     const item = itemFor(type, id);
     if (!item) return;
     resetForm(form);
+    if (type === 'package') renderPackageParents(item);
     for (const field of ['id', 'nombre', 'codigo_externo', 'kilos_netos_por_caja', 'codigo', 'predio', 'cliente_validacion_id', 'especie_validacion_id']) {
         if (form.elements[field]) form.elements[field].value = item[field] ?? '';
     }
@@ -339,6 +372,24 @@ async function remove(type, id) {
     }
 }
 
+async function restorePackage(id) {
+    const item = itemFor('package', id);
+    if (!item || item.activo || !window.confirm(`¿Restaurar el envase "${item.nombre}" al catálogo?`)) return;
+
+    setBusy(true, 'Restaurando envase…');
+    try {
+        const saved = await api(`/api/administracion/validacion/envases/${id}/restaurar`, { method: 'POST' });
+        const form = byId('packageForm');
+        if (form.elements.id.value === id) form.elements.activo.checked = true;
+        const refreshed = applySaved('package', saved) || await load(state.season?.id);
+        toast(refreshed ? 'Envase restaurado al catálogo.' : 'Envase restaurado. Pulsa Actualizar para refrescar la vista.', !refreshed);
+    } catch (error) {
+        toast(error.message, true);
+    } finally {
+        setBusy(false);
+    }
+}
+
 function renderImportPreview(item) {
     state.preview = item;
     const summary = item.resumen || {};
@@ -394,6 +445,8 @@ document.addEventListener('click', (event) => {
     if (editTarget) edit(editTarget.dataset.editType, editTarget.dataset.editId);
     const deleteTarget = event.target.closest('[data-delete-type]');
     if (deleteTarget) void remove(deleteTarget.dataset.deleteType, deleteTarget.dataset.deleteId);
+    const restoreTarget = event.target.closest('[data-restore-package]');
+    if (restoreTarget) void restorePackage(restoreTarget.dataset.restorePackage);
     const resetTarget = event.target.closest('[data-reset-form]');
     if (resetTarget) resetForm(byId(resetTarget.dataset.resetForm));
     const confirmImportTarget = event.target.closest('[data-confirm-import]');
@@ -405,8 +458,11 @@ elements.reload.addEventListener('click', () => void load(state.season?.id, { an
 elements.toggleInactive.addEventListener('click', () => {
     if (!state.loaded) return;
     state.showInactive = !state.showInactive;
+    elements.packageStatus.value = state.showInactive ? 'all' : 'active';
     render();
 });
+elements.packageSearch.addEventListener('input', renderPackages);
+elements.packageStatus.addEventListener('change', renderPackages);
 elements.importForm.addEventListener('submit', (event) => { void submitImport(event); });
 elements.logout.addEventListener('click', async () => {
     try { await api('/api/acceso-oficina', { method: 'DELETE' }); } catch { /* limpia igualmente */ }

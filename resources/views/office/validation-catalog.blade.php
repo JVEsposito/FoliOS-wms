@@ -148,7 +148,12 @@
                         <form class="catalog-form" id="packageForm">
                             <input name="id" type="hidden"><label><span>Especie *</span><select name="especie_validacion_id" required></select></label><label><span>Envase *</span><input name="nombre" maxlength="100" required></label><label><span>Código externo</span><input name="codigo_externo" maxlength="100"></label><label><span>Cliente *</span><select name="cliente_validacion_id" required></select></label><label><span>Kilos netos por caja</span><input name="kilos_netos_por_caja" type="number" step="0.0001" min="0.0001" max="999999" placeholder="Sin configurar"></label><label class="validation-check"><input name="activo" type="checkbox" checked><span>Activo</span></label>
                             <div class="catalog-actions"><button class="secondary-button" data-reset-form="packageForm" type="button">Limpiar</button><button class="primary-button" type="submit">Guardar envase</button></div>
-                        </form><p class="form-error" id="packageError"></p><div class="validation-list" id="packageList"></div>
+                        </form><p class="form-error" id="packageError" role="alert"></p>
+                        <div class="catalog-inline-form catalog-package-filters" role="group" aria-label="Filtros de envases">
+                            <label><span>Buscar envases</span><input id="packageSearch" type="search" placeholder="Nombre, código, cliente o especie"></label>
+                            <label><span>Estado</span><select id="packageStatus"><option value="active">Activos</option><option value="removed">Eliminados</option><option value="all">Todos</option></select></label>
+                        </div>
+                        <div class="validation-list" id="packageList"></div>
                     </section>
                     <section class="panel catalog-card" id="validation-catalog-panel-csg" data-office-panel-group="validation-catalog" data-office-panel-id="csg" role="tabpanel" aria-labelledby="validation-catalog-tab-csg">
                         <div class="validation-panel__heading"><div><p class="eyebrow">CSG → VARIEDADES</p><h2>CSG</h2></div><span id="csgCount">—</span></div>
