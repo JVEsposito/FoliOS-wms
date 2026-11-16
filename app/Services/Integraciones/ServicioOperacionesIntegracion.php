@@ -27,6 +27,7 @@ class ServicioOperacionesIntegracion
         return match ($tipo) {
             'stock' => 'consultar-validaciones-pallet',
             'precarga' => 'validar-pallets',
+            'estandares' => 'administrar-estandares-materiales',
             default => 'administrar-accesos',
         };
     }
@@ -60,9 +61,20 @@ class ServicioOperacionesIntegracion
         return $this->solicitar('stock', $config['conexion'], ['fuente_hash' => $lector->huellaConfiguracion($config)], $usuario);
     }
 
+    public function solicitarEstandares(User $usuario): OperacionIntegracion
+    {
+        $lector = app(ServicioLecturaEstandaresOrigen::class);
+        $config = $lector->configuracion();
+        if (! $config['habilitada'] || ! $config['conexion'] || ! $config['temporada_origen']) {
+            throw new DomainException('Configura y habilita primero la lectura de estándares de planta.');
+        }
+
+        return $this->solicitar('estandares', $config['conexion'], ['fuente_hash' => $lector->huella($config)], $usuario);
+    }
+
     public function solicitar(string $tipo, ConexionExterna $conexion, array $entrada, ?User $usuario): OperacionIntegracion
     {
-        if (! in_array($tipo, ['stock', 'precarga'], true) && ! isset(self::CONTROLADORES[$tipo])) {
+        if (! in_array($tipo, ['stock', 'precarga', 'estandares'], true) && ! isset(self::CONTROLADORES[$tipo])) {
             throw new DomainException('Operación de integración no admitida.');
         }
         if ($usuario) {
@@ -169,6 +181,16 @@ class ServicioOperacionesIntegracion
                 $contenido = ['message' => $lectura?->estado === 'correcta' ? "Stock leído: {$lectura->pallets} pallets."
                     : ($lectura?->mensaje ?? 'Otra lectura está en curso. Se conserva la última copia válida.'),
                     'lectura_id' => $lectura?->id, 'causa' => $lectura?->causa];
+            } elseif ($op->tipo === 'estandares') {
+                $lector = app(ServicioLecturaEstandaresOrigen::class);
+                if ($lector->huella($lector->configuracion()) !== $op->fuente_hash) {
+                    throw new ConflictoOperacion('La configuración de estándares cambió mientras esperaba. Solicita una lectura nueva.');
+                }
+                $lectura = $lector->leer($usuario, $op->id);
+                $codigo = $lectura->estado === 'correcta' ? 200 : 422;
+                $contenido = ['message' => $lectura->estado === 'correcta'
+                    ? "Estándares leídos: {$lectura->estandares} de {$lectura->filas} filas."
+                    : 'No se pudo leer la vista de estándares. '.$lectura->mensaje, 'lectura_id' => $lectura->id];
             } else {
                 $request = Request::create('/api/administracion/conexiones-externas/interna', $op->tipo === 'mapeo_guardar' ? 'PUT' : 'POST', [], [], [],
                     ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'], json_encode($op->entrada, JSON_THROW_ON_ERROR));

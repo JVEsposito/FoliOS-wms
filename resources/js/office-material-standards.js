@@ -1,4 +1,5 @@
 import './office-navigation';
+import { waitIntegrationOperation } from './shared/integration-operation';
 
 // Estándares de consumo: cuánto material lleva cada caja de un embalaje PT de un cliente.
 const $ = (id) => document.getElementById(id);
@@ -238,6 +239,95 @@ $('standardForm').addEventListener('submit', (e) => {
         state.detail = data; state.version = null; renderDetail(); await load();
         $('standardsNotice').textContent = fresh ? `Estándar ${data.codigo} creado.` : `Versión ${data.versiones[0].numero} de ${data.codigo} guardada.`;
     }, $('standardFormError'));
+});
+
+// ── Estándares de planta (vista ODBC) ─────────────────────────────────────
+const plantStates = { nuevo: 'Nuevo', cambio: 'Cambió en planta', al_dia: 'Al día', falta_cliente: 'Falta cliente', falta_embalaje: 'Falta embalaje' };
+const plant = { data: null, envelopes: {} };
+function when(v) { return v ? new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', dateStyle: 'short', timeStyle: 'short' }).format(new Date(v)) : '—'; }
+async function envelopesFor(clientId) {
+    if (!plant.envelopes[clientId]) plant.envelopes[clientId] = (await api(`/api/materiales/estandares/opciones?cliente_id=${encodeURIComponent(clientId)}`)).envases;
+    return plant.envelopes[clientId];
+}
+async function renderPlant() {
+    const d = plant.data; if (!d) return;
+    const last = d.ultima_lectura; const counts = d.resumen || {};
+    $('plantSummary').textContent = last ? `${d.estandares.length} en la copia · ${counts.nuevo || 0} nuevos · ${counts.cambio || 0} con cambios · ${(counts.falta_cliente || 0) + (counts.falta_embalaje || 0)} por vincular` : 'Sin lecturas todavía';
+    $('plantStatus').textContent = !d.configuracion.conexion_id ? 'La lectura aún no está configurada.'
+        : `${d.configuracion.tabla} · temporada ${d.configuracion.temporada_origen || '—'}${d.configuracion.empresas.length ? ` · empresas ${d.configuracion.empresas.join(', ')}` : ''}${d.configuracion.habilitada ? '' : ' · deshabilitada'}. `
+          + (last ? `Última lectura ${when(last.leida_at)}: ${last.estado === 'correcta' ? `${last.estandares} estándares de ${last.filas} filas${last.filas_duplicadas ? `, ${last.filas_duplicadas} filas repetidas` : ''}${last.cabeceras_descartadas ? `, ${last.cabeceras_descartadas} cabeceras antiguas descartadas` : ''}.` : `falló. ${last.mensaje || ''}`}${last.estado === 'correcta' && last.mensaje ? ` ${last.mensaje}` : ''}` : 'Sin lecturas.');
+    $('plantConfigure').hidden = !d.puede_configurar;
+    $('plantRead').hidden = !d.puede_administrar || !d.configuracion.habilitada;
+    $('plantIncorporate').hidden = !d.puede_administrar || !((counts.nuevo || 0) + (counts.cambio || 0));
+    const pending = d.insumos_pendientes;
+    $('plantPending').innerHTML = pending.length ? `<h3>Insumos por reconocer (${pending.length})</h3><div class="custody-table-wrap"><table class="custody-table"><thead><tr><th>Empresa</th><th>Insumo de planta</th><th>Estándares</th><th>Ítem de Materiales</th></tr></thead><tbody>${pending.map((p, i) => `<tr>
+        <td>${escape(p.cod_empresa)}<small>${escape(p.cliente || '')}</small></td><td><strong>${escape(p.cod_insumo)}</strong><small>${escape(p.descripcion)}</small></td><td>${escape(p.estandares.join(', '))}</td>
+        <td>${d.puede_administrar ? `<div class="standards-plant__link"><select data-pending="${i}"><option value="">${p.candidatos.length ? 'Elegir entre los ítems con ese código' : 'Sin ítem con ese código'}</option>${p.candidatos.map((c) => `<option value="${escape(c.id)}">${escape(c.codigo)} · ${escape(c.nombre)} · ${escape(c.dueno)}</option>`).join('')}</select><button type="button" class="secondary-button" data-link-supply="${i}">Vincular</button></div>` : '—'}</td></tr>`).join('')}</tbody></table></div>` : '';
+    $('plantRows').innerHTML = d.estandares.length ? `<h3>Estándares de la última lectura</h3><div class="custody-table-wrap"><table class="custody-table"><thead><tr><th>Empresa · artículo</th><th>Estándar</th><th>Cliente</th><th>Embalaje PT</th><th>Insumos</th><th>Estado</th></tr></thead><tbody>${d.estandares.map((e, i) => `<tr>
+        <td><strong>${escape(e.cod_empresa)} · ${escape(e.cod_articulo)}</strong><small>${escape(e.descripcion_articulo || '')}</small></td>
+        <td>${escape(e.codigo_estandar || '—')}<small>creado ${escape(e.fecha_creacion || '—')}${e.fecha_edicion ? ` · editado ${escape(e.fecha_edicion)}` : ''}${e.cabeceras > 1 ? ` · ${e.cabeceras} cabeceras` : ''}</small></td>
+        <td>${e.cliente ? escape(e.cliente.nombre) : (d.puede_administrar ? `<div class="standards-plant__link"><select data-client="${i}"><option value="">Elegir cliente</option>${(state.options?.clientes || []).map((c) => `<option value="${escape(c.id)}">${escape(c.nombre)}</option>`).join('')}</select><button type="button" class="secondary-button" data-link-client="${i}">Vincular</button></div>` : '<span class="standards-warning">Sin cliente</span>')}</td>
+        <td>${e.envase ? escape(e.envase.nombre) : (e.cliente && d.puede_administrar ? `<div class="standards-plant__link"><select data-envelope="${i}" data-client-id="${escape(e.cliente.id)}"><option value="">Cargando embalajes…</option></select><button type="button" class="secondary-button" data-link-envelope="${i}">Vincular</button></div>` : '<span class="standards-warning">Sin embalaje</span>')}</td>
+        <td>${e.insumos}${e.insumos_sin_item ? `<small class="standards-warning">${e.insumos_sin_item} sin ítem</small>` : ''}${e.insumos_repetidos.length ? `<small>Sumados: ${escape(e.insumos_repetidos.join(', '))}</small>` : ''}</td>
+        <td><span class="standards-badge standards-badge--${escape(e.estado)}">${escape(plantStates[e.estado] || e.estado)}</span></td></tr>`).join('')}</tbody></table></div>` : '';
+    for (const select of $('plantRows').querySelectorAll('[data-envelope]')) {
+        const rows = await envelopesFor(select.dataset.clientId);
+        select.innerHTML = '<option value="">Elegir embalaje</option>' + rows.map((e) => `<option value="${escape(e.id)}">${escape(e.nombre)}${e.codigo_externo ? ` · ${escape(e.codigo_externo)}` : ''}</option>`).join('');
+    }
+}
+async function loadPlant() {
+    plant.data = await api('/api/materiales/estandares/planta'); plant.envelopes = {};
+    await renderPlant();
+}
+function fillPlantConfig() {
+    const form = $('plantConfig'); const c = plant.data.configuracion;
+    form.elements.conexion_id.innerHTML = '<option value="">Elegir conexión</option>' + plant.data.conexiones.map((x) => `<option value="${escape(x.id)}">${escape(x.nombre)}</option>`).join('');
+    form.elements.conexion_id.value = c.conexion_id || ''; form.elements.tabla.value = c.tabla || 'odbc_estandar_materiales';
+    form.elements.temporada_origen.value = c.temporada_origen || ''; form.elements.empresas.value = (c.empresas || []).join(', '); form.elements.habilitada.checked = c.habilitada;
+}
+$('plantStandards').addEventListener('toggle', () => { if ($('plantStandards').open && !plant.data) void run(loadPlant, $('plantNotice')); });
+$('plantConfigure').addEventListener('click', () => { fillPlantConfig(); $('plantConfig').hidden = !$('plantConfig').hidden; });
+$('plantConfig').addEventListener('submit', (e) => {
+    e.preventDefault();
+    void run(async () => {
+        const f = $('plantConfig').elements;
+        const data = await api('/api/materiales/estandares/planta/configuracion', { method: 'PUT', body: JSON.stringify({
+            conexion_id: f.conexion_id.value, tabla: f.tabla.value.trim(), temporada_origen: f.temporada_origen.value.trim(),
+            empresas: f.empresas.value.split(',').map((x) => x.trim()).filter(Boolean), habilitada: f.habilitada.checked, version_conocida: plant.data.configuracion.version,
+        }) });
+        $('plantConfig').hidden = true; await loadPlant(); $('plantNotice').textContent = data.message;
+    }, $('plantNotice'));
+});
+$('plantRead').addEventListener('click', () => void run(async () => {
+    $('plantNotice').textContent = 'Lectura en cola. Puedes seguir trabajando.';
+    const accepted = await api('/api/materiales/estandares/planta/lecturas', { method: 'POST', headers: { Prefer: 'respond-async' } });
+    const result = await waitIntegrationOperation(accepted, { headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }, onProgress: (op) => { $('plantNotice').textContent = `${op.fase}…`; } });
+    await loadPlant(); $('plantNotice').textContent = result.message;
+}, $('plantNotice')));
+$('plantIncorporate').addEventListener('click', () => void run(async () => {
+    const data = await api('/api/materiales/estandares/planta/incorporar', { method: 'POST', body: JSON.stringify({}) });
+    await loadPlant(); await load(); $('plantNotice').textContent = data.message;
+}, $('plantNotice')));
+$('plantStandards').addEventListener('click', (e) => {
+    const supply = e.target.closest('[data-link-supply]'); const client = e.target.closest('[data-link-client]'); const envelope = e.target.closest('[data-link-envelope]');
+    if (!supply && !client && !envelope) return;
+    void run(async () => {
+        let result;
+        if (supply) {
+            const row = plant.data.insumos_pendientes[Number(supply.dataset.linkSupply)]; const item = $('plantStandards').querySelector(`[data-pending="${supply.dataset.linkSupply}"]`).value;
+            if (!item) throw new Error('Elige el ítem de Materiales.');
+            result = await api('/api/materiales/estandares/planta/vinculos/insumos', { method: 'POST', body: JSON.stringify({ cod_empresa: row.cod_empresa, cod_insumo: row.cod_insumo, item_material_id: item }) });
+        } else if (client) {
+            const row = plant.data.estandares[Number(client.dataset.linkClient)]; const id = $('plantStandards').querySelector(`[data-client="${client.dataset.linkClient}"]`).value;
+            if (!id) throw new Error('Elige el cliente.');
+            result = await api('/api/materiales/estandares/planta/vinculos/clientes', { method: 'POST', body: JSON.stringify({ cod_empresa: row.cod_empresa, cliente_id: id }) });
+        } else {
+            const row = plant.data.estandares[Number(envelope.dataset.linkEnvelope)]; const id = $('plantStandards').querySelector(`[data-envelope="${envelope.dataset.linkEnvelope}"]`).value;
+            if (!id) throw new Error('Elige el embalaje PT.');
+            result = await api('/api/materiales/estandares/planta/vinculos/embalajes', { method: 'POST', body: JSON.stringify({ estandar_origen_id: row.id, envase_validacion_id: id }) });
+        }
+        await loadPlant(); $('plantNotice').textContent = result.message || result.mensaje || 'Vínculo guardado.';
+    }, $('plantNotice'));
 });
 
 if (!token) location.replace('/oficina/materiales');
