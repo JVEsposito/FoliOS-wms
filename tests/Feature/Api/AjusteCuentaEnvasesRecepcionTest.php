@@ -128,6 +128,12 @@ class AjusteCuentaEnvasesRecepcionTest extends TestCase
         $this->assertSame(['bins' => [2, 4, -2], 'totes' => [97, 0, 97]], $saldos);
         $this->assertSame('Ajuste a la guía de salida N° GS-CORR-1', collect(collect($cuenta['detalle_csg'])->firstWhere('codigo', 'CSG-CORR')['documentos'])
             ->firstWhere('movimiento', 'Ajuste de entregados por administración')['titulo']);
+        $reporte = fn (): array => app(ServicioCuentaCorrienteEnvases::class)->operacionesPorProductor($recepcion->cliente, $recepcion->temporada, []);
+        $vigentes = collect($reporte()[0]['movimientos'])->keyBy('guia');
+        $this->assertCount(2, $vigentes);
+        $this->assertSame(['Ingreso con fruta', 2, 97], [$vigentes['1511 / 1512']['movimiento'], $vigentes['1511 / 1512']['bins'], $vigentes['1511 / 1512']['totes']]);
+        $this->assertSame('Entregados en el destare', $vigentes['GS-CORR-1']['movimiento']);
+        $this->assertArrayNotHasKey('totes', $vigentes['GS-CORR-1']);
 
         // Volver a lo registrado deja la cuenta como estaba y sin líneas de ajuste.
         $this->putJson($ruta, $this->payload($estado(), ['bins' => ['recibidos' => 4], 'totes' => ['entregados' => 97]]))->assertOk()
@@ -137,6 +143,7 @@ class AjusteCuentaEnvasesRecepcionTest extends TestCase
         $this->assertEmpty(collect($cuenta['movimientos'])->filter(fn ($l) => str_starts_with($l['movimiento'], 'Ajuste de')));
         $this->assertSame(0, collect($cuenta['tipos'])->sum('saldo_final'));
         $this->assertNull(app(ServicioAjusteCuentaEnvasesRecepcion::class)->resumen($recepcion));
+        $this->assertSame(['1511', '1512', 'GS-CORR-1'], array_column($reporte()[0]['movimientos'], 'guia'));
     }
 
     public function test_la_correccion_completa_no_vuelve_a_corregir_un_envase_ajustado_en_cuenta(): void

@@ -164,6 +164,15 @@ class DevolucionEnvasesCsgTest extends TestCase
         $pdf = $this->get('/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$this->cliente->id)->assertOk()->getContent();
         $this->assertStringContainsString(iconv('UTF-8', 'Windows-1252', 'devuelve la guía 2324'), $pdf);
         $this->get('/api/envases/cuenta-corriente/estado-cuenta?cliente_id='.$this->cliente->id.'&formato=xlsx')->assertOk();
+        $vigentes = app(ServicioCuentaCorrienteEnvases::class)->operacionesPorProductor($this->cliente, $this->temporada, [
+            'desde' => '2026-11-10', 'hasta' => '2026-11-10',
+        ]);
+        $this->assertCount(1, $vigentes);
+        $this->assertSame(['90624', 'AGRICOLA RIBAGORZA SPA'], [$vigentes[0]['codigo'], $vigentes[0]['nombre']]);
+        $this->assertCount(2, $vigentes[0]['movimientos']);
+        $entrada = collect($vigentes[0]['movimientos'])->firstWhere('movimiento', 'Devolución de envases');
+        $this->assertSame(['2026-11-10 17:50:00', '2324', 'Luis Duarte', 'JJLY15', 13, 312, 14],
+            [$entrada['fecha'], $entrada['guia'], $entrada['chofer'], $entrada['patente_camion'], $entrada['bins'], $entrada['totes'], $entrada['esponjas']]);
         $sinCsg = collect($estado['detalle_csg'])->firstWhere('codigo', null);
         $this->assertNotContains('Devolución de envases', array_column($sinCsg['documentos'] ?? [], 'movimiento'));
 
