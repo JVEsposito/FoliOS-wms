@@ -35,6 +35,7 @@ class PermisosAccionesMaterialesTest extends TestCase
         'capacidad.configurar' => 'configurar-capacidad-materiales',
         'capacidad.medir' => 'medir-cargas-materiales',
         'recetas.administrar' => 'administrar-recetas-materiales',
+        'estandares.administrar' => 'administrar-estandares-materiales',
         'transformaciones.planificar' => 'gestionar-transformaciones-materiales',
         'transformaciones.operar' => 'operar-transformaciones-materiales',
         'transformaciones.revertir' => 'revertir-transformaciones-materiales',
@@ -145,7 +146,7 @@ class PermisosAccionesMaterialesTest extends TestCase
     private function usuario(?array $permisos): User
     {
         $perfil = (new PerfilAcceso)->forceFill(['id' => (string) Str::uuid(), 'rol_base' => RolUsuario::Administrador,
-            'activo' => true, 'protegido' => false, 'modulos' => ['materiales.etiquetas', 'materiales.inventario', 'materiales.despachos', 'materiales.catalogos', 'materiales.recetas', 'materiales.ordenes'],
+            'activo' => true, 'protegido' => false, 'modulos' => ['materiales.etiquetas', 'materiales.inventario', 'materiales.despachos', 'materiales.catalogos', 'materiales.recetas', 'materiales.estandares', 'materiales.ordenes'],
             'modulos_tablet' => ['recepcion_materiales', 'operacion_materiales'], 'permisos_materiales' => $permisos]);
 
         return (new User)->forceFill(['id' => 1, 'activo' => true, 'rol' => RolUsuario::Administrador, 'perfil_acceso_id' => $perfil->id])->setRelation('perfilAcceso', $perfil);

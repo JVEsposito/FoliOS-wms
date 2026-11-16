@@ -417,6 +417,8 @@ class AppServiceProvider extends ServiceProvider
             'administrar-recetas-materiales',
             fn (User $usuario): bool => $alcance->puedeAdministrarRecetasMateriales($usuario),
         );
+        Gate::define('consultar-estandares-materiales', fn (User $usuario): bool => $alcance->puedeConsultarEstandaresMateriales($usuario));
+        Gate::define('administrar-estandares-materiales', fn (User $usuario): bool => $alcance->puedeAdministrarEstandaresMateriales($usuario));
         Gate::define('consultar-recepciones-fruta-embalada', fn (User $usuario): bool => $alcance->puedeConsultarRecepcionesFrutaEmbalada($usuario));
         Gate::define('anular-recepciones-fruta-embalada', fn (User $usuario): bool => $alcance->puedeAnularRecepcionesFrutaEmbalada($usuario));
         Gate::define('gestionar-recepciones-fruta-embalada', fn (User $usuario): bool => $alcance->puedeGestionarRecepcionesFrutaEmbalada($usuario));

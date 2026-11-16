@@ -94,6 +94,8 @@ class IdentidadOficina
             'puede_editar_fotos_items_materiales' => $usuario->can('editar-fotos-items-materiales'),
             'puede_editar_niveles_stock_materiales' => $usuario->can('editar-niveles-stock-materiales'),
             'puede_administrar_recetas_materiales' => $usuario->can('administrar-recetas-materiales'),
+            'puede_consultar_estandares_materiales' => $usuario->can('consultar-estandares-materiales'),
+            'puede_administrar_estandares_materiales' => $usuario->can('administrar-estandares-materiales'),
             'puede_gestionar_despachos_materiales' => $capacidades['puede_gestionar_despachos_materiales'],
             'puede_retirar_materiales' => $capacidades['puede_retirar_materiales'],
             'puede_consultar_despachos_materiales' => $capacidades['puede_consultar_despachos_materiales'],

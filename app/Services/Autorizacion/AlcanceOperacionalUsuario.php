@@ -703,6 +703,35 @@ class AlcanceOperacionalUsuario
         );
     }
 
+    public function puedeConsultarEstandaresMateriales(User $usuario): bool
+    {
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
+        ) && $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorMateriales,
+            RolUsuario::Despachador,
+            RolUsuario::Consulta,
+        ], CatalogoModulosAcceso::OFICINA_ESTANDARES_MATERIALES);
+    }
+
+    public function puedeAdministrarEstandaresMateriales(User $usuario): bool
+    {
+        if (! $this->permiteAccionMateriales($usuario, 'estandares.administrar')) {
+            return false;
+        }
+
+        return $this->permiteModuloTablet(
+            $usuario,
+            CatalogoModulosAcceso::TABLET_OPERACION_MATERIALES,
+        ) && $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador, RolUsuario::SupervisorMateriales],
+            CatalogoModulosAcceso::OFICINA_ESTANDARES_MATERIALES,
+        );
+    }
+
     public function puedeRetirarMateriales(User $usuario): bool
     {
         if (! $this->permiteAccionMateriales($usuario, 'despachos.retirar')) {
@@ -1545,6 +1574,8 @@ class AlcanceOperacionalUsuario
             'puede_operar_transformaciones_materiales' => $this->puedeOperarTransformacionesMateriales($usuario),
             'puede_revertir_transformaciones_materiales' => $this->puedeRevertirTransformacionesMateriales($usuario),
             'puede_administrar_recetas_materiales' => $this->puedeAdministrarRecetasMateriales($usuario),
+            'puede_consultar_estandares_materiales' => $this->puedeConsultarEstandaresMateriales($usuario),
+            'puede_administrar_estandares_materiales' => $this->puedeAdministrarEstandaresMateriales($usuario),
             'puede_consultar_recepciones_fruta_embalada' => $this->puedeConsultarRecepcionesFrutaEmbalada($usuario),
             'puede_anular_recepciones_fruta_embalada' => $this->puedeAnularRecepcionesFrutaEmbalada($usuario),
             'puede_gestionar_recepciones_fruta_embalada' => $this->puedeGestionarRecepcionesFrutaEmbalada($usuario),

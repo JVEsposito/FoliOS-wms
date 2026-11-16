@@ -152,6 +152,19 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_estandares_de_consumo_tiene_filtros_editor_y_exportacion(): void
+    {
+        $html = $this->get('/oficina/materiales/estandares')->assertOk()->getContent();
+        foreach (['standardsFilters', 'standardsRows', 'standardsExport', 'standardNew', 'standardDetail', 'standardDialog', 'standardLines', 'standardAddLine'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        $this->assertStringContainsString('aria-current="page"', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/estandares-consumo.html'), $html);
+        }
+    }
+
     public function test_tomas_inventario_conserva_cierre_historial_y_filtros(): void
     {
         $html = $this->get('/oficina/materiales/tomas')->assertOk()->getContent();
