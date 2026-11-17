@@ -1809,7 +1809,8 @@ body,
 }
 
 :root[data-office-theme="dark-industrial"],
-:root[data-office-theme="dark-rose"] {
+:root[data-office-theme="dark-rose"],
+:root[data-office-theme="dark-bit"] {
     color-scheme: dark;
     /* Base oscura de Oficina. */
     --bg: #0f212b;
@@ -2009,6 +2010,79 @@ body,
     --chart-tooltip-border: var(--line);
     --series-product: #f595c8;
     --series-material: #bea9ed;
+}
+
+:root[data-office-theme="dark-bit"] {
+    /* Modo bit: tema personal (identidad.temas_personales), malla de datos verde menta y violeta. */
+    --bg: #050d12;
+    --deep: #08151c;
+    --panel: #0c1d26;
+    --raised: #122a35;
+    --soft: #173340;
+    --line: #23495a;
+    --line-soft: #183a48;
+    --border: #23495a;
+    --input-border: #4f8a9c;
+    --cyan: #3dffb0;
+    --cyan-light: #9dffd6;
+    --accent: #3dffb0;
+    --text: #e3fff4;
+    --muted: #9cc8bb;
+    --corporate-navy: #050d12;
+    --corporate-blue: #3dffb0;
+    --corporate-blue-dark: #0a6146;
+    --corporate-canvas: #050d12;
+    --corporate-card: #0c1d26;
+    --corporate-border: #23495a;
+    --corporate-text: #e3fff4;
+    --corporate-text-muted: #9cc8bb;
+    --header-bg: #050d12;
+    --subnav-bg: #0c1d26;
+    --surface-muted: #122a35;
+    --surface-hover: #173340;
+    --surface-selected: #10372e;
+    --input-bg: #08151c;
+    --table-head: #122a35;
+    --row-bg: #0c1d26;
+    --row-alt: #0f2330;
+    --row-hover: #173340;
+    --text-strong: #e3fff4;
+    --text-secondary: #c3eadf;
+    --text-subtle: #9cc8bb;
+    --icon-surface: #122a35;
+    --button-secondary: #0c1d26;
+    --button-secondary-hover: #173340;
+    --primary: #3dffb0;
+    --primary-hover: #9dffd6;
+    --on-primary: #032417;
+    --info-bg: #10372e;
+    --info-text: #9dffd6;
+    --overlay: rgba(2, 8, 11, .84);
+    --focus-ring: rgba(61, 255, 176, .5);
+    --selection-bg: rgba(61, 255, 176, .22);
+    --brand-gradient: linear-gradient(150deg, #050d12, #10372e);
+    --kpi-surface: #0c1d26;
+    --logo-border: #4f8a9c;
+    --logo-bg: #0c1d26;
+    --hydro-ice: #3dffb0;
+    --frost: #3dffb0;
+    --frost-strong: #9dffd6;
+    --area-operacion-ink: #3dffb0;
+    --area-operacion-text: #9dffd6;
+    --area-operacion-tint: #10372e;
+    --area-operacion-line: #2f8a6c;
+    --area-operacion-bright: #3dffb0;
+    --area-frigorifico-ink: #b9a2ff;
+    --area-frigorifico-text: #d9ccff;
+    --area-frigorifico-tint: #241d45;
+    --area-frigorifico-line: #6a58b8;
+    --area-frigorifico-bright: #b9a2ff;
+    --chart-grid: var(--line);
+    --chart-text: var(--text-secondary);
+    --chart-tooltip-bg: var(--raised);
+    --chart-tooltip-border: var(--line);
+    --series-product: #3dffb0;
+    --series-material: #b9a2ff;
 }
 
 body,

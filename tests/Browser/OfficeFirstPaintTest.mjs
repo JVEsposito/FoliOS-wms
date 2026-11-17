@@ -122,6 +122,41 @@ test('el Administrador puede elegir rosado y el siguiente perfil recupera su tem
     }
 });
 
+test('el modo bit solo lo ofrece la cuenta habilitada y se recupera al recargar', async () => {
+    const browser = await chromium.launch({
+        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+        args: ['--no-sandbox', '--disable-gpu'],
+    });
+    try {
+        const { context, page } = await firstPaint(browser, {
+            local: {
+                estiba_wms_office_token: token,
+                estiba_wms_office_identity: JSON.stringify({ ...identity, temas_personales: ['dark-bit'] }),
+                estiba_wms_office_theme: 'light-professional',
+            },
+            session: {},
+        }, { modules: true });
+        await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
+        await page.getByRole('button', { name: 'Activar modo bit' }).click();
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-bit');
+        await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(5, 13, 18)');
+        assert.match(await page.locator('.estiba-office-signature').evaluate((el) => getComputedStyle(el, '::before').backgroundImage), /^url\("data:image\/svg\+xml/);
+        await page.reload();
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-bit');
+        assert.equal(await page.evaluate(() => localStorage.getItem('estiba_wms_office_theme')), 'light-professional');
+
+        await page.evaluate((user) => {
+            localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
+            window.dispatchEvent(new CustomEvent('estiba:office-session'));
+        }, { ...identity, rol: 'administrador' });
+        assert.notEqual(await page.locator('html').getAttribute('data-office-theme'), 'dark-bit');
+        assert.equal(await page.evaluate(() => window.EstibaOfficeTheme.themes.includes('dark-bit')), false);
+        await context.close();
+    } finally {
+        await browser.close();
+    }
+});
+
 test('sin sesión, no pinta la oficina y va a /FoliOS con el regreso', async () => {
     const browser = await chromium.launch({
         executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
