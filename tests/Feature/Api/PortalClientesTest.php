@@ -7,6 +7,8 @@ use App\Models\Cliente;
 use App\Models\Dispositivo;
 use App\Models\Embarque;
 use App\Models\Folio;
+use App\Models\Pais;
+use App\Models\Puerto;
 use App\Models\RecepcionRomana;
 use App\Models\SolicitudCargaCliente;
 use App\Models\Temporada;
@@ -124,10 +126,15 @@ class PortalClientesTest extends TestCase
                     'composicion' => [['csg' => '001234', 'cantidad_cajas' => 80], ['csg' => '001567', 'cantidad_cajas' => 40]]]]);
         }
         foreach ([$this->propio, $this->ajeno] as $cliente) {
-            Embarque::create(['temporada_id' => $this->temporada->id, 'cliente_id' => $cliente->id, 'codigo' => 'EMB-'.$cliente->codigo,
+            $embarque = Embarque::create(['temporada_id' => $this->temporada->id, 'cliente_id' => $cliente->id, 'codigo' => 'EMB-'.$cliente->codigo,
                 'numero_correlativo' => 1, 'fecha_programada' => '2026-11-12', 'hora_programada' => '10:00:00', 'intervalo_minutos' => 60,
                 'modalidad' => 'maritimo', 'estado' => 'tentativo', 'version' => 1, 'creado_por_user_id' => $this->admin->id,
                 'actualizado_por_user_id' => $this->admin->id]);
+            // Un instructivo con país y puerto del catálogo (el caso que hacía fallar el portal).
+            $mexico = Pais::where('iso_alpha2', 'MX')->sole();
+            $manzanillo = Puerto::where('codigo', 'MXZLO')->sole();
+            $embarque->instructivos()->create(['orden' => 1, 'numero_externo' => 'INS-1', 'pais_destino_id' => $mexico->id, 'destino_pais' => $mexico->nombre_es,
+                'puerto_destino_id' => $manzanillo->id, 'destino_ciudad' => $manzanillo->nombre, 'cantidad_pallets' => 20]);
         }
         $this->withToken($token);
 
@@ -143,7 +150,8 @@ class PortalClientesTest extends TestCase
         $this->assertArrayNotHasKey('ubicacion', $folios->json('data.0'));
         $this->getJson($this->portal('/folios?situacion=todos'))->assertJsonPath('meta.total', 2);
         $this->getJson($this->portal('/folios?situacion=todos&q=0002'))->assertJsonPath('meta.total', 0);
-        $this->getJson($this->portal('/embarques'))->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.codigo', 'EMB-AGU');
+        $this->getJson($this->portal('/embarques'))->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.codigo', 'EMB-AGU')
+            ->assertJsonPath('data.0.instructivos.0.destino', 'Manzanillo, México')->assertJsonPath('data.0.instructivos.0.pallets', 20);
         $this->getJson($this->portal('/materiales'))->assertOk()->assertJsonPath('data', []);
     }
 

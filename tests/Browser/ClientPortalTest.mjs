@@ -12,8 +12,10 @@ const identity = { id: 9, nombre: 'Comex', email: 'comex@laaguada.cl', rol: 'cli
 const today = new Date(); const pad = (n) => String(n).padStart(2, '0');
 const day = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 
-async function setup(browser, { width = 1280, session = true, internal = false } = {}) {
+async function setup(browser, { width = 1280, session = true, internal = false, insecure = false } = {}) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
+    // La planta abre FoliOS por HTTP en su red local: ahí el navegador no ofrece crypto.randomUUID.
+    if (insecure) await context.addInitScript(() => { delete Crypto.prototype.randomUUID; });
     if (session) {
         await context.addInitScript((user) => {
             localStorage.setItem('estiba_wms_office_token', 'fixture');
@@ -122,6 +124,24 @@ test('el cliente revisa sus datos y solicita un horario de carga sin salir del p
             assert.deepEqual(errors, []);
             await context.close();
         }
+    } finally { await browser.close(); }
+});
+
+test('por HTTP en la red de la planta el cliente igual puede pedir un horario', async () => {
+    const browser = await launch();
+    try {
+        const { context, page, writes, errors } = await setup(browser, { insecure: true });
+        assert.equal(await page.evaluate(() => typeof crypto.randomUUID), 'undefined');
+        await page.locator('#portalKpis .portal-kpi').first().waitFor();
+        await page.locator('[data-tab="horarios"]').click();
+        await page.locator('[data-slot="10:00"]').click();
+        await page.locator('#portalRequest [name="modalidad"]').selectOption('aereo');
+        await page.locator('#portalRequest button[type="submit"]').click();
+        await page.locator('#portalRequests [data-cancel="s1"]').waitFor();
+        assert.match(writes[0].operacion_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+        assert.equal(writes[0].hora, '10:00');
+        assert.deepEqual(errors, []);
+        await context.close();
     } finally { await browser.close(); }
 });
 
