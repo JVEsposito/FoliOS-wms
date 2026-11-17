@@ -83,3 +83,7 @@
 .is-hidden { display: none !important; }
 @media (max-width: 1100px) { .sag-metrics, .sag-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sag-form-grid--lot, .sag-form-grid--filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sag-selection-layout { grid-template-columns: 1fr; } }
 @media (max-width: 680px) { .sag-workspace { padding: .6rem; } .sag-heading, .sag-panel-heading, .sag-builder-actions { align-items: stretch; flex-direction: column; } .sag-metrics, .sag-summary-grid, .sag-form-grid--lot, .sag-form-grid--filters, .sag-direct-search { grid-template-columns: 1fr; } .sag-detail-actions { width: 100%; } .sag-resolution { grid-template-columns: 1fr; } }
+.sag-preparation { display: grid; gap: .2rem; margin: 0 0 .8rem; padding: .7rem .9rem; border: 1px solid var(--line, #29404e); border-left: 4px solid var(--sag-green); border-radius: 8px; font-size: .88rem; }
+.sag-preparation strong { font-size: .92rem; }
+.sag-preparation--pending { border-left-color: var(--sag-gold); background: rgba(245, 185, 76, .08); }
+.sag-preparation--pending strong { color: var(--sag-gold); }

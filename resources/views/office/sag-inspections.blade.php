@@ -118,6 +118,7 @@
                 <section class="panel sag-detail is-hidden" id="sagLotDetail">
                     <div class="sag-panel-heading"><div><p class="eyebrow">DETALLE DEL LOTE</p><h2 id="sagDetailTitle">Lote</h2><p id="sagDetailSubtitle"></p></div><div class="sag-detail-actions"><select id="detailActionSelect" aria-label="Acciones del lote"><option value="">Seleccionar acción</option></select><a class="secondary-button is-hidden" id="sagDocumentLink">Formulario cambio de mercado</a><button class="secondary-button" id="closeSagDetailButton" type="button">Cerrar</button></div></div>
                     <div class="sag-detail-destinations" id="sagDetailDestinations"></div>
+                    <div class="sag-preparation is-hidden" id="sagDetailPreparation" role="status"></div>
                     <form class="sag-direct-search is-hidden" id="editSagLotFoliosForm">
                         <label for="addSagLotFolio"><span>Agregar pallet al lote</span><small>Disponible mientras el lote esté en preparación. Se reajustan sus reservas y traslados pendientes.</small></label>
                         <input id="addSagLotFolio" type="search" maxlength="100" autocomplete="off" placeholder="Escribir o escanear folio" required>
