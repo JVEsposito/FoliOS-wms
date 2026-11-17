@@ -207,6 +207,48 @@ class EmbarqueApiTest extends TestCase
             ]);
     }
 
+    public function test_catalogo_ampliado_ofrece_puertos_aeropuertos_pasos_y_todos_los_paises(): void
+    {
+        $despachador = $this->usuario(RolUsuario::Despachador);
+        $cliente = $this->cliente($despachador, 'MC');
+        $argentina = Pais::query()->where('iso_alpha2', 'AR')->firstOrFail();
+        $libertadores = Puerto::query()->where('codigo', 'PAS-LLI')->firstOrFail();
+        $cristoRedentor = Puerto::query()->where('codigo', 'PAS-AR-CRE')->firstOrFail();
+        $ampliacion = json_decode(file_get_contents(database_path('data/puertos_embarque_ampliacion.json')), true);
+
+        // Cada código de la ampliación quedó una sola vez, con su país y tipo.
+        $this->assertSame(110 + count($ampliacion), Puerto::query()->count());
+        foreach (['CNXMG' => ['CN', 'maritimo'], 'FRPOV' => ['FR', 'maritimo'], 'AIR-NLU' => ['MX', 'aereo'], 'PAS-JAM' => ['CL', 'terrestre']] as $codigo => [$iso, $tipo]) {
+            $punto = Puerto::query()->with('pais')->where('codigo', $codigo)->firstOrFail();
+            $this->assertSame([$iso, $tipo], [$punto->pais->iso_alpha2, $punto->tipo]);
+        }
+        $this->assertSame('Los Libertadores (Los Andes – Mendoza)', $libertadores->nombre);
+
+        // Volver a ejecutar la migración no duplica ni pisa los puntos.
+        (require database_path('migrations/2026_11_17_130000_ampliar_puntos_transporte_embarques.php'))->up();
+        $this->assertSame(110 + count($ampliacion), Puerto::query()->count());
+
+        $this->actingAs($despachador, 'sanctum')->postJson('/api/embarques', [
+            'cliente_id' => $cliente->id,
+            'fecha_programada' => '2026-08-16',
+            'hora_programada' => '07:00',
+            'modalidad' => 'terrestre',
+            'puerto_embarque_id' => $libertadores->id,
+            'instructivos' => [['pais_destino_id' => $argentina->id, 'puerto_destino_id' => $cristoRedentor->id]],
+        ])->assertCreated()
+            ->assertJsonPath('data.puerto_embarque', 'Los Libertadores (Los Andes – Mendoza)')
+            ->assertJsonPath('data.instructivos.0.destino_ciudad', 'Cristo Redentor (Mendoza – Los Andes)');
+
+        $calendario = $this->actingAs($despachador, 'sanctum')
+            ->getJson('/api/embarques?desde=2026-08-16&hasta=2026-08-16')
+            ->assertOk();
+        // Un país sin puntos catalogados también se puede declarar como destino.
+        $this->assertCount(Pais::query()->where('activo', true)->count(), $calendario->json('catalogos.paises'));
+        $this->assertContains('MN', array_column($calendario->json('catalogos.paises'), 'iso_alpha2'));
+        $this->assertCount(110 + count($ampliacion), $calendario->json('catalogos.puertos'));
+        $this->assertArrayNotHasKey('pais', $calendario->json('catalogos.puertos.0'));
+    }
+
     public function test_puerto_de_destino_debe_pertenecer_al_pais_seleccionado(): void
     {
         $despachador = $this->usuario(RolUsuario::Despachador);

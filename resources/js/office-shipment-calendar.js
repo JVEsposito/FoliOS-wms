@@ -51,6 +51,14 @@ function dateLabel(value, options = { weekday: 'short', day: '2-digit', month: '
 function statusText(value) { return String(value || '').replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase()); }
 function modeText(value) { return ({ maritimo: 'Marítimo', aereo: 'Aéreo', terrestre: 'Terrestre', por_confirmar: 'Por confirmar' })[value] || statusText(value); }
 function transportPointType(value) { return ({ maritimo: 'Puerto', aereo: 'Aeropuerto', terrestre: 'Paso' })[value] || statusText(value); }
+const pointKinds = { maritimo: 'puertos', aereo: 'aeropuertos', terrestre: 'pasos' };
+// La modalidad del embarque decide el tipo de punto; el punto ya guardado se conserva aunque no calce.
+function transportPoints(countryId, selected = '') {
+    const mode = elements.form.elements.modalidad.value;
+    return state.catalogs.puertos.filter((point) => (!countryId || point.pais_id === countryId)
+        && (!pointKinds[mode] || point.tipo === mode || point.id === selected));
+}
+function pointOption(point) { return `<option value="${point.id}">${escapeHtml(transportPointType(point.tipo))} · ${escapeHtml(point.nombre)} (${escapeHtml(point.codigo)})</option>`; }
 
 async function api(path, options = {}) {
     const headers = new Headers(options.headers || {});
@@ -218,11 +226,18 @@ function populateCatalogs() {
     form.cliente_id.innerHTML = '<option value="">Selecciona cliente</option>' + state.catalogs.clientes.map((client) => `<option value="${client.id}"${client.codigo_folio_materiales ? '' : ' disabled'}>${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}${client.codigo_folio_materiales ? '' : ' · sin sigla documental'}</option>`).join('');
     form.camara_objetivo_id.innerHTML = '<option value="">Sin cámara objetivo</option>' + state.catalogs.camaras.map((camera) => `<option value="${camera.id}">${escapeHtml(camera.codigo)} · ${escapeHtml(camera.nombre)}</option>`).join('');
     form.anden_previsto_id.innerHTML = '<option value="">Sin andén previsto</option>' + state.catalogs.andenes.map((dock) => `<option value="${dock.id}">${escapeHtml(dock.codigo)} · ${escapeHtml(dock.nombre)}</option>`).join('');
-    form.puerto_embarque_id.innerHTML = '<option value="">Sin punto de embarque informado</option>' + state.catalogs.paises.map((country) => {
-        const ports = state.catalogs.puertos.filter((port) => port.pais_id === country.id);
-        if (!ports.length) return '';
-        return `<optgroup label="${escapeHtml(country.iso_alpha2)} · ${escapeHtml(country.nombre_es)}">${ports.map((port) => `<option value="${port.id}">${escapeHtml(transportPointType(port.tipo))} · ${escapeHtml(port.nombre)} (${escapeHtml(port.codigo)})</option>`).join('')}</optgroup>`;
+    populateDeparturePoints();
+}
+function populateDeparturePoints(selected = elements.form.elements.puerto_embarque_id.value) {
+    const select = elements.form.elements.puerto_embarque_id;
+    // Chile primero: casi todos los embarques salen por un puerto, aeropuerto o paso chileno.
+    const countries = [...state.catalogs.paises].sort((a, b) => Number(b.iso_alpha2 === 'CL') - Number(a.iso_alpha2 === 'CL'));
+    select.innerHTML = '<option value="">Sin punto de embarque informado</option>' + countries.map((country) => {
+        const points = transportPoints(country.id, selected);
+        if (!points.length) return '';
+        return `<optgroup label="${escapeHtml(country.iso_alpha2)} · ${escapeHtml(country.nombre_es)}">${points.map(pointOption).join('')}</optgroup>`;
     }).join('');
+    select.value = selected;
 }
 
 function populateTimeOptions(selected = '') {
@@ -268,10 +283,19 @@ function addInstruction(data = {}) {
 }
 function populateInstructionPorts(card, countryId, selected = '') {
     const port = card.querySelector('[data-field="puerto_destino_id"]');
-    const options = state.catalogs.puertos.filter((item) => item.pais_id === countryId);
-    port.innerHTML = '<option value="">Selecciona punto de destino</option>' + options.map((item) => `<option value="${item.id}">${escapeHtml(transportPointType(item.tipo))} · ${escapeHtml(item.nombre)} (${escapeHtml(item.codigo)})</option>`).join('');
+    const options = countryId ? transportPoints(countryId, selected) : [];
+    const kind = pointKinds[elements.form.elements.modalidad.value] || 'puntos';
+    const blank = !countryId || options.length ? 'Selecciona punto de destino' : `Sin ${kind} registrados para este país`;
+    port.innerHTML = `<option value="">${blank}</option>` + options.map(pointOption).join('');
     port.disabled = !countryId;
     port.value = selected;
+}
+function refreshTransportPoints() {
+    populateDeparturePoints();
+    elements.instructionList.querySelectorAll('.instruction-card').forEach((card) => {
+        const port = card.querySelector('[data-field="puerto_destino_id"]');
+        populateInstructionPorts(card, card.querySelector('[data-field="pais_destino_id"]').value, port.value);
+    });
 }
 function renumberInstructions() {
     const cards = [...elements.instructionList.querySelectorAll('.instruction-card')];
@@ -308,6 +332,7 @@ async function openExisting(id, focusConfirmation = false) {
         const form = elements.form.elements;
         form.id.value = shipment.id; form.version_esperada.value = shipment.version; form.cliente_id.value = shipment.cliente.id;
         for (const field of ['modalidad', 'fecha_programada', 'referencia_correo', 'observacion', 'nave_vuelo', 'transportista', 'puerto_embarque_id', 'contenedor', 'sello', 'patente_camion', 'patente_trasera', 'documentos']) form[field].value = shipment[field] ?? '';
+        populateDeparturePoints(shipment.puerto_embarque_id ?? '');
         populateTimeOptions(shipment.hora_programada); form.hora_programada.value = shipment.hora_programada;
         elements.instructionList.innerHTML = ''; (shipment.instructivos || []).forEach(addInstruction); if (!shipment.instructivos?.length) addInstruction();
         const editable = state.permissions.gestionar && shipment.estado !== 'cancelado';
@@ -382,6 +407,7 @@ elements.instructionList.addEventListener('change', (event) => {
     if (!country) return;
     populateInstructionPorts(country.closest('.instruction-card'), country.value);
 });
+elements.form.elements.modalidad.addEventListener('change', () => refreshTransportPoints());
 elements.form.elements.fecha_programada.addEventListener('change', () => populateTimeOptions(elements.form.elements.hora_programada.value));
 elements.form.elements.hora_programada.addEventListener('change', () => updateOverbookControls());
 elements.form.elements.autorizar_sobrecupo.addEventListener('change', () => updateOverbookControls());
