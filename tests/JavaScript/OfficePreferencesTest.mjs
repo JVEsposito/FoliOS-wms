@@ -45,7 +45,10 @@ test('los modos bit y neón solo aparecen en las cuentas que el servidor habilit
     assert.equal(nextOfficeTheme('dark-bit', adminPersonal), 'dark-bit-neon');
     assert.equal(nextOfficeTheme('dark-bit-neon', adminPersonal), 'light-professional');
     assert.equal(normalizeOfficeTheme('dark-bit-neon', personal), 'dark-industrial');
-    assert.notEqual(officeThemeStorageKey(adminPersonal), officeThemeStorageKey({ rol: 'administrador' }));
+    // El Administrador conserva su clave (con el rosado) y la cuenta habilitada por correo usa la personal.
+    assert.equal(officeThemeStorageKey(adminPersonal), officeThemeStorageKey({ rol: 'administrador' }));
+    assert.notEqual(officeThemeStorageKey(personal), officeThemeStorageKey({ rol: 'supervisor_frio' }));
+    assert.notEqual(officeThemeStorageKey(personal), officeThemeStorageKey(adminPersonal));
     for (const other of [{ rol: 'administrador' }, { rol: 'consulta' }, null]) {
         assert.equal(normalizeOfficeTheme('dark-bit', other), 'dark-industrial');
         assert.equal(normalizeOfficeTheme('dark-bit-neon', other), 'dark-industrial');

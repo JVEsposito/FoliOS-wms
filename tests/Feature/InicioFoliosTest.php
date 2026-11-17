@@ -54,14 +54,30 @@ class InicioFoliosTest extends TestCase
         ];
     }
 
-    public function test_solo_las_cuentas_configuradas_reciben_el_tema_personal(): void
+    public function test_los_temas_pixel_van_al_administrador_y_a_las_cuentas_configuradas(): void
     {
         config(['oficina.temas_personales' => ['dark-bit' => ['persona@folios.test'], 'dark-bit-neon' => ['persona@folios.test']]]);
         $personal = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'email' => 'persona@folios.test']);
+        $perfil = PerfilAcceso::create([
+            'codigo' => 'SUPERADMIN',
+            'nombre' => 'Superadmin',
+            'rol_base' => RolUsuario::Administrador,
+            'modulos' => ['administracion.accesos'],
+            'modulos_tablet' => [],
+            'activo' => true,
+        ]);
+        $superadmin = User::factory()->create(['rol' => RolUsuario::Administrador, 'perfil_acceso_id' => $perfil->id]);
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $supervisor = User::factory()->create(['rol' => RolUsuario::SupervisorFrio]);
 
-        $this->postJson('/api/acceso-oficina', ['email' => $personal->email, 'password' => 'password'])
-            ->assertOk()->assertJsonPath('usuario.temas_personales', ['dark-bit', 'dark-bit-neon']);
+        foreach ([[$personal, ['dark-bit', 'dark-bit-neon']], [$superadmin, ['dark-bit', 'dark-bit-neon']],
+            [$administrador, ['dark-bit', 'dark-bit-neon']], [$supervisor, []]] as [$usuario, $temas]) {
+            $this->postJson('/api/acceso-oficina', ['email' => $usuario->email, 'password' => 'password'])
+                ->assertOk()->assertJsonPath('usuario.temas_personales', $temas);
+        }
+
+        // Sin temas por rol en la configuración, el Administrador vuelve a depender de su correo.
+        config(['oficina.temas_por_rol' => []]);
         $this->postJson('/api/acceso-oficina', ['email' => $administrador->email, 'password' => 'password'])
             ->assertOk()->assertJsonPath('usuario.temas_personales', []);
     }
