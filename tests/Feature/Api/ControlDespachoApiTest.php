@@ -4,10 +4,14 @@ namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
 use App\Models\Carga;
+use App\Models\Cliente;
 use App\Models\ControlDespacho;
 use App\Models\Dispositivo;
+use App\Models\Embarque;
 use App\Models\FotoControlDespacho;
+use App\Models\Pais;
 use App\Models\PerfilAcceso;
+use App\Models\Puerto;
 use App\Models\User;
 use App\Services\ControlDespacho\FormularioControlDespacho;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -120,6 +124,31 @@ class ControlDespachoApiTest extends TestCase
         $this->conToken($token)->deleteJson("/api/control-despacho/controles/{$control['id']}/posiciones/{$posicion['id']}", ['operacion_id' => (string) Str::uuid()])
             ->assertOk()->assertJsonPath('data.totales.posicionados', 1)->assertJsonPath('data.totales.cargados', 2);
         $this->assertDatabaseHas('carga_folios', ['folio_id' => $segundo->id, 'estado' => 'cargado']);
+    }
+
+    public function test_la_planilla_abre_con_un_embarque_cuyo_destino_viene_del_catalogo(): void
+    {
+        $contexto = $this->crearContextoFrio(1, 'R24P');
+        $carga = $this->crearCargaPublicada($contexto['despachador'], $contexto['anden'], [$contexto['folios'][0]]);
+        $this->enviarAlAnden($contexto, $carga, $contexto['folios'][0]);
+        $mexico = Pais::query()->where('iso_alpha2', 'MX')->sole();
+        $manzanillo = Puerto::query()->where('codigo', 'MXZLO')->sole();
+        $sanAntonio = Puerto::query()->where('codigo', 'CLSAI')->sole();
+        $embarque = Embarque::create(['temporada_id' => $carga->temporada_id, 'cliente_id' => Cliente::query()->value('id'), 'carga_id' => $carga->id,
+            'codigo' => 'EMB-R24P', 'numero_correlativo' => 1, 'fecha_programada' => now()->toDateString(), 'hora_programada' => '10:00:00',
+            'intervalo_minutos' => 60, 'modalidad' => 'maritimo', 'estado' => 'confirmado', 'version' => 1, 'puerto_embarque_id' => $sanAntonio->id,
+            'puerto_embarque' => $sanAntonio->nombre, 'creado_por_user_id' => $contexto['despachador']->id, 'actualizado_por_user_id' => $contexto['despachador']->id]);
+        // El país y el puerto se eligen del catálogo, como en el calendario de embarques.
+        $embarque->instructivos()->create(['orden' => 1, 'numero_externo' => 'INS-77', 'pais_destino_id' => $mexico->id, 'destino_pais' => $mexico->nombre_es,
+            'puerto_destino_id' => $manzanillo->id, 'destino_ciudad' => $manzanillo->nombre, 'cantidad_pallets' => 1]);
+        [$token] = $this->consolidador('R24P');
+
+        $control = $this->iniciar($token, $carga);
+        $this->assertSame('Manzanillo, México', $control['encabezado']['destino']);
+        $this->assertSame('Manzanillo', $control['encabezado']['puerto_destino']);
+        $this->assertSame('San Antonio', $control['encabezado']['puerto_zarpe']);
+        $this->conToken($token)->getJson("/api/control-despacho/controles/{$control['id']}")->assertOk()
+            ->assertJsonPath('data.encabezado.destino', 'Manzanillo, México');
     }
 
     public function test_cerrar_exige_inspeccion_y_posiciones_y_congela_la_planilla(): void
