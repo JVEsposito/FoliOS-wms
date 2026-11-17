@@ -125,7 +125,7 @@ class ServicioPortalCliente
         return Embarque::where('cliente_id', $cliente->id)->where('temporada_id', $temporada?->id)
             ->when($filtros['desde'] ?? null, fn (Builder $q, string $d) => $q->where('fecha_programada', '>=', $d))
             ->when($filtros['hasta'] ?? null, fn (Builder $q, string $h) => $q->where('fecha_programada', '<=', $h))
-            ->with(['instructivos.paisDestino:id,nombre', 'instructivos.puertoDestino:id,nombre',
+            ->with(['instructivos.paisDestino:id,nombre_es', 'instructivos.puertoDestino:id,nombre',
                 'carga' => fn ($q) => $q->withCount(['asignacionesActuales as pallets_asignados',
                     'asignacionesActuales as pallets_cargados' => fn ($a) => $a->whereIn('estado', [EstadoCargaFolio::Cargado->value, EstadoCargaFolio::Despachado->value])])])
             ->orderByDesc('fecha_programada')->orderByDesc('hora_programada')->limit(200)->get()
@@ -135,7 +135,7 @@ class ServicioPortalCliente
                 'puerto_embarque' => $e->puerto_embarque, 'contenedor' => $e->contenedor, 'referencia' => $e->referencia_correo,
                 'instructivos' => $e->instructivos->map(fn ($i): array => [
                     'numero' => $i->numero_externo, 'booking' => $i->booking, 'recibidor' => $i->recibidor,
-                    'destino' => collect([$i->puertoDestino?->nombre ?? $i->destino_ciudad, $i->paisDestino?->nombre ?? $i->destino_pais])->filter()->implode(', ') ?: null,
+                    'destino' => collect([$i->puertoDestino?->nombre ?? $i->destino_ciudad, $i->paisDestino?->nombre_es ?? $i->destino_pais])->filter()->implode(', ') ?: null,
                     'pallets' => $i->cantidad_pallets, 'cajas' => $i->cantidad_cajas,
                 ])->values(),
                 'carga' => $e->carga ? ['estado' => $e->carga->estado->value, 'pallets_asignados' => (int) $e->carga->pallets_asignados,

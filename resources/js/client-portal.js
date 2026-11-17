@@ -3,6 +3,8 @@
  * web, pero solo usa /api/portal: el servidor rechaza cualquier otra ruta a estas cuentas.
  */
 import { OFFICE_IDENTITY_KEY, OFFICE_TOKEN_KEY, officeHomePath } from './shared/folios-entry.js';
+// La planta abre FoliOS por HTTP en la red local, donde crypto.randomUUID no existe.
+import { createUuid } from './shared/uuid.js';
 
 const CLIENT_KEY = 'folios_portal_cliente';
 const $ = (id) => document.getElementById(id);
@@ -193,7 +195,7 @@ function renderRequests(requests) {
 
 function pickSlot(hour) {
     state.slot = hour;
-    state.requestId = crypto.randomUUID();
+    state.requestId = createUuid();
     document.querySelectorAll('[data-slot]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.slot === hour)));
     $('portalRequestTitle').textContent = `Solicitud para el ${shortDate(state.day)} a las ${hour}`;
     $('portalRequestError').textContent = '';
@@ -218,7 +220,7 @@ async function sendRequest(event) {
     } catch (error) {
         // Si la respuesta se perdió, reintentar conserva el mismo identificador.
         fail(error, 'portalRequestError');
-        if (error.status === 409 || error.status === 422) state.requestId = crypto.randomUUID();
+        if (error.status === 409 || error.status === 422) state.requestId = createUuid();
     } finally { button.disabled = false; }
 }
 
