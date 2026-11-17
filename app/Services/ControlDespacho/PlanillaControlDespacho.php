@@ -90,7 +90,7 @@ class PlanillaControlDespacho
             ->with([
                 'embarque.cliente:id,nombre',
                 'embarque.puertoEmbarque:id,nombre',
-                'embarque.instructivos.paisDestino:id,nombre',
+                'embarque.instructivos.paisDestino:id,nombre_es',
                 'embarque.instructivos.puertoDestino:id,nombre',
                 'presenciaAndenActiva.anden:id,codigo,nombre',
                 'andenPrevisto:id,codigo,nombre',
@@ -224,7 +224,7 @@ class PlanillaControlDespacho
         $todosArriba = $pallets->isNotEmpty() && $pallets->every(fn (array $p): bool => in_array($p['estado_carga'], [EstadoCargaFolio::Cargado->value, EstadoCargaFolio::Despachado->value], true));
         $inicio = $cargados->first() ?? $presencia?->ingresada_at?->setTimezone($zona);
         $exportadoras = $carga->asignacionesHistoricas()->with('folio:id,exportadora')->get()->pluck('folio.exportadora');
-        $destinos = $instructivos->map(fn ($i): string => collect([$i->destino_ciudad, $i->paisDestino?->nombre ?? $i->destino_pais])
+        $destinos = $instructivos->map(fn ($i): string => collect([$i->destino_ciudad, $i->paisDestino?->nombre_es ?? $i->destino_pais])
             ->map(fn ($valor): string => trim((string) $valor))->filter()->implode(', '));
 
         return [
