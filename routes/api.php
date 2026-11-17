@@ -275,6 +275,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/movimientos/{movimientoEnvase}/reasignacion', [CuentaCorrienteEnvaseController::class, 'reasignacion']);
         Route::post('/reasignaciones', [CuentaCorrienteEnvaseController::class, 'reasignar']);
         Route::post('/reasignaciones/{reasignacionEnvases}/deshacer', [CuentaCorrienteEnvaseController::class, 'deshacerReasignacion']);
+        // Reasignar un movimiento (completo o por cantidades) a otro productor CSG de la misma cuenta.
+        Route::get('/movimientos/{movimientoEnvase}/reasignacion-productor', [CuentaCorrienteEnvaseController::class, 'reasignacionProductor']);
+        Route::post('/reasignaciones-productor', [CuentaCorrienteEnvaseController::class, 'reasignarProductor']);
     });
     Route::middleware('can:ajustar-cuenta-envases')->prefix('envases/cuenta-corriente/conciliaciones-salida')->group(function () {
         Route::get('/', [ConciliacionSalidaEnvaseController::class, 'index']);

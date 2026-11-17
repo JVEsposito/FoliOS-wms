@@ -311,6 +311,8 @@ POST /api/envases/cuenta-corriente/movimientos/{movimiento}/corregir-cantidad
 GET  /api/envases/cuenta-corriente/movimientos/{movimiento}/reasignacion
 POST /api/envases/cuenta-corriente/reasignaciones
 POST /api/envases/cuenta-corriente/reasignaciones/{reasignacion}/deshacer
+GET  /api/envases/cuenta-corriente/movimientos/{movimiento}/reasignacion-productor
+POST /api/envases/cuenta-corriente/reasignaciones-productor
 GET  /api/envases/devoluciones/productores/{cliente}
 GET  /api/envases/devoluciones/salida?cliente_id=…&numero=…
 ```
@@ -397,6 +399,21 @@ Pedido del encargado de cuentas corrientes (14-11-2026): mover una entrada o sal
   - Los dos llevan `documento_tipo = reasignacion_envases` y el número de la guía. La tabla `reasignaciones_envases` guarda cada reasignación y su deshacer, con origen, destino, envases, motivo, usuario y hora. La vigente dice dónde está hoy la guía.
 - **Estado de cuenta**: en la cuenta de destino, la guía se ve como la original: *Guía de ingreso N° … · Ingreso con fruta*, con chofer, recepción y camión, o *Guía de salida N° … · Entregados en el destare*, o *Guía de despacho N° …*. Va en el CSG de destino y no menciona la reasignación, porque el documento es formal e informativo. En la cuenta de origen desaparece. Una guía de un camión con varias deja de repartir el ingreso de su recepción; las demás guías siguen separadas. El kardex (Excel de movimientos) conserva los dos asientos y el motivo.
 - **Reasignar otra vez** mueve la guía desde donde está hoy. **Deshacer reasignación** la devuelve a su cuenta y productor de origen. Mientras está reasignada, su recepción o despacho no se corrige, ajusta, anula ni concilia: el servidor rechaza cualquier asiento nuevo con *«La guía … está reasignada a … Deshaz la reasignación en Cuenta Envases antes de corregir…»*. Se deshace, se corrige y se vuelve a reasignar. Corregir el N° de guía sí se puede y llega a la guía reasignada. Corregir el peso bruto (kilos) tampoco se bloquea, porque no toca envases.
+
+### Reasignar un movimiento a otro productor / CSG (administración)
+
+Pedido del encargado de cuentas corrientes (17-11-2026). Es una acción más del menú de cada movimiento: **Reasignar movimiento a otro productor / CSG**. Es independiente de las correcciones existentes y de «Reasignar guía», que siguen igual.
+
+- **Qué se reasigna.** Un movimiento de entrada o salida de envases de una guía, siempre entre productores CSG de la misma cuenta corriente: la guía de ingreso (o una de las guías de un camión con varias), una devolución, un arriendo, la salida del destare o un despacho. El diálogo muestra el N° de guía, el productor actual (CSG y razón social) y sus cantidades de cada envase. Se elige el CSG correcto, la razón social se completa sola y se indica si se reasigna **todo el movimiento de ese productor** o **solo una parte** (cantidades por envase, sin superar lo que tiene). Se pide motivo (10 a 2000 caracteres). Solo administración (`ajustar-cuenta-envases`), en la temporada activa.
+- **Validaciones.**
+  - El CSG de destino debe ser un productor activo y declarado en la cuenta, y la razón social debe ser la de ese CSG.
+  - El productor de origen debe tener hoy ese movimiento, y no se reasigna más de lo que tiene.
+  - Destino y origen no pueden ser el mismo.
+  - Una guía movida con «Reasignar guía» (salida, despacho o ingreso completo) no se reparte hasta deshacer esa reasignación. Una sola guía movida de un camión con varias no impide repartir las otras guías de ese camión.
+  - Cada reasignación se guarda una sola vez (`operacion_id`); se lee y valida con la recepción o el despacho bloqueados.
+- **Sin asientos.** No crea movimientos en la cuenta: el saldo del cliente, la existencia, los kilos, la Validación MP y la guía no cambian. Cada reasignación queda en `reasignaciones_productor_envases`, con el origen, el destino, lo reasignado, lo que tenía el origen, el motivo, el usuario y la hora. Las reasignaciones se aplican en orden, así una cadena (A→B y después B→C) queda bien.
+- **Estado de cuenta y Excel.** En el detalle por CSG, el resumen por productor y el Excel por productor, las cantidades reasignadas pasan del productor de origen al de destino. La guía conserva su número, fecha, chofer, recepción y camión. Una reasignación parcial deja la guía en los dos productores con su parte, igual que una guía que trae dos CSG («Guía compartida con CSG …: aquí solo la parte de este productor»). No hay filas ni secciones de corrección o reasignación. Con un período, lo reasignado de guías anteriores ya está en el saldo inicial de cada productor.
+- **Kardex interno.** El movimiento anota a qué CSG pasó cada cantidad y desde cuál; el diálogo muestra el historial con motivo, usuario y hora. El reinicio operacional de la temporada borra estas reasignaciones junto con las demás.
 
 ## Auditoría
 

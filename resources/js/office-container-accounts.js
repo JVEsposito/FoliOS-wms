@@ -1,3 +1,4 @@
+import { createContainerProducerReassignment } from './office-container-producer-reassignment';
 import { createContainerReassignment } from './office-container-reassignment';
 import { createContainerReconciliation } from './office-container-reconciliation';
 
@@ -84,6 +85,7 @@ const reconciliation = createContainerReconciliation({
     afterApplied: load, toast,
 });
 const reassignment = createContainerReassignment({ api, catalogs: () => state.catalogs, operationId: accountOperationId, toast, afterSaved: load });
+const producerReassignment = createContainerProducerReassignment({ api, operationId: accountOperationId, toast, afterSaved: load });
 
 function accountOperationId() {
     if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -369,6 +371,11 @@ function render(data) {
                 ? `<button data-reverse-adjustment="${escapeHtml(movement.id)}">Revertir asiento</button>` : '';
             const reassignButton = state.identity?.puede_ajustar_cuenta_envases && movement.puede_reasignar
                 ? `<button class="property-button" data-reassign="${escapeHtml(movement.id)}">Reasignar guía</button>` : '';
+            const producerButton = state.identity?.puede_ajustar_cuenta_envases && movement.puede_reasignar_productor
+                ? `<button class="property-button" data-reassign-producer="${escapeHtml(movement.id)}">Reasignar movimiento a otro productor / CSG</button>` : '';
+            // Reparto entre productores de esta guía: trazabilidad interna, el estado de cuenta no lo muestra.
+            const producerNote = (movement.reasignaciones_productor || []).map((entry) => ` · ${entry.cantidad} a CSG ${escapeHtml(entry.destino.codigo)}`
+                + ` (desde ${entry.origen.codigo ? `CSG ${escapeHtml(entry.origen.codigo)}` : 'sin productor'})`).join('');
             // De dónde a dónde se movió la guía: solo en el kardex interno, el estado de cuenta no lo muestra.
             const reassignNote = movement.reasignacion?.desde_cuenta
                 ? ` · ${movement.reasignacion.deshace ? 'deshace reasignación' : 'reasignada'}: ${escapeHtml(placeName(movement.reasignacion.desde_cuenta))} → ${escapeHtml(placeName(movement.reasignacion.hacia_cuenta))}`
@@ -386,7 +393,7 @@ function render(data) {
             const account = movement.impacto_cuenta === 0
                 ? '<td class="impact-none" title="No mueve la cuenta de ningún cliente">—</td>'
                 : `<td class="${movement.impacto_cuenta < 0 ? 'impact-negative' : 'impact-positive'}">${signed(movement.impacto_cuenta)}</td>`;
-            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${returnNote}${receptionAdjustment}${reassignNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${returnButton}${quantityButton}${historicalButton}${reverseButton}${reassignButton}${!guideButton && !reviewButton && !propertyButton && !returnButton && !quantityButton && !historicalButton && !reverseButton && !reassignButton ? '—' : ''}</div></td></tr>`;
+            return `<tr><td>${formatDate(movement.ocurrido_at)}</td><td><b>${escapeHtml(movement.cliente?.nombre)}</b><br><small>${escapeHtml(movement.movimiento)} · ${escapeHtml(movement.numero_documento)}${emittedNote}${returnNote}${receptionAdjustment}${reassignNote}${producerNote}${documentNote}</small>${trace}</td><td>${escapeHtml(typeName(movement.tipo_envase))} · ${movement.cantidad}</td>${account}<td class="impact-stock">${signed(movement.impacto_existencia)}</td><td>${escapeHtml(label(movement.propiedad))}</td><td>${escapeHtml(label(movement.estado_revision))}</td><td><div class="table-actions">${guideButton}${emittedButton}${reviewButton}${propertyButton}${returnButton}${quantityButton}${historicalButton}${reverseButton}${reassignButton}${producerButton}${!guideButton && !reviewButton && !propertyButton && !returnButton && !quantityButton && !historicalButton && !reverseButton && !reassignButton && !producerButton ? '—' : ''}</div></td></tr>`;
         }).join('')
         : '<tr><td colspan="8">Aún no hay movimientos confirmados.</td></tr>';
 }
@@ -435,6 +442,12 @@ elements.body.addEventListener('click', (event) => {
     if (!button || !state.identity?.puede_ajustar_cuenta_envases) return;
     const movement = state.movements.find((item) => item.id === button.dataset.reassign);
     if (movement) void reassignment.open(movement);
+});
+elements.body.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-reassign-producer]');
+    if (!button || !state.identity?.puede_ajustar_cuenta_envases) return;
+    const movement = state.movements.find((item) => item.id === button.dataset.reassignProducer);
+    if (movement) void producerReassignment.open(movement);
 });
 elements.historicalForm.addEventListener('input', updateHistoricalPreview);
 elements.historicalForm.addEventListener('submit', async (event) => {

@@ -579,6 +579,9 @@ class ServicioReinicioOperacional
         $eliminados['reasignaciones_envases'] = DB::table('reasignaciones_envases')
             ->where('temporada_id', $temporada->id)
             ->delete();
+        $eliminados['reasignaciones_productor_envases'] = DB::table('reasignaciones_productor_envases')
+            ->where('temporada_id', $temporada->id)
+            ->delete();
         $eliminados['guias_envases'] = DB::table('guias_despacho_envases')
             ->where('temporada_id', $temporada->id)
             ->delete();
