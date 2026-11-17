@@ -18,8 +18,9 @@
  */
 @import './folios-fonts.css';
 @import './folios-components.css';
+@import './office-tema-bit.css';
 
-:where(:root[data-office-theme="dark-rose"]) .estiba-ui {
+:where(:root[data-office-theme="dark-rose"], :root[data-office-theme="dark-bit"], :root[data-office-theme="dark-bit-neon"]) .estiba-ui {
     color-scheme: dark;
     --eui-color-navy: var(--corporate-navy);
     --eui-color-navy-hover: var(--surface-hover);

@@ -31,7 +31,7 @@ function themeVariables(selector) {
         [...block.matchAll(/--([\w-]+):\s*(#[\da-fA-F]{6})\s*;/g)]
             .map((match) => [match[1], match[2]]),
     );
-    return selector.includes('dark-rose') ? { ...themeVariables(':root[data-office-theme="dark-industrial"]'), ...variables } : variables;
+    return /dark-(rose|bit)/.test(selector) ? { ...themeVariables(':root[data-office-theme="dark-industrial"]'), ...variables } : variables;
 }
 
 test('los temas mantienen contraste AA en contenido, acciones y selección', () => {
@@ -39,6 +39,8 @@ test('los temas mantienen contraste AA en contenido, acciones y selección', () 
         themeVariables(':root[data-office-theme="light-professional"]'),
         themeVariables(':root[data-office-theme="dark-industrial"]'),
         themeVariables(':root[data-office-theme="dark-rose"]'),
+        themeVariables(':root[data-office-theme="dark-bit"]'),
+        themeVariables(':root[data-office-theme="dark-bit-neon"]'),
     ];
 
     themes.forEach((variables) => {
@@ -72,7 +74,7 @@ test('Operación ahora mantiene contraste con filas alternas y superficies de ca
         return color.length === 4 ? `#${[...color.slice(1)].map((c) => c + c).join('')}` : color;
     }
 
-    for (const theme of ['light-professional', 'dark-industrial', 'dark-rose']) {
+    for (const theme of ['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit', 'dark-bit-neon']) {
         const variables = themeVariables(`:root[data-office-theme="${theme}"]`);
         const scope = operationCss.match(/\.operation-now\s*\{([^}]+)\}/)[1];
         for (const [, name, reference] of scope.matchAll(/--([\w-]+):\s*var\(--([\w-]+)\)/g)) {

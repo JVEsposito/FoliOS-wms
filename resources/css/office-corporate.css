@@ -1809,7 +1809,9 @@ body,
 }
 
 :root[data-office-theme="dark-industrial"],
-:root[data-office-theme="dark-rose"] {
+:root[data-office-theme="dark-rose"],
+:root[data-office-theme="dark-bit"],
+:root[data-office-theme="dark-bit-neon"] {
     color-scheme: dark;
     /* Base oscura de Oficina. */
     --bg: #0f212b;
@@ -2009,6 +2011,152 @@ body,
     --chart-tooltip-border: var(--line);
     --series-product: #f595c8;
     --series-material: #bea9ed;
+}
+
+:root[data-office-theme="dark-bit"] {
+    /* Modo bit: tema personal (identidad.temas_personales), pixel art ochentero, paleta consola de 8 bits. */
+    --bg: #1a1c2c;
+    --deep: #20233a;
+    --panel: #262b44;
+    --raised: #30364f;
+    --soft: #3a425e;
+    --line: #5a6988;
+    --line-soft: #46506d;
+    --border: #5a6988;
+    --input-border: #8b9bb4;
+    --cyan: #41a6f6;
+    --cyan-light: #a8d5fb;
+    --accent: #ffcd75;
+    --text: #f4f4f4;
+    --muted: #b6bdd3;
+    --corporate-navy: #1a1c2c;
+    --corporate-blue: #ffcd75;
+    --corporate-blue-dark: #8a5a14;
+    --corporate-canvas: #1a1c2c;
+    --corporate-card: #262b44;
+    --corporate-border: #5a6988;
+    --corporate-text: #f4f4f4;
+    --corporate-text-muted: #b6bdd3;
+    --header-bg: #1a1c2c;
+    --subnav-bg: #262b44;
+    --surface-muted: #30364f;
+    --surface-hover: #3a425e;
+    --surface-selected: #403826;
+    --input-bg: #20233a;
+    --table-head: #30364f;
+    --row-bg: #262b44;
+    --row-alt: #2a2f4a;
+    --row-hover: #3a425e;
+    --text-strong: #ffffff;
+    --text-secondary: #dfe4f1;
+    --text-subtle: #b6bdd3;
+    --icon-surface: #30364f;
+    --button-secondary: #262b44;
+    --button-secondary-hover: #3a425e;
+    --primary: #ffcd75;
+    --primary-hover: #ffe2a8;
+    --on-primary: #2c1a00;
+    --info-bg: #1f3554;
+    --info-text: #a8d5fb;
+    --overlay: rgba(10, 11, 20, .85);
+    --focus-ring: rgba(255, 205, 117, .55);
+    --selection-bg: rgba(255, 205, 117, .25);
+    --brand-gradient: linear-gradient(150deg, #1a1c2c, #403826);
+    --kpi-surface: #262b44;
+    --logo-border: #8b9bb4;
+    --logo-bg: #262b44;
+    --hydro-ice: #41a6f6;
+    --frost: #41a6f6;
+    --frost-strong: #a8d5fb;
+    --area-operacion-ink: #41a6f6;
+    --area-operacion-text: #a8d5fb;
+    --area-operacion-tint: #1f3554;
+    --area-operacion-line: #3a6fa0;
+    --area-operacion-bright: #41a6f6;
+    --area-frigorifico-ink: #ef7d57;
+    --area-frigorifico-text: #ffb59a;
+    --area-frigorifico-tint: #4a2a22;
+    --area-frigorifico-line: #a5543a;
+    --area-frigorifico-bright: #ef7d57;
+    --chart-grid: var(--line);
+    --chart-text: var(--text-secondary);
+    --chart-tooltip-bg: var(--raised);
+    --chart-tooltip-border: var(--line);
+    --series-product: #ffcd75;
+    --series-material: #41a6f6;
+}
+
+:root[data-office-theme="dark-bit-neon"] {
+    /* Modo neón: tema personal (identidad.temas_personales), pixel art ochentero, paleta arcade neón. */
+    --bg: #0b0820;
+    --deep: #100b2a;
+    --panel: #150f33;
+    --raised: #1e1745;
+    --soft: #261d55;
+    --line: #3d3180;
+    --line-soft: #2c2361;
+    --border: #3d3180;
+    --input-border: #7466c4;
+    --cyan: #29f3ff;
+    --cyan-light: #a6faff;
+    --accent: #ff3df2;
+    --text: #f3edff;
+    --muted: #b9aee6;
+    --corporate-navy: #0b0820;
+    --corporate-blue: #ff3df2;
+    --corporate-blue-dark: #8a1a85;
+    --corporate-canvas: #0b0820;
+    --corporate-card: #150f33;
+    --corporate-border: #3d3180;
+    --corporate-text: #f3edff;
+    --corporate-text-muted: #b9aee6;
+    --header-bg: #0b0820;
+    --subnav-bg: #150f33;
+    --surface-muted: #1e1745;
+    --surface-hover: #261d55;
+    --surface-selected: #33124f;
+    --input-bg: #100b2a;
+    --table-head: #1e1745;
+    --row-bg: #150f33;
+    --row-alt: #191239;
+    --row-hover: #261d55;
+    --text-strong: #f3edff;
+    --text-secondary: #d9d0ff;
+    --text-subtle: #b9aee6;
+    --icon-surface: #1e1745;
+    --button-secondary: #150f33;
+    --button-secondary-hover: #261d55;
+    --primary: #ff3df2;
+    --primary-hover: #ff8cf7;
+    --on-primary: #2a0026;
+    --info-bg: #142a4d;
+    --info-text: #a6faff;
+    --overlay: rgba(5, 3, 15, .85);
+    --focus-ring: rgba(255, 61, 242, .55);
+    --selection-bg: rgba(255, 61, 242, .25);
+    --brand-gradient: linear-gradient(150deg, #0b0820, #33124f);
+    --kpi-surface: #150f33;
+    --logo-border: #7466c4;
+    --logo-bg: #150f33;
+    --hydro-ice: #29f3ff;
+    --frost: #29f3ff;
+    --frost-strong: #a6faff;
+    --area-operacion-ink: #29f3ff;
+    --area-operacion-text: #a6faff;
+    --area-operacion-tint: #142a4d;
+    --area-operacion-line: #2a7ea8;
+    --area-operacion-bright: #29f3ff;
+    --area-frigorifico-ink: #ffe14d;
+    --area-frigorifico-text: #fff1a6;
+    --area-frigorifico-tint: #3a3214;
+    --area-frigorifico-line: #a8902a;
+    --area-frigorifico-bright: #ffe14d;
+    --chart-grid: var(--line);
+    --chart-text: var(--text-secondary);
+    --chart-tooltip-bg: var(--raised);
+    --chart-tooltip-border: var(--line);
+    --series-product: #ff3df2;
+    --series-material: #29f3ff;
 }
 
 body,

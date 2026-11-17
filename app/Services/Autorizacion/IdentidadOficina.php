@@ -38,6 +38,7 @@ class IdentidadOficina
             'nombre' => $usuario->name,
             'email' => $usuario->email,
             'rol' => $usuario->rol->value,
+            'temas_personales' => $this->temasPersonales($usuario),
             'perfil_acceso' => $capacidades['perfil_acceso'],
             'solo_consulta' => $capacidades['solo_consulta'],
             'modulos_acceso' => $capacidades['modulos_acceso'],
@@ -190,5 +191,23 @@ class IdentidadOficina
             'capacidades' => [],
             'inicio' => self::INICIO_CLIENTE,
         ];
+    }
+
+    /**
+     * Temas de Oficina habilitados solo para esta cuenta (config oficina.temas_personales).
+     *
+     * @return list<string>
+     */
+    private function temasPersonales(User $usuario): array
+    {
+        $correo = mb_strtolower(trim((string) $usuario->email));
+        if ($correo === '') {
+            return [];
+        }
+
+        return array_values(array_keys(array_filter(
+            (array) config('oficina.temas_personales', []),
+            fn (mixed $correos): bool => in_array($correo, (array) $correos, true),
+        )));
     }
 }

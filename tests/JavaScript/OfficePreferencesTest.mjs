@@ -6,6 +6,8 @@ import {
     isOfficeMenuCollapsed,
     nextOfficeTheme,
     normalizeOfficeTheme,
+    OFFICE_THEME_COLORS,
+    OFFICE_THEMES,
     officeThemes,
     officeThemeStorageKey,
     officeMenuPreference,
@@ -30,6 +32,26 @@ test('el Administrador tiene un tercer tema y guarda su elección por separado',
     assert.equal(nextOfficeTheme('dark-industrial', admin), 'dark-rose');
     assert.equal(nextOfficeTheme('dark-rose', admin), 'light-professional');
     assert.notEqual(officeThemeStorageKey(admin), officeThemeStorageKey({ rol: 'supervisor_frio' }));
+});
+
+test('los modos bit y neón solo aparecen en las cuentas que el servidor habilita y guardan su elección aparte', () => {
+    const personal = { rol: 'supervisor_frio', temas_personales: ['dark-bit'] };
+    assert.deepEqual(officeThemes(personal), ['light-professional', 'dark-industrial', 'dark-bit']);
+    assert.equal(nextOfficeTheme('dark-industrial', personal), 'dark-bit');
+    assert.equal(nextOfficeTheme('dark-bit', personal), 'light-professional');
+    assert.equal(normalizeOfficeTheme('dark-rose', personal), 'dark-industrial');
+    const adminPersonal = { rol: 'administrador', temas_personales: ['dark-bit', 'dark-bit-neon', 'tema-desconocido'] };
+    assert.deepEqual(officeThemes(adminPersonal), ['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit', 'dark-bit-neon']);
+    assert.equal(nextOfficeTheme('dark-bit', adminPersonal), 'dark-bit-neon');
+    assert.equal(nextOfficeTheme('dark-bit-neon', adminPersonal), 'light-professional');
+    assert.equal(normalizeOfficeTheme('dark-bit-neon', personal), 'dark-industrial');
+    assert.notEqual(officeThemeStorageKey(adminPersonal), officeThemeStorageKey({ rol: 'administrador' }));
+    for (const other of [{ rol: 'administrador' }, { rol: 'consulta' }, null]) {
+        assert.equal(normalizeOfficeTheme('dark-bit', other), 'dark-industrial');
+        assert.equal(normalizeOfficeTheme('dark-bit-neon', other), 'dark-industrial');
+        assert.equal(officeThemes(other).some((theme) => theme.startsWith('dark-bit')), false);
+    }
+    assert.deepEqual(Object.keys(OFFICE_THEME_COLORS), [...OFFICE_THEMES]);
 });
 
 test('serializa el estado persistente del menú lateral', () => {

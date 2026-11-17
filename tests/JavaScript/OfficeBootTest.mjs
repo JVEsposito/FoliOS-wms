@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 import { menuMemory, menuSelector } from '../../resources/js/shared/office-menu-memory.js';
-import { DEFAULT_OFFICE_THEME } from '../../resources/js/shared/office-preferences.js';
+import { DEFAULT_OFFICE_THEME, OFFICE_THEME_COLORS } from '../../resources/js/shared/office-preferences.js';
 
 const source = readFileSync(new URL('../../resources/js/office-arranque.js', import.meta.url), 'utf8');
 
@@ -55,8 +55,10 @@ test('con sesión la oficina se pinta directo y con el tema guardado', () => {
 test('el tema por omisión es el mismo de las preferencias de Oficina', () => {
     assert.equal(boot({ local: { ...session, estiba_wms_office_theme: 'otro' } }).root.attrs['data-office-theme'], DEFAULT_OFFICE_THEME);
     const navigation = readFileSync(new URL('../../resources/js/office-navigation.js', import.meta.url), 'utf8');
-    assert.match(navigation, /'#0f1c24' : '#102f43'/);
+    assert.match(navigation, /OFFICE_THEME_COLORS\[officeTheme\]/);
     assert.match(source, /'#0f1c24' : '#102f43'/);
+    // El arranque pinta el mismo color de barra que las preferencias.
+    for (const [theme, color] of Object.entries(OFFICE_THEME_COLORS)) assert.match(source, new RegExp(theme === 'light-professional' ? `: '${color}'` : `'${color}'`));
 });
 
 test('el tema rosado se aplica antes de pintar solo al Administrador en Oficina', () => {
@@ -69,6 +71,24 @@ test('el tema rosado se aplica antes de pintar solo al Administrador en Oficina'
     assert.equal(boot({ local }).root.attrs['data-office-theme'], 'light-professional');
     assert.equal(boot({ local: admin, soloTema: true }).root.attrs['data-office-theme'], 'light-professional');
     assert.equal(boot({ local: { ...admin, estiba_wms_office_token: null } }).root.attrs['data-office-theme'], 'light-professional');
+});
+
+test('los modos bit y neón se aplican antes de pintar solo a la cuenta habilitada', () => {
+    const local = { ...session, estiba_wms_office_theme: 'light-professional', estiba_wms_office_personal_theme: 'dark-bit' };
+    const personal = { ...local, estiba_wms_office_identity: '{"rol":"supervisor_frio","temas_personales":["dark-bit"]}' };
+    const { root, metas } = boot({ local: personal });
+    assert.equal(root.attrs['data-office-theme'], 'dark-bit');
+    assert.equal(metas['meta[name="color-scheme"]'].attrs.content, 'dark');
+    assert.equal(metas['meta[name="theme-color"]'].attrs.content, '#1a1c2c');
+    assert.equal(boot({ local }).root.attrs['data-office-theme'], 'light-professional');
+    assert.equal(boot({ local: personal, soloTema: true }).root.attrs['data-office-theme'], 'light-professional');
+    const neon = { ...personal, estiba_wms_office_personal_theme: 'dark-bit-neon' };
+    assert.equal(boot({ local: neon }).root.attrs['data-office-theme'], 'dark-industrial', 'sin dark-bit-neon en la identidad no se aplica');
+    const both = { ...neon, estiba_wms_office_identity: '{"temas_personales":["dark-bit","dark-bit-neon"]}' };
+    assert.equal(boot({ local: both }).root.attrs['data-office-theme'], 'dark-bit-neon');
+    assert.equal(boot({ local: both }).metas['meta[name="theme-color"]'].attrs.content, '#0b0820');
+    const other = { ...session, estiba_wms_office_theme: 'dark-bit', estiba_wms_office_identity: '{"rol":"administrador"}' };
+    assert.equal(boot({ local: other }).root.attrs['data-office-theme'], 'dark-industrial');
 });
 
 test('sin sesión no pinta la oficina y va a /FoliOS con el regreso', () => {

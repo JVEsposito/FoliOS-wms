@@ -7,6 +7,7 @@ import { initializeCommunications } from './office-communications-launcher.js';
 import {
     nextOfficeTheme,
     normalizeOfficeTheme,
+    OFFICE_THEME_COLORS,
     OFFICE_THEME_KEY,
     officeThemeStorageKey,
     officeThemes,
@@ -37,7 +38,7 @@ function storedOfficeTheme() {
 }
 
 let officeTheme = storedOfficeTheme();
-const themeLabels = { 'light-professional': 'Modo claro', 'dark-industrial': 'Modo oscuro', 'dark-rose': 'Modo rosado' };
+const themeLabels = { 'light-professional': 'Modo claro', 'dark-industrial': 'Modo oscuro', 'dark-rose': 'Modo rosado', 'dark-bit': 'Modo bit', 'dark-bit-neon': 'Modo neón' };
 
 function refreshOfficeThemeControls() {
     const dark = officeTheme !== 'light-professional';
@@ -63,7 +64,7 @@ function applyOfficeTheme(theme, { persist = true } = {}) {
     );
     document.querySelector('meta[name="theme-color"]')?.setAttribute(
         'content',
-        officeTheme === 'dark-rose' ? '#170e14' : officeTheme === 'dark-industrial' ? '#0f1c24' : '#102f43',
+        OFFICE_THEME_COLORS[officeTheme],
     );
     if (persist) {
         try { localStorage.setItem(officeThemeStorageKey(identity), officeTheme); } catch { /* Preferencia opcional. */ }
