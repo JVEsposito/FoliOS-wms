@@ -282,6 +282,14 @@ class ConsultaOperacionalApiTest extends TestCase
         $this->assertSame(['PT-2026-0045871'], $folios('P-31'));
         // El JSON de datos externos ya no se recorre.
         $this->assertSame([], $folios('SOLO-EN-JSON'));
+
+        // La tarjeta trae las cajas del folio y, en vez de «MIX», sus calibres reales.
+        $crear('PT-2026-0099001', $activa, ['cantidad_cajas' => 112, 'calibres' => ['2JD', '3JD']])->update(['calibre' => 'MIX']);
+        $tarjeta = $this->actingAs($consulta, 'sanctum')->getJson('/api/consultas/buscar?tipo=folios&q=PT-2026-0099001')
+            ->assertOk()->json('folios.0');
+        $this->assertSame([112, '2JD / 3JD'], [$tarjeta['cantidad_cajas'], $tarjeta['calibre']]);
+        $this->assertNull($this->actingAs($consulta, 'sanctum')->getJson('/api/consultas/buscar?tipo=folios&q=PT-2026-0000001')
+            ->assertOk()->json('folios.0.cantidad_cajas'));
     }
 
     public function test_el_despachador_usa_la_busqueda_global_pero_no_administra_productores(): void

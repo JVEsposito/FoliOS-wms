@@ -78,16 +78,23 @@ class ServicioConsultaOperacional
             ->get()
             ->map(function (Folio $folio): array {
                 $posicion = $folio->ubicacionActual?->posicion;
+                $datos = $folio->datos_externos ?? [];
+                // Un calibre «MIX» se muestra con los calibres reales del pallet.
+                $calibres = collect($datos['calibres'] ?? [])->filter(fn (mixed $calibre): bool => filled($calibre))->unique()->values();
+                $calibre = mb_strtoupper(trim((string) $folio->calibre)) === 'MIX' && $calibres->isNotEmpty()
+                    ? $calibres->implode(' / ')
+                    : $folio->calibre;
 
                 return [
                     'id' => $folio->id,
                     'numero' => $folio->numero_folio,
+                    'cantidad_cajas' => isset($datos['cantidad_cajas']) ? (int) $datos['cantidad_cajas'] : null,
                     'tipo_bulto' => $this->valor($folio->tipo_bulto),
                     'estado' => $this->valor($folio->estado_operacional),
                     'condicion_termica' => $this->valor($folio->condicion_termica),
                     'habilitacion_almacenamiento' => $this->valor($folio->habilitacion_almacenamiento),
                     'variedad' => $folio->variedad,
-                    'calibre' => $folio->calibre,
+                    'calibre' => $calibre,
                     'marca' => $folio->marca,
                     'exportadora' => $folio->exportadora,
                     'fecha_ingreso' => $folio->fecha_ingreso?->toIso8601String(),

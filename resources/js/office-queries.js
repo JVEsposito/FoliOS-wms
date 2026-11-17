@@ -238,7 +238,7 @@ function resultCard(type, item) {
         return `<article class="result-card result-card--folio">
             <div class="result-card__head"><strong>${escapeHtml(item.numero)}</strong><span class="query-badge">${escapeHtml(label(item.estado))}</span></div>
             <p>${escapeHtml([item.exportadora, item.marca, item.variedad, item.calibre].filter(Boolean).join(' · '))}</p>
-            <div class="folio-card-status"><span>${escapeHtml(label(item.tipo_bulto))}</span><span>${escapeHtml(label(item.condicion_termica))}</span></div>
+            <div class="folio-card-status"><span>${escapeHtml(label(item.tipo_bulto))}</span>${item.cantidad_cajas === null || item.cantidad_cajas === undefined ? '' : `<span>${escapeHtml(new Intl.NumberFormat('es-CL').format(item.cantidad_cajas))} ${item.cantidad_cajas === 1 ? 'caja' : 'cajas'}</span>`}<span>${escapeHtml(label(item.condicion_termica))}</span></div>
             <small>${escapeHtml(location)} · Ingreso ${escapeHtml(formatDate(item.fecha_ingreso))}</small>
             <button type="button" class="trace-button" data-open-folio="${escapeHtml(item.id)}">Ver trazabilidad →</button>
         </article>`;
