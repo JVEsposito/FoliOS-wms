@@ -17,3 +17,22 @@ al catálogo global de países mediante su código ISO alpha-2. La operación us
 las claves foráneas para evitar combinaciones inválidas y conserva el nombre
 como snapshot en cada embarque o instructivo para no alterar documentos
 históricos si el catálogo cambia posteriormente.
+
+`puertos_embarque_ampliacion.json` (noviembre de 2026) agrega 769 puntos: la
+migración `ampliar_puntos_transporte_embarques` inserta solo los códigos que
+faltan y no toca los existentes.
+
+- **Puertos (406):** código UN/LOCODE verificado contra la lista oficial
+  (`datasets/un-locode`), con función de puerto. Son los puertos de contenedores
+  y refrigerados de los mercados de la fruta, más los chilenos y los de la región.
+- **Aeropuertos (298):** código `AIR-` + IATA, verificado contra
+  `datasets/airport-codes`; aeropuertos con carga internacional.
+- **Pasos terrestres (65):** código `PAS-`. Los pasos habilitados de Chile con
+  Perú, Bolivia y Argentina son puntos de salida; su contraparte en el país
+  vecino (`PAS-AR-…`, `PAS-BO-…`, `PAS-PE-…`) sirve como destino del
+  instructivo. Incluye los principales cruces del Mercosur para camiones que
+  siguen desde Argentina a Brasil, Paraguay y Uruguay.
+
+En el calendario de embarques, la modalidad filtra el tipo de punto (marítimo →
+puertos, aéreo → aeropuertos, terrestre → pasos; «Por confirmar» muestra todos)
+y el país de destino ofrece todos los países activos, aunque no tengan puntos.

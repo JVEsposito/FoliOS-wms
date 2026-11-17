@@ -71,13 +71,12 @@ class EmbarqueController extends Controller
                     ->orderBy('codigo')->get(['id', 'codigo', 'nombre']),
                 'andenes' => Anden::query()->where('activo', true)
                     ->orderBy('codigo')->get(['id', 'codigo', 'nombre']),
+                // Todos los países: un instructivo puede declarar el país aunque su punto aún no esté catalogado.
                 'paises' => Pais::query()
                     ->where('activo', true)
-                    ->whereHas('puertos', fn ($consulta) => $consulta->where('activo', true))
                     ->orderBy('nombre_es')
                     ->get(['id', 'iso_alpha2', 'nombre_es']),
                 'puertos' => Puerto::query()->where('activo', true)
-                    ->with('pais:id,iso_alpha2,nombre_es')
                     ->orderBy('nombre')
                     ->get(['id', 'pais_id', 'codigo', 'nombre', 'tipo']),
             ],
