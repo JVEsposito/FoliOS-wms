@@ -36,7 +36,7 @@ class GeneradorHistorialValidacionesPdf
         foreach ($validaciones as $validacion) {
             $celdas = [];
             foreach ($this->valores($validacion) as $indice => $valor) {
-                $celdas[] = $this->pdf->envolver($valor, self::COLUMNAS[$indice][1] - 10, 8);
+                $celdas[] = is_array($valor) ? $valor : $this->pdf->envolver($valor, self::COLUMNAS[$indice][1] - 10, 8);
             }
             $alto = 8 + 10 * max(array_map('count', $celdas));
             if ($y - $alto < 39) {
@@ -48,6 +48,9 @@ class GeneradorHistorialValidacionesPdf
             $x = self::MARGEN + 4;
             foreach ($celdas as $indice => $lineas) {
                 foreach ($lineas as $numero => $linea) {
+                    if ($linea === '') {
+                        continue;
+                    }
                     $contenido .= $this->pdf->texto($x, $y - $numero * 10, 8, $linea, $indice === 0);
                 }
                 $x += self::COLUMNAS[$indice][1];
@@ -94,11 +97,14 @@ class GeneradorHistorialValidacionesPdf
         return [$contenido, $y - 26];
     }
 
-    /** @return list<string> */
+    /** @return list<string|list<string>> */
     private function valores(ValidacionPallet $validacion): array
     {
         $origen = $validacion->snapshot['origen'] ?? [];
         $articulo = $validacion->snapshot['articulo'] ?? [];
+        $lineas = LineasInformeValidacion::de($validacion->snapshot ?? [], (int) $validacion->cantidad_cajas);
+        $calibre = LineasInformeValidacion::calibreUnico($lineas);
+        [$csg, $cajas] = $this->desglose($lineas, $calibre === null, (int) $validacion->cantidad_cajas);
         $resultado = match ($validacion->resultado) {
             ResultadoValidacionPallet::Aprobado => 'Aprobado',
             ResultadoValidacionPallet::Observado => 'Observado',
@@ -120,12 +126,12 @@ class GeneradorHistorialValidacionesPdf
             $validacion->numero_folio,
             implode(' · ', array_filter([$origen['cliente'] ?? 'Sin origen', $origen['marca'] ?? null])),
             implode(' · ', array_filter([
-                trim(implode(' ', array_filter([$articulo['especie'] ?? null, $articulo['variedad'] ?? null, $articulo['calibre'] ?? null]))),
+                trim(implode(' ', array_filter([$articulo['especie'] ?? null, $articulo['variedad'] ?? null, $calibre]))),
                 $articulo['envase'] ?? null,
                 $validacion->snapshot['categoria']['nombre'] ?? null,
             ])) ?: 'Sin artículo',
-            (string) ($origen['csg'] ?? '—'),
-            (string) $validacion->cantidad_cajas,
+            $csg,
+            $cajas,
             $resultado,
             ($validacion->usuario?->name ?? 'Sin usuario')."\n".implode(' · ', array_filter([
                 $hora,
@@ -134,5 +140,30 @@ class GeneradorHistorialValidacionesPdf
                 $turno && $validacion->turno && $turno !== $validacion->turno ? 'Declarado '.$validacion->turno : null,
             ])),
         ];
+    }
+
+    /**
+     * Columnas CSG y Cajas alineadas: una línea por CSG (y calibre, si el pallet tiene varios)
+     * con sus cajas, y el total cuando hay más de una.
+     *
+     * @param  list<array{csg: string, calibre: string, cajas: int}>  $lineas
+     * @return array{list<string>, list<string>}
+     */
+    private function desglose(array $lineas, bool $conCalibre, int $total): array
+    {
+        $csg = [];
+        $cajas = [];
+        foreach ($lineas as $linea) {
+            $texto = $conCalibre ? $linea['csg'].' · '.$linea['calibre'] : $linea['csg'];
+            $envueltas = $this->pdf->envolver($texto, self::COLUMNAS[3][1] - 10, 8);
+            array_push($csg, ...$envueltas);
+            array_push($cajas, (string) $linea['cajas'], ...array_fill(0, count($envueltas) - 1, ''));
+        }
+        if (count($lineas) > 1) {
+            $csg[] = '';
+            $cajas[] = 'Total '.$total;
+        }
+
+        return [$csg, $cajas];
     }
 }

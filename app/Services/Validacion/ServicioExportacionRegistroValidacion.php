@@ -50,12 +50,12 @@ class ServicioExportacionRegistroValidacion
             'linea' => 0,
             'turno' => '',
             'numero' => 1,
-            'validaciones' => collect(),
+            'filas' => [],
         ]]);
     }
 
     /**
-     * @param  array<int, array{fecha:string,encargado:string,linea:int,turno:string,numero:int,validaciones:Collection<int,ValidacionPallet>}>  $paginas
+     * @param  array<int, array{fecha:string,encargado:string,linea:int,turno:string,numero:int,filas:list<array{validacion:ValidacionPallet,linea:array{csg:string,calibre:string,cajas:int},primera:bool}>}>  $paginas
      */
     private function generarPaginas(array $paginas): string
     {
@@ -137,7 +137,7 @@ class ServicioExportacionRegistroValidacion
 
     /**
      * @param  Collection<int, ValidacionPallet>  $validaciones
-     * @return array<int, array{fecha:string,encargado:string,linea:int,turno:string,numero:int,validaciones:Collection<int,ValidacionPallet>}>
+     * @return array<int, array{fecha:string,encargado:string,linea:int,turno:string,numero:int,filas:list<array{validacion:ValidacionPallet,linea:array{csg:string,calibre:string,cajas:int},primera:bool}>}>
      */
     private function paginas(Collection $validaciones): array
     {
@@ -159,14 +159,14 @@ class ServicioExportacionRegistroValidacion
         ])) as $grupo) {
             /** @var ValidacionPallet $primera */
             $primera = $grupo->first();
-            foreach ($grupo->values()->chunk(self::FILAS_POR_HOJA) as $indice => $lote) {
+            foreach ($this->hojas($grupo) as $indice => $filas) {
                 $paginas[] = [
                     'fecha' => $primera->fechaJornada()?->format('d-m-Y') ?? '',
                     'encargado' => $primera->usuario?->name ?? 'Sin usuario',
                     'linea' => (int) $primera->linea_proceso,
                     'turno' => (string) ($primera->turnoOperativo() ?? $primera->turno),
                     'numero' => $indice + 1,
-                    'validaciones' => $lote->values(),
+                    'filas' => $filas,
                 ];
             }
         }
@@ -175,7 +175,43 @@ class ServicioExportacionRegistroValidacion
     }
 
     /**
-     * @param  array{fecha:string,encargado:string,linea:int,turno:string,numero:int,validaciones:Collection<int,ValidacionPallet>}  $pagina
+     * Un pallet con varios CSG o calibres ocupa una fila por cada uno, con sus cajas: el
+     * registro no muestra «MIX». Las filas de un mismo pallet no se separan entre hojas.
+     *
+     * @param  Collection<int, ValidacionPallet>  $validaciones
+     * @return list<list<array{validacion:ValidacionPallet,linea:array{csg:string,calibre:string,cajas:int},primera:bool}>>
+     */
+    private function hojas(Collection $validaciones): array
+    {
+        $hojas = [];
+        $actual = [];
+        foreach ($validaciones as $validacion) {
+            $filas = [];
+            foreach (LineasInformeValidacion::de($validacion->snapshot ?? [], (int) $validacion->cantidad_cajas) as $orden => $linea) {
+                $filas[] = ['validacion' => $validacion, 'linea' => $linea, 'primera' => $orden === 0];
+            }
+            if ($actual !== [] && count($actual) + count($filas) > self::FILAS_POR_HOJA) {
+                $hojas[] = $actual;
+                $actual = [];
+            }
+            foreach ($filas as $fila) {
+                // Un pallet con más líneas que una hoja continúa en la siguiente.
+                if (count($actual) === self::FILAS_POR_HOJA) {
+                    $hojas[] = $actual;
+                    $actual = [];
+                }
+                $actual[] = $fila;
+            }
+        }
+        if ($actual !== []) {
+            $hojas[] = $actual;
+        }
+
+        return $hojas;
+    }
+
+    /**
+     * @param  array{fecha:string,encargado:string,linea:int,turno:string,numero:int,filas:list<array{validacion:ValidacionPallet,linea:array{csg:string,calibre:string,cajas:int},primera:bool}>}  $pagina
      */
     private function completarHoja(string $xml, array $pagina): string
     {
@@ -201,33 +237,25 @@ class ServicioExportacionRegistroValidacion
                 $this->limpiar($xpath, $columna.$fila);
             }
 
-            /** @var ValidacionPallet|null $validacion */
-            $validacion = $pagina['validaciones']->get($indice);
-            if ($validacion === null) {
+            $registro = $pagina['filas'][$indice] ?? null;
+            if ($registro === null) {
                 continue;
             }
+            /** @var ValidacionPallet $validacion */
+            $validacion = $registro['validacion'];
+            $linea = $registro['linea'];
 
             $articulo = $validacion->snapshot['articulo'] ?? [];
             $origen = $validacion->snapshot['origen'] ?? [];
-            $csgs = collect($validacion->snapshot['composicion'] ?? [])
-                ->pluck('csg')
-                ->filter()
-                ->unique()
-                ->implode(' / ');
             $categoria = $validacion->snapshot['categoria'] ?? [];
             $this->texto($documento, $xpath, 'B'.$fila, $validacion->numero_folio);
             $this->texto($documento, $xpath, 'C'.$fila, $origen['marca'] ?? null);
             $this->texto($documento, $xpath, 'D'.$fila, $articulo['envase'] ?? null);
             $this->texto($documento, $xpath, 'E'.$fila, $articulo['especie'] ?? null);
             $this->texto($documento, $xpath, 'F'.$fila, $articulo['variedad'] ?? null);
-            $this->texto(
-                $documento,
-                $xpath,
-                'G'.$fila,
-                $csgs !== '' ? $csgs : ($origen['csg'] ?? null),
-            );
-            $this->texto($documento, $xpath, 'H'.$fila, $articulo['calibre'] ?? null);
-            $this->numero($documento, $xpath, 'I'.$fila, (int) $validacion->cantidad_cajas);
+            $this->texto($documento, $xpath, 'G'.$fila, $linea['csg']);
+            $this->texto($documento, $xpath, 'H'.$fila, $linea['calibre']);
+            $this->numero($documento, $xpath, 'I'.$fila, $linea['cajas']);
 
             if ($validacion->resultado === ResultadoValidacionPallet::Aprobado) {
                 $this->texto($documento, $xpath, 'J'.$fila, 'X');
@@ -235,6 +263,11 @@ class ServicioExportacionRegistroValidacion
                 $this->texto($documento, $xpath, 'K'.$fila, 'X');
             }
 
+            if (! $registro['primera']) {
+                $this->texto($documento, $xpath, self::COLUMNA_CATEGORIA.$fila, $categoria['nombre'] ?? $categoria['codigo_externo'] ?? null);
+
+                continue;
+            }
             $turno = $validacion->turnoOperativo();
             $traza = $turno ? implode(' · ', array_filter([
                 $validacion->generado_dispositivo_at?->setTimezone(config('app.operational_timezone'))->format('d-m-Y H:i:s'),
@@ -254,7 +287,7 @@ class ServicioExportacionRegistroValidacion
             $xpath,
             'I31',
             'SUM(I11:I30)',
-            (int) $pagina['validaciones']->sum('cantidad_cajas'),
+            (int) array_sum(array_map(fn (array $registro): int => $registro['linea']['cajas'], $pagina['filas'])),
         );
         $this->configurarImpresion($documento, $xpath);
 
@@ -372,7 +405,7 @@ class ServicioExportacionRegistroValidacion
     }
 
     /**
-     * @param  array<int, array{fecha:string,encargado:string,linea:int,turno:string,numero:int,validaciones:Collection<int,ValidacionPallet>}>  $paginas
+     * @param  array<int, array{fecha:string,encargado:string,linea:int,turno:string,numero:int,filas:list<array{validacion:ValidacionPallet,linea:array{csg:string,calibre:string,cajas:int},primera:bool}>}>  $paginas
      */
     private function actualizarLibro(string $xml, array $paginas): string
     {
@@ -558,7 +591,7 @@ class ServicioExportacionRegistroValidacion
     }
 
     /**
-     * @param  array{fecha:string,encargado:string,linea:int,turno:string,numero:int,validaciones:Collection<int,ValidacionPallet>}  $pagina
+     * @param  array{fecha:string,encargado:string,linea:int,turno:string,numero:int,filas:list<array{validacion:ValidacionPallet,linea:array{csg:string,calibre:string,cajas:int},primera:bool}>}  $pagina
      */
     private function nombreHoja(array $pagina, int $numero): string
     {

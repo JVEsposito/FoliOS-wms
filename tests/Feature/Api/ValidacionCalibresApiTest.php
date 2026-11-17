@@ -41,6 +41,27 @@ class ValidacionCalibresApiTest extends TestCase
         $payload['composicion'][1]['articulo_validacion_id'] = $catalogo['articulo_original_id'];
         $payload['composicion'][1]['proceso_packing'] = 'P-OTRO';
         $this->conToken($token)->postJson('/api/validacion/pallets', $payload)->assertConflict();
+
+        // Los informes muestran cada calibre con sus cajas, nunca «MIX».
+        $ruta = '/api/validacion/registro/rrpp-01?'.http_build_query(['temporada_id' => $catalogo['temporada_id'],
+            'fecha' => $respuesta['fecha_jornada'], 'cliente' => $respuesta['catalogo']['origen']['cliente']]);
+        $pdf = $this->conToken($token)->get($ruta.'&formato=pdf')->assertOk()->getContent();
+        $this->assertStringContainsString('2J', $pdf);
+        $this->assertStringContainsString('3J', $pdf);
+        $this->assertStringContainsString('(80)', $pdf);
+        $this->assertStringContainsString('(40)', $pdf);
+        $this->assertStringContainsString('(Total 120)', $pdf);
+        // Solo el texto del documento: el logo embebido puede contener esos bytes.
+        preg_match_all('/\((.*?)\) Tj/', $pdf, $textos);
+        $this->assertNotEmpty($textos[1]);
+        $this->assertSame([], array_values(array_filter($textos[1], fn (string $texto): bool => preg_match('/(^|[\s·])MIX($|[\s·])/u', $texto) === 1)));
+        $excel = $this->conToken($token)->get($ruta)->assertOk();
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($excel->baseResponse->getFile()->getPathname()) === true);
+        $hoja = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        $this->assertStringContainsString('3J', $hoja);
+        $this->assertStringNotContainsString('MIX', $hoja);
     }
 
     public function test_no_mezcla_especies_variedades_o_envases_aunque_la_combinacion_exista(): void
