@@ -62,12 +62,14 @@ calibre, variedad u otro dato del artículo mezclado, se marca como «mezcla en 
 
 ## Qué muestra
 
-- **Pendientes:** en el stock del origen y sin ningún intento de validación. Ordenados
-  por antigüedad en bodega. La columna **Composición** muestra las cajas de cada CSG (con
+- **Sin aprobar:** en el stock del origen y sin aprobación vigente, incluso de turnos
+  anteriores. Ordenados por antigüedad en bodega. El estado distingue los que están
+  sin intento de los que ya tuvieron una validación y requieren revisión.
+  La columna **Composición** muestra las cajas de cada CSG (con
   su predio) y, dentro de cada CSG, las cajas por lote y proceso: lo que el validador debe
   encontrar en la etiqueta. El CSG con más cajas va primero. **Solo en FoliOS** muestra la
   misma distribución, tomada de la composición validada.
-- **Por resolver:** hubo intento, pero no quedó un folio vigente: observado, rechazo
+- **Por resolver:** vista de los que tuvieron un intento, pero no quedó un folio vigente: observado, rechazo
   definitivo, conflicto o validación anulada. Manda el último intento.
 - **Con diferencias:** conciliaciones entre planta y la validación física, con respaldo
   e historial (ver abajo). La comparación adicional con el stock actual de FoliOS se

@@ -186,13 +186,29 @@ function bulkType(item) {
     return `<span class="pending-chip${item.tipo_bulto === 'saldo' ? ' pending-chip--saldo' : ''}">${label}</span>${item.tipo_mezclado ? '<small class="pending-warning">PC/PI mezclado</small>' : ''}`;
 }
 
+function validationStatus(item) {
+    const status = item.validacion?.situacion;
+    return status
+        ? `<span class="pending-chip pending-chip--${escapeHtml(status)}">${escapeHtml(situations[status] || status)}</span>`
+        : '<span class="pending-chip">Sin intento</span>';
+}
+
+function validationReason(attempt) {
+    return [attempt?.motivo?.replaceAll('_', ' '), attempt?.observacion].filter(Boolean).join(' · ');
+}
+
+function receivedAt(item) {
+    const fecha = Date.parse(item.recibido_origen_at);
+    return Number.isNaN(fecha) ? Number.POSITIVE_INFINITY : fecha;
+}
+
 function matches(item, term) {
     if (!term) return true;
     const text = [
         item.numero, item.empresa, item.cliente, item.especie, item.variedad, item.calibre, item.categoria,
         item.categoria_sugerida, item.envase_codigo, item.envase, item.marca,
         ...(item.csgs || []), ...(item.procesos || []), ...(item.lotes || []),
-        item.validacion?.situacion, item.folio?.estado_etiqueta,
+        item.validacion?.situacion, situations[item.validacion?.situacion], item.folio?.estado_etiqueta,
         // Catálogo: el dato, su valor y en qué pallets está.
         item.dimension_etiqueta, item.etiqueta, item.csg, ...(item.pallets || []),
     ].join(' ').toLowerCase();
@@ -247,24 +263,27 @@ function render() {
     elements.kpiUnresolved.textContent = number(summary.por_resolver);
     elements.kpiDifferences.textContent = number(summary.con_diferencias);
     elements.kpiOnlyFolios.textContent = number(summary.solo_en_folios);
-    elements.tabPending.textContent = summary.pendientes;
+    elements.tabPending.textContent = summary.pendientes + summary.por_resolver;
     elements.tabUnresolved.textContent = summary.por_resolver;
     elements.tabOnlyFolios.textContent = summary.solo_en_folios;
     elements.tabCatalog.textContent = summary.catalogo_pendiente;
     renderCatalogNote(data);
 
-    elements.pendingBody.innerHTML = rows(data.pendientes, (item) => `<tr>
+    const withoutApproval = [...data.pendientes, ...data.por_resolver].sort((first, second) =>
+        receivedAt(first) - receivedAt(second) || first.numero.localeCompare(second.numero));
+    elements.pendingBody.innerHTML = rows(withoutApproval, (item) => `<tr>
         <td><b class="pending-number">${escapeHtml(item.numero)}</b>${bulkType(item)}</td>
         <td>${formatDate(item.recibido_origen_at)}<small>${age(item.recibido_origen_at)} · embalado ${formatDay(item.fecha_embalaje)}</small></td>
+        <td>${validationStatus(item)}${item.validacion ? `<small>${escapeHtml(validationReason(item.validacion))}</small>` : ''}</td>
         <td class="pending-num">${number(item.cajas)}</td>
         <td>${article(item)}</td>
         <td>${composition(item)}</td>
-    </tr>`, 'Todo lo que está en bodega según el origen ya pasó por Validación.', 5);
+    </tr>`, 'No hay pallets ni saldos en el stock de origen pendientes de aprobación o revisión.', 6);
 
     elements.unresolvedBody.innerHTML = rows(data.por_resolver, (item) => `<tr>
         <td><b class="pending-number">${escapeHtml(item.numero)}</b>${bulkType(item)}</td>
-        <td><span class="pending-chip pending-chip--${escapeHtml(item.validacion.situacion)}">${escapeHtml(situations[item.validacion.situacion] || item.validacion.situacion)}</span></td>
-        <td>${escapeHtml([item.validacion.motivo?.replaceAll('_', ' '), item.validacion.observacion].filter(Boolean).join(' · ') || '—')}</td>
+        <td>${validationStatus(item)}</td>
+        <td>${escapeHtml(validationReason(item.validacion) || '—')}</td>
         <td>${formatDate(item.validacion.registrado_at)}<small>intento ${escapeHtml(item.validacion.intento)}</small></td>
         <td class="pending-num">${number(item.cajas)}</td>
         <td>${article(item)}</td>

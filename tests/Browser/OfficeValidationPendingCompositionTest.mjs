@@ -20,6 +20,9 @@ const pending = { numero: '1000000170', tipo_bulto: 'pallet', tipo_mezclado: fal
         { csg: '176364', predio: 'PREDIO SUR', cajas: 60, lineas: [{ lote: '11463', proceso: 'AR01STD10001', cajas: 60 }] },
         { csg: '3126339', predio: null, cajas: 36, lineas: [{ lote: null, proceso: 'AR01STD10006', cajas: 36 }] },
     ] };
+const previousShift = { ...pending, numero: '1000000169', tipo_bulto: 'saldo', cajas: 30,
+    recibido_origen_at: '2026-10-05T06:50:00-03:00', distribucion: [],
+    validacion: { situacion: 'observado', motivo: 'cantidad_cajas_incorrecta', registrado_at: '2026-10-05T06:55:00-03:00', intento: 1 } };
 const onlyFolio = { numero: 'SOLO-1', tipo_bulto: 'saldo', estado_etiqueta: 'Pendiente de prefrío', validado_at: '2026-10-26T15:00:00Z', cajas: 30,
     cliente: 'LA AGUADA', especie: 'Cereza', variedad: 'Santina', calibre: '2J', envase: '5 kg', categoria: 'CAT1', csgs: ['100001'],
     distribucion: [{ csg: '100001', predio: 'PREDIO VALIDADO', cajas: 30, lineas: [{ lote: '11462', proceso: 'AR01STD10000', cajas: 30 }] }] };
@@ -40,8 +43,8 @@ async function open(browser, width) {
         if (path === '/api/validacion/pendientes-origen') return route.fulfill({ json: {
             fuente: { habilitada: true, conexion: 'Planta', tabla: 'odbc_stock', bodega: 'AR01', temporada_catalogo: 'Prueba' },
             lectura: { ultima: null, ultima_correcta_at: '2026-10-27T15:01:00Z', desactualizada: false, vigencia_minutos: 20 },
-            resumen: { en_origen: 2, validados: 1, pendientes: 1, cajas_pendientes: 168, por_resolver: 0, con_diferencias: 0, solo_en_folios: 1, catalogo_pendiente: 0, pallets_sin_catalogo: 0 },
-            pendientes: [pending], por_resolver: [], diferencias: [], solo_en_folios: [onlyFolio], catalogo: [], puede_administrar_catalogo: false,
+            resumen: { en_origen: 2, validados: 0, pendientes: 1, cajas_pendientes: 168, por_resolver: 1, con_diferencias: 0, solo_en_folios: 1, catalogo_pendiente: 0, pallets_sin_catalogo: 0 },
+            pendientes: [pending], por_resolver: [previousShift], diferencias: [], solo_en_folios: [onlyFolio], catalogo: [], puede_administrar_catalogo: false,
         } });
         if (path === '/api/validacion/pendientes-origen/conciliaciones') return route.fulfill({ json: { casos: { data: [], current_page: 1, last_page: 1, total: 0 }, resumen: {}, fuente: { vigente: true }, puede_gestionar: false } });
         return route.fulfill({ status: 404, json: { message: 'No disponible en fixture' } });
@@ -61,8 +64,19 @@ for (const width of [1280, 390]) test(`la composición por CSG, lote y proceso s
         assert.match(await groups.nth(0).innerText(), /119003\s+PREDIO NORTE[\s\S]*72\s+lote 11464 · AR01STD10002\s+24\s+lote 11471 · AR01STD10009\s+48/);
         assert.match(await groups.nth(1).innerText(), /176364\s+PREDIO SUR\s+60\s+lote 11463 · AR01STD10001\s+60/);
         assert.match(await groups.nth(2).innerText(), /3126339\s+36\s+sin lote · AR01STD10006\s+36/);
-        assert.match(await page.locator('#pendingBody').innerText(), /1000000170/);
-        assert.equal(await page.locator('#pendingBody tr:first-child td').count(), 5, 'Una sola columna de composición reemplaza CSG y proceso · lote.');
+        assert.equal(await page.locator('#tabPendingCount').innerText(), '2');
+        assert.deepEqual(await page.locator('#pendingBody .pending-number').allTextContents(), [previousShift.numero, pending.numero]);
+        assert.match(await page.locator('#pendingBody tr').first().innerText(), /Saldo[\s\S]*Observado\s+cantidad cajas incorrecta/);
+        assert.match(await page.locator('#pendingBody tr').last().innerText(), /Sin intento/);
+        assert.equal(await page.locator('#pendingBody tr:first-child td').count(), 6);
+
+        await page.locator('#pendingSearch').fill('Observado');
+        assert.deepEqual(await page.locator('#pendingBody .pending-number').allTextContents(), [previousShift.numero]);
+        await page.locator('#pendingSearch').clear();
+        assert.deepEqual(await page.locator('#pendingBody .pending-number').allTextContents(), [previousShift.numero, pending.numero]);
+
+        await page.locator('#pending-validation-tab-unresolved').click();
+        assert.deepEqual(await page.locator('#unresolvedBody .pending-number').allTextContents(), [previousShift.numero]);
 
         await page.locator('#pending-validation-tab-only-folios').click();
         assert.match(await page.locator('#onlyFoliosBody .pending-composition').innerText(), /100001\s+PREDIO VALIDADO\s+30\s+lote 11462 · AR01STD10000\s+30/);

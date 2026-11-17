@@ -51,7 +51,7 @@
                 <div class="pending-kpis">
                     <article><span>EN STOCK DE ORIGEN</span><strong id="kpiOrigin">—</strong><small>pallets y saldos en bodega</small></article>
                     <article class="pending-kpi--ok"><span>VALIDADOS</span><strong id="kpiValidated">—</strong><small>con folio en FoliOS</small></article>
-                    <article class="pending-kpi--attention"><span>PENDIENTES</span><strong id="kpiPending">—</strong><small id="kpiPendingBoxes">— cajas</small></article>
+                    <article class="pending-kpi--attention"><span>SIN INTENTO</span><strong id="kpiPending">—</strong><small id="kpiPendingBoxes">— cajas</small></article>
                     <article class="pending-kpi--attention"><span>POR RESOLVER</span><strong id="kpiUnresolved">—</strong><small>observados, rechazados o anulados</small></article>
                     <article class="pending-kpi--critical"><span>DIFERENCIAS DE STOCK</span><strong id="kpiDifferences">—</strong><small>comparación del stock actual</small></article>
                     <article><span>SOLO EN FOLIOS</span><strong id="kpiOnlyFolios">—</strong><small>en planta, sin stock en origen</small></article>
@@ -62,7 +62,7 @@
                     label="Vistas de pendientes por validar"
                     default="pending"
                     :panels="[
-                        'pending' => ['label' => 'Pendientes', 'icon' => '◷', 'badge_id' => 'tabPendingCount'],
+                        'pending' => ['label' => 'Sin aprobar', 'icon' => '◷', 'badge_id' => 'tabPendingCount'],
                         'unresolved' => ['label' => 'Por resolver', 'icon' => '!', 'badge_id' => 'tabUnresolvedCount'],
                         'differences' => ['label' => 'Cuadraturas', 'icon' => '≠', 'badge_id' => 'tabReconciliationCount'],
                         'only-folios' => ['label' => 'Solo en FoliOS', 'icon' => '▣', 'badge_id' => 'tabOnlyFoliosCount'],
@@ -73,8 +73,8 @@
                 <label class="pending-search"><span class="office-visually-hidden">Buscar</span><input id="pendingSearch" type="search" maxlength="60" placeholder="Buscar pallet, cliente, marca, variedad, calibre, embalaje, CSG, proceso o lote"></label>
 
                 <section class="panel pending-panel" id="pending-validation-panel-pending" data-office-panel-group="pending-validation" data-office-panel-id="pending" role="tabpanel" aria-labelledby="pending-validation-tab-pending">
-                    <div class="pending-panel__heading"><div><p class="eyebrow">SIN VALIDAR</p><h2>En bodega y sin ningún intento de validación</h2></div><small>Los más antiguos primero.</small></div>
-                    <div class="pending-table-scroll"><table class="pending-table"><thead><tr><th>N° pallet</th><th>En bodega desde</th><th>Cajas</th><th>Artículo</th><th>Composición <small>CSG · lote · proceso · cajas</small></th></tr></thead><tbody id="pendingBody"></tbody></table></div>
+                    <div class="pending-panel__heading"><h2>Pallets y saldos sin aprobación vigente</h2><small>Incluye turnos anteriores en el stock de origen. Los más antiguos primero.</small></div>
+                    <div class="pending-table-scroll"><table class="pending-table"><thead><tr><th>Folio</th><th>En bodega desde</th><th>Estado</th><th>Cajas</th><th>Artículo</th><th>Composición <small>CSG · lote · proceso · cajas</small></th></tr></thead><tbody id="pendingBody"></tbody></table></div>
                 </section>
                 <section class="panel pending-panel" id="pending-validation-panel-unresolved" data-office-panel-group="pending-validation" data-office-panel-id="unresolved" role="tabpanel" aria-labelledby="pending-validation-tab-unresolved" hidden>
                     <div class="pending-panel__heading"><div><p class="eyebrow">VALIDACIÓN SIN FOLIO</p><h2>Se intentó validar, pero no quedó folio vigente</h2></div><small>El último intento manda.</small></div>
