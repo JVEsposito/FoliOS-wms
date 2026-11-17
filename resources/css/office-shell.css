@@ -49,6 +49,21 @@
     --shell-active-gajo: #2f5262;
 }
 
+:root[data-office-theme="dark-rose"] .estiba-office-shell {
+    --shell-navy: var(--corporate-navy);
+    --shell-navy-hover: var(--surface-hover);
+    --shell-ink: var(--text);
+    --shell-muted: var(--text-secondary);
+    --shell-faint: var(--text-subtle);
+    --shell-line: var(--line);
+    --shell-gajo: var(--line);
+    --shell-active-bg: var(--surface-selected);
+    --shell-active-ink: var(--text-strong);
+    --shell-active-gajo: var(--line);
+    --shell-focus: var(--primary);
+    --eui-shell-frost: var(--corporate-blue-dark);
+}
+
 .estiba-office-shell *,
 .estiba-office-shell *::before,
 .estiba-office-shell *::after { box-sizing: border-box; }
@@ -242,6 +257,7 @@
 }
 
 :root[data-office-theme="dark-industrial"] .estiba-office-theme-icon { background: currentColor; }
+:root[data-office-theme="dark-rose"] .estiba-office-theme-icon { background: var(--primary); border-color: var(--primary); }
 
 .estiba-office-replenishment {
     grid-column: 2 / -1;
@@ -358,11 +374,11 @@
     --gajo-hub: var(--shell-active-bg);
 }
 
-:root[data-office-theme="dark-industrial"] .estiba-office-sidebar .estiba-office-area.is-active {
+:root:is([data-office-theme="dark-industrial"], [data-office-theme="dark-rose"]) .estiba-office-sidebar .estiba-office-area.is-active {
     box-shadow: inset 3px 0 var(--area-bright);
 }
 
-:root[data-office-theme="dark-industrial"] .estiba-office-sidebar .estiba-office-area.is-active .folios-gajo {
+:root:is([data-office-theme="dark-industrial"], [data-office-theme="dark-rose"]) .estiba-office-sidebar .estiba-office-area.is-active .folios-gajo {
     --gajo-area: var(--gajo-bright);
 }
 

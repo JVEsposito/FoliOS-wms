@@ -24,27 +24,31 @@
         }
     }
 
-    var theme = read('estiba_wms_office_theme');
-    if (theme !== 'dark-industrial' && theme !== 'light-professional') theme = 'light-professional';
-    var dark = theme === 'dark-industrial';
+    var soloTema = script && script.hasAttribute('data-solo-tema');
+    var token = read('estiba_wms_office_token');
+    var storedIdentity = read('estiba_wms_office_identity');
+    var identity = null;
+    try { identity = JSON.parse(storedIdentity || 'null'); } catch (error) { /* identidad ilegible */ }
+    var administrator = token && !soloTema && identity?.rol === 'administrador';
+    var theme = (administrator && read('estiba_wms_office_admin_theme')) || read('estiba_wms_office_theme');
+    if (theme === 'dark-rose' && !administrator) theme = 'dark-industrial';
+    if (theme !== 'dark-rose' && theme !== 'dark-industrial' && theme !== 'light-professional') theme = 'light-professional';
+    var dark = theme !== 'light-professional';
     root.setAttribute('data-office-theme', theme);
     var scheme = document.querySelector('meta[name="color-scheme"]');
     if (scheme) scheme.setAttribute('content', dark ? 'dark' : 'light');
     var color = document.querySelector('meta[name="theme-color"]');
-    if (color) color.setAttribute('content', dark ? '#0f1c24' : '#102f43');
+    if (color) color.setAttribute('content', theme === 'dark-rose' ? '#170e14' : dark ? '#0f1c24' : '#102f43');
 
     // La entrada /FoliOS solo toma el tema: ella misma decide qué mostrar.
-    if (script && script.hasAttribute('data-solo-tema')) return;
+    if (soloTema) return;
 
-    var token = read('estiba_wms_office_token');
     // Una cuenta de cliente solo usa su portal: las oficinas internas la devuelven ahí.
-    try {
-        if (token && JSON.parse(read('estiba_wms_office_identity') || 'null').es_cliente === true) {
-            window.location.replace('/oficina/clientes');
-            return;
-        }
-    } catch (e) { /* identidad ilegible: sigue la validación habitual */ }
-    if (token && read('estiba_wms_office_identity')) {
+    if (token && identity?.es_cliente === true) {
+        window.location.replace('/oficina/clientes');
+        return;
+    }
+    if (token && storedIdentity) {
         root.setAttribute('data-office-session', 'activa');
         hideRememberedMenu(token);
         return;

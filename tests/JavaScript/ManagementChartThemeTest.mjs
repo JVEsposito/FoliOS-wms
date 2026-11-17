@@ -45,15 +45,15 @@ test('un token incompatible conserva la paleta anterior o los valores por defect
     assert.equal(readManagementChartPaletteSafely(previous, fallback, () => next), next);
 });
 
-test('los dos temas de Oficina tienen tokens propios y gerencia no reintroduce literales ni el plugin de la dona', () => {
+test('los temas de Oficina tienen tokens propios y gerencia no reintroduce literales ni el plugin de la dona', () => {
     const js = readFileSync(new URL('../../resources/js/office-management.js', import.meta.url), 'utf8');
     const css = readFileSync(new URL('../../resources/css/office-corporate.css', import.meta.url), 'utf8');
     assert.doesNotMatch(js, /(?<!&)#[\da-f]{3,8}\b|\b(?:rgba?|hsla?)\s*\(|\bcenterLabel\b/i);
 
     // Solo existen los temas que normalizeOfficeTheme acepta; los demás no se pueden activar.
-    assert.doesNotMatch(css, /data-office-theme="(?!dark-industrial"|light-professional")/);
+    assert.doesNotMatch(css, /data-office-theme="(?!dark-industrial"|light-professional"|dark-rose")/);
 
-    for (const theme of ['dark-industrial', 'light-professional']) {
+    for (const theme of ['dark-industrial', 'light-professional', 'dark-rose']) {
         const blocks = [...css.matchAll(new RegExp(`:root\\[data-office-theme="${theme}"\\]\\s*\\{([^}]+)\\}`, 'g'))];
         for (const token of ['chart-grid', 'chart-text', 'chart-tooltip-bg', 'chart-tooltip-border', 'series-product', 'series-material']) {
             assert.ok(blocks.some(([, body]) => body.includes(`--${token}:`)), `${theme}: falta --${token}`);

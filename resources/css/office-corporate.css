@@ -1808,9 +1808,10 @@ body,
     --area-administracion-bright: #b7c4cc;
 }
 
-:root[data-office-theme="dark-industrial"] {
+:root[data-office-theme="dark-industrial"],
+:root[data-office-theme="dark-rose"] {
     color-scheme: dark;
-    /* FoliOS v2 "Cámara" (modo oscuro de Oficina, misma paleta que tablet y PDA). */
+    /* Base oscura de Oficina. */
     --bg: #0f212b;
     --deep: #15303c;
     --panel: #15303c;
@@ -1936,6 +1937,78 @@ body,
     --area-administracion-tint: #1b2a32;
     --area-administracion-line: #4f5f69;
     --area-administracion-bright: #b7c4cc;
+}
+
+:root[data-office-theme="dark-rose"] {
+    --bg: #140e13;
+    --deep: #1c131b;
+    --panel: #241923;
+    --raised: #30212e;
+    --soft: #382736;
+    --line: #594052;
+    --line-soft: #423041;
+    --border: #594052;
+    --input-border: #a07a93;
+    --cyan: #f595c8;
+    --cyan-light: #ffc0e1;
+    --accent: #f595c8;
+    --text: #f8ecf4;
+    --muted: #c6aabc;
+    --corporate-navy: #170e14;
+    --corporate-blue: #f595c8;
+    --corporate-blue-dark: #8c315e;
+    --corporate-canvas: #140e13;
+    --corporate-card: #241923;
+    --corporate-border: #594052;
+    --corporate-text: #f8ecf4;
+    --corporate-text-muted: #c6aabc;
+    --header-bg: #170e14;
+    --subnav-bg: #241923;
+    --surface-muted: #30212e;
+    --surface-hover: #382736;
+    --surface-selected: #42283a;
+    --input-bg: #1c131b;
+    --table-head: #30212e;
+    --row-bg: #241923;
+    --row-alt: #2b1d29;
+    --row-hover: #382736;
+    --text-strong: #f8ecf4;
+    --text-secondary: #e6cbdc;
+    --text-subtle: #c6aabc;
+    --icon-surface: #30212e;
+    --button-secondary: #241923;
+    --button-secondary-hover: #382736;
+    --primary: #f595c8;
+    --primary-hover: #ffc0e1;
+    --on-primary: #310e24;
+    --info-bg: #42283a;
+    --info-text: #ffc0e1;
+    --overlay: rgba(12, 6, 11, .82);
+    --focus-ring: rgba(245, 149, 200, .55);
+    --selection-bg: rgba(245, 149, 200, .25);
+    --brand-gradient: linear-gradient(150deg, #170e14, #42283a);
+    --kpi-surface: #241923;
+    --logo-border: #a07a93;
+    --logo-bg: #241923;
+    --hydro-ice: #f595c8;
+    --frost: #f595c8;
+    --frost-strong: #ffc0e1;
+    --area-operacion-ink: #f595c8;
+    --area-operacion-text: #ffc0e1;
+    --area-operacion-tint: #42283a;
+    --area-operacion-line: #89516f;
+    --area-operacion-bright: #f595c8;
+    --area-frigorifico-ink: #f595c8;
+    --area-frigorifico-text: #ffc0e1;
+    --area-frigorifico-tint: #42283a;
+    --area-frigorifico-line: #89516f;
+    --area-frigorifico-bright: #f595c8;
+    --chart-grid: var(--line);
+    --chart-text: var(--text-secondary);
+    --chart-tooltip-bg: var(--raised);
+    --chart-tooltip-border: var(--line);
+    --series-product: #f595c8;
+    --series-material: #bea9ed;
 }
 
 body,

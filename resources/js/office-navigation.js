@@ -8,7 +8,8 @@ import {
     nextOfficeTheme,
     normalizeOfficeTheme,
     OFFICE_THEME_KEY,
-    OFFICE_THEMES,
+    officeThemeStorageKey,
+    officeThemes,
 } from './shared/office-preferences.js';
 import { FOLIOS_ENTRY_PATH, officeEntryHref, officeHomeHref } from './shared/folios-entry.js';
 import { MENU_ATTRIBUTES, MENU_MEMORY_KEY, menuMemory } from './shared/office-menu-memory.js';
@@ -21,37 +22,51 @@ const moduleAliases = {
     'administracion.maestros-temporada': ['frigorifico.catalogos'],
 };
 
+function themeIdentity() {
+    return storedToken() ? readIdentity() : null;
+}
+
 function storedOfficeTheme() {
-    try { return normalizeOfficeTheme(localStorage.getItem(OFFICE_THEME_KEY)); } catch { return normalizeOfficeTheme(null); }
+    const identity = themeIdentity();
+    try {
+        const value = localStorage.getItem(officeThemeStorageKey(identity)) || localStorage.getItem(OFFICE_THEME_KEY);
+        return normalizeOfficeTheme(value, identity);
+    } catch {
+        return normalizeOfficeTheme(null);
+    }
 }
 
 let officeTheme = storedOfficeTheme();
+const themeLabels = { 'light-professional': 'Modo claro', 'dark-industrial': 'Modo oscuro', 'dark-rose': 'Modo rosado' };
 
 function refreshOfficeThemeControls() {
-    const dark = officeTheme === 'dark-industrial';
-    const action = dark ? 'Activar modo claro' : 'Activar modo oscuro';
+    const dark = officeTheme !== 'light-professional';
+    const next = nextOfficeTheme(officeTheme, themeIdentity());
+    const labelText = themeLabels[next];
+    const action = `Activar ${labelText.toLowerCase()}`;
     document.querySelectorAll('[data-office-theme-toggle]').forEach((button) => {
         button.setAttribute('aria-pressed', String(dark));
         button.setAttribute('aria-label', action);
         button.title = action;
         const label = button.querySelector('[data-office-theme-label]');
-        if (label) label.textContent = dark ? 'Modo claro' : 'Modo oscuro';
+        if (label) label.textContent = labelText;
     });
 }
 
 function applyOfficeTheme(theme, { persist = true } = {}) {
-    officeTheme = normalizeOfficeTheme(theme);
+    const identity = themeIdentity();
+    officeTheme = normalizeOfficeTheme(theme, identity);
     document.documentElement.dataset.officeTheme = officeTheme;
     document.querySelector('meta[name="color-scheme"]')?.setAttribute(
         'content',
-        officeTheme === 'dark-industrial' ? 'dark' : 'light',
+        officeTheme === 'light-professional' ? 'light' : 'dark',
     );
     document.querySelector('meta[name="theme-color"]')?.setAttribute(
         'content',
-        officeTheme === 'dark-industrial' ? '#0f1c24' : '#102f43',
+        officeTheme === 'dark-rose' ? '#170e14' : officeTheme === 'dark-industrial' ? '#0f1c24' : '#102f43',
     );
     if (persist) {
-        try { localStorage.setItem(OFFICE_THEME_KEY, officeTheme); } catch { /* Preferencia opcional. */ }
+        try { localStorage.setItem(officeThemeStorageKey(identity), officeTheme); } catch { /* Preferencia opcional. */ }
     }
     refreshOfficeThemeControls();
     return officeTheme;
@@ -224,6 +239,9 @@ window.addEventListener('click', logoutToEntry, true);
 
 function refreshNavigation() {
     const identity = readIdentity();
+    const theme = storedOfficeTheme();
+    if (theme !== officeTheme) applyOfficeTheme(theme, { persist: false });
+    else refreshOfficeThemeControls();
     const hasSession = Boolean(storedToken() && identity);
     if (!hasSession) {
         goToEntry(officeEntryHref(window.location));
@@ -591,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeCommunications();
     refreshOfficeThemeControls();
     document.querySelectorAll('[data-office-theme-toggle]').forEach((button) => {
-        button.addEventListener('click', () => applyOfficeTheme(nextOfficeTheme(officeTheme)));
+        button.addEventListener('click', () => applyOfficeTheme(nextOfficeTheme(officeTheme, themeIdentity())));
     });
     refreshNavigation();
     observeApplication();
@@ -604,15 +622,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-window.addEventListener('storage', (event) => {
-    if (event.key === OFFICE_THEME_KEY) applyOfficeTheme(event.newValue, { persist: false });
-    refreshNavigation();
-});
+window.addEventListener('storage', refreshNavigation);
 window.addEventListener('estiba:office-session', refreshNavigation);
 
 window.EstibaOfficeTheme = {
     apply: (theme) => applyOfficeTheme(theme),
     current: () => officeTheme,
-    themes: [...OFFICE_THEMES],
+    get themes() { return officeThemes(themeIdentity()); },
 };
 window.EstibaOfficeNavigation = { refresh: refreshNavigation };
