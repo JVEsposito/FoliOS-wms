@@ -1006,7 +1006,8 @@
     --plant-door: #1f7a8c;
 }
 
-:root[data-office-theme="dark-industrial"] :is(.plant-view, .operation-map-dialog) {
+:root[data-office-theme="dark-industrial"] :is(.plant-view, .operation-map-dialog),
+:root[data-office-theme="dark-rose"] :is(.plant-view, .operation-map-dialog) {
     --plant-canvas: #13222c;
     --plant-grid: rgba(145, 170, 188, .07);
     --plant-grid-major: rgba(145, 170, 188, .13);
@@ -1040,6 +1041,30 @@
     --plant-blocked-alt: #22333d;
     --plant-blocked-border: #3a4c57;
     --plant-door: #5fc4d6;
+}
+
+:root[data-office-theme="dark-rose"] :is(.plant-view, .operation-map-dialog) {
+    --plant-canvas: var(--deep);
+    --plant-grid: rgba(198, 170, 188, .07);
+    --plant-grid-major: rgba(198, 170, 188, .13);
+    --plant-wall: var(--line);
+    --plant-node: var(--panel);
+    --plant-node-border: var(--line);
+    --plant-ink: var(--text);
+    --plant-muted: var(--muted);
+    --plant-neutral: var(--muted);
+    --plant-zone: var(--raised);
+    --plant-zone-border: var(--line);
+    --plant-dock: var(--corporate-navy);
+    --plant-legend: var(--deep);
+    --plant-legend-ink: var(--text-secondary);
+    --plant-corridor: var(--raised);
+    --plant-corridor-border: var(--line);
+    --plant-corridor-line: rgba(198, 170, 188, .45);
+    --plant-blocked: var(--deep);
+    --plant-blocked-alt: var(--soft);
+    --plant-blocked-border: var(--line);
+    --plant-door: var(--primary);
 }
 
 .operation-now-facility.plant-view {

@@ -27,16 +27,18 @@ function themeVariables(selector) {
     const closingBrace = css.indexOf('}', openingBrace);
     const block = css.slice(openingBrace + 1, closingBrace);
 
-    return Object.fromEntries(
+    const variables = Object.fromEntries(
         [...block.matchAll(/--([\w-]+):\s*(#[\da-fA-F]{6})\s*;/g)]
             .map((match) => [match[1], match[2]]),
     );
+    return selector.includes('dark-rose') ? { ...themeVariables(':root[data-office-theme="dark-industrial"]'), ...variables } : variables;
 }
 
-test('los temas claro y oscuro mantienen contraste AA en contenido y selección', () => {
+test('los temas mantienen contraste AA en contenido, acciones y selección', () => {
     const themes = [
         themeVariables(':root[data-office-theme="light-professional"]'),
         themeVariables(':root[data-office-theme="dark-industrial"]'),
+        themeVariables(':root[data-office-theme="dark-rose"]'),
     ];
 
     themes.forEach((variables) => {
@@ -45,6 +47,7 @@ test('los temas claro y oscuro mantienen contraste AA en contenido y selección'
         assert.ok(contrast(variables.muted, variables['corporate-card']) >= 4.5);
         assert.ok(contrast(variables['corporate-blue'], variables['surface-selected']) >= 4.5);
         assert.ok(contrast('#ffffff', variables['corporate-blue-dark']) >= 4.5);
+        assert.ok(contrast(variables['on-primary'], variables.primary) >= 4.5);
         assert.ok(contrast(variables['text-secondary'], variables['button-secondary']) >= 4.5);
         assert.ok(contrast(variables['text-strong'], variables['surface-muted']) >= 4.5);
         assert.ok(contrast(variables['text-subtle'], variables['kpi-surface']) >= 4.5);
@@ -69,7 +72,7 @@ test('Operación ahora mantiene contraste con filas alternas y superficies de ca
         return color.length === 4 ? `#${[...color.slice(1)].map((c) => c + c).join('')}` : color;
     }
 
-    for (const theme of ['light-professional', 'dark-industrial']) {
+    for (const theme of ['light-professional', 'dark-industrial', 'dark-rose']) {
         const variables = themeVariables(`:root[data-office-theme="${theme}"]`);
         const scope = operationCss.match(/\.operation-now\s*\{([^}]+)\}/)[1];
         for (const [, name, reference] of scope.matchAll(/--([\w-]+):\s*var\(--([\w-]+)\)/g)) {

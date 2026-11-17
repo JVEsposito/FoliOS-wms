@@ -19,6 +19,62 @@
 @import './folios-fonts.css';
 @import './folios-components.css';
 
+:where(:root[data-office-theme="dark-rose"]) .estiba-ui {
+    color-scheme: dark;
+    --eui-color-navy: var(--corporate-navy);
+    --eui-color-navy-hover: var(--surface-hover);
+    --eui-color-on-navy-muted: var(--text-secondary);
+    --eui-color-navy-gajo: var(--line);
+    --eui-color-canvas: var(--corporate-canvas);
+    --eui-color-surface: var(--corporate-card);
+    --eui-color-subtle: var(--surface-muted);
+    --eui-color-border: var(--line);
+    --eui-color-border-soft: var(--line-soft);
+    --eui-color-input-border: var(--input-border);
+    --eui-color-text: var(--text);
+    --eui-color-text-secondary: var(--text-secondary);
+    --eui-color-muted: var(--text-subtle);
+    --eui-color-primary: var(--primary);
+    --eui-color-primary-hover: var(--primary-hover);
+    --eui-color-confirm-hover: var(--success-text);
+    --eui-color-on-primary: var(--on-primary);
+    --eui-color-selected: var(--surface-selected);
+    --eui-color-focus: var(--primary);
+    --eui-color-disabled-surface: var(--soft);
+    --eui-color-disabled-text: var(--text-subtle);
+    --eui-color-frost: var(--frost);
+    --eui-color-frost-strong: var(--frost-strong);
+    --eui-color-frost-bright: var(--frost);
+    --eui-color-seal: var(--seal);
+    --eui-color-seal-surface: var(--seal-bg);
+    --eui-color-critical-fill: var(--critical-fill);
+    --eui-color-on-critical-fill: var(--on-critical-fill);
+    --eui-signal-neutral-text: var(--text-subtle);
+    --eui-signal-neutral-surface: var(--surface-muted);
+    --eui-signal-neutral-border: var(--line);
+    --eui-signal-info-text: var(--info-text);
+    --eui-signal-info-surface: var(--info-bg);
+    --eui-signal-info-border: var(--area-operacion-line);
+    --eui-signal-success-text: var(--success-text);
+    --eui-signal-success-surface: var(--success-bg);
+    --eui-signal-success-border: #2f6b52;
+    --eui-signal-warning-text: var(--warning-text);
+    --eui-signal-warning-surface: var(--warning-bg);
+    --eui-signal-warning-border: #7a5f22;
+    --eui-signal-critical-text: var(--danger-text);
+    --eui-signal-critical-surface: var(--danger-bg);
+    --eui-signal-critical-border: #7d3f38;
+    --eui-signal-reserved-text: var(--eui-signal-warning-text);
+    --eui-signal-reserved-surface: var(--eui-signal-warning-surface);
+    --eui-signal-reserved-border: var(--eui-signal-warning-border);
+    --eui-signal-temporary-text: #f0a874;
+    --eui-signal-temporary-surface: #2e1d0f;
+    --eui-signal-temporary-border: #8a5c34;
+    --eui-signal-blocked-text: var(--eui-signal-critical-text);
+    --eui-signal-blocked-surface: var(--eui-signal-critical-surface);
+    --eui-signal-blocked-border: var(--eui-signal-critical-border);
+}
+
 /* 1. Tipografía ------------------------------------------------------------------ */
 
 body,

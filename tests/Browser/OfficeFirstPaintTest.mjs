@@ -12,10 +12,9 @@ const token = '41|tokenDePruebaParaElPrimerPintado';
 const identity = { nombre: 'Rosa Romana', rol: 'operador_romana' };
 
 /**
- * Abre Materia Prima sin ejecutar sus módulos de Vite: así se ve exactamente lo que el
- * navegador pinta antes de que carguen, que es lo que aparecía al cambiar de pestaña.
+ * Por defecto bloquea los módulos de Vite para observar el primer pintado.
  */
-async function firstPaint(browser, storage) {
+async function firstPaint(browser, storage, { modules = false } = {}) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     await context.addInitScript(({ local, session }) => {
         if (sessionStorage.getItem('estiba_prueba_preparada')) return;
@@ -27,10 +26,11 @@ async function firstPaint(browser, storage) {
     await context.route('http://localhost/**', (route) => {
         const { pathname, search } = new URL(route.request().url());
         visited.push(pathname + search);
-        if (pathname.endsWith('.js')) return route.abort();
+        if (!modules && pathname.endsWith('.js')) return route.abort();
         if (pathname.startsWith('/build/')) {
-            return route.fulfill({ body: readFileSync(resolve(root, `public${pathname}`)), contentType: 'text/css' });
+            return route.fulfill({ path: resolve(root, `public${pathname}`) });
         }
+        if (pathname === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Planta de prueba', temporada: null } } });
         if (pathname === '/oficina/materia-prima') return route.fulfill({ body: html, contentType: 'text/html' });
         if (pathname === '/FoliOS') return route.fulfill({ body: '<p id="entrada">FoliOS</p>', contentType: 'text/html' });
         return route.fulfill({ status: 404, body: '' });
@@ -80,6 +80,42 @@ test('con sesión, la oficina se pinta directo, con su tema y el menú del perfi
         assert.notEqual(state.materiales, 'none');
         assert.equal(state.name, 'Rosa Romana');
         assert.equal(state.initials, 'RR');
+        await context.close();
+    } finally {
+        await browser.close();
+    }
+});
+
+test('el Administrador puede elegir rosado y el siguiente perfil recupera su tema', async () => {
+    const browser = await chromium.launch({
+        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+        args: ['--no-sandbox', '--disable-gpu'],
+    });
+    try {
+        const { context, page } = await firstPaint(browser, {
+            local: {
+                estiba_wms_office_token: token,
+                estiba_wms_office_identity: JSON.stringify({ ...identity, rol: 'administrador' }),
+                estiba_wms_office_theme: 'light-professional',
+            },
+            session: {},
+        }, { modules: true });
+        await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
+        await page.getByRole('button', { name: 'Activar modo rosado' }).click();
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-rose');
+        await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(20, 14, 19)');
+        assert.equal(await page.locator('#officeSidebar').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgb(23, 14, 20)');
+        await page.reload();
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-rose');
+
+        await page.evaluate((user) => {
+            localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
+            window.dispatchEvent(new CustomEvent('estiba:office-session'));
+        }, { ...identity, puede_consultar_romana: true });
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'light-professional');
+        await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
+        await page.getByRole('button', { name: 'Activar modo claro' }).waitFor();
+        assert.equal(await page.evaluate(() => window.EstibaOfficeTheme.themes.includes('dark-rose')), false);
         await context.close();
     } finally {
         await browser.close();
