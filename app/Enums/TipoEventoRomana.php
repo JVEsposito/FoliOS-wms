@@ -23,4 +23,6 @@ enum TipoEventoRomana: string
     case AjusteCuentaEnvases = 'ajuste_cuenta_envases';
     // Solo cambió el número de una o más guías de ingreso.
     case NumeroGuiaCorregido = 'numero_guia_corregido';
+    // La recepción se digitó después: se corrigió la fecha y hora reales del camión.
+    case FechaRealCorregida = 'fecha_real_corregida';
 }

@@ -117,6 +117,20 @@ En el expediente, **Corregir N° de guía** cambia solo el número de una o más
 
 La corrección completa de una recepción validada, que también edita el número, ahora lo propaga igual.
 
+### Fecha real de una recepción digitada después
+
+Cuando la recepción de la noche se digita al día siguiente, FoliOS la fecha con el momento del registro y la cuenta en la jornada equivocada. En el expediente, **Corregir fecha real** deja la fecha y hora en que el camión llegó y, si ya hizo el destare, en que salió. El formulario usa la hora de planta y muestra cuándo se digitó.
+
+- Pueden hacerlo administración, supervisión de frío, operación de Romana y digitación MP (permiso `corregir-fecha-real-romana`, módulo Romana).
+- Fuera de administración, solo para recepciones digitadas en los últimos `MP_DIAS_FECHA_REAL` días (3 por defecto) y con un ingreso real de hasta esos días antes de la digitación. Administración no tiene ese límite.
+- El ingreso real no puede ser posterior a la digitación ni quedar fuera de la temporada activa. La salida debe ser posterior al ingreso y no futura, y no puede quedar después del reingreso de una devolución que devuelve esa guía de salida.
+- No puede dejar el ingreso después de un movimiento ya registrado de sus lotes, como su ingreso a cámara con hora real.
+- Solo recepciones de fruta vigentes. Las de solo envases ya eligen su fecha al registrarse.
+- Cambian `ingreso_at` y `salida_at`, y con ellos la jornada, el turno, el filtro por fecha de Romana, el RPR-01, el control de envases, el registro de hidrocooler y el panel gerencial.
+- Los movimientos de envases anclados al ingreso o a la salida (recepción, salida del destare, devolución del préstamo de bins y ajustes de cuenta de ese lado) se mueven con su mismo desfase. Las correcciones posteriores conservan su fecha.
+- Queda el evento `fecha_real_corregida` con la fecha anterior y la nueva, cuándo se digitó, el motivo y cuántos movimientos se movieron. El expediente muestra **Digitada en FoliOS** cuando difiere del ingreso.
+- Ruta: `PUT /api/romana/recepciones/{recepcion}/fecha-real`, con `operacion_id`, `version_conocida`, `ingreso_fecha`, `ingreso_hora`, `salida_fecha` y `salida_hora` (si ya salió) y `motivo`.
+
 El estado de pesaje es independiente del avance de Validación MP. Una recepción puede estar cerrada en Romana y continuar pendiente, tomada o confirmada en el flujo de Validación MP.
 
 ## Datos transaccionales

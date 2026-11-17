@@ -171,6 +171,13 @@ function localDateValue() {
     return localDateTimeValue().slice(0, 10);
 }
 
+/** Valor de un input datetime-local (hora del navegador) para un instante ISO. */
+function localDateTimeFrom(iso) {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '';
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 function stateBadge(status) {
     const style = status === 'borrador'
         ? 'draft'
@@ -660,6 +667,7 @@ function openOperation(type, lotId) {
             description: 'La asignación es a una cámara exclusiva de materia prima; no crea un folio ni ocupa una posición.',
             fields: `
                 <label class="field"><span>Cámara *</span><select name="camara_id" required><option value="">Seleccionar cámara</option>${state.catalogs.camaras.map((camera) => `<option value="${escapeHtml(camera.id)}">${escapeHtml(camera.codigo)} · ${escapeHtml(camera.nombre)}</option>`).join('')}</select></label>
+                <label class="field"><span>Hora real de ingreso a cámara</span><input name="ingresado_at" type="datetime-local" max="${escapeHtml(localDateTimeValue())}"${lot.recepcion?.ingreso_at ? ` min="${escapeHtml(localDateTimeFrom(lot.recepcion.ingreso_at))}"` : ''}><small>Déjala vacía si el lote entra ahora. Si lo digitas después, indica cuándo entró${lot.recepcion?.ingreso_at ? `; el camión llegó el ${escapeHtml(formatDate(lot.recepcion.ingreso_at))}` : ''}.</small></label>
                 <label class="field"><span>Observación</span><textarea name="observacion" maxlength="2000"></textarea></label>`,
         },
         void: {
@@ -709,6 +717,7 @@ async function submitOperation() {
         path = `/api/materia-prima/lotes/${lotId}/asignar-camara`;
         payload.camara_id = values.camara_id;
         payload.observacion = values.observacion || null;
+        if (values.ingresado_at) payload.ingresado_at = values.ingresado_at;
     } else if (type === 'void') {
         path = `/api/materia-prima/lotes/${lotId}/anular`;
         payload.motivo = values.motivo;

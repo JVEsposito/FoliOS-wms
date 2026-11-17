@@ -15,6 +15,7 @@ use App\Http\Requests\AnularPesajeEnvasesRomanaRequest;
 use App\Http\Requests\CerrarRecepcionRomanaRequest;
 use App\Http\Requests\ConfirmarIngresoRomanaRequest;
 use App\Http\Requests\ConsultarRecepcionesRomanaRequest;
+use App\Http\Requests\CorregirFechaRealRomanaRequest;
 use App\Http\Requests\CorregirPesoBrutoRomanaRequest;
 use App\Http\Requests\CorregirRecepcionRomanaRequest;
 use App\Http\Requests\CorregirSalidaEnvasesRomanaRequest;
@@ -36,6 +37,7 @@ use App\Services\Romana\ServicioAjusteCuentaEnvasesRecepcion;
 use App\Services\Romana\ServicioAnulacionRecepcionRomana;
 use App\Services\Romana\ServicioCorreccionIntegralRecepcion;
 use App\Services\Romana\ServicioCorreccionNumeroGuia;
+use App\Services\Romana\ServicioFechaRealRecepcionRomana;
 use App\Services\Romana\ServicioGuiasRecepcionRomana;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRecepcionRomana;
@@ -207,6 +209,16 @@ class RecepcionRomanaController extends Controller
             $request->validated(),
             $request->user(),
         );
+
+        return response()->json(['data' => $this->recepcion($recepcion, true)]);
+    }
+
+    public function corregirFechaReal(
+        CorregirFechaRealRomanaRequest $request,
+        RecepcionRomana $recepcion,
+        ServicioFechaRealRecepcionRomana $servicio,
+    ): JsonResponse {
+        $recepcion = $servicio->corregir($recepcion, $request->validated(), $request->user());
 
         return response()->json(['data' => $this->recepcion($recepcion, true)]);
     }
@@ -525,6 +537,8 @@ class RecepcionRomanaController extends Controller
                     ->toDateString()
                 : null,
             'ingreso_at' => $recepcion->ingreso_at?->toAtomString(),
+            // Momento en que se digitó; difiere del ingreso cuando se registró después.
+            'registrado_at' => $recepcion->created_at?->toAtomString(),
             ...app(CalendarioOperativo::class)->datos($recepcion->ingreso_at, 'UTC'),
             'ingreso_confirmado_at' => $recepcion->ingreso_confirmado_at?->toAtomString(),
             'salida_at' => $recepcion->salida_at?->toAtomString(),
@@ -539,6 +553,7 @@ class RecepcionRomanaController extends Controller
             'puede_corregir_peso_bruto' => Gate::allows('corregir-peso-bruto-romana')
                 && $recepcion->estado !== EstadoRecepcionRomana::Anulada && $recepcion->eliminada_at === null
                 && ! $esSoloEnvases && (! $esPesajeEnvases || $cantidadPesada > 0),
+            'puede_corregir_fecha_real' => $conEventos && app(ServicioFechaRealRecepcionRomana::class)->disponible($recepcion, request()->user()),
             'puede_anular' => Gate::allows('anular-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,
             'puede_eliminar' => Gate::allows('eliminar-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,
             'eliminada' => $recepcion->eliminada_at !== null,

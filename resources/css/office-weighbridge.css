@@ -130,6 +130,9 @@ body {
 .weighbridge-dialog::backdrop { background: rgba(1, 8, 12, .8); backdrop-filter: blur(4px); }
 .weighbridge-dialog__shell { padding: 22px; }
 .weighbridge-dialog__shell--compact { width: min(520px, 100%); }
+.real-date-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.real-date-pair legend { padding: 0 6px; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+@media (max-width: 480px) { .real-date-pair { grid-template-columns: 1fr; } }
 #annulReceptionError { white-space: pre-line; overflow-wrap: anywhere; font-weight: 400; line-height: 1.5; }
 .weighbridge-dialog__heading { align-items: flex-start; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .weighbridge-dialog__heading h2 { margin: 0; font-size: 1.5rem; }

@@ -526,6 +526,10 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('eliminar-folios-manuales', fn (User $usuario): bool => $usuario->activo
             && $usuario->rol === RolUsuario::Administrador);
         Gate::define(
+            'corregir-fecha-real-romana',
+            fn (User $usuario): bool => $alcance->puedeCorregirFechaRealRomana($usuario),
+        );
+        Gate::define(
             'corregir-recepciones-romana',
             fn (User $usuario): bool => $alcance->puedeCorregirRecepcionesRomana($usuario),
         );

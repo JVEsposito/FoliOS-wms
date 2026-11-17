@@ -2091,7 +2091,7 @@ class ServicioRecepcionRomana
         }
     }
 
-    private function cargar(RecepcionRomana $recepcion): RecepcionRomana
+    public function cargar(RecepcionRomana $recepcion): RecepcionRomana
     {
         return $recepcion->refresh()->load([
             'temporada',
