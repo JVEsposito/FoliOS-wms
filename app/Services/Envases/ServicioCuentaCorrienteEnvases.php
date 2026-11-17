@@ -127,6 +127,29 @@ class ServicioCuentaCorrienteEnvases
         return $reasignacion ? (TipoMovimientoEnvase::tryFrom($reasignacion['tipo'] ?? '') ?? $movimiento->tipo_movimiento) : $movimiento->tipo_movimiento;
     }
 
+    /**
+     * Documento al que se le pueden reasignar productores dentro de la cuenta: la guía de ingreso (o una de las
+     * guías del camión), la salida del destare o el despacho. Las guías ya reasignadas y los ajustes no.
+     *
+     * @param  array{clave?: string}  $parte  parte del documento: la guía de ingreso cuando el camión trae varias
+     */
+    public static function claveProductor(MovimientoEnvase $movimiento, array $parte = []): ?string
+    {
+        if (self::reasignacion($movimiento) !== null || self::ajusteRecepcion($movimiento) !== null) {
+            return null;
+        }
+        $guia = ($parte['clave'] ?? '') !== '' ? ':guia:'.$parte['clave'] : '';
+
+        return match ($movimiento->tipo_movimiento) {
+            TipoMovimientoEnvase::RecepcionFruta, TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::DevolucionEnvases => $movimiento->recepcion_romana_id
+                ? 'recepcion:'.$movimiento->recepcion_romana_id.':recibidos'.($movimiento->tipo_movimiento === TipoMovimientoEnvase::RecepcionFruta ? $guia : '') : null,
+            TipoMovimientoEnvase::SalidaRecepcionFruta => $movimiento->recepcion_romana_id ? 'recepcion:'.$movimiento->recepcion_romana_id.':entregados' : null,
+            TipoMovimientoEnvase::DespachoCliente => $movimiento->documento_tipo === self::DOCUMENTO_GUIA && $movimiento->documento_id
+                ? 'despacho:'.$movimiento->documento_id : null,
+            default => null,
+        };
+    }
+
     private static function recepcionId(MovimientoEnvase $movimiento): ?string
     {
         return $movimiento->recepcion_romana_id ?? self::reasignacion($movimiento)['recepcion_id'] ?? null;
@@ -338,6 +361,9 @@ class ServicioCuentaCorrienteEnvases
         $anterioresCsg = [];
         $historicos = $movimientos->where('tipo_movimiento', TipoMovimientoEnvase::CorreccionCuenta)->pluck('movimiento_origen_id')->all();
         $porDocumento = [];
+        // Reasignaciones entre productores de esta cuenta: cambian a qué CSG se atribuye cada guía, no la cuenta.
+        $reasignacionesProductor = ReasignacionesProductorVigentes::cargar($cliente->id, $temporada->id);
+        $basesAnteriores = [];
         foreach ($this->vistaCliente($movimientos) as ['movimiento' => $movimiento, 'impacto' => $impacto]) {
             $tipo = $movimiento->tipo_envase->value;
             $tipos[$tipo] ??= [
@@ -389,6 +415,9 @@ class ServicioCuentaCorrienteEnvases
             if ($inicio !== null && $movimiento->ocurrido_at->lt($inicio)) {
                 $tipos[$tipo]['saldo_inicial'] += $impacto;
                 $anterioresCsg[] = $movimientoCsg;
+                if (($base = self::claveProductor($movimiento)) !== null) {
+                    $basesAnteriores[$base] = true;
+                }
 
                 continue;
             }
@@ -483,7 +512,9 @@ class ServicioCuentaCorrienteEnvases
 
             return $linea;
         }, $lineas);
-        [$detalleCsg, $resumenCsg] = $this->detallePorCsg($porDocumento, $recepcionesCsg, $anterioresCsg, $movimientos);
+        // Lo reasignado de una guía anterior al período cambia el saldo inicial de cada productor.
+        array_push($anterioresCsg, ...$reasignacionesProductor->lineasAnteriores($basesAnteriores, $tiposEnvase));
+        [$detalleCsg, $resumenCsg, $atribucion] = $this->detallePorCsg($porDocumento, $recepcionesCsg, $anterioresCsg, $movimientos, $reasignacionesProductor);
         $pendientes = DetalleEnvaseRecepcionRomana::query()
             ->whereHas('recepcion', fn (Builder $recepcion) => $recepcion
                 ->where('cliente_id', $cliente->id)
@@ -507,6 +538,8 @@ class ServicioCuentaCorrienteEnvases
             'grupos_documentos' => array_values($gruposDocumentos),
             'resumen_csg' => $resumenCsg,
             'detalle_csg' => $detalleCsg,
+            // Atribución por CSG de cada guía, para reasignar productores; no se imprime.
+            'atribucion_documentos' => $atribucion,
             'lineas_pendientes_validacion' => $pendientes,
             'emitido_at' => $this->local(now()),
         ];
@@ -526,7 +559,7 @@ class ServicioCuentaCorrienteEnvases
      * @param  Collection<int, MovimientoEnvase>  $movimientos
      * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>}
      */
-    private function detallePorCsg(array $porDocumento, array $recepcionesCsg, array $anterioresCsg, Collection $movimientos): array
+    private function detallePorCsg(array $porDocumento, array $recepcionesCsg, array $anterioresCsg, Collection $movimientos, ReasignacionesProductorVigentes $reasignacionesProductor): array
     {
         $recepciones = RecepcionRomana::query()
             ->whereKey($movimientos->map(fn (MovimientoEnvase $m): ?string => self::recepcionId($m))->filter()->unique()->values())
@@ -537,6 +570,7 @@ class ServicioCuentaCorrienteEnvases
         $documentos = [];
         $asignacionesResumen = [];
         $tipos = [];
+        $atribucion = [];
         foreach ($porDocumento as ['movimiento' => $movimiento, 'parte' => $parte, 'guia' => $guia, 'historico' => $historico, 'tipo' => $tipoVisible, 'tipos' => $porTipo]) {
             foreach ($porTipo as $tipo => $fila) {
                 $tipos[$tipo] = ['nombre' => $fila['nombre'], 'orden' => $fila['orden']];
@@ -558,14 +592,32 @@ class ServicioCuentaCorrienteEnvases
                     $parte['clave'] !== '' ? ($repartoGuias[$parte['clave']] ?? []) : ($recepcionesCsg[$movimiento->recepcion_romana_id]['envases'] ?? [])),
                 default => [['csg' => null, 'compartido' => null, 'tipos' => $porTipo]],
             };
+            // La reasignación entre productores mueve las cantidades a su CSG definitivo, sin filas nuevas.
+            $claveProductor = self::claveProductor($movimiento, $parte);
+            $asignaciones = $reasignacionesProductor->aplicar($claveProductor, $asignaciones);
             foreach ($asignaciones as $asignacion) {
                 foreach ($asignacion['tipos'] as $tipo => $fila) {
                     $asignacionesResumen[] = ['csg' => $asignacion['csg'], 'tipo_envase' => $tipo, 'nombre_envase' => $fila['nombre'],
                         'orden' => $fila['orden'], 'entradas' => $fila['entradas'], 'salidas' => $fila['salidas']];
                 }
             }
-            $documentos[] = ['fecha' => $this->local($movimiento->ocurrido_at), 'asignaciones' => $asignaciones,
+            $documento = ['fecha' => $this->local($movimiento->ocurrido_at), 'asignaciones' => $asignaciones,
                 ...$this->identidadDocumento($movimiento, $parte, $guia, $recepcion, $historico, $reasignacion !== null ? [] : $opciones, $tipoVisible)];
+            $documentos[] = $documento;
+            if ($claveProductor !== null) {
+                $atribucion[$claveProductor] ??= ['clave' => $claveProductor, 'fecha' => $documento['fecha'], 'fecha_at' => $movimiento->ocurrido_at,
+                    'titulo' => $documento['titulo'], 'movimiento' => $documento['movimiento'], 'referencia' => $documento['referencia'],
+                    'chofer' => $documento['chofer'], 'numero' => $parte['documento'] ?? $movimiento->numero_documento, 'productores' => []];
+                foreach ($asignaciones as $asignacion) {
+                    $clave = ResumenEnvasesPorCsg::clave($asignacion['csg']);
+                    $atribucion[$claveProductor]['productores'][$clave] ??= ['codigo' => $asignacion['csg']['codigo'] ?? null,
+                        'nombre' => $asignacion['csg']['nombre'] ?? null, 'envases' => []];
+                    foreach ($asignacion['tipos'] as $tipo => $fila) {
+                        $atribucion[$claveProductor]['productores'][$clave]['envases'][$tipo] = ($atribucion[$claveProductor]['productores'][$clave]['envases'][$tipo] ?? 0)
+                            + $fila[ReasignacionesProductorVigentes::campo($claveProductor)];
+                    }
+                }
+            }
         }
         $resumen = ResumenEnvasesPorCsg::desdeAsignaciones($asignacionesResumen, $recepcionesCsg, $anterioresCsg);
         foreach ($anterioresCsg as $anterior) {
@@ -581,7 +633,7 @@ class ServicioCuentaCorrienteEnvases
         // Con los nombres completos, los CSG de una misma razón social quedan juntos.
         usort($detalle, [ResumenEnvasesPorCsg::class, 'comparar']);
 
-        return [$detalle, $resumen];
+        return [$detalle, $resumen, $atribucion];
     }
 
     /** @return list<array{codigo: ?string, nombre: ?string, movimientos: list<array>}> */
@@ -629,6 +681,7 @@ class ServicioCuentaCorrienteEnvases
         $csgRecepcion = $this->recepcionesCsg($movimientos->concat($ajustes));
         $guiasRecepcion = $this->guiasRecepcion($movimientos);
         $repartos = $this->repartoGuias($movimientos);
+        $reasignacionesProductor = ReasignacionesProductorVigentes::cargar($cliente->id, $temporada->id);
 
         $documentos = $movimientos->groupBy(function (MovimientoEnvase $m): string {
             // Las líneas con documento vinculado comparten la guía y fecha vigentes de ese documento.
@@ -680,6 +733,10 @@ class ServicioCuentaCorrienteEnvases
                     ? $this->asignarIngreso($parte['tipos'], $clave !== '' ? ($csgRecepcion[$recepcionId]['csg'] ?? []) : ($csgRecepcion[$recepcionId]['csg_ingreso'] ?? []),
                         $clave !== '' ? ($repartos[$clave] ?? []) : ($csgRecepcion[$recepcionId]['envases'] ?? []))
                     : [['csg' => $productor, 'tipos' => $parte['tipos']]];
+                // Igual que en el estado de cuenta: lo reasignado entre productores queda en su CSG definitivo.
+                if ($reasignacion === null) {
+                    $asignaciones = $reasignacionesProductor->aplicar(self::claveProductor($origen, ['clave' => $clave]), $asignaciones);
+                }
                 foreach ($asignaciones as $asignacion) {
                     $cantidades = [];
                     foreach ($asignacion['tipos'] as $envase => $linea) {
@@ -842,11 +899,24 @@ class ServicioCuentaCorrienteEnvases
                 $agregar(['codigo' => $p['codigo'], 'nombre' => $p['nombre']], $tipo, [...$fila, 'entradas' => $p['cantidad']]);
             }
         }
+
+        return self::notasCompartidas(array_values($asignaciones));
+    }
+
+    /**
+     * Una guía repartida entre varios productores dice con quién se comparte; con uno solo, sin nota.
+     *
+     * @param  list<array{csg: ?array, compartido?: ?string, tipos: array}>  $asignaciones
+     * @return list<array{csg: ?array, compartido: ?string, tipos: array}>
+     */
+    public static function notasCompartidas(array $asignaciones): array
+    {
         $total = count($asignaciones);
-        foreach ($asignaciones as &$asignacion) {
+        foreach ($asignaciones as $indice => &$asignacion) {
+            $asignacion['compartido'] = null;
             if ($total > 1) {
                 $otros = array_map(fn (array $a): string => $a['csg']['codigo'] ?? 'sin productor',
-                    array_filter($asignaciones, fn (array $a): bool => $a !== $asignacion));
+                    array_filter($asignaciones, fn (int $otro): bool => $otro !== $indice, ARRAY_FILTER_USE_KEY));
                 $asignacion['compartido'] = 'Guía compartida con '.implode(', ', array_map(
                     fn (string $c): string => $c === 'sin productor' ? 'envases sin productor' : 'CSG '.$c, $otros,
                 )).': aquí solo la parte de este productor.';

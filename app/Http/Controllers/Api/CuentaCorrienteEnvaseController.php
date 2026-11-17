@@ -18,6 +18,7 @@ use App\Models\DetalleGuiaDespachoEnvase;
 use App\Models\GuiaDespachoEnvase;
 use App\Models\MovimientoEnvase;
 use App\Models\ReasignacionEnvases;
+use App\Models\ReasignacionProductorEnvases;
 use App\Models\RevisionMovimientoEnvase;
 use App\Models\Temporada;
 use App\Services\Envases\GeneradorCuentaEnvasesProductorXlsx;
@@ -28,6 +29,7 @@ use App\Services\Envases\ServicioCorreccionPropiedadEnvases;
 use App\Services\Envases\ServicioCorreccionSaldoHistoricoEnvases;
 use App\Services\Envases\ServicioCuentaCorrienteEnvases;
 use App\Services\Envases\ServicioReasignacionEnvases;
+use App\Services\Envases\ServicioReasignacionProductorEnvases;
 use App\Services\Existencias\GeneradorLibroXlsx;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
@@ -35,6 +37,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -127,6 +130,67 @@ class CuentaCorrienteEnvaseController extends Controller
         ], ['motivo.required' => 'Indica por qué se deshace la reasignación.', 'motivo.min' => 'El motivo debe tener al menos 10 caracteres.']);
 
         return response()->json(['data' => $this->reasignacionDatos($servicio->deshacer($reasignacionEnvases, $datos, $request->user()))]);
+    }
+
+    /** Guías del movimiento con sus productores y cantidades, para reasignarlas a otro productor de la cuenta. */
+    public function reasignacionProductor(MovimientoEnvase $movimientoEnvase, ServicioReasignacionProductorEnvases $servicio): JsonResponse
+    {
+        Gate::authorize('ajustar-cuenta-envases');
+
+        return response()->json(['data' => $servicio->opciones($movimientoEnvase->loadMissing('cliente'))]);
+    }
+
+    /** Reasigna un movimiento de envases a otro productor CSG de la misma cuenta, completo o por cantidades. */
+    public function reasignarProductor(Request $request, ServicioReasignacionProductorEnvases $servicio): JsonResponse
+    {
+        Gate::authorize('ajustar-cuenta-envases');
+        $datos = $request->validate([
+            'operacion_id' => ['required', 'uuid'],
+            'documento_clave' => ['required', 'string', 'max:120'],
+            'productor_origen_codigo' => ['nullable', 'string', 'max:40'],
+            'productor_csg_id' => ['required', 'uuid'],
+            'razon_social' => ['required', 'string', 'max:200'],
+            'modalidad' => ['required', Rule::in([ReasignacionProductorEnvases::COMPLETA, ReasignacionProductorEnvases::PARCIAL])],
+            'envases' => ['required_if:modalidad,'.ReasignacionProductorEnvases::PARCIAL, 'array', 'max:'.count(TipoEnvaseRomana::cases())],
+            'envases.*.tipo_envase' => ['required', 'distinct', Rule::enum(TipoEnvaseRomana::class)],
+            'envases.*.cantidad' => ['required', 'integer', 'min:0', 'max:100000'],
+            'motivo' => ['required', 'string', 'min:10', 'max:2000'],
+        ], [
+            'productor_csg_id.required' => 'Selecciona el CSG del productor correcto.',
+            'razon_social.required' => 'Falta la razón social del CSG de destino.',
+            'envases.required_if' => 'Indica cuántos envases se reasignan.',
+            'motivo.required' => 'Indica el motivo de la reasignación.',
+            'motivo.min' => 'El motivo debe tener al menos 10 caracteres.',
+        ]);
+        $registro = $servicio->reasignar($datos, $request->user());
+
+        return response()->json(['data' => [
+            'id' => $registro->id, 'documento_clave' => $registro->documento_clave, 'numero_documento' => $registro->numero_documento,
+            'modalidad' => $registro->modalidad, 'origen' => $registro->productor_origen, 'destino' => $registro->productor_destino,
+            'envases' => $registro->envases, 'motivo' => $registro->motivo, 'registrado_at' => $registro->registrado_at?->toAtomString(),
+        ]], 201);
+    }
+
+    /**
+     * Lo reasignado entre productores de este envase en la guía del movimiento, para el kardex interno.
+     *
+     * @param  Collection<int, ReasignacionProductorEnvases>  $registros
+     * @return list<array<string, mixed>>
+     */
+    private function reasignacionesProductorDe(MovimientoEnvase $movimiento, $registros): array
+    {
+        $base = ServicioCuentaCorrienteEnvases::claveProductor($movimiento);
+        if ($base === null) {
+            return [];
+        }
+
+        return $registros->filter(fn (ReasignacionProductorEnvases $r): bool => $r->cliente_id === $movimiento->cliente_id
+            && ServicioReasignacionProductorEnvases::baseDe($r->documento_clave) === $base)
+            ->map(fn (ReasignacionProductorEnvases $r): ?array => ($cantidad = (int) collect($r->envases)->where('tipo_envase', $movimiento->tipo_envase->value)->sum('cantidad')) > 0 ? [
+                'id' => $r->id, 'numero_documento' => $r->numero_documento, 'origen' => $r->productor_origen, 'destino' => $r->productor_destino,
+                'cantidad' => $cantidad, 'modalidad' => $r->modalidad, 'motivo' => $r->motivo, 'usuario' => $r->usuario?->name,
+                'registrado_at' => $r->registrado_at?->toAtomString(),
+            ] : null)->filter()->values()->all();
     }
 
     /** @return array<string, mixed> */
@@ -301,8 +365,14 @@ class CuentaCorrienteEnvaseController extends Controller
             })
             ->values();
 
+        // Reasignaciones entre productores de las guías de estos movimientos: solo trazabilidad interna del kardex.
+        $reasignacionesProductor = ReasignacionProductorEnvases::query()
+            ->where(fn (Builder $q) => $q->whereIn('recepcion_romana_id', $movimientos->pluck('recepcion_romana_id')->filter()->unique()->values())
+                ->orWhereIn('guia_despacho_envase_id', $movimientos->where('documento_tipo', 'guia_despacho_envases')->pluck('documento_id')->filter()->unique()->values()))
+            ->with('usuario:id,name')->orderBy('registrado_at')->get();
+
         return response()->json([
-            'data' => $movimientos->map(function (MovimientoEnvase $movimiento) use ($corregidos, $cantidadesCorregidas, $conGuias, $conMovimientos, $guiasEmitidas): array {
+            'data' => $movimientos->map(function (MovimientoEnvase $movimiento) use ($corregidos, $cantidadesCorregidas, $conGuias, $conMovimientos, $guiasEmitidas, $reasignacionesProductor): array {
                 $guia = $movimiento->documento_tipo === 'guia_despacho_envases'
                     ? $guiasEmitidas->get($movimiento->documento_id)
                     : null;
@@ -319,6 +389,7 @@ class CuentaCorrienteEnvaseController extends Controller
                         'numero' => $guia->numero_guia_despacho,
                         'archivo' => (bool) $guia->archivo_vigente_exists,
                     ] : null,
+                    'reasignaciones_productor' => $this->reasignacionesProductorDe($movimiento, $reasignacionesProductor),
                 ];
             }),
             'pendientes' => $pendientes->map(fn (DetalleEnvaseRecepcionRomana $detalle): array => [
@@ -610,6 +681,8 @@ class CuentaCorrienteEnvaseController extends Controller
                 TipoMovimientoEnvase::RecepcionFruta, TipoMovimientoEnvase::RecepcionArriendo, TipoMovimientoEnvase::DevolucionEnvases,
                 TipoMovimientoEnvase::SalidaRecepcionFruta, TipoMovimientoEnvase::DespachoCliente, TipoMovimientoEnvase::ReasignacionEntrada,
             ], true) || ! empty($movimiento->datos['ajuste_recepcion']['lado'])),
+            // Ingresos y salidas de una guía que se pueden repartir entre productores de la cuenta.
+            'puede_reasignar_productor' => (bool) $movimiento->temporada?->activa && ServicioReasignacionProductorEnvases::reasignable($movimiento),
             'reasignacion' => isset($movimiento->datos['reasignacion']) ? collect($movimiento->datos['reasignacion'])
                 ->only(['id', 'documento_clave', 'deshace', 'motivo', 'usuario', 'registrado_at', 'desde_cuenta', 'hacia_cuenta', 'productor'])->all() : null,
             'puede_revertir_ajuste' => ! $conVinculos && $movimiento->temporada?->activa

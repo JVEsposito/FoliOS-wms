@@ -131,6 +131,32 @@
                 <footer class="dialog-actions"><button class="secondary-button" id="reassignCancel" type="button">Cancelar</button><button class="secondary-button" id="reassignUndo" type="button" hidden>Deshacer reasignación</button><button class="primary-button" id="reassignSubmit" type="submit">Reasignar guía</button></footer>
             </form>
         </dialog>
+        <dialog class="review-dialog property-dialog reassign-dialog producer-reassign-dialog" id="producerReassignDialog" aria-labelledby="producerReassignTitle" aria-describedby="producerReassignHelp">
+            <form id="producerReassignForm" novalidate>
+                <header class="review-dialog__header"><p class="eyebrow">SOLO ATRIBUCIÓN POR PRODUCTOR</p><h2 id="producerReassignTitle">Reasignar movimiento a otro productor / CSG</h2></header>
+                <p class="property-dialog__help" id="producerReassignHelp">Cambia a qué productor de esta cuenta corriente se atribuye el movimiento, completo o en parte. El saldo de la cuenta, los kilos y la guía no cambian; el estado de cuenta y el Excel muestran solo la asignación final.</p>
+                <fieldset class="reassign-dialog__choices" id="producerReassignChoices" hidden></fieldset>
+                <div class="property-dialog__context reassign-dialog__document" id="producerReassignSummary"></div>
+                <label><span>Productor actual</span><select name="productor_origen" required></select></label>
+                <ul class="reassign-dialog__lines" id="producerReassignLines"></ul>
+                <p class="reassign-dialog__blocked" id="producerReassignBlocked" role="status" hidden></p>
+                <div class="reassign-dialog__destination">
+                    <label><span>CSG del productor correcto</span><select name="productor_csg_id" required><option value="">Seleccionar CSG</option></select></label>
+                    <label><span>Razón social</span><input name="razon_social" type="text" readonly tabindex="-1" placeholder="Se completa con el CSG"></label>
+                </div>
+                <fieldset class="producer-reassign-dialog__mode">
+                    <legend>Qué se reasigna</legend>
+                    <label><input type="radio" name="modalidad" value="completa" checked><span>Todo el movimiento de este productor</span></label>
+                    <label><input type="radio" name="modalidad" value="parcial"><span>Solo una parte de las cantidades</span></label>
+                </fieldset>
+                <div class="producer-reassign-dialog__quantities" id="producerReassignQuantities" hidden></div>
+                <label><span>Motivo</span><textarea name="motivo" rows="3" minlength="10" maxlength="2000" required placeholder="Ej.: 2 bins de esta guía son de Agrícola Tres, no del CSG validado"></textarea></label>
+                <p class="reassign-dialog__preview" id="producerReassignPreview" aria-live="polite"></p>
+                <details class="reassign-dialog__history" id="producerReassignHistory" hidden><summary>Historial de reasignaciones entre productores</summary><ol id="producerReassignHistoryList"></ol></details>
+                <p class="form-error" id="producerReassignError" role="alert"></p>
+                <footer class="dialog-actions"><button class="secondary-button" id="producerReassignCancel" type="button">Cancelar</button><button class="primary-button" id="producerReassignSubmit" type="submit">Reasignar movimiento</button></footer>
+            </form>
+        </dialog>
         <dialog class="review-dialog" id="reviewDialog" aria-labelledby="reviewDialogTitle">
             <form id="reviewForm" method="dialog">
                 <input name="movimiento_id" type="hidden">
