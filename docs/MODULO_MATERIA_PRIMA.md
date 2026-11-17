@@ -140,6 +140,7 @@ La asignación del lote:
 
 - exige una cámara activa de contenido `materia_prima`;
 - registra usuario, fecha y observación;
+- acepta la **hora real de ingreso a cámara** cuando la digitación se hace después (`ingresado_at`, hora de planta). No puede ser futura ni anterior a la llegada del camión. Fuera de administración, admite hasta `MP_DIAS_FECHA_REAL` días hacia atrás (3 por defecto). El registro de movimientos usa esa hora e indica cuándo se digitó. Si la recepción también se digitó tarde, conviene corregir primero su fecha real en Romana;
 - se realiza a nivel de cámara;
 - no crea folio;
 - no ocupa una posición del plano frigorífico.

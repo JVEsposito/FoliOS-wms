@@ -1,6 +1,7 @@
 import { createReceptionGuides, guideProblem } from './office-weighbridge-guides.js';
 import { createIntegralCorrection } from './office-weighbridge-integral.js';
 import { createGuideNumberCorrection } from './office-weighbridge-guide-number.js';
+import { createRealDateCorrection, realDateAudit } from './office-weighbridge-real-date.js';
 import { createGatehouseRomana } from './office-weighbridge-porteria';
 import { dispatchInspectionPayload } from './office-container-inspection.js';
 import { receptionSteps } from './shared/weighbridge-steps.js';
@@ -105,6 +106,7 @@ function label(value) {
     const labels = {
         recepcion_eliminada: 'Recepción eliminada por el administrador',
         peso_bruto_corregido: 'Peso bruto corregido',
+        fecha_real_corregida: 'Fecha real corregida',
         mismos: 'Se va con los mismos', diferentes: 'Se va con más o menos', vacio: 'Se va vacío',
         en_bascula_ingreso: 'En báscula ingreso', en_pesaje_envases: 'Pesaje acumulativo', en_bascula_salida: 'Pendiente de destare', cerrado: 'Cerrado',
         anulada: 'Anulada', recepcion_anulada: 'Recepción anulada', ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada', salida_envases_corregida: 'Salida de envases corregida', correccion_integral: 'Corrección administrativa de recepción validada', ajuste_cuenta_envases: 'Ajuste de cuenta de envases (administración)', numero_guia_corregido: 'N° de guía corregido (administración)',
@@ -431,6 +433,7 @@ function renderDetail(reception) {
     ] : [];
     elements.detailFacts.innerHTML = [
         fact('INGRESO', formatDate(reception.ingreso_at)),
+        ...(registeredLater(reception) ? [fact('DIGITADA EN FOLIOS', formatDate(reception.registrado_at))] : []),
         ...(reception.turno_operativo && reception.fecha_jornada ? [fact('JORNADA DE INGRESO', `${reception.fecha_jornada.split('-').reverse().join('-')} · Turno ${reception.turno_operativo}`)] : []), fact(reception.tipo_recepcion === 'solo_envases' ? 'CIERRE DOCUMENTAL' : reception.pesaje_envases ? 'CIERRE DE PESAJE' : 'SALIDA / DESTARE', formatDate(reception.salida_at)), fact('TEMPORADA GLOBAL', `${reception.temporada.nombre} · ${reception.temporada.codigo}`), fact('CLIENTE', reception.cliente.nombre), fact('TIPO RECEPCIÓN', label(reception.tipo_recepcion)), fact('SERVICIO / CONCEPTO', reception.tipo_recepcion === 'solo_envases' ? label(reception.concepto_envases) : label(reception.tipo_servicio)), fact('GUÍAS', guideNumbers(reception)),
         ...(reception.devolucion ? [fact('DEVOLUCIÓN DE PRODUCTOR', [`CSG ${reception.devolucion.productor?.codigo || ''}`, reception.devolucion.productor?.nombre, reception.devolucion.guia_salida ? `devuelve guía ${reception.devolucion.guia_salida}` : ''].filter(Boolean).join(' · '))] : []),
         ...(reception.destare_pendiente_validacion ? [fact('DESTARE', 'Espera la Validación MP completa en la PDA')] : []),
@@ -443,7 +446,7 @@ function renderDetail(reception) {
         ...(reception.observacion_conteo?.length ? [fact('CONTEO VALIDACIÓN MP', reception.observacion_conteo.join(' '))] : []),
         fact('VERSIÓN', String(reception.version)), fact('OBS. INGRESO', reception.observacion || 'Sin observaciones'), fact('OBS. CIERRE', reception.observacion_cierre || 'Sin observaciones'),
     ].join('');
-    elements.detailTimeline.innerHTML = (reception.eventos || []).map((event) => `<article class="timeline-item"><i></i><div><strong>${escapeHtml(label(event.tipo))}</strong><small>${escapeHtml(event.usuario?.nombre || 'Sistema')} · ${escapeHtml(event.estado_anterior ? `${receptionStateLabel(reception, event.estado_anterior)} → ${receptionStateLabel(reception, event.estado_nuevo)}` : receptionStateLabel(reception, event.estado_nuevo))}</small>${grossWeightAudit(event)}${['ajuste_cuenta_envases', 'numero_guia_corregido'].includes(event.tipo) && event.datos?.resumen ? `<small>${escapeHtml(event.datos.resumen)}</small>` : ''}${event.datos?.motivo ? `<small>Motivo: ${escapeHtml(event.datos.motivo)}</small>` : ''}</div><time>${escapeHtml(formatDate(event.ocurrido_at))}</time></article>`).join('');
+    elements.detailTimeline.innerHTML = (reception.eventos || []).map((event) => `<article class="timeline-item"><i></i><div><strong>${escapeHtml(label(event.tipo))}</strong><small>${escapeHtml(event.usuario?.nombre || 'Sistema')} · ${escapeHtml(event.estado_anterior ? `${receptionStateLabel(reception, event.estado_anterior)} → ${receptionStateLabel(reception, event.estado_nuevo)}` : receptionStateLabel(reception, event.estado_nuevo))}</small>${grossWeightAudit(event)}${realDateAudit(event, byId('realDateDialog')?.dataset.zone || 'America/Santiago')}${['ajuste_cuenta_envases', 'numero_guia_corregido'].includes(event.tipo) && event.datos?.resumen ? `<small>${escapeHtml(event.datos.resumen)}</small>` : ''}${event.datos?.motivo ? `<small>Motivo: ${escapeHtml(event.datos.motivo)}</small>` : ''}</div><time>${escapeHtml(formatDate(event.ocurrido_at))}</time></article>`).join('');
     elements.weightBalance.innerHTML = reception.tipo_recepcion === 'solo_envases'
         ? '<div class="net-row"><span>Recepción documental</span><strong>Sin registro de kilos</strong></div>'
         : `<div><span>Bruto${reception.pesaje_envases ? ' acumulado' : ''}</span><strong>${escapeHtml(formatWeight(reception.peso_bruto))}</strong></div><div><span>Tara ${reception.pesaje_envases ? 'acumulada' : 'camión'}</span><strong>${escapeHtml(formatWeight(reception.peso_tara))}</strong></div>${reception.modo_salida_envases && reception.peso_tara_envases !== 0 ? `<div><span>Diferencia tara envases</span><strong>${escapeHtml(formatWeight(reception.peso_tara_envases))}</strong></div>` : ''}${reception.pesaje_envases ? (weighingTypes(reception.pesaje_envases).length > 1
@@ -459,6 +462,7 @@ function renderDetail(reception) {
     elements.annulReception.classList.toggle('is-hidden', !reception.puede_anular || Boolean(reception.puede_eliminar));
     elements.deleteReception.classList.toggle('is-hidden', !reception.puede_eliminar);
     elements.correctGrossWeight.classList.toggle('is-hidden', state.identity?.rol !== 'administrador' || !reception.puede_corregir_peso_bruto);
+    byId('realDateButton').classList.toggle('is-hidden', !reception.puede_corregir_fecha_real);
     // Administración corrige el número de la guía en cualquier etapa: solo el número, sin tocar envases ni kilos.
     byId('guideNumberButton').classList.toggle('is-hidden', state.identity?.rol !== 'administrador'
         || reception.estado === 'anulada' || Boolean(reception.eliminada) || !(reception.guias || []).length);
@@ -561,6 +565,16 @@ const guideNumberCorrection = createGuideNumberCorrection({
     onSaved: async (recepcion) => { renderDetail(recepcion); await loadReceptions({ silent: true }); },
 });
 byId('guideNumberButton').addEventListener('click', () => { if (state.selected) guideNumberCorrection.open(state.selected); });
+const realDateCorrection = createRealDateCorrection({
+    dialog: byId('realDateDialog'), api, escapeHtml, operationUuid, toast,
+    onSaved: async (recepcion) => { renderDetail(recepcion); await loadReceptions({ silent: true }); },
+});
+byId('realDateButton').addEventListener('click', () => { if (state.selected) realDateCorrection.open(state.selected); });
+/** Digitada después del ingreso del camión: más de diez minutos de diferencia. */
+function registeredLater(reception) {
+    if (!reception.registrado_at || !reception.ingreso_at) return false;
+    return Math.abs(new Date(reception.registrado_at) - new Date(reception.ingreso_at)) > 10 * 60 * 1000;
+}
 byId('integralCorrectionButton').addEventListener('click', async () => {
     if (!state.selected) return;
     setBusy(true, 'Preparando la corrección…');

@@ -8,6 +8,7 @@ use App\Models\EventoLoteMateriaPrima;
 use App\Models\LoteMateriaPrima;
 use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -115,10 +116,13 @@ class RegistroMovimientosCamaraMp
                 'usuario' => $datos['usuario_nombre'] ?? $evento->usuario?->name ?? 'Sistema',
                 'observacion' => $datos['motivo'] ?? $datos['observacion'] ?? $entrega?->observacion,
                 'es_correccion' => $anulacion,
-                'detalle' => $anulacion ? 'Corrección del registro; no acredita un traslado físico.'
+                'detalle' => ($datos['hora_real'] ?? false) && filled($datos['registrado_at'] ?? null)
+                    ? 'Hora real declarada; se digitó el '.CarbonImmutable::parse($datos['registrado_at'])
+                        ->setTimezone(config('app.operational_timezone', 'America/Santiago'))->format('d-m-Y H:i').'.'
+                    : ($anulacion ? 'Corrección del registro; no acredita un traslado físico.'
                     : ($salida && $entrega?->anulado_at !== null ? 'Salida anulada: se conserva el registro original.'
                         : ($lotesOrigen->count() > 1 ? 'Cantidad del sublote completo; sin reparto supuesto entre lotes de origen.'
-                            : ($cantidad === null ? 'Cantidad no registrada en el evento histórico.' : null))),
+                            : ($cantidad === null ? 'Cantidad no registrada en el evento histórico.' : null)))),
             ];
         });
     }

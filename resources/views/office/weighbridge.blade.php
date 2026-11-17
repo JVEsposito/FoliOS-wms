@@ -86,6 +86,7 @@
                             <button class="secondary-button rec-delete-button is-hidden" id="deleteReceptionButton" type="button">Eliminar recepción</button>
                             <button class="secondary-button is-hidden" id="annulReceptionButton" type="button">Anular recepción</button>
                             <button class="secondary-button is-hidden" id="editReceptionButton" type="button">Editar ingreso</button>
+                            <button class="secondary-button is-hidden" id="realDateButton" type="button">Corregir fecha real</button>
                             <button class="secondary-button is-hidden" id="correctGrossWeightButton" type="button">Corregir peso bruto</button>
                             <button class="secondary-button is-hidden" id="guideNumberButton" type="button">Corregir N° de guía</button>
                             <button class="secondary-button is-hidden" id="integralCorrectionButton" type="button">Corregir recepción validada</button>
@@ -121,6 +122,7 @@
         </dialog>
         <dialog class="weighbridge-dialog integral-dialog" id="integralCorrectionDialog" aria-label="Corregir recepción validada"></dialog>
         <dialog class="weighbridge-dialog" id="guideNumberDialog" aria-label="Corregir N° de guía"></dialog>
+        <dialog class="weighbridge-dialog weighbridge-dialog--compact" id="realDateDialog" aria-label="Corregir fecha real" data-zone="{{ config('app.operational_timezone') }}"></dialog>
         <dialog class="weighbridge-dialog weighbridge-dialog--compact" id="grossWeightDialog" aria-labelledby="grossWeightTitle">
             <form class="weighbridge-dialog__shell" id="grossWeightForm">
                 <header class="weighbridge-dialog__heading"><div><p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p><h2 id="grossWeightTitle">Corregir peso bruto</h2><p id="grossWeightDescription"></p></div></header>

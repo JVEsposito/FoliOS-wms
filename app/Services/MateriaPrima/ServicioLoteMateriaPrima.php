@@ -8,6 +8,7 @@ use App\Enums\EstadoHidrocoolerMateriaPrima;
 use App\Enums\EstadoLoteMateriaPrima;
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\EstadoValidacionMp;
+use App\Enums\RolUsuario;
 use App\Enums\TipoEnvaseRomana;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\AsignacionCamaraLoteMateriaPrima;
@@ -785,12 +786,14 @@ class ServicioLoteMateriaPrima
                 ]);
             }
 
+            $ahora = CarbonImmutable::now();
+            $ingresado = $this->ingresoRealCamara($lote, $datos['ingresado_at'] ?? null, $usuario, $ahora);
             AsignacionCamaraLoteMateriaPrima::create([
                 'operacion_id' => $datos['operacion_id'],
                 'lote_materia_prima_id' => $lote->id,
                 'camara_id' => $camara->id,
                 'asignado_por_user_id' => $usuario->id,
-                'asignado_at' => now(),
+                'asignado_at' => $ingresado,
                 'observacion' => $datos['observacion'] ?? null,
             ]);
             $lote->update([
@@ -809,11 +812,42 @@ class ServicioLoteMateriaPrima
                     'camara_destino_id' => $camara->id, 'camara_destino_codigo' => $camara->codigo, 'camara_destino_nombre' => $camara->nombre,
                     'cantidad_envases' => $lote->cantidad_envases_primarios, 'tipo_envase' => $lote->envase_primario->value,
                     'origen_operacional' => $lote->requiere_hidrocooler ? 'Hidrocooler' : 'Recepción MP',
-                    'usuario_nombre' => $usuario->name, 'observacion' => $datos['observacion'] ?? null],
+                    'usuario_nombre' => $usuario->name, 'observacion' => $datos['observacion'] ?? null,
+                    ...($ingresado->equalTo($ahora) ? [] : ['hora_real' => true, 'registrado_at' => $ahora->toAtomString()])],
+                $ingresado,
             );
 
             return $this->cargar($lote);
         }, attempts: 3);
+    }
+
+    /**
+     * Si la digitación quedó para después, el ingreso a cámara se fecha con la hora real que
+     * se declara: no antes de la llegada del camión ni en el futuro, y fuera de administración
+     * hasta los días permitidos para registrar tarde.
+     */
+    private function ingresoRealCamara(LoteMateriaPrima $lote, ?string $declarado, User $usuario, CarbonImmutable $ahora): CarbonImmutable
+    {
+        if ($declarado === null) {
+            return $ahora;
+        }
+        $zona = (string) config('app.operational_timezone');
+        $ingresado = CarbonImmutable::createFromFormat('Y-m-d\\TH:i', $declarado, $zona)->startOfMinute()->utc();
+        $formato = fn (CarbonImmutable $momento): string => $momento->setTimezone($zona)->format('d-m-Y H:i');
+        if ($ingresado->gt($ahora)) {
+            throw ValidationException::withMessages(['ingresado_at' => 'La hora real del ingreso a cámara no puede ser futura.']);
+        }
+        $llegada = $lote->recepcion?->ingreso_at;
+        if ($llegada !== null && $ingresado->lt(CarbonImmutable::instance($llegada))) {
+            throw ValidationException::withMessages(['ingresado_at' => 'El ingreso a cámara no puede ser anterior a la llegada del camión ('
+                .$formato(CarbonImmutable::instance($llegada)).'). Si la recepción también se digitó después, corrige primero su fecha real en Romana.']);
+        }
+        $dias = max(0, (int) config('materia_prima.dias_fecha_real', 3));
+        if ($usuario->rol !== RolUsuario::Administrador && $ingresado->lt($ahora->subDays($dias))) {
+            throw ValidationException::withMessages(['ingresado_at' => "Puedes indicar hasta {$dias} días hacia atrás. Para fechas anteriores, pide la asignación a administración."]);
+        }
+
+        return $ingresado;
     }
 
     public function anular(
@@ -1303,6 +1337,7 @@ class ServicioLoteMateriaPrima
         ?EstadoLoteMateriaPrima $estadoAnterior,
         ?EstadoLoteMateriaPrima $estadoNuevo,
         ?array $datos = null,
+        ?CarbonImmutable $ocurridoAt = null,
     ): void {
         EventoLoteMateriaPrima::create([
             'lote_materia_prima_id' => $lote->id,
@@ -1311,7 +1346,7 @@ class ServicioLoteMateriaPrima
             'estado_anterior' => $estadoAnterior?->value,
             'estado_nuevo' => $estadoNuevo?->value,
             'user_id' => $usuario->id,
-            'ocurrido_at' => now(),
+            'ocurrido_at' => $ocurridoAt ?? now(),
             'datos' => $datos,
         ]);
     }

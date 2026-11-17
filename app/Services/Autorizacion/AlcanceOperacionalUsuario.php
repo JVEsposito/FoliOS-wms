@@ -1206,6 +1206,17 @@ class AlcanceOperacionalUsuario
         ], 'materia-prima.romana');
     }
 
+    /** Quien registra en Romana o digita MP declara la fecha real cuando registra después. */
+    public function puedeCorregirFechaRealRomana(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo($usuario, [
+            RolUsuario::Administrador,
+            RolUsuario::SupervisorFrio,
+            RolUsuario::OperadorRomana,
+            RolUsuario::DigitadorMateriaPrima,
+        ], 'materia-prima.romana');
+    }
+
     public function puedeCorregirRecepcionesRomana(User $usuario): bool
     {
         return $this->rolActivoEnModulo(

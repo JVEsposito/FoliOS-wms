@@ -34,6 +34,7 @@ class LoteMateriaPrimaResource extends JsonResource
                 'id' => $this->recepcion->id,
                 'numero_recepcion' => $this->recepcion->numero_recepcion,
                 'numero_guia_despacho' => $this->recepcion->numero_guia_despacho,
+                'ingreso_at' => $this->recepcion->ingreso_at?->toAtomString(),
                 'peso_neto' => $this->recepcion->peso_neto !== null ? (float) $this->recepcion->peso_neto : null,
                 'tipo_envase_calculo_neto' => $this->recepcion->tipo_envase_calculo_neto,
                 'peso_neto_por_envase' => $this->recepcion->peso_neto_por_envase !== null ? (float) $this->recepcion->peso_neto_por_envase : null,
