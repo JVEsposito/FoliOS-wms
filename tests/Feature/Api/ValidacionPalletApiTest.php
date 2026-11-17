@@ -7,6 +7,7 @@ use App\Models\Dispositivo;
 use App\Models\Folio;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Models\ValidacionPallet;
 use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Carbon\CarbonImmutable;
@@ -342,6 +343,28 @@ class ValidacionPalletApiTest extends TestCase
         $this->assertSame('MIX', $folio->datos_externos['csg']);
         $this->assertSame('2026-08-12', $folio->datos_externos['fecha_embalaje']);
         $this->assertSame([70, 50], collect($folio->datos_externos['composicion'])->pluck('cantidad_cajas')->all());
+
+        // Los informes no muestran «MIX»: una línea por CSG con sus cajas.
+        $fecha = ValidacionPallet::query()->where('numero_folio', 'PAL-MIX-CSG')->firstOrFail()->fechaJornada()->toDateString();
+        $ruta = '/api/validacion/registro/rrpp-01?'.http_build_query(['temporada_id' => $catalogo['temporada_id'], 'fecha' => $fecha, 'cliente' => 'DIS']);
+        $pdf = $this->conToken($token)->get($ruta.'&formato=pdf')->assertOk()->getContent();
+        foreach (['(105410)', '(105411)', '(70)', '(50)', '(Total 120)'] as $texto) {
+            $this->assertStringContainsString($texto, $pdf);
+        }
+        // Solo el texto del documento: el logo embebido puede contener esos bytes.
+        preg_match_all('/\((.*?)\) Tj/', $pdf, $textos);
+        $this->assertNotEmpty($textos[1]);
+        $this->assertSame([], array_values(array_filter($textos[1], fn (string $texto): bool => preg_match('/(^|[\s·])MIX($|[\s·])/u', $texto) === 1)));
+        $excel = $this->conToken($token)->get($ruta)->assertOk();
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($excel->baseResponse->getFile()->getPathname()) === true);
+        $hoja = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        $this->assertSame(['PAL-MIX-CSG', 'PAL-MIX-CSG', ''], [$this->valorCelda($hoja, 'B11'), $this->valorCelda($hoja, 'B12'), $this->valorCelda($hoja, 'B13')]);
+        $this->assertSame(['105410', '105411'], [$this->valorCelda($hoja, 'G11'), $this->valorCelda($hoja, 'G12')]);
+        $this->assertSame(['70', '50', '120'], [$this->valorCelda($hoja, 'I11'), $this->valorCelda($hoja, 'I12'), $this->valorCelda($hoja, 'I31')]);
+        $this->assertSame(['X', 'X'], [$this->valorCelda($hoja, 'J11'), $this->valorCelda($hoja, 'J12')]);
+        $this->assertSame(['2J', '2J'], [$this->valorCelda($hoja, 'H11'), $this->valorCelda($hoja, 'H12')]);
     }
 
     public function test_registra_varios_lotes_y_procesos_por_pallet_y_los_hace_trazables(): void
