@@ -1,6 +1,8 @@
 import { createSearchSelect } from './search-select.js';
 import {
-    articlesForOrigins,
+    articlesForOriginProducts,
+    lineArticles,
+    uniqueSorted,
     brandOptions,
     categoryOptions,
     clientOptions,
@@ -81,6 +83,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
     let notice = '';
     const loadedClients = new Set();
     const linePickers = new Map();
+    const caliberPickers = new Map();
     const pickers = {};
 
     const picker = (name, label, placeholder, onChange) => {
@@ -133,6 +136,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
 
     function renderLines() {
         linePickers.clear();
+        caliberPickers.clear();
         elements.lines.innerHTML = '';
         draft.lines.forEach((line, position) => {
             const number = position + 1;
@@ -141,6 +145,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
             row.dataset.key = line.key;
             row.innerHTML = `<span class="vc-line__number" aria-hidden="true">${number}</span>
                 <div class="vc-field vc-line__csg"><span>CSG</span><div data-line-picker></div></div>
+                <div class="vc-field vc-line__caliber"><span>Calibre</span><div data-caliber-picker></div></div>
                 <label class="vc-field vc-line__boxes"><span>Cajas</span><input data-line-field="boxes" type="number" min="1" step="1" inputmode="numeric" value="${escapeHtml(line.boxes)}" aria-label="Cajas de la línea ${number}"></label>
                 <label class="vc-field"><span>Lote MP</span><input data-line-field="lot" maxlength="80" autocomplete="off" value="${escapeHtml(line.lot)}" aria-label="Lote de materia prima de la línea ${number}"></label>
                 <label class="vc-field"><span>Proceso</span><input data-line-field="process" maxlength="80" autocomplete="off" value="${escapeHtml(line.process)}" aria-label="Proceso de packing de la línea ${number}"></label>
@@ -154,7 +159,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
                     const lines = draft.lines.map((item) => item.key === line.key ? { ...item, originId: value } : item);
                     const ids = lines.map((item) => item.originId).filter(Boolean);
                     // Igual que la PDA: un CSG sin producto en común con los demás no se acepta.
-                    if (ids.length > 1 && !articlesForOrigins(index, ids).length) {
+                    if (ids.length > 1 && !articlesForOriginProducts(index, ids).length) {
                         const csgs = [...new Set(ids.map((id) => index.originById.get(id)?.csg || id))].join(' + ');
                         notice = `Los CSG ${csgs} no tienen un producto habilitado en común. Elige otro CSG o revisa sus variedades en el catálogo.`;
                         refresh();
@@ -166,6 +171,11 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
                 },
             });
             linePickers.set(line.key, csg);
+            caliberPickers.set(line.key, createSearchSelect(row.querySelector('[data-caliber-picker]'), {
+                label: `Calibre de la línea ${number}`,
+                placeholder: 'Elegir calibre',
+                onChange: (value) => { draft.lines = draft.lines.map((item) => item.key === line.key ? { ...item, caliber: value } : item); refresh(); },
+            }));
         });
     }
 
@@ -203,6 +213,13 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
             csg.setOptions(csgs);
             csg.setValue(line.originId);
             csg.setDisabled(!draft.marca);
+        }
+        for (const line of draft.lines) {
+            const picker = caliberPickers.get(line.key);
+            if (!picker) continue;
+            picker.setOptions(uniqueSorted(lineArticles(index, draft, line).map((article) => article.calibre)).map((value) => ({ value, label: value })));
+            picker.setValue(line.caliber || draft.calibre);
+            picker.setDisabled(!draft.envase || !line.originId);
         }
         elements.addLine.disabled = !draft.marca || draft.lines.length >= 20;
 
@@ -308,7 +325,7 @@ export function createValidationCorrection({ api, setBusy = () => {}, toast = ()
             return;
         }
         const article = productChoices(index, draft).article;
-        const payload = correctionPayload(draft, article, operationId, datesOnly);
+        const payload = correctionPayload(draft, article, operationId, datesOnly, index);
         const payloadKey = JSON.stringify({ ...payload, operacion_id: null });
         if (submittedPayload !== null && submittedPayload !== payloadKey) operationId = randomUuid();
         submittedPayload = payloadKey;

@@ -7,6 +7,23 @@ use PHPUnit\Framework\TestCase;
 
 class ComparadorConciliacionValidacionTest extends TestCase
 {
+    public function test_compara_una_mezcla_por_cajas_de_calibre_y_no_solo_por_el_resumen_mix(): void
+    {
+        $comparador = new ComparadorConciliacionValidacion;
+        $fisico = [...$this->fisico(), 'calibre' => 'MIX', 'calibres' => ['2J' => 60, '3J' => 40]];
+        $planta = [...$this->planta(), 'calibre' => '2J / 3J', 'mezclados' => ['calibre'], 'calibres' => ['3J' => 40, '2J' => 60]];
+        $this->assertSame('coincide', $comparador->comparar($fisico, $planta)['calibre']['estado']);
+        $planta['calibres'] = ['2J' => 40, '3J' => 60];
+        $this->assertSame('diferente', $comparador->comparar($fisico, $planta)['calibre']['estado']);
+        $this->assertSame('diferente', $comparador->comparar($fisico, $this->planta())['calibre']['estado']);
+        $this->assertSame('diferente', $comparador->comparar($this->fisico(), $planta)['calibre']['estado']);
+        $planta['calibres'] = [];
+        $this->assertSame('por_revisar', $comparador->comparar($fisico, $planta)['calibre']['estado']);
+        $this->assertSame(['2J' => 60, '3J' => 40], $comparador->porCalibre([
+            ['calibre' => '2j', 'cajas' => 60], ['calibre' => '3J', 'cajas' => 40],
+        ], 'cajas'));
+    }
+
     private function fisico(): array
     {
         return ['cajas' => 100, 'marca' => 'Marca A', 'calibre' => '2J', 'csg' => ['001234' => 60, '001567' => 40]];

@@ -14,8 +14,8 @@ class AnulacionValidacionPalletOfficeTest extends TestCase
             ->assertSee('Pallets aún anulables')
             ->assertSee('Registro de anulaciones')
             ->assertSee('validationCorrectionDialog', false)
-            ->assertSee('Composición por CSG')
-            ->assertSee('+ Agregar línea (otro CSG, lote o proceso)');
+            ->assertSee('Composición por CSG y calibre')
+            ->assertSee('+ Agregar línea (otro calibre, CSG, lote o proceso)');
 
         $script = file_get_contents(resource_path('js/office-validation-annulments.js'));
 
@@ -34,7 +34,8 @@ class AnulacionValidacionPalletOfficeTest extends TestCase
         $this->get('/oficina/validacion')
             ->assertOk()
             ->assertSee('validationCorrectionDialog', false)
-            ->assertSee('Composición por CSG');
+            ->assertSee('Composición por CSG y calibre')
+            ->assertSee('+ Agregar línea (otro calibre, CSG, lote o proceso)');
         $this->assertStringContainsString(
             'createValidationCorrection',
             (string) file_get_contents(resource_path('js/office-validation.js')),

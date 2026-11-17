@@ -126,71 +126,13 @@ class ServicioValidacionPallet
                 );
             }
 
-            $combinaciones = DB::table('combinaciones_validacion')
-                ->where('temporada_id', $temporada->id)
-                ->where('articulo_validacion_id', $articulo->id)
-                ->whereIn('origen_validacion_id', $origenIds)
-                ->where('activo', true)
-                ->get()
-                ->keyBy('origen_validacion_id');
-
-            if ($combinaciones->count() !== $origenIds->count()) {
-                throw new DomainException(
-                    'Una de las combinaciones de artículo y CSG no se encuentra habilitada.',
-                );
-            }
-
-            // La proyección puede quedar anticuada entre la descarga del catálogo y el registro.
-            // Verificamos la asociación vigente en los maestros antes de aceptar el pallet.
-            if ($articulo->variedad_validacion_id !== null) {
-                foreach ($origenes as $origenValidacion) {
-                    if ($origenValidacion->csg_validacion_id !== null
-                        && ! DB::table('csg_variedades_validacion')
-                            ->where('csg_validacion_id', $origenValidacion->csg_validacion_id)
-                            ->where('variedad_validacion_id', $articulo->variedad_validacion_id)
-                            ->exists()) {
-                        throw new DomainException('La variedad seleccionada no está asociada al CSG elegido.');
-                    }
-                }
-            }
-
-            $totalComposicion = (int) $composicionSolicitada->sum('cantidad_cajas');
-            if ($totalComposicion !== (int) $datos['cantidad_cajas']) {
-                throw new DomainException(sprintf(
-                    'La composición por CSG suma %d cajas y el bulto declara %d.',
-                    $totalComposicion,
-                    (int) $datos['cantidad_cajas'],
-                ));
-            }
-
-            $composicion = $composicionSolicitada->map(function (array $linea) use (
-                $origenes,
-                $combinaciones,
-                $payload,
-                $articulo,
-            ): array {
-                $origen = $origenes->get($linea['origen_validacion_id']);
-                $combinacion = $combinaciones->get($linea['origen_validacion_id']);
-                $lote = $linea['lote_materia_prima'] ?? null;
-                $proceso = $linea['proceso_packing'] ?? null;
-
-                return [
-                    'articulo_validacion_id' => $articulo->id,
-                    'envase_validacion_id' => $articulo->envase_validacion_id,
-                    'especie' => $articulo->especie, 'variedad' => $articulo->variedad,
-                    'envase' => $articulo->envase, 'cliente' => $origen->cliente,
-                    'origen_validacion_id' => $origen->id,
-                    'combinacion_validacion_id' => $combinacion->id,
-                    'csg' => $origen->csg,
-                    'predio' => $origen->predio,
-                    'fecha_embalaje' => $payload['fecha_embalaje'],
-                    'cantidad_cajas' => (int) $linea['cantidad_cajas'],
-                    ...($lote !== null ? ['lote_materia_prima' => $lote] : []),
-                    ...($proceso !== null ? ['proceso_packing' => $proceso] : []),
-                ];
-            })->values();
+            $composicion = app(ComposicionCalibresValidacion::class)->preparar(
+                $payload['composicion'], $articulo, $temporada->id,
+                (int) $datos['cantidad_cajas'], $payload['fecha_embalaje'],
+            );
+            $calibreResumen = ComposicionCalibresValidacion::resumen($composicion);
             $origen = $origenes->get($composicion->first()['origen_validacion_id']);
-            $combinacion = $combinaciones->get($origen->id);
+            $combinacion = DB::table('combinaciones_validacion')->where('id', $composicion->first()['combinacion_validacion_id'])->first();
             $csgResumen = $this->valorComun($composicion->pluck('csg'));
             $predioResumen = $this->valorComun($composicion->pluck('predio'));
 
@@ -234,7 +176,7 @@ class ServicioValidacionPallet
                 'articulo' => [
                     'especie' => $articulo->especie,
                     'variedad' => $articulo->variedad,
-                    'calibre' => $articulo->calibre,
+                    'calibre' => $calibreResumen,
                     'envase' => $articulo->envase,
                 ],
                 'origen' => [
@@ -300,7 +242,7 @@ class ServicioValidacionPallet
                     'fecha_ingreso' => now(),
                     'activo' => true,
                     'variedad' => $articulo->variedad,
-                    'calibre' => $articulo->calibre,
+                    'calibre' => $calibreResumen,
                     'marca' => $origen->marca,
                     'exportadora' => $origen->cliente,
                     'origen_sistema' => 'validacion',
@@ -312,6 +254,7 @@ class ServicioValidacionPallet
                         'envase' => $articulo->envase,
                         'csg' => $csgResumen,
                         'csgs' => $composicion->pluck('csg')->unique()->values()->all(),
+                        'calibres' => $composicion->pluck('calibre')->unique()->values()->all(),
                         'predio' => $predioResumen,
                         'fecha_embalaje' => $payload['fecha_embalaje'],
                         'fechas_embalaje' => $payload['fecha_embalaje']
@@ -363,6 +306,7 @@ class ServicioValidacionPallet
                 'origen_validacion_id' => $datos['origen_validacion_id'],
                 'cantidad_cajas' => (int) $datos['cantidad_cajas'],
             ]])->map(fn (array $linea): array => array_filter([
+                'articulo_validacion_id' => $linea['articulo_validacion_id'] ?? null,
                 'origen_validacion_id' => $linea['origen_validacion_id'],
                 'cantidad_cajas' => (int) $linea['cantidad_cajas'],
                 // Solo se incluyen si vienen informados: así el hash de las PDA anteriores

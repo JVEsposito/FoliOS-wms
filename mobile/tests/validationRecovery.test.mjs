@@ -33,7 +33,7 @@ const pending = (overrides = {}) => ({
 });
 
 function harness({ item = pending(), statusError = false, record = null, finalRecord = null, failPost = null, width = 1200,
-  cachedVersion = 2, serverVersion = 2, catalogError = null, historyError = false, cacheError = false, noCached = false, catalogBlocked = false, historyBlocked = false } = {}) {
+  mixed = false, cachedVersion = 2, serverVersion = 2, catalogError = null, historyError = false, cacheError = false, noCached = false, catalogBlocked = false, historyBlocked = false } = {}) {
   let renderer; let sequence = 0; let failWrite = false;
   let pollTask;
   const files = new Map();
@@ -50,6 +50,10 @@ function harness({ item = pending(), statusError = false, record = null, finalRe
     combinaciones: [1, 2].map((n) => ({ origen_validacion_id: `origin-${n}`, articulo_validacion_id: 'article' })),
     motivos: ['otro'],
   };
+  if (mixed) {
+    catalog.articulos.push({ ...catalog.articulos[0], id: 'article-3j', calibre: '3J' });
+    catalog.combinaciones.push({ origen_validacion_id: 'origin-2', articulo_validacion_id: 'article-3j' });
+  }
   if (!noCached) storage.set('estiba_validation_catalog:1:pda', JSON.stringify({ ...catalog, temporada: { ...catalog.temporada, version_catalogo: cachedVersion } }));
   storage.set('estiba_validation_work_context:1:pda', JSON.stringify({ linea_proceso: 1, turno: 'A' }));
   const asyncStorage = {
@@ -424,4 +428,19 @@ test('mutaciones simultáneas de bandeja conservan los otros folios y rechazan r
   assert.deepEqual(h.outbox().map((entry) => entry.id), ['corrected', 'second']);
   await assert.rejects(h.offline.replaceValidationOutboxItem('1', 'pda', 'corrected', { ...corrected, operacion_id: 'third' }), /La captura cambió/);
   assert.deepEqual(h.outbox().map((entry) => entry.id), ['corrected', 'second']);
+});
+
+test('retomar una validación mixta mantiene calibre y cajas por línea al reenviar', async () => {
+  const data = payload();
+  data.composicion[0].articulo_validacion_id = 'article';
+  data.composicion[1].articulo_validacion_id = 'article-3j';
+  const h = harness({ item: pending({ payload: data }), mixed: true });
+  try {
+    await h.mount(); await h.press('Retomar');
+    assert.equal(h.field('Calibre de la línea 1'), '2J');
+    assert.equal(h.field('Calibre de la línea 2'), '3J');
+    await h.press('Aprobar');
+    assert.equal(h.calls.posts.length, 1);
+    assert.deepEqual(h.calls.posts[0].composicion.map((line) => [line.articulo_validacion_id, line.cantidad_cajas]), [['article', 70], ['article-3j', 50]]);
+  } finally { await h.unmount(); }
 });

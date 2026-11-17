@@ -78,6 +78,8 @@ export type ValidationCatalog = {
 export type ValidationPrefillField = 'tipo_bulto' | 'cantidad_cajas' | 'fecha_embalaje' | 'articulo' | 'categoria' | 'composicion';
 
 export type ValidationPrefillLine = {
+  articulo_validacion_id?: string | null;
+  calibre?: string | null;
   csg: string | null;
   predio: string | null;
   origen_validacion_id: string | null;
@@ -133,6 +135,7 @@ export type RegisterValidationPayload = {
   origen_validacion_id: string;
   fecha_embalaje: string;
   composicion: Array<{
+    articulo_validacion_id?: string;
     origen_validacion_id: string;
     cantidad_cajas: number;
     lote_materia_prima?: string;
@@ -174,6 +177,8 @@ export type ValidationAttempt = {
     origen: { cliente: string; marca: string; csg: string; predio: string | null } | null;
     fecha_embalaje: string | null;
     composicion: Array<{
+      articulo_validacion_id?: string;
+      calibre?: string | null;
       origen_validacion_id: string;
       combinacion_validacion_id: string;
       csg: string;

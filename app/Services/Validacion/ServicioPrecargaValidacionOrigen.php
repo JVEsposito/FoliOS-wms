@@ -88,7 +88,9 @@ final class ServicioPrecargaValidacionOrigen
         $resuelto = $this->catalogo->resolver($pallet);
         $pendientes = [];
         foreach ($pallet->mezclados ?? [] as $campo) {
-            $pendientes[] = "Mezcla en origen: {$campo}. Elige el valor del pallet.";
+            $pendientes[] = $campo === 'calibre'
+                ? 'El pallet contiene varios calibres. Revisa el calibre y las cajas de cada línea.'
+                : "Mezcla en origen: {$campo}. Elige el valor del pallet.";
         }
         foreach ($resuelto['sin_catalogo'] as $dimension) {
             $pendientes[] = ServicioCatalogoStockOrigen::DIMENSIONES[$dimension].' sin equivalencia en el catálogo de validación.';
@@ -102,14 +104,14 @@ final class ServicioPrecargaValidacionOrigen
 
         $composicion = collect($pallet->composicion ?? [])
             ->filter(fn (mixed $linea): bool => is_array($linea))
-            // La PDA registra una línea por CSG, lote y proceso: el productor y la variedad del
-            // origen no separan líneas en la validación.
+            // Los calibres se conservan por separado, incluso en el mismo CSG, lote y proceso.
             ->groupBy(fn (array $linea): string => implode('|', [
                 ProyeccionTrazabilidadFolio::normalizarCodigo($linea['csg'] ?? null),
                 ProyeccionTrazabilidadFolio::normalizarCodigo($linea['lote'] ?? null),
                 ProyeccionTrazabilidadFolio::normalizarCodigo($linea['proceso'] ?? null),
+                ProyeccionTrazabilidadFolio::normalizarCodigo($linea['calibre'] ?? null),
             ]))
-            ->map(function (Collection $grupo) use ($temporada, $cliente, $marca, &$pendientes): array {
+            ->map(function (Collection $grupo) use ($temporada, $cliente, $marca, $resuelto, $pallet, &$pendientes): array {
                 $csg = $this->texto($grupo->first()['csg'] ?? null);
                 $csgValidacion = $this->catalogo->csg($csg);
                 $origen = $csgValidacion && $cliente && $marca
@@ -125,7 +127,13 @@ final class ServicioPrecargaValidacionOrigen
                     $pendientes[] = "CSG {$csg} no está habilitado para {$cliente->nombre} · {$marca->nombre}.";
                 }
 
+                $calibreOrigen = $this->texto($grupo->first()['calibre'] ?? null) ?? $pallet->calibre;
+                $calibre = $this->catalogo->calibre($resuelto['especie'], $calibreOrigen);
+                $articuloLinea = $this->articulo($temporada->id, [...$resuelto, 'calibre' => $calibre]);
+
                 return [
+                    'articulo_validacion_id' => $articuloLinea?->id,
+                    'calibre' => $calibre?->nombre ?? $calibreOrigen,
                     'csg' => $csg,
                     'predio' => $grupo->map(fn (array $linea): ?string => $this->texto($linea['predio'] ?? null))->filter()->first(),
                     'origen_validacion_id' => $origen?->id,
@@ -134,9 +142,12 @@ final class ServicioPrecargaValidacionOrigen
                     'proceso_packing' => ProyeccionTrazabilidadFolio::normalizarCodigo($grupo->first()['proceso'] ?? null),
                 ];
             })
-            ->sortBy(fn (array $linea): string => implode('|', [$linea['csg'] ?? '', $linea['lote_materia_prima'] ?? '', $linea['proceso_packing'] ?? '']))
+            ->sortBy(fn (array $linea): string => implode('|', [$linea['csg'] ?? '', $linea['lote_materia_prima'] ?? '', $linea['proceso_packing'] ?? '', $linea['calibre'] ?? '']))
             ->values()
             ->all();
+        if (! $articulo && isset($composicion[0]['articulo_validacion_id'])) {
+            $articulo = ArticuloValidacion::find($composicion[0]['articulo_validacion_id']);
+        }
         if ($composicion === []) {
             $pendientes[] = 'El origen no informa la composición por CSG.';
         }

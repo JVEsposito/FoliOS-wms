@@ -59,6 +59,7 @@ class CorregirValidacionPalletRequest extends FormRequest
             // Con composición, reemplaza todas las líneas del bulto: mismas reglas que la PDA.
             'composicion' => ['sometimes', 'array', 'min:1', 'max:20'],
             'composicion.*.origen_validacion_id' => ['required', 'uuid', 'exists:origenes_validacion,id'],
+            'composicion.*.articulo_validacion_id' => ['nullable', 'uuid', 'exists:articulos_validacion,id'],
             'composicion.*.cantidad_cajas' => ['required', 'integer', 'min:1'],
             'composicion.*.lote_materia_prima' => [
                 config('validacion.exigir_lote_proceso') ? 'required' : 'nullable',
@@ -104,6 +105,7 @@ class CorregirValidacionPalletRequest extends FormRequest
             $claves = collect($this->input('composicion', []))
                 ->filter(fn (mixed $linea): bool => is_array($linea))
                 ->map(fn (array $linea): string => implode('|', [
+                    (string) ($linea['articulo_validacion_id'] ?? $this->input('articulo_validacion_id')),
                     (string) ($linea['origen_validacion_id'] ?? ''),
                     ProyeccionTrazabilidadFolio::normalizarCodigo($linea['lote_materia_prima'] ?? null),
                     ProyeccionTrazabilidadFolio::normalizarCodigo($linea['proceso_packing'] ?? null),

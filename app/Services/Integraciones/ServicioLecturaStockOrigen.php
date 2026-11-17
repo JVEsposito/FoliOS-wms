@@ -269,11 +269,13 @@ class ServicioLecturaStockOrigen
                         $this->codigo($fila['proceso'] ?? null),
                         $this->texto($fila['codigo_entidad'] ?? null),
                         $this->texto($fila['variedad'] ?? null),
+                        $this->texto($fila['cod_calibre'] ?? null),
                     ]))
                     ->map(fn (Collection $grupo): array => [
                         'csg' => $this->texto($grupo->first()['codigo_csg_predio'] ?? null),
                         'predio' => $this->texto($grupo->first()['descripcion_predio'] ?? null),
                         'variedad' => $this->texto($grupo->first()['variedad'] ?? null),
+                        'calibre' => $this->texto($grupo->first()['cod_calibre'] ?? null),
                         'lote' => $this->codigo($grupo->first()['lote_recepcion'] ?? null),
                         'proceso' => $this->codigo($grupo->first()['proceso'] ?? null),
                         'productor_codigo' => $this->texto($grupo->first()['codigo_entidad'] ?? null),
@@ -281,7 +283,7 @@ class ServicioLecturaStockOrigen
                         'cajas' => (int) $grupo->sum(fn (array $fila): int => (int) ($fila['cantidad'] ?? 0)),
                         'kilos' => round((float) $grupo->sum(fn (array $fila): float => (float) ($fila['kilos_netos'] ?? 0)), 2),
                     ])
-                    ->sortBy(fn (array $linea): string => implode('|', [$linea['csg'], $linea['lote'], $linea['proceso'], $linea['productor_codigo'], $linea['variedad']]))
+                    ->sortBy(fn (array $linea): string => implode('|', [$linea['csg'], $linea['lote'], $linea['proceso'], $linea['productor_codigo'], $linea['variedad'], $linea['calibre']]))
                     ->values()
                     ->all();
                 $embalajes = $lineas->map(fn (array $fila): ?string => $this->fecha($fila['fecha_embalaje'] ?? null, $zona)?->toDateString())->filter()->sort()->values();

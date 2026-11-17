@@ -151,62 +151,29 @@ class ServicioCorreccionValidacionPallet
             }
 
             $composicionAnterior = collect($snapshot['composicion'] ?? []);
-            $composicion = array_key_exists('composicion', $payload)
-                ? $this->composicionSolicitada($validacionBloqueada, $articulo, $payload, $snapshot, $composicionAnterior)
-                : null;
-            if ($composicion === null && $composicionAnterior->count() > 1
-                && ($payload['origen_validacion_id'] !== $validacionBloqueada->origen_validacion_id
-                    || $payload['cantidad_cajas'] !== $validacionBloqueada->cantidad_cajas)) {
-                throw new DomainException(
-                    'Este bulto posee varios CSG. La corrección simple no puede cambiar su origen ni su total de cajas.',
-                );
+            if (! array_key_exists('composicion', $payload)) {
+                if ($composicionAnterior->count() > 1
+                    && ($payload['origen_validacion_id'] !== $validacionBloqueada->origen_validacion_id
+                        || $payload['cantidad_cajas'] !== $validacionBloqueada->cantidad_cajas)) {
+                    throw new DomainException('Este bulto posee varios CSG. La corrección simple no puede cambiar su origen ni su total de cajas.');
+                }
+                $mixto = $composicionAnterior->pluck('articulo_validacion_id')->filter()->unique()->count() > 1;
+                if ($mixto && $articulo->id !== $validacionBloqueada->articulo_validacion_id) {
+                    throw new DomainException('Para cambiar el producto de un pallet con varios calibres, envía el detalle de cada línea.');
+                }
+                $payload['composicion'] = $composicionAnterior->count() > 1
+                    ? $composicionAnterior->map(fn (array $linea): array => [
+                        ...$linea,
+                        'articulo_validacion_id' => $mixto ? $linea['articulo_validacion_id'] : $articulo->id,
+                    ])->all()
+                    : [[
+                        ...collect($composicionAnterior->first() ?? [])->only(['lote_materia_prima', 'proceso_packing'])->all(),
+                        'origen_validacion_id' => $origen->id,
+                        'cantidad_cajas' => $payload['cantidad_cajas'],
+                    ]];
             }
-            $combinacionesComposicion = $composicion === null && $composicionAnterior->count() > 1
-                ? DB::table('combinaciones_validacion')
-                    ->where('temporada_id', $validacionBloqueada->temporada_id)
-                    ->where('articulo_validacion_id', $articulo->id)
-                    ->whereIn(
-                        'origen_validacion_id',
-                        $composicionAnterior->pluck('origen_validacion_id'),
-                    )
-                    ->where('activo', true)
-                    ->get()
-                    ->keyBy('origen_validacion_id')
-                : collect();
-            if ($composicion === null && $composicionAnterior->count() > 1
-                && $combinacionesComposicion->count()
-                    !== $composicionAnterior->pluck('origen_validacion_id')->unique()->count()) {
-                throw new DomainException(
-                    'El artículo corregido no está habilitado para todos los CSG del bulto.',
-                );
-            }
-            $composicion ??= $composicionAnterior->count() > 1
-                ? $composicionAnterior->map(function (array $linea) use (
-                    $combinacionesComposicion,
-                ): array {
-                    $linea['combinacion_validacion_id'] = $combinacionesComposicion
-                        ->get($linea['origen_validacion_id'])->id;
-
-                    return $linea;
-                })
-                : collect([[
-                    'origen_validacion_id' => $origen->id,
-                    'combinacion_validacion_id' => $combinacion->id,
-                    'csg' => $origen->csg,
-                    'predio' => $origen->predio,
-                    'fecha_embalaje' => $snapshot['fecha_embalaje'] ?? null,
-                    'cantidad_cajas' => $payload['cantidad_cajas'],
-                    // La corrección simple no cambia la trazabilidad a materia prima.
-                    ...collect($composicionAnterior->first() ?? [])
-                        ->only(['lote_materia_prima', 'proceso_packing'])
-                        ->all(),
-                ]]);
-            $composicion = $composicion->map(fn (array $linea): array => [
-                ...$linea, 'articulo_validacion_id' => $articulo->id,
-                'envase_validacion_id' => $articulo->envase_validacion_id,
-                'especie' => $articulo->especie, 'variedad' => $articulo->variedad, 'envase' => $articulo->envase,
-                'cliente' => $origen->cliente,
-            ]);
+            $composicion = $this->composicionSolicitada($validacionBloqueada, $articulo, $payload, $snapshot, $composicionAnterior);
+            $calibreResumen = ComposicionCalibresValidacion::resumen($composicion);
             $csgResumen = $composicion->pluck('csg')->unique()->count() === 1
                 ? $composicion->first()['csg']
                 : 'MIX';
@@ -218,7 +185,7 @@ class ServicioCorreccionValidacionPallet
             $snapshot['articulo'] = [
                 'especie' => $articulo->especie,
                 'variedad' => $articulo->variedad,
-                'calibre' => $articulo->calibre,
+                'calibre' => $calibreResumen,
                 'envase' => $articulo->envase,
             ];
             $snapshot['origen'] = [
@@ -260,7 +227,7 @@ class ServicioCorreccionValidacionPallet
                 ...($cambiaNumero ? ['numero_folio' => $numeroFolio] : []),
                 'tipo_bulto' => $payload['tipo_bulto'],
                 'variedad' => $articulo->variedad,
-                'calibre' => $articulo->calibre,
+                'calibre' => $calibreResumen,
                 'marca' => $origen->marca,
                 'exportadora' => $origen->cliente,
                 'datos_externos' => [
@@ -270,6 +237,7 @@ class ServicioCorreccionValidacionPallet
                     'envase' => $articulo->envase,
                     'csg' => $csgResumen,
                     'csgs' => $composicion->pluck('csg')->unique()->values()->all(),
+                    'calibres' => $composicion->pluck('calibre')->unique()->values()->all(),
                     'predio' => $predioResumen,
                     'composicion' => $composicion->values()->all(),
                     'cantidad_cajas' => $payload['cantidad_cajas'],
@@ -473,6 +441,7 @@ class ServicioCorreccionValidacionPallet
             // Solo si viene: así el hash de las correcciones de un CSG no cambia.
             ...(isset($datos['composicion']) ? ['composicion' => collect($datos['composicion'])
                 ->map(fn (array $linea): array => array_filter([
+                    'articulo_validacion_id' => $linea['articulo_validacion_id'] ?? null,
                     'origen_validacion_id' => $linea['origen_validacion_id'],
                     'cantidad_cajas' => (int) $linea['cantidad_cajas'],
                     'lote_materia_prima' => ProyeccionTrazabilidadFolio::normalizarCodigo($linea['lote_materia_prima'] ?? null),
@@ -499,67 +468,19 @@ class ServicioCorreccionValidacionPallet
         array $snapshot,
         Collection $composicionAnterior,
     ): Collection {
-        $lineas = collect($payload['composicion']);
-        $origenIds = $lineas->pluck('origen_validacion_id')->unique()->values();
-        $origenes = DB::table('origenes_validacion')
-            ->whereIn('id', $origenIds)
-            ->where('temporada_id', $validacion->temporada_id)
-            ->where('activo', true)
-            ->get()
-            ->keyBy('id');
-        if ($origenes->count() !== $origenIds->count()) {
-            throw new DomainException('Uno de los CSG no pertenece al catálogo activo de la temporada.');
-        }
-        $clave = fn (mixed $valor): string => mb_strtoupper(trim((string) $valor));
-        if ($origenes->pluck('cliente')->map($clave)->unique()->count() !== 1
-            || $origenes->pluck('marca')->map($clave)->unique()->count() !== 1) {
-            throw new DomainException('Todos los CSG del bulto deben pertenecer al mismo cliente y marca.');
-        }
-        $combinaciones = DB::table('combinaciones_validacion')
-            ->where('temporada_id', $validacion->temporada_id)
-            ->where('articulo_validacion_id', $articulo->id)
-            ->whereIn('origen_validacion_id', $origenIds)
-            ->where('activo', true)
-            ->get()
-            ->keyBy('origen_validacion_id');
-        if ($combinaciones->count() !== $origenIds->count()) {
-            throw new DomainException('El artículo corregido no está habilitado para todos los CSG del bulto.');
-        }
-        if ($articulo->variedad_validacion_id !== null) {
-            foreach ($origenes as $origen) {
-                if ($origen->csg_validacion_id !== null
-                    && ! DB::table('csg_variedades_validacion')
-                        ->where('csg_validacion_id', $origen->csg_validacion_id)
-                        ->where('variedad_validacion_id', $articulo->variedad_validacion_id)
-                        ->exists()) {
-                    throw new DomainException("La variedad {$articulo->variedad} no está autorizada en el CSG {$origen->csg}.");
-                }
+        $fecha = $snapshot['fecha_embalaje'] ?? ($composicionAnterior->first()['fecha_embalaje'] ?? null);
+
+        try {
+            return app(ComposicionCalibresValidacion::class)->preparar(
+                $payload['composicion'], $articulo, $validacion->temporada_id, $payload['cantidad_cajas'], $fecha,
+            );
+        } catch (DomainException $error) {
+            if ($error->getMessage() === 'Una de las combinaciones de artículo y CSG no se encuentra habilitada.') {
+                throw new DomainException('El artículo corregido no está habilitado para todos los CSG del bulto.');
             }
-        }
-        $total = (int) $lineas->sum('cantidad_cajas');
-        if ($total !== $payload['cantidad_cajas']) {
-            throw new DomainException(sprintf(
-                'La composición por CSG suma %d cajas y el bulto declara %d.',
-                $total,
-                $payload['cantidad_cajas'],
-            ));
-        }
-        $fechaEmbalaje = $snapshot['fecha_embalaje'] ?? ($composicionAnterior->first()['fecha_embalaje'] ?? null);
 
-        return $lineas->map(function (array $linea) use ($origenes, $combinaciones, $fechaEmbalaje): array {
-            $origen = $origenes->get($linea['origen_validacion_id']);
-
-            return [
-                'origen_validacion_id' => $origen->id,
-                'combinacion_validacion_id' => $combinaciones->get($origen->id)->id,
-                'csg' => $origen->csg,
-                'predio' => $origen->predio,
-                'fecha_embalaje' => $fechaEmbalaje,
-                'cantidad_cajas' => (int) $linea['cantidad_cajas'],
-                ...(isset($linea['lote_materia_prima']) ? ['lote_materia_prima' => $linea['lote_materia_prima']] : []),
-                ...(isset($linea['proceso_packing']) ? ['proceso_packing' => $linea['proceso_packing']] : []),
-            ];
-        })->values();
+            throw $error;
+        }
     }
 
     /**

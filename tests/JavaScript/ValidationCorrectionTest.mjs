@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
     articlesForOrigins,
+    articlesForOriginProducts,
     correctionPayload,
     csgOptions,
     draftChanges,
@@ -109,7 +110,7 @@ test('avisa lo que falta antes de guardar, en el orden del formulario', () => {
     ]);
 
     const repeated = { ...draft, lines: [newLine({ originId: 'o1', boxes: '20', lot: 'l-1' }), newLine({ originId: 'o1', boxes: '20', lot: 'L-1 ' })] };
-    assert.ok(draftIssues(repeated, index).includes('No repitas la misma combinación de CSG, lote y proceso.'));
+    assert.ok(draftIssues(repeated, index).includes('No repitas la misma combinación de calibre, CSG, lote y proceso.'));
 
     const foreign = { ...draft, lines: [newLine({ originId: 'o3', boxes: '0' })] };
     assert.deepEqual(draftIssues(foreign, index).slice(0, 2), ['El CSG no es de EXPORTADORA DEMO · MARCA DEMO.', 'Ingresa las cajas.']);
@@ -148,7 +149,7 @@ test('la revisión muestra solo lo que cambia frente a lo validado', () => {
     draft.categoriaId = 'cat2';
     assert.deepEqual(draftChanges(validation, draft, index), [
         { label: 'Cajas', before: '40', after: '38' },
-        { label: 'Composición', before: '100001: 40', after: '100001: 25 · 100002: 13' },
+        { label: 'Composición', before: '100001: 40 (calibre 2J)', after: '100001: 25 (calibre 2J) · 100002: 13 (calibre 2J)' },
         { label: 'Producto', before: 'Cereza · Santina · 2J · Caja 5 kg', after: 'Cereza · Santina · 2J · Cartón 10 kg' },
         { label: 'Categoría', before: 'CAT1', after: 'CAT2' },
     ]);
@@ -198,4 +199,45 @@ test('corrige fechas en hora de planta sin enviar el resto de la validación', (
         fecha_embalaje: '2026-11-02',
         solo_fechas: true,
     });
+});
+
+test('Oficina conserva y permite corregir dos calibres en un mismo CSG, lote y proceso', () => {
+    const mixedIndex = indexCatalog({
+        ...catalog,
+        articulos: [...catalog.articulos, article('santina-3j-5', 'Santina', '3J', 'Caja 5 kg')],
+        combinaciones: [...catalog.combinaciones, { articulo_validacion_id: 'santina-3j-5', origen_validacion_id: 'o1' }],
+    });
+    const mixed = {
+        ...validation, cantidad_cajas: 120,
+        articulo: { ...validation.articulo, calibre: 'MIX' },
+        composicion: [
+            { origen_validacion_id: 'o1', articulo_validacion_id: 'santina-2j-5', calibre: '2J', cantidad_cajas: 80, lote_materia_prima: 'L-1', proceso_packing: 'P-1' },
+            { origen_validacion_id: 'o1', articulo_validacion_id: 'santina-3j-5', calibre: '3J', cantidad_cajas: 40, lote_materia_prima: 'L-1', proceso_packing: 'P-1' },
+        ],
+    };
+    const draft = draftFromValidation(mixed, mixedIndex);
+    assert.deepEqual(draftChanges(mixed, draft, mixedIndex), []);
+    draft.motivo = 'Corregir las cajas por calibre.';
+    draft.lines[0].boxes = '60'; draft.lines[1].boxes = '60';
+    assert.deepEqual(draftIssues(draft, mixedIndex), []);
+    const payload = correctionPayload(draft, productChoices(mixedIndex, draft).article, 'op-mix', false, mixedIndex);
+    assert.deepEqual(payload.composicion.map((line) => [line.articulo_validacion_id, line.cantidad_cajas]), [['santina-2j-5', 60], ['santina-3j-5', 60]]);
+    assert.equal(payload.articulo_validacion_id, 'santina-2j-5');
+    assert.ok(draftChanges(mixed, draft, mixedIndex).some((change) => change.label === 'Composición' && change.after.includes('3J')));
+    draft.lines[1].caliber = '2J';
+    assert.ok(draftIssues(draft, mixedIndex).some((issue) => issue.includes('No repitas')));
+    draft.lines[1].caliber = 'SIN-CATALOGO';
+    assert.ok(draftIssues(draft, mixedIndex).some((issue) => issue.includes('calibre habilitado')));
+});
+
+test('CSG con calibres diferentes comparten producto sin exigir un artículo idéntico', () => {
+    const mixedIndex = indexCatalog({
+        ...catalog, articulos: [article('2j', 'Santina', '2J', 'Caja 5 kg'), article('3j', 'Santina', '3J', 'Caja 5 kg')],
+        combinaciones: [
+            { articulo_validacion_id: '2j', origen_validacion_id: 'o1' },
+            { articulo_validacion_id: '3j', origen_validacion_id: 'o2' },
+        ],
+    });
+    assert.deepEqual(articlesForOrigins(mixedIndex, ['o1', 'o2']), []);
+    assert.deepEqual(articlesForOriginProducts(mixedIndex, ['o1', 'o2']).map((row) => row.id), ['2j', '3j']);
 });

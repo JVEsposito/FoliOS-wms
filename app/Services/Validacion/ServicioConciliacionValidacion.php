@@ -260,6 +260,11 @@ class ServicioConciliacionValidacion
         $f = $folio->datos_externos ?? [];
         $actual = ['cajas' => (int) ($f['cantidad_cajas'] ?? 0), 'marca' => $folio->marca, 'calibre' => $folio->calibre,
             'csg' => $this->comparador->porCsg($f['composicion'] ?? [], 'cantidad_cajas')];
+        if (isset($datos['calibres']) && ! $this->comparador->iguales(
+            'csg', $datos['calibres'], $this->comparador->porCalibre($f['composicion'] ?? [], 'cantidad_cajas', $folio->calibre),
+        )) {
+            return 'folio_modificado';
+        }
         foreach (array_keys(ComparadorConciliacionValidacion::CAMPOS) as $campo) {
             if (! $this->comparador->iguales($campo, $datos[$campo], $actual[$campo])) {
                 return 'folio_modificado';
@@ -290,6 +295,12 @@ class ServicioConciliacionValidacion
             return null;
         }
         $resuelto = $this->catalogo->resolver($pallet);
+        $calibres = in_array('calibre', $pallet->mezclados ?? [], true)
+            ? $this->comparador->porCalibre(collect($pallet->composicion ?? [])->map(fn (array $linea): array => [
+                ...$linea,
+                'calibre' => $this->catalogo->calibre($resuelto['especie'], $linea['calibre'] ?? null)?->nombre,
+            ])->all(), 'cajas')
+            : null;
 
         return ['pallet_id' => $pallet->id, 'huella' => $pallet->huella, 'presente' => $pallet->presente,
             'fuente' => ['conexion_id' => $config['conexion']->id, 'nombre' => $config['conexion']->nombre,
@@ -297,6 +308,7 @@ class ServicioConciliacionValidacion
                 'temporada' => $config['temporada'], 'ambito_stock' => $config['ambito']],
             'cajas' => $pallet->cajas, 'marca' => $pallet->marca, 'calibre' => $pallet->calibre,
             'marca_homologado' => $resuelto['marca']?->nombre, 'calibre_homologado' => $resuelto['calibre']?->nombre,
+            ...($calibres !== null ? ['calibres' => $calibres] : []),
             'csg' => $this->comparador->porCsg($pallet->composicion ?? [], 'cajas'), 'mezclados' => $pallet->mezclados ?? [],
             'lectura_id' => $pallet->lectura_stock_origen_id, 'leida_at' => $pallet->ultima_lectura_at?->toAtomString()];
     }
