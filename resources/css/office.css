@@ -254,3 +254,6 @@ input, select { width: 100%; min-height: 52px; border: 1px solid var(--line); bo
     .office-subnavigation { align-items: stretch; flex-direction: column; gap: 8px; padding: 10px 14px; }
     .office-subnavigation__heading { min-width: 0; }
 }
+
+.sag-lot-alerts { border: 1px solid var(--line); border-inline-start: 4px solid var(--accent); padding: 12px; margin-block: 10px; background: var(--panel); overflow-wrap: anywhere; }
+.sag-lot-alerts ul { margin-block: 8px 0; padding-inline-start: 20px; }

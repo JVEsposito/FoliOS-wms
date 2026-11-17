@@ -28,6 +28,7 @@ use App\Models\TunelPrefrio;
 use App\Models\User;
 use App\Models\VerificacionUbicacion;
 use App\Services\Camaras\EstadoEvacuacionEmergencia;
+use App\Services\InspeccionSag\ServicioRetencionesLoteSag;
 use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Planificador\ServicioConciliacionPalletsHistoricos;
 use App\Services\Planificador\ServicioPuestoMandoPlanificador;
@@ -94,6 +95,7 @@ class ServicioOperacionAhora
                 ])->all(),
             'verificaciones' => $this->verificaciones($temporada, $ventana),
             'despacho' => app(ResumenDespachoOperacion::class)->obtener($temporada),
+            'retenciones_sag' => app(ServicioRetencionesLoteSag::class)->alertasOperacion(),
             'planificador' => [
                 ...$this->puestoMando->obtener($temporada),
                 'conciliacion' => $this->conciliacion->diagnosticar($temporada, 0),

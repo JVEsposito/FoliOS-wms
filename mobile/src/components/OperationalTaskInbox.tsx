@@ -1,3 +1,4 @@
+import { SagLotAlerts } from './SagLotAlerts';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -1021,6 +1022,7 @@ export function OperationalTaskInbox({ api, auth, onBusyChange }: Props) {
         </View>
       ) : null}
 
+      <SagLotAlerts alerts={activeTask?.alertas_sag} />
       <OperatorToast
         inline={!onHome}
         message={notice}

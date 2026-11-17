@@ -294,6 +294,18 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_lotes_retenidos_sag_exporta_el_seguimiento_y_sus_resoluciones(): void
+    {
+        $html = $this->get('/oficina/frigorifico/lotes-retenidos-sag')->assertOk()->getContent();
+        foreach (['slFilters', 'slForm', 'slDestinations', 'slExpand', 'slFolios', 'slHistory', 'slEvidence'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/sag-lotes-retenidos.html'), $html);
+        }
+    }
+
     public function test_inspeccion_sag_exporta_el_aviso_de_carga(): void
     {
         $html = $this->get('/oficina/frigorifico/inspeccion-sag')->assertOk()->getContent();

@@ -1,0 +1,19 @@
+.sl-workspace { display: grid; gap: 18px; max-width: 1500px; margin: auto; padding: 22px; }
+.sl-heading, .sl-actions { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; align-items: end; }
+.sl-workspace label { display: grid; gap: 7px; margin-bottom: 14px; }
+.sl-workspace input, .sl-workspace select, .sl-workspace textarea { width: 100%; min-width: 0; }
+.sl-workspace .sl-check { display: flex; align-items: center; gap: 9px; }
+.sl-check input { width: auto; }
+.sl-help { color: var(--muted); line-height: 1.5; }
+.sl-scroll { overflow: auto; }
+.sl-workspace table { width: 100%; border-collapse: collapse; }
+.sl-workspace th, .sl-workspace td { padding: 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.sl-workspace td small { display: block; margin-top: 5px; color: var(--muted); }
+.sl-destinations { padding: 16px; margin: 18px 0; border: 1px solid var(--line); border-radius: var(--radius); }
+.sl-options { max-height: 280px; overflow: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
+.sl-options label { margin: 0; padding: 9px; border-bottom: 1px solid var(--line); }
+.sl-history { padding: 14px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.sl-history p { white-space: pre-wrap; }
+.sl-workspace textarea { resize: vertical; }
+@media (max-width: 700px) { .sl-workspace { padding: 12px; } .sl-grid { grid-template-columns: 1fr; } .sl-options { grid-template-columns: 1fr; } }

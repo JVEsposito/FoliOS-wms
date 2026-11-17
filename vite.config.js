@@ -90,6 +90,8 @@ export default defineConfig({
                 'resources/js/office-sag-inspections.js',
                 'resources/css/office-sag-counterpart.css',
                 'resources/js/office-sag-counterpart.js',
+                'resources/css/office-sag-retained-lots.css',
+                'resources/js/office-sag-retained-lots.js',
                 'resources/css/office-management.css',
                 'resources/js/office-management.js',
                 'resources/css/office-operation-now.css',

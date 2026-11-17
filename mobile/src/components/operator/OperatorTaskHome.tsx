@@ -1,3 +1,4 @@
+import { SagLotAlerts } from '../SagLotAlerts';
 import { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import type { ReactNode } from 'react';
@@ -193,6 +194,7 @@ function NextTaskCard({ busy, compact, item, onOpen, showAction, suggestion }: {
         </View>
       </View>
 
+      <SagLotAlerts alerts={task.alertas_sag} />
       <View style={styles.identity}>
         <Text accessibilityRole="header" style={styles.heroTitle}>{purpose.label}</Text>
         {purpose.goal ? <Text numberOfLines={2} style={styles.heroGoal}>{purpose.goal}</Text> : null}

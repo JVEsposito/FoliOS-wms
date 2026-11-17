@@ -7,6 +7,7 @@ import { useOperationalPolling } from '../../hooks/useOperationalPolling';
 import type { OperationalTasksApi } from '../../services/operationalTasksApi';
 import { operatorTheme as o } from '../../theme/operatorTheme';
 import { font } from '../../theme/typography';
+import { SagLotAlerts } from '../SagLotAlerts';
 
 type Filter = 'todas' | 'activas' | 'terminadas';
 
@@ -88,6 +89,7 @@ function LoadStatusCard({ load, zone, expanded, onToggle }: { load: OperatorLoad
       <Text style={styles.copy}>{dock ? `Andén: ${dock}` : 'Andén sin asignar'}{plate ? ` · Camión ${plate}` : ''}</Text>
       {load.camara_objetivo ? <Text style={styles.copy}>Cámara objetivo: {load.camara_objetivo.nombre}</Text> : null}
       {load.incidencias_abiertas ? <Text style={styles.warning}>{load.incidencias_abiertas} incidencias abiertas</Text> : null}
+      {!finished ? <SagLotAlerts alerts={load.alertas_sag} /> : null}
       {load.cierre ? <Text style={styles.copy}>Cerrada: {operatorLoadDate(load.cierre.cerrada_at, zone)}</Text> : null}
       {load.cancelada_at ? <Text style={styles.copy}>Cancelada: {operatorLoadDate(load.cancelada_at, zone)}</Text> : null}
       {expanded ? <View style={styles.detail}>

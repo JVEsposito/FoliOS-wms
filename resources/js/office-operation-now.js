@@ -1,3 +1,4 @@
+import { sagLotAlertsHtml } from './shared/sag-lot-alerts.js';
 import { mountPalletAdministration } from './shared/admin-pallet-control.js';
 import { createAvailabilityTracker, operatorPresenceLabel } from './shared/operator-availability';
 import { createUuid } from './shared/uuid.js';
@@ -1203,6 +1204,8 @@ function dispatchMeter(done, total, tone, detail) {
 }
 
 function dispatchLoadState(load) {
+    if (load.salida_restringida_sag) return signal('Salida restringida SAG', 'critical') + sagLotAlertsHtml(load.alertas_sag || []);
+    if (load.alertas_sag?.length) return signal('Con seguimiento SAG', 'warning') + sagLotAlertsHtml(load.alertas_sag);
     if (load.incidencias_abiertas) return signal(`${number(load.incidencias_abiertas)} ${load.incidencias_abiertas === 1 ? 'incidencia' : 'incidencias'}`, 'critical');
     if (load.lista_para_cerrar) return signal('Lista para cerrar', 'success');
     if (['cargado_completo', 'separacion_completa'].includes(load.estado)) return signal(DISPATCH_STATES[load.estado], 'success');
@@ -1345,6 +1348,8 @@ function renderVerifications(data = {}) {
 
 function render(data) {
     state.snapshot = data;
+    const sag = document.getElementById('operationSagLotAlerts');
+    if (sag) { sag.hidden = !(data.retenciones_sag || []).length; sag.innerHTML = sagLotAlertsHtml(data.retenciones_sag || []); }
     renderHeader(data);
     renderMetrics(data);
     renderSync(data.sincronizacion, data.generado_at);

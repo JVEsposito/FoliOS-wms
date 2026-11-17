@@ -61,6 +61,7 @@
 
                 {{-- Una pestaña por pregunta de supervisión: lo que exige atención, lo que ordena el
                      planificador, la planta, las cámaras, el prefrío y quién trabaja con qué equipo. --}}
+                <section id="operationSagLotAlerts" class="panel" role="status" hidden></section>
                 <div class="operation-now-workspace" aria-busy="true" id="operationWorkspace">
                     <section class="operation-now-tabpanel operation-now-tabpanel--atencion" role="tabpanel" id="operationPanel-atencion" aria-labelledby="operationTab-atencion" data-operation-panel="atencion" tabindex="0">
                         <div class="operation-now-attention">

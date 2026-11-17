@@ -29,6 +29,7 @@ use App\Models\User;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\InspeccionSag\ServicioExistenciasSag;
+use App\Services\InspeccionSag\ServicioRetencionesLoteSag;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
 use BackedEnum;
@@ -592,6 +593,7 @@ class ServicioDespachoFrigorifico
             $payloadHash,
             $datosEmbarque,
         ): Carga {
+            app(ServicioRetencionesLoteSag::class)->bloquearTemporada($carga->temporada_id);
             $otraCarga = Carga::query()
                 ->where('operacion_cierre_id', $operacionId)
                 ->lockForUpdate()
@@ -671,6 +673,8 @@ class ServicioDespachoFrigorifico
             if ($incidenciasAbiertas) {
                 throw new DomainException('La carga posee incidencias abiertas.');
             }
+
+            app(ServicioRetencionesLoteSag::class)->asegurarSalida($cargaBloqueada, $asignaciones);
 
             foreach ($asignaciones as $asignacion) {
                 $asignacion->folio->update([

@@ -1088,6 +1088,12 @@ class AlcanceOperacionalUsuario
             && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador, RolUsuario::SupervisorFrio, RolUsuario::Consulta], CatalogoModulosAcceso::OFICINA_CONTRAPARTE_SAG);
     }
 
+    public function puedeGestionarRetencionesLoteSag(User $usuario): bool
+    {
+        return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_CONTRAPARTE_SAG)
+            && $this->rolActivoEnModulo($usuario, [RolUsuario::Administrador], CatalogoModulosAcceso::OFICINA_LOTES_RETENIDOS_SAG);
+    }
+
     public function puedeGestionarContraparteSag(User $usuario): bool
     {
         return $this->permiteModuloTablet($usuario, CatalogoModulosAcceso::TABLET_CONTRAPARTE_SAG)
@@ -1647,6 +1653,7 @@ class AlcanceOperacionalUsuario
             'puede_consultar_prefrio' => $this->puedeConsultarPrefrio($usuario),
             'puede_consultar_contraparte_sag' => $this->puedeConsultarContraparteSag($usuario),
             'puede_gestionar_contraparte_sag' => $this->puedeGestionarContraparteSag($usuario),
+            'puede_gestionar_lotes_retenidos_sag' => $this->puedeGestionarRetencionesLoteSag($usuario),
             'puede_consultar_control_despacho' => $this->puedeConsultarControlDespacho($usuario),
             'puede_registrar_control_despacho' => $this->puedeRegistrarControlDespacho($usuario),
             'puede_reabrir_control_despacho' => $this->puedeReabrirControlDespacho($usuario),
