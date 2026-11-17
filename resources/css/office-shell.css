@@ -49,7 +49,7 @@
     --shell-active-gajo: #2f5262;
 }
 
-:root:is([data-office-theme="dark-rose"], [data-office-theme="dark-bit"]) .estiba-office-shell {
+:root:is([data-office-theme="dark-rose"], [data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"]) .estiba-office-shell {
     --shell-navy: var(--corporate-navy);
     --shell-navy-hover: var(--surface-hover);
     --shell-ink: var(--text);
@@ -257,7 +257,7 @@
 }
 
 :root[data-office-theme="dark-industrial"] .estiba-office-theme-icon { background: currentColor; }
-:root:is([data-office-theme="dark-rose"], [data-office-theme="dark-bit"]) .estiba-office-theme-icon { background: var(--primary); border-color: var(--primary); }
+:root:is([data-office-theme="dark-rose"], [data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"]) .estiba-office-theme-icon { background: var(--primary); border-color: var(--primary); }
 
 .estiba-office-replenishment {
     grid-column: 2 / -1;
@@ -374,11 +374,11 @@
     --gajo-hub: var(--shell-active-bg);
 }
 
-:root:is([data-office-theme="dark-industrial"], [data-office-theme="dark-rose"], [data-office-theme="dark-bit"]) .estiba-office-sidebar .estiba-office-area.is-active {
+:root:is([data-office-theme="dark-industrial"], [data-office-theme="dark-rose"], [data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"]) .estiba-office-sidebar .estiba-office-area.is-active {
     box-shadow: inset 3px 0 var(--area-bright);
 }
 
-:root:is([data-office-theme="dark-industrial"], [data-office-theme="dark-rose"], [data-office-theme="dark-bit"]) .estiba-office-sidebar .estiba-office-area.is-active .folios-gajo {
+:root:is([data-office-theme="dark-industrial"], [data-office-theme="dark-rose"], [data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"]) .estiba-office-sidebar .estiba-office-area.is-active .folios-gajo {
     --gajo-area: var(--gajo-bright);
 }
 

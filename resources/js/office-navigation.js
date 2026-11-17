@@ -38,7 +38,7 @@ function storedOfficeTheme() {
 }
 
 let officeTheme = storedOfficeTheme();
-const themeLabels = { 'light-professional': 'Modo claro', 'dark-industrial': 'Modo oscuro', 'dark-rose': 'Modo rosado', 'dark-bit': 'Modo bit' };
+const themeLabels = { 'light-professional': 'Modo claro', 'dark-industrial': 'Modo oscuro', 'dark-rose': 'Modo rosado', 'dark-bit': 'Modo bit', 'dark-bit-neon': 'Modo neón' };
 
 function refreshOfficeThemeControls() {
     const dark = officeTheme !== 'light-professional';

@@ -18,8 +18,9 @@
  */
 @import './folios-fonts.css';
 @import './folios-components.css';
+@import './office-tema-bit.css';
 
-:where(:root[data-office-theme="dark-rose"], :root[data-office-theme="dark-bit"]) .estiba-ui {
+:where(:root[data-office-theme="dark-rose"], :root[data-office-theme="dark-bit"], :root[data-office-theme="dark-bit-neon"]) .estiba-ui {
     color-scheme: dark;
     --eui-color-navy: var(--corporate-navy);
     --eui-color-navy-hover: var(--surface-hover);
@@ -756,41 +757,3 @@ dialog[class*="dialog"] :is(h2, h3) {
     font-weight: 800;
     text-transform: none;
 }
-
-/* Modo bit (tema personal): malla de datos de fondo y una mascota pixelada propia, la «bitcereza». */
-:root[data-office-theme="dark-bit"] body,
-:root[data-office-theme="dark-bit"] .office-app {
-    background:
-        linear-gradient(rgba(61, 255, 176, .035) 1px, transparent 1px) 0 0 / 28px 28px,
-        linear-gradient(90deg, rgba(61, 255, 176, .035) 1px, transparent 1px) 0 0 / 28px 28px,
-        radial-gradient(120% 70% at 100% 0%, rgba(185, 162, 255, .09), transparent 60%),
-        var(--corporate-canvas) !important;
-}
-
-:root[data-office-theme="dark-bit"] .estiba-office-signature::before {
-    content: "";
-    display: block;
-    width: 56px;
-    height: 56px;
-    margin-bottom: 10px;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect x='10' y='1' width='3' height='1' fill='%233dffb0'/%3E%3Crect x='9' y='2' width='2' height='1' fill='%233dffb0'/%3E%3Crect x='11' y='2' width='1' height='1' fill='%23c9ffe9'/%3E%3Crect x='12' y='2' width='1' height='1' fill='%233dffb0'/%3E%3Crect x='8' y='3' width='1' height='1' fill='%232bb37f'/%3E%3Crect x='9' y='3' width='2' height='1' fill='%233dffb0'/%3E%3Crect x='7' y='4' width='1' height='1' fill='%232bb37f'/%3E%3Crect x='9' y='4' width='1' height='1' fill='%232bb37f'/%3E%3Crect x='6' y='5' width='1' height='1' fill='%232bb37f'/%3E%3Crect x='10' y='5' width='1' height='1' fill='%232bb37f'/%3E%3Crect x='5' y='6' width='1' height='1' fill='%232bb37f'/%3E%3Crect x='11' y='6' width='1' height='1' fill='%232bb37f'/%3E%3Crect x='2' y='7' width='4' height='1' fill='%23ff4d6d'/%3E%3Crect x='9' y='7' width='4' height='1' fill='%23ff4d6d'/%3E%3Crect x='1' y='8' width='2' height='1' fill='%23ff4d6d'/%3E%3Crect x='3' y='8' width='1' height='1' fill='%23ffa3b5'/%3E%3Crect x='4' y='8' width='3' height='1' fill='%23ff4d6d'/%3E%3Crect x='8' y='8' width='2' height='1' fill='%23ff4d6d'/%3E%3Crect x='10' y='8' width='1' height='1' fill='%23ffa3b5'/%3E%3Crect x='11' y='8' width='3' height='1' fill='%23ff4d6d'/%3E%3Crect x='1' y='9' width='1' height='1' fill='%23ff4d6d'/%3E%3Crect x='2' y='9' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='3' y='9' width='1' height='1' fill='%2306120f'/%3E%3Crect x='4' y='9' width='3' height='1' fill='%23ff4d6d'/%3E%3Crect x='8' y='9' width='1' height='1' fill='%23ff4d6d'/%3E%3Crect x='9' y='9' width='1' height='1' fill='%23ffffff'/%3E%3Crect x='10' y='9' width='1' height='1' fill='%2306120f'/%3E%3Crect x='11' y='9' width='3' height='1' fill='%23ff4d6d'/%3E%3Crect x='1' y='10' width='6' height='1' fill='%23ff4d6d'/%3E%3Crect x='8' y='10' width='6' height='1' fill='%23ff4d6d'/%3E%3Crect x='1' y='11' width='2' height='1' fill='%23ff4d6d'/%3E%3Crect x='3' y='11' width='2' height='1' fill='%23a8173c'/%3E%3Crect x='5' y='11' width='2' height='1' fill='%23ff4d6d'/%3E%3Crect x='8' y='11' width='2' height='1' fill='%23ff4d6d'/%3E%3Crect x='10' y='11' width='2' height='1' fill='%23a8173c'/%3E%3Crect x='12' y='11' width='2' height='1' fill='%23ff4d6d'/%3E%3Crect x='2' y='12' width='4' height='1' fill='%23ff4d6d'/%3E%3Crect x='9' y='12' width='4' height='1' fill='%23ff4d6d'/%3E%3Crect x='3' y='13' width='2' height='1' fill='%23b9a2ff'/%3E%3Crect x='10' y='13' width='2' height='1' fill='%23b9a2ff'/%3E%3Crect x='2' y='14' width='1' height='1' fill='%23b9a2ff'/%3E%3Crect x='12' y='14' width='1' height='1' fill='%23b9a2ff'/%3E%3C/svg%3E") center / contain no-repeat;
-    image-rendering: pixelated;
-    filter: drop-shadow(0 0 6px rgba(61, 255, 176, .35));
-    animation: folios-bit-flota 3.2s ease-in-out infinite;
-}
-
-:root[data-office-theme="dark-bit"] .estiba-office-signature strong { color: var(--primary); }
-
-:root[data-office-theme="dark-bit"] .estiba-office-header {
-    box-shadow: inset 0 -1px rgba(61, 255, 176, .28);
-}
-
-@keyframes folios-bit-flota {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-4px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    :root[data-office-theme="dark-bit"] .estiba-office-signature::before { animation: none; }
-}
-

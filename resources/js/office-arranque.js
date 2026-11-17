@@ -30,20 +30,21 @@
     var identity = null;
     try { identity = JSON.parse(storedIdentity || 'null'); } catch (error) { /* identidad ilegible */ }
     var administrator = token && !soloTema && identity?.rol === 'administrador';
-    // Tema personal: solo para las cuentas que el servidor habilita (identidad.temas_personales).
-    var personal = token && !soloTema && Array.isArray(identity?.temas_personales) && identity.temas_personales.indexOf('dark-bit') !== -1;
+    // Temas personales: solo para las cuentas que el servidor habilita (identidad.temas_personales).
+    var personales = token && !soloTema && Array.isArray(identity?.temas_personales) ? identity.temas_personales : [];
+    var personal = personales.indexOf('dark-bit') !== -1 || personales.indexOf('dark-bit-neon') !== -1;
     var theme = (personal && read('estiba_wms_office_personal_theme'))
         || (administrator && read('estiba_wms_office_admin_theme'))
         || read('estiba_wms_office_theme');
     if (theme === 'dark-rose' && !administrator) theme = 'dark-industrial';
-    if (theme === 'dark-bit' && !personal) theme = 'dark-industrial';
-    if (['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit'].indexOf(theme) === -1) theme = 'light-professional';
+    if ((theme === 'dark-bit' || theme === 'dark-bit-neon') && personales.indexOf(theme) === -1) theme = 'dark-industrial';
+    if (['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit', 'dark-bit-neon'].indexOf(theme) === -1) theme = 'light-professional';
     var dark = theme !== 'light-professional';
     root.setAttribute('data-office-theme', theme);
     var scheme = document.querySelector('meta[name="color-scheme"]');
     if (scheme) scheme.setAttribute('content', dark ? 'dark' : 'light');
     var color = document.querySelector('meta[name="theme-color"]');
-    if (color) color.setAttribute('content', theme === 'dark-bit' ? '#050d12' : theme === 'dark-rose' ? '#170e14' : dark ? '#0f1c24' : '#102f43');
+    if (color) color.setAttribute('content', theme === 'dark-bit' ? '#1a1c2c' : theme === 'dark-bit-neon' ? '#0b0820' : theme === 'dark-rose' ? '#170e14' : dark ? '#0f1c24' : '#102f43');
 
     // La entrada /FoliOS solo toma el tema: ella misma decide qué mostrar.
     if (soloTema) return;

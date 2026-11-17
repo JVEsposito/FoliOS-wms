@@ -73,15 +73,20 @@ test('el tema rosado se aplica antes de pintar solo al Administrador en Oficina'
     assert.equal(boot({ local: { ...admin, estiba_wms_office_token: null } }).root.attrs['data-office-theme'], 'light-professional');
 });
 
-test('el modo bit se aplica antes de pintar solo a la cuenta habilitada', () => {
+test('los modos bit y neón se aplican antes de pintar solo a la cuenta habilitada', () => {
     const local = { ...session, estiba_wms_office_theme: 'light-professional', estiba_wms_office_personal_theme: 'dark-bit' };
     const personal = { ...local, estiba_wms_office_identity: '{"rol":"supervisor_frio","temas_personales":["dark-bit"]}' };
     const { root, metas } = boot({ local: personal });
     assert.equal(root.attrs['data-office-theme'], 'dark-bit');
     assert.equal(metas['meta[name="color-scheme"]'].attrs.content, 'dark');
-    assert.equal(metas['meta[name="theme-color"]'].attrs.content, '#050d12');
+    assert.equal(metas['meta[name="theme-color"]'].attrs.content, '#1a1c2c');
     assert.equal(boot({ local }).root.attrs['data-office-theme'], 'light-professional');
     assert.equal(boot({ local: personal, soloTema: true }).root.attrs['data-office-theme'], 'light-professional');
+    const neon = { ...personal, estiba_wms_office_personal_theme: 'dark-bit-neon' };
+    assert.equal(boot({ local: neon }).root.attrs['data-office-theme'], 'dark-industrial', 'sin dark-bit-neon en la identidad no se aplica');
+    const both = { ...neon, estiba_wms_office_identity: '{"temas_personales":["dark-bit","dark-bit-neon"]}' };
+    assert.equal(boot({ local: both }).root.attrs['data-office-theme'], 'dark-bit-neon');
+    assert.equal(boot({ local: both }).metas['meta[name="theme-color"]'].attrs.content, '#0b0820');
     const other = { ...session, estiba_wms_office_theme: 'dark-bit', estiba_wms_office_identity: '{"rol":"administrador"}' };
     assert.equal(boot({ local: other }).root.attrs['data-office-theme'], 'dark-industrial');
 });

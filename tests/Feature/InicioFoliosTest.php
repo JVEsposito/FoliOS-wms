@@ -56,12 +56,12 @@ class InicioFoliosTest extends TestCase
 
     public function test_solo_las_cuentas_configuradas_reciben_el_tema_personal(): void
     {
-        config(['oficina.temas_personales' => ['dark-bit' => ['persona@folios.test']]]);
+        config(['oficina.temas_personales' => ['dark-bit' => ['persona@folios.test'], 'dark-bit-neon' => ['persona@folios.test']]]);
         $personal = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'email' => 'persona@folios.test']);
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
 
         $this->postJson('/api/acceso-oficina', ['email' => $personal->email, 'password' => 'password'])
-            ->assertOk()->assertJsonPath('usuario.temas_personales', ['dark-bit']);
+            ->assertOk()->assertJsonPath('usuario.temas_personales', ['dark-bit', 'dark-bit-neon']);
         $this->postJson('/api/acceso-oficina', ['email' => $administrador->email, 'password' => 'password'])
             ->assertOk()->assertJsonPath('usuario.temas_personales', []);
     }

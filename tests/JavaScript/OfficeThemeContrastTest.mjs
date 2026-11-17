@@ -40,6 +40,7 @@ test('los temas mantienen contraste AA en contenido, acciones y selección', () 
         themeVariables(':root[data-office-theme="dark-industrial"]'),
         themeVariables(':root[data-office-theme="dark-rose"]'),
         themeVariables(':root[data-office-theme="dark-bit"]'),
+        themeVariables(':root[data-office-theme="dark-bit-neon"]'),
     ];
 
     themes.forEach((variables) => {
@@ -73,7 +74,7 @@ test('Operación ahora mantiene contraste con filas alternas y superficies de ca
         return color.length === 4 ? `#${[...color.slice(1)].map((c) => c + c).join('')}` : color;
     }
 
-    for (const theme of ['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit']) {
+    for (const theme of ['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit', 'dark-bit-neon']) {
         const variables = themeVariables(`:root[data-office-theme="${theme}"]`);
         const scope = operationCss.match(/\.operation-now\s*\{([^}]+)\}/)[1];
         for (const [, name, reference] of scope.matchAll(/--([\w-]+):\s*var\(--([\w-]+)\)/g)) {

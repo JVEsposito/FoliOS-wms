@@ -2,15 +2,16 @@ export const OFFICE_THEME_KEY = 'estiba_wms_office_theme';
 export const OFFICE_ADMIN_THEME_KEY = 'estiba_wms_office_admin_theme';
 export const OFFICE_PERSONAL_THEME_KEY = 'estiba_wms_office_personal_theme';
 export const OFFICE_MENU_KEY = 'estiba_wms_office_menu';
-export const OFFICE_THEMES = Object.freeze(['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit']);
+export const OFFICE_THEMES = Object.freeze(['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit', 'dark-bit-neon']);
 export const DEFAULT_OFFICE_THEME = OFFICE_THEMES[0];
 // Temas que el servidor habilita a cuentas puntuales (identidad.temas_personales).
-export const OFFICE_PERSONAL_THEMES = Object.freeze(['dark-bit']);
+export const OFFICE_PERSONAL_THEMES = Object.freeze(['dark-bit', 'dark-bit-neon']);
 export const OFFICE_THEME_COLORS = Object.freeze({
     'light-professional': '#102f43',
     'dark-industrial': '#0f1c24',
     'dark-rose': '#170e14',
-    'dark-bit': '#050d12',
+    'dark-bit': '#1a1c2c',
+    'dark-bit-neon': '#0b0820',
 });
 
 export function officePersonalThemes(identity) {

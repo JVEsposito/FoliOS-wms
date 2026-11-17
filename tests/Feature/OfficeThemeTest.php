@@ -28,6 +28,7 @@ class OfficeThemeTest extends TestCase
         $this->assertStringContainsString('nextOfficeTheme', $javascript);
         $this->assertStringContainsString(':root[data-office-theme="dark-rose"]', $css);
         $this->assertStringContainsString(':root[data-office-theme="dark-bit"]', $css);
+        $this->assertStringContainsString(':root[data-office-theme="dark-bit-neon"]', $css);
         $this->assertStringContainsString('localStorage.setItem(officeThemeStorageKey(identity), officeTheme)', $javascript);
         $this->assertStringContainsString('get themes() { return officeThemes(themeIdentity()); }', $javascript);
         $this->assertStringNotContainsString('officeThemeSelector', $javascript);
