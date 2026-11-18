@@ -121,4 +121,55 @@ class TemasPerfilApiTest extends TestCase
         $this->get($ruta)->assertOk();
         $this->getJson($rutaPorPerfil)->assertNotFound();
     }
+
+    public function test_los_estilos_de_planta_requieren_ilustracion_y_se_asignan_por_perfil(): void
+    {
+        $disco = Storage::fake('local');
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $perfil = PerfilAcceso::where('predeterminado', true)->where('rol_base', RolUsuario::SupervisorFrio)->firstOrFail();
+        $usuario = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => $perfil->id]);
+        $claves = ['personal-gundam', 'personal-omegamon-x'];
+        $webp = 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAgA0JaQAA3AA/vuUAAA=';
+
+        Sanctum::actingAs($administrador);
+        $disco->put('temas-oficina/personal-gundam.webp', 'imagen incompleta');
+        $this->getJson('/api/administracion/perfiles-acceso')->assertOk()
+            ->assertJsonMissingPath('catalogo_temas.personal-gundam')
+            ->assertJsonMissingPath('catalogo_temas.personal-omegamon-x');
+
+        foreach ($claves as $clave) {
+            $disco->put("temas-oficina/{$clave}.webp", base64_decode($webp, true));
+        }
+        $this->getJson('/api/administracion/perfiles-acceso')->assertOk()
+            ->assertJsonPath('catalogo_temas.personal-gundam', 'Gundam RX-78-2')
+            ->assertJsonPath('catalogo_temas.personal-omegamon-x', 'Omegamon X');
+
+        Sanctum::actingAs($usuario);
+        foreach ($claves as $clave) {
+            $this->get("/api/oficina/tema-personal/{$clave}")->assertNotFound();
+        }
+
+        $disco->put('temas-oficina/catalogo.json', json_encode([
+            'personal-omegamon-x' => ['nombre' => 'Tema previo', 'color' => '#123456', 'correo' => 'otro@folios.test'],
+        ]));
+        $disco->put('temas-oficina/personal-omegamon-x.css', ':root { --estilo-anterior: 1; }');
+
+        Sanctum::actingAs($administrador);
+        $this->patchJson("/api/administracion/perfiles-acceso/{$perfil->id}/temas", ['temas_oficina' => $claves])->assertOk();
+
+        Sanctum::actingAs($usuario->fresh());
+        $this->getJson('/api/oficina/contexto')->assertOk()
+            ->assertJsonPath('data.temas_oficina_personales.personal-gundam.claro', true)
+            ->assertJsonPath('data.temas_oficina_personales.personal-omegamon-x.nombre', 'Omegamon X')
+            ->assertJsonMissingPath('data.temas_oficina_personales.personal-omegamon-x.correo')
+            ->assertJsonMissingPath('data.temas_oficina_personales.personal-omegamon-x.ilustracion');
+
+        foreach ($claves as $clave) {
+            $respuesta = $this->get("/api/oficina/tema-personal/{$clave}")->assertOk()
+                ->assertHeader('Content-Type', 'text/css; charset=UTF-8');
+            $this->assertStringContainsString('data:image/webp;base64,'.$webp, $respuesta->getContent());
+            $this->assertStringNotContainsString('__FOLIOS_TEMA_WEBP__', $respuesta->getContent());
+            $this->assertStringNotContainsString('--estilo-anterior', $respuesta->getContent());
+        }
+    }
 }

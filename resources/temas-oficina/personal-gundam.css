@@ -1,0 +1,268 @@
+/* Tema personal de Oficina. Colores de alertas y estados heredados de FoliOS. */
+@media screen {
+    :root[data-office-personal-theme="personal-gundam"] {
+        color-scheme: light;
+        --bg: #e9effa;
+        --deep: #ffffff;
+        --panel: #fcfdff;
+        --raised: #ecf2fd;
+        --soft: #dbe7fb;
+        --line: #a5b7d9;
+        --line-soft: #d0ddf3;
+        --border: #a5b7d9;
+        --input-border: #6a83b4;
+        --text: #172946;
+        --text-strong: #101f3b;
+        --text-secondary: #263e68;
+        --text-subtle: #465d81;
+        --muted: #465d81;
+        --corporate-text: #172946;
+        --corporate-text-muted: #465d81;
+        --corporate-navy: #0e2660;
+        --corporate-canvas: #e9effa;
+        --corporate-card: #fcfdff;
+        --corporate-border: #a5b7d9;
+        --corporate-blue: #174cae;
+        --corporate-blue-dark: #143986;
+        --corporate-orange: #875215;
+        --corporate-gold: #875215;
+        --corporate-shadow: 0 4px 14px #1b397c1a;
+        --corporate-shadow-raised: 0 16px 36px #15347440;
+        --header-bg: #fcfdff;
+        --subnav-bg: #dde9ff;
+        --surface-muted: #e7effd;
+        --surface-hover: #dce9ff;
+        --surface-selected: #d3e3fd;
+        --input-bg: #ffffff;
+        --table-head: #244882;
+        --row-bg: #fcfdff;
+        --row-alt: #edf3ff;
+        --row-hover: #dce9ff;
+        --button-secondary: #eef4ff;
+        --button-secondary-hover: #dce9ff;
+        --icon-surface: #e7effd;
+        --primary: #1c4eaf;
+        --primary-hover: #153b8e;
+        --on-primary: #ffffff;
+        --accent: #1c4eaf;
+        --info-bg: #e5eeff;
+        --info-text: #16449c;
+        --focus-ring: #184cab66;
+        --selection-bg: #6396e64d;
+        --brand-gradient: linear-gradient(130deg, #0d2559, #204d9e);
+        --kpi-surface: #ecf2fd;
+        --logo-border: #6a83b4;
+        --logo-bg: #ffffff;
+        --cyan: #144da7;
+        --cyan-light: #153986;
+        --frost: #204fb1;
+        --frost-strong: #183d86;
+        --area-operacion-ink: #204fb1;
+        --area-operacion-text: #183d86;
+        --area-operacion-tint: #e5eeff;
+        --area-operacion-line: #a5b7d9;
+        --area-operacion-bright: #d1e1fd;
+        --hydro-blue: #174cae;
+        --hydro-ice: #204fb1;
+        --series-product: #174cae;
+        --series-material: #a04e14;
+        --theme-header: linear-gradient(105deg, #ffffff 12%, #edf4ff 70%, #dce9ff);
+        --theme-sidebar: linear-gradient(165deg, #0c2154 10%, #153d84 75%, #1b4a98);
+        --theme-stripe: linear-gradient(90deg, #e6be54 0 20%, #2056bc 20% 76%, #b1263b 76% 92%, #e6be54 92%);
+        --theme-command: linear-gradient(135deg, #ffffff 10%, #eef4ff 67%, #d7e6ff);
+        --theme-command-detail: linear-gradient(125deg, transparent 90%, #1b50b324 90% 91%, transparent 91% 92%, #b1263b28 92% 92.8%, transparent 92.8%);
+        --theme-panel-heading: linear-gradient(100deg, #ffffff, #e6efff 100%);
+        --theme-tab: linear-gradient(135deg, #143a8d, #245ab9);
+        --theme-tab-text: #ffffff;
+        --theme-tab-line: #ffd171;
+        --theme-table-heading-text: #f3f7ff;
+        --theme-gold: #f0b845;
+        --theme-edge: #b1263b;
+        --theme-silver: #d1e1fd;
+        --theme-sidebar-input: #ecf3ff;
+        --theme-sidebar-fg: #122c5a;
+        --theme-sidebar-muted: #acc5f1;
+        --theme-sidebar-action: #255abd;
+        --chart-grid: var(--line);
+        --chart-text: var(--text-secondary);
+        --chart-tooltip-bg: var(--raised);
+        --chart-tooltip-border: var(--line);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .estiba-ui {
+        --eui-color-navy: var(--corporate-navy);
+        --eui-color-navy-hover: var(--surface-hover);
+        --eui-color-canvas: var(--corporate-canvas);
+        --eui-color-surface: var(--corporate-card);
+        --eui-color-subtle: var(--surface-muted);
+        --eui-color-border: var(--line);
+        --eui-color-border-soft: var(--line-soft);
+        --eui-color-input-border: var(--input-border);
+        --eui-color-text: var(--text);
+        --eui-color-text-secondary: var(--text-secondary);
+        --eui-color-muted: var(--text-subtle);
+        --eui-color-primary: var(--primary);
+        --eui-color-primary-hover: var(--primary-hover);
+        --eui-color-on-primary: var(--on-primary);
+        --eui-color-selected: var(--surface-selected);
+        --eui-color-focus: var(--primary);
+        --eui-color-disabled-surface: var(--soft);
+        --eui-color-disabled-text: var(--text-subtle);
+        --eui-color-frost: var(--frost);
+        --eui-color-frost-strong: var(--frost-strong);
+        --eui-color-frost-bright: var(--frost);
+        --eui-signal-info-text: var(--info-text);
+        --eui-signal-info-surface: var(--info-bg);
+        --eui-signal-info-border: var(--line);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .estiba-office-shell {
+        --shell-navy: #0e2660;
+        --shell-navy-hover: #1b51af;
+        --shell-strong: #ffffff;
+        --shell-ink: #eaf1ff;
+        --shell-muted: #c8d8fa;
+        --shell-faint: var(--theme-sidebar-muted);
+        --shell-line: #6e92d6;
+        --shell-gajo: #6e92d6;
+        --shell-active-bg: #1b51af;
+        --shell-active-ink: #ffffff;
+        --shell-active-gajo: var(--theme-silver);
+        --shell-focus: var(--theme-tab-line);
+        --eui-shell-frost: var(--theme-sidebar-action);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .estiba-office-header {
+        background: var(--theme-header);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .estiba-office-header::after {
+        background: var(--theme-stripe);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .estiba-office-sidebar {
+        background: var(--theme-sidebar);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .estiba-office-sidebar :is(.estiba-office-area.is-active, .estiba-office-offices a.is-active) {
+        border-radius: 3px 13px 3px 3px;
+        background: var(--theme-tab);
+        color: var(--theme-tab-text);
+        box-shadow: inset 3px 0 var(--theme-tab-line);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .estiba-office-search input {
+        background: var(--theme-sidebar-input);
+        color: var(--theme-sidebar-fg);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .estiba-office-search input::placeholder {
+        color: var(--theme-sidebar-fg);
+        opacity: .83;
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .estiba-office-shell .estiba-office-theme-select {
+        border-color: var(--input-border);
+        background: var(--button-secondary);
+        box-shadow: inset 3px 0 var(--corporate-blue);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .estiba-office-sidebar::after {
+        content: "";
+        flex: 0 0 142px;
+        background: radial-gradient(ellipse at center, #d7e7ff4a, transparent 68%),
+            center / contain no-repeat url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .office-app table th {
+        background: var(--table-head) !important;
+        color: var(--theme-table-heading-text) !important;
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .office-app .office-panel-tab[aria-selected="true"] {
+        background: var(--theme-tab);
+        color: var(--theme-tab-text);
+        border-block-end-color: var(--theme-tab-line);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-command {
+        padding-inline: clamp(12px, 1.5vw, 22px);
+        border: 1px solid var(--corporate-border);
+        border-block-start: 3px solid var(--corporate-blue);
+        border-radius: 5px 18px 5px 5px;
+        background: var(--theme-command-detail), var(--theme-command);
+        box-shadow: var(--corporate-shadow);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-command__title h1 {
+        font-stretch: 82%;
+        letter-spacing: -.035em;
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--frost-strong);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-eyebrow::before {
+        width: 19px;
+        height: 6px;
+        flex: 0 0 19px;
+        background: repeating-linear-gradient(125deg, transparent 0 4px, var(--theme-gold) 4px 8px, transparent 8px 11px);
+        content: "";
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-tabs {
+        margin: 8px 0 0;
+        padding: 0 7px;
+        border: 1px solid var(--corporate-border);
+        border-radius: 5px 13px 5px 5px;
+        background: var(--subnav-bg);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-tab[aria-selected="true"] {
+        border-radius: 3px 12px 0 0;
+        border-block-end-color: var(--theme-tab-line);
+        background: var(--theme-tab);
+        color: var(--theme-tab-text);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-tab[aria-selected="true"]:focus-visible {
+        outline-color: var(--theme-tab-line);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-panel {
+        border-radius: 5px 15px 5px 5px;
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-panel__heading {
+        background: var(--theme-panel-heading);
+        box-shadow: inset 3px 0 var(--corporate-blue);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-overview__card {
+        border-radius: 5px 15px 5px 5px;
+        box-shadow: inset 0 3px var(--corporate-blue);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-overview__card:hover {
+        box-shadow: inset 0 3px var(--theme-edge);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-command .operation-now-refresh {
+        border-color: var(--input-border);
+        background: var(--button-secondary);
+        color: var(--text-strong);
+    }
+
+    :root[data-office-personal-theme="personal-gundam"] .operation-now-command .operation-now-refresh:hover {
+        background: var(--button-secondary-hover);
+    }
+}
+
+@media screen and (max-width: 1199px), screen and (max-height: 780px) {
+    :root[data-office-personal-theme="personal-gundam"] .estiba-office-sidebar::after { display: none; }
+}
