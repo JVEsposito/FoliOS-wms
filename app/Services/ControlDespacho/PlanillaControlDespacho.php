@@ -69,6 +69,9 @@ class PlanillaControlDespacho
             'estado' => $carga->estado->value,
             'exportadora' => $carga->embarque?->cliente?->nombre,
             'embarque' => $carga->embarque?->codigo,
+            'instructivos' => $carga->embarque?->instructivos
+                ->pluck('numero_externo')->filter(fn ($numero): bool => trim((string) $numero) !== '')
+                ->unique()->values()->all() ?? [],
             'contenedor' => $carga->embarque?->contenedor,
             'anden' => $presencia?->anden?->codigo ?? $carga->andenPrevisto?->codigo,
             'patente' => $presencia?->patente ?? $carga->patente,

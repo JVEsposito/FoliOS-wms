@@ -21,6 +21,7 @@ export type ConsolidationCatalog = {
 
 export type ConsolidationLoad = {
   id: string; codigo: string; referencia_embarque?: string | null; estado: string; exportadora: string | null; embarque: string | null; contenedor: string | null;
+  instructivos?: string[];
   anden: string | null; patente: string | null; pallets: number; en_anden: number; cargados: number;
   control: { id: string; estado: 'borrador' | 'cerrado'; posicionados: number } | null;
 };

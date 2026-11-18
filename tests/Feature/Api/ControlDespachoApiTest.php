@@ -53,6 +53,7 @@ class ControlDespachoApiTest extends TestCase
         $this->enviarAlAnden($contexto, $carga, $segundo);
         $this->enviarAlAnden($contexto, $otra, $contexto['folios'][4]);
         $this->conToken($token)->getJson('/api/control-despacho/cargas')->assertOk()
+            ->assertJsonPath('data.0.instructivos', [])
             ->assertJsonFragment(['codigo' => $carga->codigo, 'en_anden' => 2, 'control' => null]);
 
         $operacion = (string) Str::uuid();
@@ -142,6 +143,8 @@ class ControlDespachoApiTest extends TestCase
         $embarque->instructivos()->create(['orden' => 1, 'numero_externo' => 'INS-77', 'pais_destino_id' => $mexico->id, 'destino_pais' => $mexico->nombre_es,
             'puerto_destino_id' => $manzanillo->id, 'destino_ciudad' => $manzanillo->nombre, 'cantidad_pallets' => 1]);
         [$token] = $this->consolidador('R24P');
+        $this->conToken($token)->getJson('/api/control-despacho/cargas')->assertOk()
+            ->assertJsonPath('data.0.instructivos', ['INS-77']);
 
         $control = $this->iniciar($token, $carga);
         $this->assertSame('INS-77', $control['referencia_embarque']);
@@ -158,7 +161,8 @@ class ControlDespachoApiTest extends TestCase
         $this->conToken($token)->getJson('/api/control-despacho/controles?buscar=INS-78')->assertOk()
             ->assertJsonPath('data.0.referencia_embarque', 'INS-77 / INS-78');
         $this->conToken($token)->getJson('/api/control-despacho/cargas')->assertOk()
-            ->assertJsonPath('data.0.referencia_embarque', 'INS-77 / INS-78');
+            ->assertJsonPath('data.0.referencia_embarque', 'INS-77 / INS-78')
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.instructivos', ['INS-77', 'INS-78']);
     }
 
     public function test_cerrar_exige_inspeccion_y_posiciones_y_congela_la_planilla(): void
