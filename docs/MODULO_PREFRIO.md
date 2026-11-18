@@ -449,3 +449,14 @@ Quedan para entregas posteriores:
 - fotografías;
 - telemetría automática;
 - integración con el ERP.
+
+
+### Corrección administrativa de horas reales
+
+En **Oficina → Prefrío → detalle del proceso → Corregir horas**, Administrador y Superadmin pueden corregir las fechas y horas ya registradas, tanto en procesos activos como cerrados. Se presentan inicio, inversión, pausas, reanudaciones, deshielo, lecturas, término del enfriado, aprobación/reproceso/cancelación, finalizaciones parciales y retiros. La edición es opcional: se cambian únicamente los campos necesarios y se exige un motivo.
+
+Los valores del formulario se muestran e interpretan en la zona operacional (`America/Santiago`), mientras que la persistencia continúa en UTC. El inicio real puede ser anterior a la digitación o al armado; se conservan las verificaciones de coherencia entre inicio, eventos térmicos, término y cierre, así como entre finalización parcial y retiro. Se rechazan fechas futuras más allá de la tolerancia operativa existente de cinco minutos.
+
+`PUT /api/administracion/prefrio/procesos/{id}/corregir-horas` usa el mismo permiso y motor transaccional de la corrección de historial, con versión conocida, UUID idempotente y auditoría de valores anteriores/nuevos, usuario, motivo y momento de corrección. Sincroniza los hitos del proceso y los de las asignaciones vinculadas a eventos. Los retiros confirmados desde una labor o las cargas históricas sin evento propio tienen su campo de hora independiente. No se permite inventar un retiro inexistente. No cambia resultados térmicos, ubicaciones, movimientos físicos ni composición del proceso. La fecha original de creación del evento permanece intacta.
+
+La pantalla conserva el UUID si se reintenta un formulario idéntico cuya respuesta se perdió. La corrección completa de historial sigue disponible para modificar otros datos del expediente; las horas de las finalizaciones y retiros parciales se corrigen en la acción específica.
