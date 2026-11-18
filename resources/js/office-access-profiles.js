@@ -3,6 +3,13 @@ const profileTable = document.getElementById('accessProfilesTableBody');
 
 if (profileForm && profileTable) {
     const tokenKey = 'estiba_wms_office_token';
+    const themeDialog = document.getElementById('accessThemeDialog');
+    const themeForm = document.getElementById('accessThemeForm');
+    const themeOptions = document.getElementById('accessThemeOptions');
+    const themeError = document.getElementById('accessThemeError');
+    const cancelTheme = document.getElementById('cancelAccessTheme');
+    const saveTheme = themeForm.querySelector('[type="submit"]');
+    let themeProfileId;
     const state = {
         profiles: [],
         macros: [],
@@ -10,6 +17,8 @@ if (profileForm && profileTable) {
         homes: [],
         roles: [],
         materialPermissions: [],
+        themes: {},
+        canEditThemes: false,
     };
 
     const escapeHtml = (value) => String(value ?? '')
@@ -268,9 +277,23 @@ if (profileForm && profileTable) {
                 <td>${profile.protegido
                     ? '<span class="access-profile-lock">Protegido</span>'
                     : `<button data-edit-access-profile="${profile.id}" type="button">Editar</button>`}
+                    ${state.canEditThemes ? `<button data-edit-access-themes="${escapeHtml(profile.id)}" type="button" aria-label="Temas de ${escapeHtml(profile.nombre)}">Temas</button>` : ''}
                 </td>
             </tr>
         `).join('') || '<tr class="admin-empty"><td colspan="6">No existen perfiles configurados.</td></tr>';
+    }
+
+    function editThemes(profile) {
+        themeProfileId = profile.id;
+        document.getElementById('accessThemeProfile').textContent = profile.nombre;
+        themeError.textContent = '';
+        themeForm.elements.heredar.checked = profile.temas_oficina == null;
+        themeOptions.disabled = themeForm.elements.heredar.checked;
+        const selected = new Set(profile.temas_oficina);
+        document.getElementById('accessThemeChoices').innerHTML = Object.entries(state.themes).map(([key, name]) => `
+            <label class="admin-check"><input name="tema" type="checkbox" value="${escapeHtml(key)}" ${selected.has(key) ? 'checked' : ''}><span>${escapeHtml(name)}</span></label>
+        `).join('');
+        themeDialog.showModal();
     }
 
     function resetForm() {
@@ -332,6 +355,8 @@ if (profileForm && profileTable) {
         state.homes = response.pantallas_inicio || [];
         state.roles = response.roles_base || [];
         state.materialPermissions = response.catalogo_permisos_materiales || [];
+        state.themes = response.catalogo_temas || {};
+        state.canEditThemes = response.puede_editar_temas === true;
         state.permissionEvents?.abort();
         state.permissionEvents = new AbortController();
         profileForm.elements.rol_base.innerHTML = state.roles.map((role) =>
@@ -355,10 +380,45 @@ if (profileForm && profileTable) {
     document.getElementById('cancelAccessProfileEdit').addEventListener('click', resetForm);
 
     profileTable.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-edit-access-profile]');
+        const button = event.target.closest('[data-edit-access-profile], [data-edit-access-themes]');
         if (!button) return;
-        const profile = state.profiles.find((candidate) => candidate.id === button.dataset.editAccessProfile);
-        if (profile) editProfile(profile);
+        const profile = state.profiles.find((candidate) => candidate.id === (button.dataset.editAccessProfile || button.dataset.editAccessThemes));
+        if (!profile) return;
+        if (button.dataset.editAccessThemes) editThemes(profile);
+        else editProfile(profile);
+    });
+
+    themeForm.elements.heredar.addEventListener('change', () => {
+        themeOptions.disabled = themeForm.elements.heredar.checked;
+    });
+    cancelTheme.addEventListener('click', () => themeDialog.close());
+    themeDialog.addEventListener('cancel', (event) => {
+        if (saveTheme.disabled) event.preventDefault();
+    });
+    themeForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (saveTheme.disabled) return;
+        themeError.textContent = '';
+        const themes = themeForm.elements.heredar.checked ? null
+            : Array.from(themeOptions.querySelectorAll('input:checked'), (input) => input.value);
+        saveTheme.disabled = true;
+        cancelTheme.disabled = true;
+        try {
+            const { data } = await api(`/api/administracion/perfiles-acceso/${themeProfileId}/temas`, {
+                method: 'PATCH',
+                body: JSON.stringify({ temas_oficina: themes }),
+            });
+            state.profiles = state.profiles.map((profile) => profile.id === data.id ? data : profile);
+            themeDialog.close();
+            renderProfiles();
+            profileTable.querySelector(`[data-edit-access-themes="${CSS.escape(data.id)}"]`)?.focus();
+            window.dispatchEvent(new Event('estiba:access-profile-themes-saved'));
+        } catch (exception) {
+            themeError.textContent = exception.message;
+        } finally {
+            saveTheme.disabled = false;
+            cancelTheme.disabled = false;
+        }
     });
 
     profileForm.addEventListener('submit', async (event) => {

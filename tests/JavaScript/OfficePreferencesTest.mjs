@@ -63,3 +63,13 @@ test('serializa el estado persistente del menú lateral', () => {
     assert.equal(isOfficeMenuCollapsed('collapsed'), true);
     assert.equal(isOfficeMenuCollapsed('expanded'), false);
 });
+
+test('la configuración del perfil prevalece y los temas locales requieren metadatos autorizados', () => {
+    const perfil = { rol: 'administrador', temas_personales: ['dark-bit'], temas_oficina: [] };
+    assert.deepEqual(officeThemes(perfil), ['light-professional', 'dark-industrial']);
+    const asignado = { rol: 'consulta', temas_oficina: ['dark-rose', 'personal-prueba'] };
+    assert.deepEqual(officeThemes(asignado), ['light-professional', 'dark-industrial', 'dark-rose']);
+    assert.equal(normalizeOfficeTheme('personal-prueba', asignado), 'dark-industrial');
+    asignado.temas_oficina_personales = { 'personal-prueba': { nombre: 'Prueba' } };
+    assert.equal(nextOfficeTheme('dark-rose', asignado), 'personal-prueba');
+});

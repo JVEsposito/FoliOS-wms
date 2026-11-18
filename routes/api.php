@@ -143,6 +143,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/ingresos/{ingresoPorteria}/anular', [IngresoPorteriaController::class, 'anular'])->middleware('can:administrar-porteria');
     });
     Route::get('/oficina/contexto', ContextoOficinaController::class);
+    Route::get('/oficina/tema-personal/{tema}', [ContextoOficinaController::class, 'tema']);
     Route::get('/envases/catalogo', [CatalogoEnvaseController::class, 'catalogo']);
     Route::get('/administracion/reparto-envases', [CatalogoEnvaseController::class, 'referencias']);
     Route::put('/administracion/reparto-envases/{especieValidacion}', [CatalogoEnvaseController::class, 'guardar']);
@@ -938,6 +939,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/administracion/sesiones-acceso/{sesionAcceso}', [SesionesAccesoAdministracionController::class, 'destroy']);
         Route::post('/administracion/perfiles-acceso', [PerfilAccesoController::class, 'store']);
         Route::put('/administracion/perfiles-acceso/{perfilAcceso}', [PerfilAccesoController::class, 'update']);
+        Route::patch('/administracion/perfiles-acceso/{perfilAcceso}/temas', [PerfilAccesoController::class, 'actualizarTemas']);
         Route::post('/administracion/usuarios', [AdministracionAccesoController::class, 'crearUsuario']);
         Route::put('/administracion/usuarios/{usuario}', [AdministracionAccesoController::class, 'actualizarUsuario']);
         Route::post('/administracion/dispositivos', [AdministracionAccesoController::class, 'crearDispositivo']);

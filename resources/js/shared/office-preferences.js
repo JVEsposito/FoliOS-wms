@@ -20,24 +20,24 @@ export function officePersonalThemes(identity) {
 }
 
 export function officeThemeStorageKey(identity) {
-    // El Administrador conserva su clave (rosado incluido) aunque también tenga temas personales.
+    // El Administrador conserva la preferencia que ya tenía guardada.
     if (identity?.rol === 'administrador') return OFFICE_ADMIN_THEME_KEY;
-    return officePersonalThemes(identity).length ? OFFICE_PERSONAL_THEME_KEY : OFFICE_THEME_KEY;
+    return officeThemes(identity).length > 2 ? OFFICE_PERSONAL_THEME_KEY : OFFICE_THEME_KEY;
 }
 
 export function officeThemes(identity) {
-    return [
-        'light-professional',
-        'dark-industrial',
+    const additional = Array.isArray(identity?.temas_oficina) ? identity.temas_oficina : [
         ...(identity?.rol === 'administrador' ? ['dark-rose'] : []),
         ...officePersonalThemes(identity),
     ];
+    const installed = [...OFFICE_THEMES, ...Object.keys(identity?.temas_oficina_personales || {})];
+    return installed.filter((theme, index) => index < 2 || additional.includes(theme));
 }
 
 export function normalizeOfficeTheme(value, identity) {
     if (officeThemes(identity).includes(value)) return value;
     // Un tema oscuro que esta cuenta no tiene vuelve al oscuro común.
-    return OFFICE_THEMES.includes(value) && value !== DEFAULT_OFFICE_THEME ? 'dark-industrial' : DEFAULT_OFFICE_THEME;
+    return OFFICE_THEMES.includes(value) || /^personal-[a-z0-9-]+$/.test(value) ? 'dark-industrial' : DEFAULT_OFFICE_THEME;
 }
 
 export function nextOfficeTheme(value, identity) {

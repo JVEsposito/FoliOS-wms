@@ -29,16 +29,24 @@
     var storedIdentity = read('estiba_wms_office_identity');
     var identity = null;
     try { identity = JSON.parse(storedIdentity || 'null'); } catch (error) { /* identidad ilegible */ }
-    var administrator = token && !soloTema && identity?.rol === 'administrador';
-    // Temas personales: solo para las cuentas que el servidor habilita (identidad.temas_personales).
-    var personales = token && !soloTema && Array.isArray(identity?.temas_personales) ? identity.temas_personales : [];
-    var personal = personales.indexOf('dark-bit') !== -1 || personales.indexOf('dark-bit-neon') !== -1;
-    var theme = (administrator && read('estiba_wms_office_admin_theme'))
-        || (personal && read('estiba_wms_office_personal_theme'))
-        || read('estiba_wms_office_theme');
-    if (theme === 'dark-rose' && !administrator) theme = 'dark-industrial';
-    if ((theme === 'dark-bit' || theme === 'dark-bit-neon') && personales.indexOf(theme) === -1) theme = 'dark-industrial';
-    if (['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit', 'dark-bit-neon'].indexOf(theme) === -1) theme = 'light-professional';
+    var themeIdentity = token && !soloTema ? identity : null;
+    var administrator = themeIdentity?.rol === 'administrador';
+    var themes = ['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit', 'dark-bit-neon'];
+    var additional = Array.isArray(themeIdentity?.temas_oficina)
+        ? themeIdentity.temas_oficina
+        : [
+            ...(administrator ? ['dark-rose'] : []),
+            ...['dark-bit', 'dark-bit-neon'].filter(function (item) {
+                return Array.isArray(themeIdentity?.temas_personales) && themeIdentity.temas_personales.includes(item);
+            }),
+        ];
+    var personalThemes = themeIdentity?.temas_oficina_personales || {};
+    var allowed = [...themes, ...Object.keys(personalThemes)].filter(function (item, index) { return index < 2 || additional.includes(item); });
+    var commonKey = 'estiba_wms_office_theme';
+    var preferenceKey = administrator ? 'estiba_wms_office_admin_theme' : allowed.length > 2 ? 'estiba_wms_office_personal_theme' : commonKey;
+    var theme = read(preferenceKey) || read(commonKey);
+    if (!allowed.includes(theme)) theme = themes.includes(theme) || /^personal-[a-z0-9-]+$/.test(theme) ? 'dark-industrial' : 'light-professional';
+    else if (Object.hasOwn(personalThemes, theme)) theme = personalThemes[theme].claro ? 'light-professional' : 'dark-industrial';
     var dark = theme !== 'light-professional';
     root.setAttribute('data-office-theme', theme);
     var scheme = document.querySelector('meta[name="color-scheme"]');

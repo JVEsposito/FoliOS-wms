@@ -6,10 +6,12 @@ use App\Enums\TipoNotificacionOperacional;
 use App\Http\Controllers\Controller;
 use App\Models\NotificacionOperacional;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Autorizacion\CatalogoTemasOficina;
 use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ContextoOficinaController extends Controller
 {
@@ -18,12 +20,14 @@ class ContextoOficinaController extends Controller
         AlcanceOperacionalUsuario $alcance,
         ServicioTemporadaActiva $temporadas,
         ServicioNotificacionesOperacionales $notificaciones,
+        CatalogoTemasOficina $temas,
     ): JsonResponse {
         abort_unless($alcance->puedeAccederOficina($request->user()), 403);
         $temporada = $temporadas->buscar();
 
         return response()->json(['data' => [
             'planta' => config('oficina.planta') ?: null,
+            ...$temas->preferencias($request->user()),
             'temporada' => $temporada ? [
                 'id' => $temporada->id,
                 'codigo' => $temporada->codigo,
@@ -49,5 +53,17 @@ class ContextoOficinaController extends Controller
                 ])
                 ->all(),
         ]])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function tema(Request $request, string $tema, AlcanceOperacionalUsuario $alcance, CatalogoTemasOficina $temas): BinaryFileResponse
+    {
+        abort_unless($alcance->puedeAccederOficina($request->user()), 403);
+        $ruta = $temas->hojaPersonal($request->user(), $tema);
+        abort_if($ruta === null || ! is_file($ruta), 404);
+
+        return response()->file($ruta, [
+            'Content-Type' => 'text/css; charset=UTF-8',
+            'Cache-Control' => 'private, no-store',
+        ]);
     }
 }

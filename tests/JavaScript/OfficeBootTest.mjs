@@ -55,7 +55,7 @@ test('con sesión la oficina se pinta directo y con el tema guardado', () => {
 test('el tema por omisión es el mismo de las preferencias de Oficina', () => {
     assert.equal(boot({ local: { ...session, estiba_wms_office_theme: 'otro' } }).root.attrs['data-office-theme'], DEFAULT_OFFICE_THEME);
     const navigation = readFileSync(new URL('../../resources/js/office-navigation.js', import.meta.url), 'utf8');
-    assert.match(navigation, /OFFICE_THEME_COLORS\[officeTheme\]/);
+    assert.match(navigation, /OFFICE_THEME_COLORS\[baseTheme\]/);
     assert.match(source, /'#0f1c24' : '#102f43'/);
     // El arranque pinta el mismo color de barra que las preferencias.
     for (const [theme, color] of Object.entries(OFFICE_THEME_COLORS)) assert.match(source, new RegExp(theme === 'light-professional' ? `: '${color}'` : `'${color}'`));
@@ -101,6 +101,21 @@ test('sin sesión no pinta la oficina y va a /FoliOS con el regreso', () => {
 
     assert.deepEqual(boot({ path: '/otra' }).replaced, ['/FoliOS']);
     assert.deepEqual(boot({ local: { estiba_wms_office_token: 'x' } }).replaced.length, 1, 'sin identidad tampoco hay sesión');
+});
+
+test('el primer pintado respeta el perfil y la clave de preferencia de la cuenta', () => {
+    const admin = { ...session, estiba_wms_office_theme: 'light-professional',
+        estiba_wms_office_admin_theme: 'dark-rose', estiba_wms_office_personal_theme: 'dark-bit-neon',
+        estiba_wms_office_identity: '{"rol":"administrador","temas_oficina":[],"temas_personales":["dark-bit-neon"]}' };
+
+    assert.equal(boot({ local: admin }).root.attrs['data-office-theme'], 'dark-industrial');
+    assert.equal(boot({ local: { ...admin, estiba_wms_office_admin_theme: null } }).root.attrs['data-office-theme'], 'light-professional');
+    const granted = { ...admin, estiba_wms_office_identity: '{"rol":"supervisor_frio","temas_oficina":["dark-rose"]}',
+        estiba_wms_office_personal_theme: 'dark-rose' };
+    assert.equal(boot({ local: granted }).root.attrs['data-office-theme'], 'dark-rose');
+    const privateTheme = { ...granted, estiba_wms_office_personal_theme: 'personal-prueba',
+        estiba_wms_office_identity: '{"temas_oficina":["personal-prueba"],"temas_oficina_personales":{"personal-prueba":{"claro":true}}}' };
+    assert.equal(boot({ local: privateTheme }).root.attrs['data-office-theme'], 'light-professional');
 });
 
 test('la entrada única solo toma el tema', () => {
