@@ -6,7 +6,9 @@ use App\Enums\EstadoLoteMateriaPrima;
 use App\Models\Folio;
 use App\Models\LoteMateriaPrima;
 use App\Models\TrazabilidadFolioOrigen;
+use App\Services\Revisiones\RevisionBandejasOperacionales;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Mantiene trazabilidad_folio_origenes a partir de la composición guardada en el folio.
@@ -103,6 +105,23 @@ class ProyeccionTrazabilidadFolio
         ])->filter()->unique()->values()->all();
         $temporadas = collect([$lote->temporada_id, $lote->getOriginal('temporada_id')])
             ->filter()->unique()->values()->all();
+
+        // Un seguimiento puede preceder a la digitación del lote. Al aparecer su identidad
+        // estable se conserva el control aunque posteriormente se corrija el número impreso.
+        if (Schema::hasTable('retenciones_lote_sag')) {
+            $casos = DB::table('retenciones_lote_sag')->where('temporada_id', $lote->temporada_id)
+                ->where('cliente_id', $lote->cliente_id)->whereNull('lote_materia_prima_id')
+                ->whereIn('numero_lote', $numeros)->get(['id', 'numero_lote']);
+            foreach ($casos as $caso) {
+                $id = $this->loteRegistrado($lote->temporada_id, $caso->numero_lote, $lote->cliente_id);
+                if ($id) {
+                    DB::table('retenciones_lote_sag')->where('id', $caso->id)->whereNull('lote_materia_prima_id')
+                        ->update(['lote_materia_prima_id' => $id]);
+                    DB::afterCommit(fn () => app(RevisionBandejasOperacionales::class)
+                        ->invalidar(RevisionBandejasOperacionales::CARGAS));
+                }
+            }
+        }
 
         TrazabilidadFolioOrigen::query()
             ->where(fn ($consulta) => $consulta

@@ -1,3 +1,4 @@
+import { SagLotAlerts } from './SagLotAlerts';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -485,6 +486,7 @@ export function RefrigeratedLoadOperation({
         </Pressable>
       </View>
 
+      <SagLotAlerts alerts={selectedLoad?.alertas_sag} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 

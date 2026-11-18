@@ -1,3 +1,4 @@
+import { sagLotAlertsHtml } from './shared/sag-lot-alerts.js';
 import { loadClusterLocation } from './shared/load-cluster-location.js';
 import { createOperationalPoller } from './shared/operational-poller';
 import { loadReceptionDependencies } from './shared/load-reception-dependencies.js';
@@ -165,6 +166,9 @@ function renderDetail() {
         : null;
 
     elements.code.textContent = load.codigo;
+    let sag = document.getElementById('loadStatusSagAlerts');
+    if (!sag) { sag = document.createElement('div'); sag.id = 'loadStatusSagAlerts'; elements.code.parentElement.append(sag); }
+    sag.innerHTML = sagLotAlertsHtml(load.alertas_sag || []);
     elements.status.textContent = statusLabels[load.estado] || load.estado;
     elements.status.dataset.tone = load.camion_en_anden ? 'success' : 'info';
     elements.priority.textContent = priorityLabels[load.prioridad] || load.prioridad;

@@ -267,6 +267,9 @@ class ServicioReinicioOperacional
 
         return [
             'frigorifico' => [
+                'retenciones_lote_sag' => DB::table('retenciones_lote_sag')->where('temporada_id', $temporada->id)->count(),
+                'eventos_retencion_lote_sag' => DB::table('eventos_retencion_lote_sag')->whereIn('retencion_id',
+                    DB::table('retenciones_lote_sag')->select('id')->where('temporada_id', $temporada->id))->count(),
                 'folios' => (clone $folios)->count(),
                 'validaciones_pallet' => $this->validacionesPallet($temporada)->count(),
                 'cargas' => (clone $cargas)->count(),
@@ -523,6 +526,9 @@ class ServicioReinicioOperacional
         $eliminados['trazabilidad_origenes'] = DB::table('trazabilidad_folio_origenes')
             ->whereIn('folio_id', clone $folios)
             ->delete();
+        $eliminados['eventos_retencion_lote_sag'] = DB::table('eventos_retencion_lote_sag')->whereIn('retencion_id',
+            DB::table('retenciones_lote_sag')->select('id')->where('temporada_id', $temporada->id))->delete();
+        $eliminados['retenciones_lote_sag'] = DB::table('retenciones_lote_sag')->where('temporada_id', $temporada->id)->delete();
 
         DB::table('validaciones_pallet')
             ->where('temporada_id', $temporada->id)

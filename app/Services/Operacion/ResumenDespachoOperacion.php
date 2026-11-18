@@ -9,6 +9,7 @@ use App\Models\CargaFolio;
 use App\Models\Temporada;
 use App\Services\Cargas\CalculadorConcentracionCarga;
 use App\Services\Cargas\ServicioReingresoCamara;
+use App\Services\InspeccionSag\ServicioRetencionesLoteSag;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -54,6 +55,7 @@ class ResumenDespachoOperacion
 
         $filas = $cargas->map(function (Carga $carga) use ($exigeCargados): array {
             $asignaciones = $carga->asignacionesActuales;
+            $alertasSag = app(ServicioRetencionesLoteSag::class)->alertasCarga($carga, $asignaciones);
             $progreso = $this->concentracion->calcular($asignaciones);
             $total = (int) $progreso['total'];
             $presencia = $carga->presenciaAndenActiva;
@@ -66,6 +68,8 @@ class ResumenDespachoOperacion
             return [
                 'id' => $carga->id,
                 'codigo' => $carga->codigo,
+                'alertas_sag' => $alertasSag,
+                'salida_restringida_sag' => collect($alertasSag)->contains('bloquea_salida', true),
                 'numero_orden_externa' => $carga->numero_orden_externa,
                 'embarque' => $carga->embarque?->codigo,
                 'clientes' => $clientes,
@@ -93,6 +97,7 @@ class ResumenDespachoOperacion
                     'en_anden_por_cargar' => $porCargarEnAnden,
                 ],
                 'lista_para_cerrar' => $carga->estado === EstadoCarga::Despachada
+                    && ! collect($alertasSag)->contains('bloquea_salida', true)
                     && (int) $carga->incidencias_abiertas === 0
                     && (! $exigeCargados || $porCargarEnAnden === 0),
                 'publicada_at' => $carga->publicada_at?->toAtomString(),

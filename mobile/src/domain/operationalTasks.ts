@@ -1,3 +1,4 @@
+import type { SagLotAlert } from './sagLotHolds';
 import type { MovementType } from './estiba';
 
 export type OperationalTaskPriority = 'normal' | 'alta' | 'urgente' | 'critica';
@@ -92,6 +93,7 @@ export type OperationalTaskReservation = {
 };
 
 export type OperationalTask = {
+  alertas_sag?: SagLotAlert[];
   id: string;
   permite_sesion_por_tarea?: boolean;
   plan: {

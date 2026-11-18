@@ -6,6 +6,7 @@ use App\Enums\EstadoCarga;
 use App\Enums\EstadoCargaFolio;
 use App\Services\Cargas\CalculadorConcentracionCarga;
 use App\Services\Cargas\ServicioAcopioCarga;
+use App\Services\InspeccionSag\ServicioRetencionesLoteSag;
 use App\Services\Jornadas\CalendarioOperativo;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -23,6 +24,7 @@ class CargaResource extends JsonResource
             : collect();
         $asignaciones = $this->asignacionesVisibles($asignacionesActuales);
         $folios = $this->transformarFolios($asignaciones);
+        $alertasSag = app(ServicioRetencionesLoteSag::class)->alertasCarga($this->resource, $asignaciones);
         $concentracion = app(CalculadorConcentracionCarga::class)
             ->calcular($asignaciones);
         $dependencias = app(ServicioAcopioCarga::class)->dependencias($asignaciones);
@@ -87,6 +89,8 @@ class CargaResource extends JsonResource
                 'estado' => $this->embarque->estado->value,
             ] : null),
             'total_folios' => $folios->count(),
+            'alertas_sag' => $alertasSag,
+            'salida_restringida_sag' => collect($alertasSag)->contains('bloquea_salida', true),
             'total_programado' => $this->resource->relationLoaded('embarque') && $this->embarque?->relationLoaded('instructivos')
                 && $this->embarque->instructivos->isNotEmpty()
                 && $this->embarque->instructivos->every(fn ($i): bool => $i->cantidad_pallets !== null)

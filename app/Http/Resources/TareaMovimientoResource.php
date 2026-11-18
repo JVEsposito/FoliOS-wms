@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Enums\EstadoCustodiaTemporal;
 use App\Enums\EstadoTareaMovimiento;
 use App\Models\TareaMovimiento;
+use App\Services\InspeccionSag\ServicioRetencionesLoteSag;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,6 +16,7 @@ class TareaMovimientoResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'alertas_sag' => app(ServicioRetencionesLoteSag::class)->paraFolios([$this->folio_id])[$this->folio_id] ?? [],
             'permite_sesion_por_tarea' => $this->maniobra_operacional_id !== null
                 && (($this->planOperacional?->contexto ?? [])['planner_horizon'] ?? config('planificador.horizon')) === 'rolling',
             'plan' => $this->whenLoaded('planOperacional', fn (): array => [

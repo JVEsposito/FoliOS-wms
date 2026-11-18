@@ -64,6 +64,7 @@ class CatalogoOficinas
         ['frigorifico', 'Repaletizajes', '/oficina/validacion/repaletizajes', '', ['puede_consultar_repaletizajes']],
         ['frigorifico', 'Anulaciones', '/oficina/validacion/anulaciones', 'frigorifico.validacion', ['puede_consultar_validaciones_pallet']],
         ['frigorifico', 'Contraparte SAG', '/oficina/frigorifico/contraparte-sag', 'frigorifico.contraparte-sag', ['puede_consultar_contraparte_sag']],
+        ['frigorifico', 'Lotes retenidos SAG', '/oficina/frigorifico/lotes-retenidos-sag', 'frigorifico.lotes-retenidos-sag', ['puede_gestionar_lotes_retenidos_sag']],
         ['frigorifico', 'Inspección SAG', '/oficina/frigorifico/inspeccion-sag', 'frigorifico.inspeccion-sag', ['puede_consultar_inspeccion_sag']],
         ['frigorifico', 'Prefrío', '/oficina/prefrio', 'frigorifico.prefrio', ['puede_consultar_prefrio']],
         ['frigorifico', 'Punto de rocío', '/oficina/prefrio/punto-rocio', 'frigorifico.prefrio', ['puede_consultar_prefrio']],

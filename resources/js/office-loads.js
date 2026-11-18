@@ -1,3 +1,4 @@
+import { sagLotAlertsHtml } from './shared/sag-lot-alerts.js';
 import { loadClusterLocation } from './shared/load-cluster-location.js';
 import { createUuid as operationId } from './shared/uuid.js';
 import { showOfficeToast } from './office-toast.js';
@@ -931,6 +932,7 @@ function renderCommands(load) {
     elements.cancel.classList.toggle('is-hidden', !canCancel(load));
     elements.publish.classList.toggle('is-hidden', !draft);
     elements.closeDispatch.classList.toggle('is-hidden', !canCloseDispatch(load));
+    elements.closeDispatch.disabled = Boolean(load.salida_restringida_sag);
     elements.returnButton.classList.toggle('is-hidden', !canReturn(load));
     elements.truckDock.classList.toggle('is-hidden', !canManageTruckPresence(load));
     elements.truckDock.textContent = load.camion_en_anden ? 'Liberar andén' : 'Camión en andén';
@@ -1016,6 +1018,9 @@ function renderSelected(load) {
     const editable = canEdit(load);
     elements.editorEyebrow.textContent = load.estado === 'borrador' ? 'ORDEN EN PREPARACIÓN' : 'ORDEN DE CARGA';
     elements.editorTitle.textContent = load.codigo;
+    let sag = document.getElementById('loadSagAlerts');
+    if (!sag) { sag = document.createElement('div'); sag.id = 'loadSagAlerts'; elements.editorTitle.parentElement.append(sag); }
+    sag.innerHTML = sagLotAlertsHtml(load.alertas_sag || []);
     const linkedShipment = Boolean(load.embarque);
     const linkedExternalNumbers = externalNumbers(load);
     elements.editorDescription.textContent = linkedShipment

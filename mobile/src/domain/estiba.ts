@@ -1,3 +1,4 @@
+import type { SagLotAlert } from './sagLotHolds';
 export type MaterialWarehouseAssignment = { almacen_id: string; codigo: string; nombre: string; origen: 'regla' | 'central_por_defecto'; regla: { id: string; nombre: string; version: number; prioridad: number } | null; ubicacion_fisica: 'pendiente'; capacidad: 'pendiente_verificacion'; aviso: string };
 
 export type ApiMode = 'demo' | 'connected' | 'unconfigured';
@@ -449,6 +450,7 @@ export type LoadProgress = {
 };
 
 export type RefrigeratedLoad = {
+  alertas_sag?: SagLotAlert[];
   id: string;
   codigo: string;
   numero_orden_externa: string | null;

@@ -471,6 +471,7 @@ class AppServiceProvider extends ServiceProvider
         );
         Gate::define('consultar-contraparte-sag', fn (User $usuario): bool => $alcance->puedeConsultarContraparteSag($usuario));
         Gate::define('gestionar-contraparte-sag', fn (User $usuario): bool => $alcance->puedeGestionarContraparteSag($usuario));
+        Gate::define('gestionar-lotes-retenidos-sag', fn (User $usuario): bool => $alcance->puedeGestionarRetencionesLoteSag($usuario));
         Gate::define(
             'consultar-inspeccion-sag',
             fn (User $usuario): bool => $alcance->puedeConsultarInspeccionSag($usuario),

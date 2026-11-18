@@ -100,6 +100,13 @@ class ReinicioOperacionalApiTest extends TestCase
             'folio_id' => $folioPt->id,
             'lote_materia_prima_id' => $materiaPrima['lote_id'],
         ]);
+        $loteRetenido = DB::table('lotes_materia_prima')->where('id', $materiaPrima['lote_id'])->first();
+        $this->actingAs($administrador, 'sanctum')->postJson('/api/sag/lotes-retenidos', [
+            'operacion_id' => (string) Str::uuid(), 'cliente_id' => $loteRetenido->cliente_id,
+            'numero_lote' => $loteRetenido->numero_lote, 'estado' => 'retenido',
+            'fecha_deteccion' => now()->toDateString(), 'observacion' => 'Detección pendiente de resultado.',
+            'todos_destinos' => true, 'destinos' => [], 'definitivo' => false,
+        ])->assertOk();
 
         $vistaPrevia = $this->actingAs($administrador, 'sanctum')
             ->getJson("/api/administracion/temporadas/{$temporada->id}/reinicio-operacional")
@@ -134,6 +141,8 @@ class ReinicioOperacionalApiTest extends TestCase
         $this->assertDatabaseMissing('guias_recepcion_romana', ['recepcion_romana_id' => $materiaPrima['recepcion_id']]);
         $this->assertDatabaseMissing('lotes_materia_prima', ['id' => $materiaPrima['lote_id']]);
         $this->assertDatabaseCount('trazabilidad_folio_origenes', 0);
+        $this->assertDatabaseCount('retenciones_lote_sag', 0);
+        $this->assertDatabaseCount('eventos_retencion_lote_sag', 0);
         $this->assertDatabaseCount('validaciones_mp', 0);
         $this->assertDatabaseCount('segmentos_validacion_mp', 0);
         $this->assertDatabaseCount('procesos_hidrocooler_materia_prima', 0);
