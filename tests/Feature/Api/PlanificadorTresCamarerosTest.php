@@ -94,6 +94,31 @@ class PlanificadorTresCamarerosTest extends TestCase
         $this->assertSame(1, TareaMovimiento::where('estado', 'en_proceso')->where('responsable_user_id', $identidades[0]['usuario'])->count());
     }
 
+    public function test_iniciar_no_intenta_bloquear_la_tarea_en_proceso_de_otro_camarero(): void
+    {
+        $this->requiereMysql();
+        $temporada = Temporada::where('activa', true)->firstOrFail();
+        $identidades = [];
+        foreach (range(0, 2) as $n) {
+            [$usuario, $tablet] = $this->identidad($n);
+            $folio = $this->folio($temporada, 'INICIO-AISLADO-'.$n);
+            $plan = PlanOperacional::create(['temporada_id' => $temporada->id, 'tipo' => 'almacenamiento_pallet',
+                'estado' => 'en_ejecucion', 'prioridad' => 'normal', 'titulo' => 'Labor independiente '.$n,
+                'creado_por_user_id' => $usuario->id, 'programado_at' => now(), 'contexto' => ['planner_horizon' => 'rolling']]);
+            $tarea = TareaMovimiento::create(['plan_operacional_id' => $plan->id, 'folio_id' => $folio->id,
+                'tipo_movimiento' => 'retiro', 'secuencia' => 1, 'estado' => $n === 0 ? 'en_proceso' : 'asumida',
+                'prioridad' => 'normal', 'responsable_user_id' => $usuario->id, 'dispositivo_id' => $tablet->id]);
+            ReservaTareaMovimiento::create(['tarea_movimiento_id' => $tarea->id, 'bloqueo_tarea_id' => $tarea->id,
+                'estado' => 'activa', 'user_id' => $usuario->id, 'dispositivo_id' => $tablet->id,
+                'reservada_at' => now(), 'renovada_at' => now(), 'vence_at' => now()->addMinutes(10)]);
+            $identidades[] = ['usuario' => $usuario->id, 'tablet' => $tablet->id, 'tarea' => $tarea->id];
+        }
+        $resultados = $this->ejecutar(['escenario' => 'iniciar_sin_bloquear_otro_camarero', 'modo' => 'off', 'identidades' => $identidades]);
+        $this->assertSame(['protegida', 'iniciada', 'iniciada'], array_column($resultados, 'estado'));
+        $this->assertSame(3, TareaMovimiento::where('estado', 'en_proceso')->count());
+        $this->assertDatabaseCount('movimientos', 0);
+    }
+
     public function test_tres_camareros_llenan_la_camara_con_84_movimientos_sin_cruzar_labores_pallets_ni_bandas(): void
     {
         $this->requiereMysql();
