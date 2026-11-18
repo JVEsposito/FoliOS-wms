@@ -31,11 +31,21 @@
     try { identity = JSON.parse(storedIdentity || 'null'); } catch (error) { /* identidad ilegible */ }
     var themeIdentity = token && !soloTema ? identity : null;
     var administrator = themeIdentity?.rol === 'administrador';
-    var themes = ['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit', 'dark-bit-neon'];
+    var themeColors = {
+        'light-professional': '#102f43',
+        'dark-industrial': '#0f1c24',
+        'dark-princess': '#18142e',
+        'light-garden': '#fff3f7',
+        'dark-bit': '#1a1c2c',
+        'dark-bit-neon': '#0b0820',
+    };
+    var themes = Object.keys(themeColors);
+    // Claro y oscuro siempre; los demás, los que el perfil de acceso habilita (identidad.temas_oficina).
+    // Sin esa lista: los del Administrador y los habilitados por correo (identidad.temas_personales).
     var additional = Array.isArray(themeIdentity?.temas_oficina)
         ? themeIdentity.temas_oficina
         : [
-            ...(administrator ? ['dark-rose'] : []),
+            ...(administrator ? ['dark-princess', 'light-garden'] : []),
             ...['dark-bit', 'dark-bit-neon'].filter(function (item) {
                 return Array.isArray(themeIdentity?.temas_personales) && themeIdentity.temas_personales.includes(item);
             }),
@@ -45,14 +55,18 @@
     var commonKey = 'estiba_wms_office_theme';
     var preferenceKey = administrator ? 'estiba_wms_office_admin_theme' : allowed.length > 2 ? 'estiba_wms_office_personal_theme' : commonKey;
     var theme = read(preferenceKey) || read(commonKey);
-    if (!allowed.includes(theme)) theme = themes.includes(theme) || /^personal-[a-z0-9-]+$/.test(theme) ? 'dark-industrial' : 'light-professional';
-    else if (Object.hasOwn(personalThemes, theme)) theme = personalThemes[theme].claro ? 'light-professional' : 'dark-industrial';
-    var dark = theme !== 'light-professional';
+    if (theme === 'dark-rose') theme = 'dark-princess';
+    if (!allowed.includes(theme)) {
+        theme = /^personal-[a-z0-9-]+$/.test(theme) || (themes.includes(theme) && theme.startsWith('dark-')) ? 'dark-industrial' : 'light-professional';
+    } else if (Object.hasOwn(personalThemes, theme)) {
+        // El paquete personal se carga después; antes de pintar se usa su base clara u oscura.
+        theme = personalThemes[theme].claro ? 'light-professional' : 'dark-industrial';
+    }
     root.setAttribute('data-office-theme', theme);
     var scheme = document.querySelector('meta[name="color-scheme"]');
-    if (scheme) scheme.setAttribute('content', dark ? 'dark' : 'light');
+    if (scheme) scheme.setAttribute('content', theme.startsWith('dark-') ? 'dark' : 'light');
     var color = document.querySelector('meta[name="theme-color"]');
-    if (color) color.setAttribute('content', theme === 'dark-bit' ? '#1a1c2c' : theme === 'dark-bit-neon' ? '#0b0820' : theme === 'dark-rose' ? '#170e14' : dark ? '#0f1c24' : '#102f43');
+    if (color) color.setAttribute('content', themeColors[theme]);
 
     // La entrada /FoliOS solo toma el tema: ella misma decide qué mostrar.
     if (soloTema) return;

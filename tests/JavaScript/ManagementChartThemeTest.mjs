@@ -51,9 +51,9 @@ test('los temas de Oficina tienen tokens propios y gerencia no reintroduce liter
     assert.doesNotMatch(js, /(?<!&)#[\da-f]{3,8}\b|\b(?:rgba?|hsla?)\s*\(|\bcenterLabel\b/i);
 
     // Solo existen los temas que normalizeOfficeTheme acepta; los demás no se pueden activar.
-    assert.doesNotMatch(css, /data-office-theme="(?!dark-industrial"|light-professional"|dark-rose"|dark-bit"|dark-bit-neon")/);
+    assert.doesNotMatch(css, /data-office-theme="(?!dark-industrial"|light-professional"|dark-princess"|light-garden"|dark-bit"|dark-bit-neon")/);
 
-    for (const theme of ['dark-industrial', 'light-professional', 'dark-rose', 'dark-bit', 'dark-bit-neon']) {
+    for (const theme of ['dark-industrial', 'light-professional', 'dark-princess', 'light-garden', 'dark-bit', 'dark-bit-neon']) {
         const blocks = [...css.matchAll(new RegExp(`:root\\[data-office-theme="${theme}"\\]\\s*\\{([^}]+)\\}`, 'g'))];
         for (const token of ['chart-grid', 'chart-text', 'chart-tooltip-bg', 'chart-tooltip-border', 'series-product', 'series-material']) {
             assert.ok(blocks.some(([, body]) => body.includes(`--${token}:`)), `${theme}: falta --${token}`);

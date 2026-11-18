@@ -99,6 +99,7 @@ class ProcesoPrefrioResource extends JsonResource
             'eventos' => $this->whenLoaded('eventos', fn () => $this->eventos->map(fn ($evento) => [
                 'id' => $evento->id,
                 'operacion_id' => $evento->operacion_id,
+                'proceso_prefrio_folio_id' => $evento->proceso_prefrio_folio_id,
                 'tipo' => $evento->tipo->value,
                 'ocurrido_at' => $evento->ocurrido_at?->toAtomString(),
                 'datos' => $evento->datos,

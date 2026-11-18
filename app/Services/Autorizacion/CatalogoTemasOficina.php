@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Storage;
 final class CatalogoTemasOficina
 {
     public const ADICIONALES = [
-        'dark-rose' => 'Modo rosado',
+        'dark-princess' => 'Princesa Estelar',
+        'light-garden' => 'Jardín Encantado',
         'dark-bit' => 'Modo bit',
         'dark-bit-neon' => 'Modo neón',
     ];
@@ -50,7 +51,7 @@ final class CatalogoTemasOficina
     {
         $porRol = (array) (config('oficina.temas_por_rol', [])[$usuario->rol->value] ?? []);
         if ($usuario->rol === RolUsuario::Administrador) {
-            $porRol[] = 'dark-rose';
+            array_push($porRol, 'dark-princess', 'light-garden');
         }
         $porCorreo = $correo === '' ? [] : array_keys(array_filter(
             (array) config('oficina.temas_personales', []),

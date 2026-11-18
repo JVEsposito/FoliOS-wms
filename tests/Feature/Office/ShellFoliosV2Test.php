@@ -77,7 +77,7 @@ class ShellFoliosV2Test extends TestCase
         foreach (['officeInitials', 'officeUserName', 'officeUserRole', 'officeLogoutButton'] as $id) {
             $this->assertSame(1, $xpath->query("//aside[@id='officeSidebar']//*[@id='{$id}']")->length, $id);
         }
-        $this->assertSame(1, $xpath->query('//header[@data-office-shell-header]//*[@data-office-theme-toggle]')->length);
+        $this->assertSame(1, $xpath->query('//header[@data-office-shell-header]//select[@data-office-theme-select]')->length);
         $this->assertSame(1, $xpath->query('//header[@data-office-shell-header]//*[@data-office-context-refresh]')->length);
     }
 }

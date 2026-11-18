@@ -81,7 +81,7 @@
                 <section class="process-detail is-hidden" id="processDetail">
                     <div class="process-detail__heading">
                         <div><p class="eyebrow">DETALLE DEL CICLO</p><h2 id="processDetailTitle">Proceso</h2><p id="processDetailSubtitle"></p></div>
-                        <div class="process-detail__actions"><button class="secondary-button is-hidden" id="correctProcessButton" type="button">Corregir historial</button><button class="secondary-button" id="refreshProcessButton" type="button">↻ Actualizar</button><button class="secondary-button" id="closeProcessDetailButton" type="button">Cerrar</button></div>
+                        <div class="process-detail__actions"><button class="secondary-button is-hidden" id="correctHoursButton" type="button">Corregir horas</button><button class="secondary-button is-hidden" id="correctProcessButton" type="button">Corregir historial</button><button class="secondary-button" id="refreshProcessButton" type="button">↻ Actualizar</button><button class="secondary-button" id="closeProcessDetailButton" type="button">Cerrar</button></div>
                     </div>
                     <div class="process-detail__metrics" id="processDetailMetrics"></div>
                     <div class="process-detail__layout">
@@ -222,6 +222,23 @@
                     <button class="secondary-button" value="cancel" type="submit" formnovalidate>Cancelar</button>
                     <button class="primary-button" id="savePartialButton" value="default" type="submit" disabled></button>
                 </div>
+            </form>
+        </dialog>
+
+        <dialog class="prefrio-dialog prefrio-dialog--history" id="hoursDialog">
+            <form method="dialog" class="prefrio-dialog__shell" id="hoursForm">
+                <div class="prefrio-dialog__heading">
+                    <div><p class="eyebrow">CORRECCIÓN DE HORAS</p><h2 id="hoursTitle">Horas reales de Prefrío</h2>
+                        <p>Administrador y Superadmin. Ingresa las fechas y horas reales en horario de Chile, aunque correspondan a otro turno.</p></div>
+                    <button class="dialog-close" value="cancel" type="submit" aria-label="Cerrar">×</button>
+                </div>
+                <p>Modifica solo las horas necesarias. Se conservan estados, temperaturas, posiciones y la fecha de registro original. Cada cambio queda auditado.</p>
+                <div class="history-editor-list" id="hoursEvents"></div>
+                <div class="history-editor-list" id="hoursFolios"></div>
+                <label><span>Motivo de la corrección *</span><textarea name="motivo" maxlength="500" required placeholder="Ej.: digitación del turno anterior según planilla física."></textarea></label>
+                <p class="form-error" id="hoursError" role="alert"></p>
+                <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">Cancelar</button>
+                    <button class="danger-button" value="default" type="submit">Guardar horas reales</button></div>
             </form>
         </dialog>
 

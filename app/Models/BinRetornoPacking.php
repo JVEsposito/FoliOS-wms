@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'operacion_id',
     'payload_hash',
     'folio_provisional',
+    'folio_por_confirmar',
     'folio_definitivo',
     'folio_definitivo_vigente',
     'kilos_totales',

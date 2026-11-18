@@ -5,10 +5,10 @@ import { initializeOfficeShell, refreshOfficeShell } from './office-shell.js';
 import { initializeOfficeProfile } from './office-profile.js';
 import { initializeCommunications } from './office-communications-launcher.js';
 import {
-    nextOfficeTheme,
     normalizeOfficeTheme,
     OFFICE_THEME_COLORS,
     OFFICE_THEME_KEY,
+    officeThemeColorScheme,
     officeThemeStorageKey,
     officeThemes,
 } from './shared/office-preferences.js';
@@ -38,31 +38,39 @@ function storedOfficeTheme() {
 }
 
 let officeTheme = storedOfficeTheme();
-const themeLabels = { 'light-professional': 'Modo claro', 'dark-industrial': 'Modo oscuro', 'dark-rose': 'Modo rosado', 'dark-bit': 'Modo bit', 'dark-bit-neon': 'Modo neón' };
+const themeLabels = {
+    'light-professional': '☀️ Modo claro',
+    'dark-industrial': '◐ Modo oscuro',
+    'dark-princess': '🌙 Princesa Estelar',
+    'light-garden': '🌸 Jardín Encantado',
+    'dark-bit': '👾 Modo bit',
+    'dark-bit-neon': '⚡ Modo neón',
+};
 let personalStyle;
 let personalRequest;
 let themeToken;
 
 function refreshOfficeThemeControls() {
+    const select = document.querySelector('[data-office-theme-select]');
+    if (!select) return;
+
     const identity = themeIdentity();
-    const dark = officeTheme !== 'light-professional' && !identity?.temas_oficina_personales?.[officeTheme]?.claro;
-    const next = nextOfficeTheme(officeTheme, identity);
-    const labelText = themeLabels[next] || identity?.temas_oficina_personales?.[next]?.nombre;
-    const action = `Activar ${labelText.toLowerCase()}`;
-    document.querySelectorAll('[data-office-theme-toggle]').forEach((button) => {
-        button.setAttribute('aria-pressed', String(dark));
-        button.setAttribute('aria-label', action);
-        button.title = action;
-        const label = button.querySelector('[data-office-theme-label]');
-        if (label) label.textContent = labelText;
-    });
+    const themes = officeThemes(identity);
+    // Los paquetes personales traen su propio nombre.
+    const labelOf = (theme) => themeLabels[theme] || identity?.temas_oficina_personales?.[theme]?.nombre || theme;
+    if (select.length !== themes.length
+        || themes.some((theme, index) => select.options[index].value !== theme || select.options[index].text !== labelOf(theme))) {
+        select.replaceChildren(...themes.map((theme) => new Option(labelOf(theme), theme)));
+    }
+    select.value = officeTheme;
+    select.hidden = false;
 }
 
-function paintTheme(theme, isLight, color) {
+function paintTheme(theme, color) {
     document.documentElement.dataset.officeTheme = theme;
     document.querySelector('meta[name="color-scheme"]')?.setAttribute(
         'content',
-        isLight ? 'light' : 'dark',
+        officeThemeColorScheme(theme),
     );
     document.querySelector('meta[name="theme-color"]')?.setAttribute(
         'content',
@@ -99,7 +107,7 @@ function applyOfficeTheme(theme, { persist = true } = {}) {
     delete document.documentElement.dataset.officePersonalTheme;
     const personal = identity?.temas_oficina_personales?.[officeTheme];
     const baseTheme = personal ? (personal.claro ? 'light-professional' : 'dark-industrial') : officeTheme;
-    paintTheme(baseTheme, baseTheme === 'light-professional', OFFICE_THEME_COLORS[baseTheme]);
+    paintTheme(baseTheme, OFFICE_THEME_COLORS[baseTheme]);
     if (personal) void loadPersonalTheme(officeTheme, personal);
     if (persist) {
         try { localStorage.setItem(officeThemeStorageKey(identity), officeTheme); } catch { /* Preferencia opcional. */ }
@@ -647,9 +655,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeOfficeShell();
     initializeOfficeProfile();
     initializeCommunications();
-    refreshOfficeThemeControls();
-    document.querySelectorAll('[data-office-theme-toggle]').forEach((button) => {
-        button.addEventListener('click', () => applyOfficeTheme(nextOfficeTheme(officeTheme, themeIdentity())));
+    document.querySelector('[data-office-theme-select]')?.addEventListener('change', (event) => {
+        applyOfficeTheme(event.currentTarget.value);
     });
     refreshNavigation();
     observeApplication();

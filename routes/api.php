@@ -398,6 +398,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/prefrio/punto-rocio/margenes', [PuntoRocioPrefrioController::class, 'guardarMargenes']);
         Route::put('/prefrio/punto-rocio/plan', [PuntoRocioPrefrioController::class, 'guardarPlan']);
     });
+    Route::put('/administracion/prefrio/procesos/{procesoPrefrio}/corregir-horas', [ProcesoPrefrioController::class, 'corregirHoras'])
+        ->middleware('can:corregir-procesos-prefrio');
     Route::put(
         '/administracion/prefrio/procesos/{procesoPrefrio}/corregir',
         [ProcesoPrefrioController::class, 'corregir'],

@@ -19,16 +19,17 @@ class TemasPerfilApiTest extends TestCase
         $perfil = PerfilAcceso::where('protegido', true)->where('rol_base', RolUsuario::Administrador)->firstOrFail();
         $usuario = User::factory()->create(['rol' => RolUsuario::Administrador, 'perfil_acceso_id' => $perfil->id]);
         $sesion = $this->postJson('/api/acceso-oficina', ['email' => $usuario->email, 'password' => 'password'])
-            ->assertOk()->assertJsonPath('usuario.temas_oficina', ['dark-rose', 'dark-bit', 'dark-bit-neon']);
+            ->assertOk()->assertJsonPath('usuario.temas_oficina', ['dark-princess', 'light-garden', 'dark-bit', 'dark-bit-neon']);
         $this->withToken($sesion->json('token'));
         $ruta = "/api/administracion/perfiles-acceso/{$perfil->id}/temas";
 
         $this->getJson('/api/administracion/perfiles-acceso')->assertOk()
             ->assertJsonPath('puede_editar_temas', true)
-            ->assertJsonPath('catalogo_temas.dark-rose', 'Modo rosado');
+            ->assertJsonPath('catalogo_temas.dark-princess', 'Princesa Estelar')
+            ->assertJsonPath('catalogo_temas.light-garden', 'Jardín Encantado');
         $this->patchJson($ruta, [])->assertUnprocessable();
         $this->patchJson($ruta, ['temas_oficina' => ['otro']])->assertUnprocessable();
-        $this->patchJson($ruta, ['temas_oficina' => ['dark-rose', 'dark-rose']])->assertUnprocessable();
+        $this->patchJson($ruta, ['temas_oficina' => ['dark-princess', 'dark-princess']])->assertUnprocessable();
         $this->patchJson($ruta, ['temas_oficina' => [], 'activo' => false])->assertOk()
             ->assertJsonPath('data.temas_oficina', [])->assertJsonPath('data.activo', true);
         app('auth')->forgetGuards();
@@ -36,7 +37,7 @@ class TemasPerfilApiTest extends TestCase
         $this->assertSame(1, $usuario->tokens()->count());
         $this->patchJson($ruta, ['temas_oficina' => null])->assertOk()->assertJsonPath('data.temas_oficina', null);
         app('auth')->forgetGuards();
-        $this->getJson('/api/oficina/contexto')->assertOk()->assertJsonPath('data.temas_oficina', ['dark-rose', 'dark-bit', 'dark-bit-neon']);
+        $this->getJson('/api/oficina/contexto')->assertOk()->assertJsonPath('data.temas_oficina', ['dark-princess', 'light-garden', 'dark-bit', 'dark-bit-neon']);
     }
 
     public function test_el_perfil_habilita_un_tema_para_todas_sus_cuentas_sin_darles_permiso_de_edicion(): void
@@ -44,14 +45,14 @@ class TemasPerfilApiTest extends TestCase
         $perfil = PerfilAcceso::where('predeterminado', true)->where('rol_base', RolUsuario::SupervisorFrio)->firstOrFail();
         $ruta = "/api/administracion/perfiles-acceso/{$perfil->id}/temas";
         Sanctum::actingAs(User::factory()->create(['rol' => RolUsuario::Administrador]));
-        $this->patchJson($ruta, ['temas_oficina' => ['dark-neon']])->assertUnprocessable();
-        $this->patchJson($ruta, ['temas_oficina' => ['dark-bit', 'dark-rose']])
-            ->assertOk()->assertJsonPath('data.temas_oficina', ['dark-rose', 'dark-bit']);
+        $this->patchJson($ruta, ['temas_oficina' => ['dark-rose']])->assertUnprocessable();
+        $this->patchJson($ruta, ['temas_oficina' => ['dark-bit', 'light-garden']])
+            ->assertOk()->assertJsonPath('data.temas_oficina', ['light-garden', 'dark-bit']);
 
         $usuarios = User::factory()->count(2)->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => $perfil->id]);
         foreach ($usuarios as $usuario) {
             Sanctum::actingAs($usuario);
-            $this->getJson('/api/oficina/contexto')->assertOk()->assertJsonPath('data.temas_oficina', ['dark-rose', 'dark-bit']);
+            $this->getJson('/api/oficina/contexto')->assertOk()->assertJsonPath('data.temas_oficina', ['light-garden', 'dark-bit']);
             $this->patchJson($ruta, ['temas_oficina' => []])->assertForbidden();
         }
     }

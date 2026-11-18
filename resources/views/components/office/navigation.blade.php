@@ -141,7 +141,10 @@
     <a class="estiba-office-skip" href="#officeContent" data-office-skip>Saltar al contenido</a>
     <header class="estiba-office-header" data-office-shell-header data-active-domain="{{ $domain }}" data-active-office="{{ $office }}">
         <div class="estiba-office-brand">
-            <a class="estiba-office-home" href="/oficina" data-office-home title="Ir a mi inicio"><x-folios-logo surface="dark" class="folios-logo--office" /></a>
+            <a class="estiba-office-home" href="/oficina" data-office-home title="Ir a mi inicio">
+                <x-folios-logo surface="dark" class="folios-logo--office folios-logo--office-dark" />
+                <x-folios-logo class="folios-logo--office folios-logo--office-garden" />
+            </a>
             <button type="button" class="estiba-office-menu" data-office-menu aria-controls="officeSidebar" aria-expanded="true" aria-label="Ocultar menú lateral" title="Ocultar menú lateral">
                 <span class="estiba-office-menu-icon" aria-hidden="true"></span>
                 <span class="estiba-office-menu-text" data-office-menu-label>Menú</span>
@@ -167,10 +170,7 @@
             @if (filled($serverLabel))
                 <span class="estiba-office-server" data-office-server>{{ $serverLabel }}</span>
             @endif
-            <button type="button" class="estiba-office-theme-toggle" data-office-theme-toggle aria-pressed="false" aria-label="Activar modo oscuro" title="Activar modo oscuro">
-                <span class="estiba-office-theme-icon" aria-hidden="true"></span>
-                <span data-office-theme-label>Modo oscuro</span>
-            </button>
+            <select class="estiba-office-theme-select" data-office-theme-select aria-label="Tema de Oficina" title="Tema de Oficina" hidden></select>
         </div>
         @if ($domain === 'materiales')
             <a href="/oficina/materiales/reposicion" class="estiba-office-replenishment" data-material-replenishment-indicator hidden>Reposición</a>
@@ -242,6 +242,7 @@
                 @endif
             @endforeach
         </nav>
+        <div class="estiba-office-theme-art" aria-hidden="true"></div>
         <div class="estiba-office-identity">
             <button type="button" class="estiba-office-avatar" data-office-profile-open aria-label="Cambiar mi foto de perfil" title="Cambiar mi foto de perfil" aria-haspopup="dialog" aria-controls="officeProfileDialog">
                 <span id="officeInitials" aria-hidden="true">OF</span>

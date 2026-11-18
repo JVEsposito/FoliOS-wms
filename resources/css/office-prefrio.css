@@ -662,6 +662,7 @@
     background: var(--surface-muted);
 }
 
+.history-editor-row--hours { grid-template-columns: minmax(150px, .8fr) minmax(180px, 1fr); }
 .history-editor-row--folio { grid-template-columns: minmax(150px, .8fr) minmax(125px, .65fr) minmax(180px, 1fr) repeat(2, minmax(110px, .55fr)) minmax(180px, 1fr); }
 .history-editor-row label { min-width: 0; }
 .history-editor-row__identity { display: grid; align-self: center; gap: 3px; }

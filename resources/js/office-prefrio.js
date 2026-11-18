@@ -24,6 +24,7 @@ const elements = {
     tunnelDialog: byId('tunnelDialog'), tunnelForm: byId('tunnelForm'), tunnelDialogTitle: byId('tunnelDialogTitle'), tunnelError: byId('tunnelFormError'), tunnelPreview: byId('tunnelPreview'), tunnelPreviewSummary: byId('tunnelPreviewSummary'),
     processDialog: byId('processDialog'), processForm: byId('processForm'), processError: byId('processFormError'),
     reasonDialog: byId('reasonDialog'), reasonForm: byId('reasonForm'), reasonTitle: byId('reasonTitle'), reasonDescription: byId('reasonDescription'), reasonEyebrow: byId('reasonEyebrow'), reasonError: byId('reasonError'), confirmReason: byId('confirmReasonButton'),
+    correctHours: byId('correctHoursButton'), hoursDialog: byId('hoursDialog'), hoursForm: byId('hoursForm'), hoursTitle: byId('hoursTitle'), hoursEvents: byId('hoursEvents'), hoursFolios: byId('hoursFolios'), hoursError: byId('hoursError'),
     correctProcess: byId('correctProcessButton'), correctionDialog: byId('correctionDialog'), correctionForm: byId('correctionForm'), correctionTitle: byId('correctionDialogTitle'), correctionEvents: byId('correctionEvents'), correctionFolios: byId('correctionFolios'), correctionNewPosition: byId('correctionNewPosition'), correctionError: byId('correctionError'),
     loading: byId('officeLoading'), loadingText: byId('officeLoadingText'), toasts: byId('officeToasts'),
 };
@@ -212,6 +213,7 @@ function renderProcessDetail() {
         ['ESTADO', statusText(process.estado)], [historical ? 'POSICIONES REGISTRADAS' : 'POSICIONES', `${occupiedPositions}/${process.tunel?.capacidad_posiciones || '—'}`], [historical ? 'FOLIOS REGISTRADOS' : 'FOLIOS', occupied.length], ['INICIO', formatDate(process.iniciado_at, 'No iniciado')], ['FINAL', formatDate(process.finalizado_at, 'Pendiente')],
     ].map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join('');
     elements.correctProcess.classList.toggle('is-hidden', state.identity?.rol !== 'administrador');
+    elements.correctHours.classList.toggle('is-hidden', state.identity?.rol !== 'administrador');
     byId('processTunnelMapTitle').textContent = historical ? 'Distribución histórica del ciclo' : 'Posiciones del túnel';
     renderTunnelMap(process, occupied, historical);
     renderTimeline(process);
@@ -469,6 +471,63 @@ function decisionResults() {
     }).map(({ observation, ...item }) => ({ ...item, observacion: observation }));
 }
 
+
+let hoursOperation = null;
+function openHoursDialog() {
+    const process = state.selectedProcess;
+    if (!process || state.identity?.rol !== 'administrador') return;
+    hoursOperation = null;
+    elements.hoursForm.reset();
+    elements.hoursError.textContent = '';
+    elements.hoursTitle.textContent = `${process.codigo} · Horas reales`;
+    const events = (process.eventos || []).filter((event) => event.tipo !== 'correccion_administrativa');
+    const labels = { proceso_iniciado: 'Inicio del enfriado', verificacion_final: 'Fin del enfriado', aprobacion: 'Aprobación del proceso', finalizacion_parcial: 'Finalización parcial', retiro_parcial_confirmado: 'Retiro parcial confirmado' };
+    elements.hoursEvents.innerHTML = events.map((event) => `
+        <article class="history-editor-row history-editor-row--hours" data-hour-event="${event.id}">
+            <div class="history-editor-row__identity"><strong>${escapeHtml(labels[event.tipo] || statusText(event.tipo))}</strong><small>${escapeHtml(event.usuario?.nombre || 'Usuario')}</small></div>
+            <label><span>Fecha y hora real</span><input type="datetime-local" step="1" value="${localDateTimeValue(event.ocurrido_at)}" data-original="${localDateTimeValue(event.ocurrido_at)}" required></label>
+        </article>`).join('');
+    elements.hoursFolios.innerHTML = (process.folios || []).map((item) => {
+        const inputs = ['cargado_at', 'retirado_at'].filter((field) => item[field] && !events.some((event) => {
+            const types = field === 'cargado_at' ? ['pallet_agregado'] : ['pallet_retirado', 'retiro_parcial_confirmado'];
+            return types.includes(event.tipo) && (event.proceso_prefrio_folio_id === item.id || (event.tipo === 'retiro_parcial_confirmado' && (event.datos?.folios || []).includes(item.folio?.id)));
+        }));
+        if (!inputs.length) return '';
+        return `<article class="history-editor-row history-editor-row--hours" data-hour-folio="${item.id}"><strong>${escapeHtml(item.folio?.numero_folio || 'Folio')}</strong>${inputs.map((field) => `<label><span>${field === 'cargado_at' ? 'Carga del folio' : 'Retiro del folio'}</span><input name="${field}" type="datetime-local" step="1" value="${localDateTimeValue(item[field])}" data-original="${localDateTimeValue(item[field])}" required></label>`).join('')}</article>`;
+    }).join('');
+    elements.hoursDialog.querySelectorAll('input[data-original]').forEach((input) => { input.dataset.original = input.value; });
+    elements.hoursDialog.showModal();
+}
+async function saveHours() {
+    const process = state.selectedProcess;
+    elements.hoursError.textContent = '';
+    const events = [...elements.hoursEvents.querySelectorAll('[data-hour-event]')].flatMap((node) => {
+        const input = node.querySelector('input');
+        return input.value === input.dataset.original ? [] : [{ id: node.dataset.hourEvent, ocurrido_at: occurredAt(input.value) }];
+    });
+    const folios = [...elements.hoursFolios.querySelectorAll('[data-hour-folio]')].flatMap((node) => {
+        const changes = [...node.querySelectorAll('input')].filter((input) => input.value !== input.dataset.original);
+        return changes.length ? [{ id: node.dataset.hourFolio, ...Object.fromEntries(changes.map((input) => [input.name, occurredAt(input.value)])) }] : [];
+    });
+    if (!events.length && !folios.length) { elements.hoursError.textContent = 'Modifica al menos una hora.'; return; }
+    const data = { version_conocida: process.version, motivo: elements.hoursForm.elements.motivo.value.trim(), eventos: events, folios };
+    const signature = JSON.stringify(data);
+    if (hoursOperation?.signature !== signature) hoursOperation = { signature, id: operationUuid() };
+    setBusy(true, 'Guardando horas reales…');
+    try {
+        const response = await api(`/api/administracion/prefrio/procesos/${process.id}/corregir-horas`, {
+            method: 'PUT', body: JSON.stringify({ ...data, operacion_id: hoursOperation.id }),
+        });
+        state.selectedProcess = response.data;
+        elements.hoursDialog.close();
+        renderProcessDetail();
+        toast('Horas corregidas. El cambio quedó auditado.');
+        await Promise.all([loadProcesses(), loadTunnels(), loadSummary()]);
+        markViewUpdated();
+    } catch (error) {
+        elements.hoursError.textContent = error.message;
+    } finally { setBusy(false); }
+}
 
 function correctionPositionOptions(process, selected = '') {
     const tunnel = state.tunnels.find((item) => item.id === process.tunel?.id);
@@ -739,6 +798,8 @@ elements.tunnelForm.addEventListener('submit', (event) => { event.preventDefault
 elements.processForm.elements.tunel_prefrio_id.addEventListener('change', syncProcessSetpoint);
 elements.processForm.addEventListener('submit', (event) => { event.preventDefault(); if (event.submitter?.value === 'cancel') { elements.processDialog.close(); return; } if (!elements.processForm.reportValidity()) return; saveProcess(); });
 elements.refreshProcess.addEventListener('click', () => state.selectedProcess && selectProcess(state.selectedProcess.id, false));
+elements.correctHours.addEventListener('click', openHoursDialog);
+elements.hoursForm.addEventListener('submit', (event) => { event.preventDefault(); if (event.submitter?.value === 'cancel') { elements.hoursDialog.close(); return; } if (elements.hoursForm.reportValidity()) void saveHours(); });
 elements.correctProcess.addEventListener('click', openCorrectionDialog);
 elements.correctionForm.addEventListener('submit', (event) => { event.preventDefault(); if (event.submitter?.value === 'cancel') { elements.correctionDialog.close(); return; } if (!elements.correctionForm.reportValidity()) return; void saveCorrection(); });
 elements.closeDetail.addEventListener('click', () => { state.selectedProcess = null; elements.detail.classList.add('is-hidden'); renderProcesses(); });

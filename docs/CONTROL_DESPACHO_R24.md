@@ -223,3 +223,11 @@ equipo guardó antes, la respuesta es 409.
 - `tests/JavaScript/DispatchControlTest.mjs`
 - `mobile/tests/consolidation.test.mjs`
 - `mobile/tests/consolidationScreen.test.mjs`
+
+## Referencia de embarque
+
+La R-24 se identifica por la referencia externa de embarque (por ejemplo, F025) en la consulta de Oficina, la PDA y las descargas Excel/PDF de fotos. La carga CAR se conserva como vínculo interno. El buscador permite encontrar la referencia confirmada y los números de los instructivos.
+
+Si el camión tiene varios instructivos, se muestran todas sus referencias, ordenadas y sin repetir. Por ejemplo, F025 / F026 genera R-24_F025_F026.xlsx. El encabezado y el pie de cada hoja conservan la referencia. Una referencia confirmada por consolidación prevalece sobre la sugerencia; una planilla cerrada mantiene su dato histórico aunque cambie el calendario.
+
+Los registros antiguos que no tienen referencia siguen disponibles bajo su código de carga. No se sustituye una referencia comercial faltante por un código interno de embarque. No se agregan migraciones ni se modifican planillas cerradas o PDF ya archivados.

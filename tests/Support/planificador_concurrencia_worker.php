@@ -52,6 +52,29 @@ function barrera(string $directorio, string $nombre, int $indice): void
     }
 }
 try {
+    if ($entrada['escenario'] === 'iniciar_sin_bloquear_otro_camarero') {
+        DB::statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $paso = TareaMovimiento::findOrFail($identidad['tarea']);
+        if ($indice === 0) {
+            DB::beginTransaction();
+            TareaMovimiento::query()->whereKey($paso->id)->lockForUpdate()->firstOrFail();
+        }
+        barrera($directorio, 'operador_bloqueado', $indice);
+        try {
+            if ($indice !== 0) {
+                $planes->iniciar($paso, $usuario, $tablet);
+            }
+        } finally {
+            // El primer operador conserva su fila bloqueada hasta que los otros
+            // hayan iniciado; sus consultas no deben intentar adquirir esa fila.
+            barrera($directorio, 'inicios_terminados', $indice);
+            if ($indice === 0) {
+                DB::commit();
+            }
+        }
+        echo json_encode(['estado' => $indice === 0 ? 'protegida' : 'iniciada']);
+        exit(0);
+    }
     if ($entrada['escenario'] === 'iniciar') {
         $paso = TareaMovimiento::findOrFail($identidad['tarea']);
         barrera($directorio, 'iniciar', $indice);
