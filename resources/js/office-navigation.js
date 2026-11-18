@@ -46,31 +46,69 @@ const themeLabels = {
     'dark-bit': '👾 Modo bit',
     'dark-bit-neon': '⚡ Modo neón',
 };
+let personalStyle;
+let personalRequest;
+let themeToken;
 
 function refreshOfficeThemeControls() {
     const select = document.querySelector('[data-office-theme-select]');
     if (!select) return;
 
-    const themes = officeThemes(themeIdentity());
-    if (select.length !== themes.length || themes.some((theme, index) => select.options[index].value !== theme)) {
-        select.replaceChildren(...themes.map((theme) => new Option(themeLabels[theme], theme)));
+    const identity = themeIdentity();
+    const themes = officeThemes(identity);
+    // Los paquetes personales traen su propio nombre.
+    const labelOf = (theme) => themeLabels[theme] || identity?.temas_oficina_personales?.[theme]?.nombre || theme;
+    if (select.length !== themes.length
+        || themes.some((theme, index) => select.options[index].value !== theme || select.options[index].text !== labelOf(theme))) {
+        select.replaceChildren(...themes.map((theme) => new Option(labelOf(theme), theme)));
     }
     select.value = officeTheme;
     select.hidden = false;
 }
 
-function applyOfficeTheme(theme, { persist = true } = {}) {
-    const identity = themeIdentity();
-    officeTheme = normalizeOfficeTheme(theme, identity);
-    document.documentElement.dataset.officeTheme = officeTheme;
+function paintTheme(theme, color) {
+    document.documentElement.dataset.officeTheme = theme;
     document.querySelector('meta[name="color-scheme"]')?.setAttribute(
         'content',
-        officeThemeColorScheme(officeTheme),
+        officeThemeColorScheme(theme),
     );
     document.querySelector('meta[name="theme-color"]')?.setAttribute(
         'content',
-        OFFICE_THEME_COLORS[officeTheme],
+        color,
     );
+}
+
+async function loadPersonalTheme(theme, personal) {
+    const request = new AbortController();
+    personalRequest = request;
+    try {
+        const response = await fetch(`/api/oficina/tema-personal/${encodeURIComponent(theme)}`, {
+            headers: { Authorization: `Bearer ${themeToken}` },
+            signal: request.signal,
+            cache: 'no-store',
+        });
+        if (!response.ok || !response.headers.get('Content-Type')?.startsWith('text/css')) return;
+        const css = await response.text();
+        if (request.signal.aborted || themeToken !== storedToken()) return;
+        personalStyle = document.createElement('style');
+        personalStyle.textContent = css;
+        document.head.append(personalStyle);
+        document.documentElement.dataset.officePersonalTheme = theme;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', personal.color);
+    } catch { /* Se conserva el tema base si falla la hoja opcional. */ }
+}
+
+function applyOfficeTheme(theme, { persist = true } = {}) {
+    const identity = themeIdentity();
+    themeToken = storedToken();
+    officeTheme = normalizeOfficeTheme(theme, identity);
+    personalStyle?.remove();
+    personalRequest?.abort();
+    delete document.documentElement.dataset.officePersonalTheme;
+    const personal = identity?.temas_oficina_personales?.[officeTheme];
+    const baseTheme = personal ? (personal.claro ? 'light-professional' : 'dark-industrial') : officeTheme;
+    paintTheme(baseTheme, OFFICE_THEME_COLORS[baseTheme]);
+    if (personal) void loadPersonalTheme(officeTheme, personal);
     if (persist) {
         try { localStorage.setItem(officeThemeStorageKey(identity), officeTheme); } catch { /* Preferencia opcional. */ }
     }
@@ -243,11 +281,15 @@ async function logoutToEntry(event) {
 
 window.addEventListener('click', logoutToEntry, true);
 
+function refreshOfficeTheme() {
+    const theme = storedOfficeTheme();
+    if (theme !== officeTheme || themeToken !== storedToken()) applyOfficeTheme(theme, { persist: false });
+    else refreshOfficeThemeControls();
+}
+
 function refreshNavigation() {
     const identity = readIdentity();
-    const theme = storedOfficeTheme();
-    if (theme !== officeTheme) applyOfficeTheme(theme, { persist: false });
-    else refreshOfficeThemeControls();
+    refreshOfficeTheme();
     const hasSession = Boolean(storedToken() && identity);
     if (!hasSession) {
         goToEntry(officeEntryHref(window.location));
@@ -629,6 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('storage', refreshNavigation);
 window.addEventListener('estiba:office-session', refreshNavigation);
+window.addEventListener('estiba:office-themes', refreshOfficeTheme);
 
 window.EstibaOfficeTheme = {
     apply: (theme) => applyOfficeTheme(theme),

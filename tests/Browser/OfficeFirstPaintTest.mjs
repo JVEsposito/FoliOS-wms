@@ -14,7 +14,7 @@ const identity = { nombre: 'Rosa Romana', rol: 'operador_romana' };
 /**
  * Por defecto bloquea los módulos de Vite para observar el primer pintado.
  */
-async function firstPaint(browser, storage, { modules = false } = {}) {
+async function firstPaint(browser, storage, { modules = false, contextData = {}, personalCss = '' } = {}) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     await context.addInitScript(({ local, session }) => {
         if (sessionStorage.getItem('estiba_prueba_preparada')) return;
@@ -30,7 +30,10 @@ async function firstPaint(browser, storage, { modules = false } = {}) {
         if (pathname.startsWith('/build/')) {
             return route.fulfill({ path: resolve(root, `public${pathname}`) });
         }
-        if (pathname === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Planta de prueba', temporada: null } } });
+        if (pathname === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Planta de prueba', temporada: null, ...contextData } } });
+        if (pathname === '/api/oficina/tema-personal/personal-prueba' && route.request().headers().authorization === `Bearer ${token}`) {
+            return route.fulfill({ body: personalCss, contentType: 'text/css' });
+        }
         if (pathname === '/oficina/materia-prima') return route.fulfill({ body: html, contentType: 'text/html' });
         if (pathname === '/FoliOS') return route.fulfill({ body: '<p id="entrada">FoliOS</p>', contentType: 'text/html' });
         return route.fulfill({ status: 404, body: '' });
@@ -39,6 +42,53 @@ async function firstPaint(browser, storage, { modules = false } = {}) {
     await page.goto('http://localhost/oficina/materia-prima');
     return { context, page, visited };
 }
+
+test('el tema personal se descarga con sesión y se retira al actualizar el perfil', async () => {
+    const browser = await chromium.launch({
+        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+        args: ['--no-sandbox', '--disable-gpu'],
+    });
+    try {
+        const contextData = {
+            temas_oficina: ['personal-prueba'],
+            temas_oficina_personales: { 'personal-prueba': { nombre: 'Prueba', claro: true, color: '#112233' } },
+        };
+        const { context, page, visited } = await firstPaint(browser, {
+            local: {
+                estiba_wms_office_token: token,
+                estiba_wms_office_identity: JSON.stringify({ ...identity, ...contextData }),
+                estiba_wms_office_theme: 'dark-industrial',
+            },
+            session: {},
+        }, {
+            modules: true,
+            contextData,
+            personalCss: ':root[data-office-personal-theme="personal-prueba"] { --corporate-canvas: #102030; }',
+        });
+
+        const select = page.getByRole('combobox', { name: 'Tema de Oficina' });
+        await select.waitFor();
+        assert.deepEqual(await select.locator('option').evaluateAll((options) => options.map((option) => [option.value, option.text])),
+            [['light-professional', '☀️ Modo claro'], ['dark-industrial', '◐ Modo oscuro'], ['personal-prueba', 'Prueba']]);
+        await select.selectOption('personal-prueba');
+        await page.waitForFunction(() => document.documentElement.dataset.officePersonalTheme === 'personal-prueba');
+        await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(16, 32, 48)');
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'light-professional');
+        assert.ok(visited.includes('/api/oficina/tema-personal/personal-prueba'));
+
+        contextData.temas_oficina = [];
+        contextData.temas_oficina_personales = {};
+        await page.locator('[data-office-context-refresh]').click();
+        await page.waitForFunction(() => !document.documentElement.dataset.officePersonalTheme);
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-industrial');
+        assert.deepEqual(await select.locator('option').evaluateAll((options) => options.map((option) => option.value)),
+            ['light-professional', 'dark-industrial']);
+        assert.equal(await select.inputValue(), 'dark-industrial');
+        await context.close();
+    } finally {
+        await browser.close();
+    }
+});
 
 test('con sesión, la oficina se pinta directo, con su tema y el menú del perfil', async () => {
     const browser = await chromium.launch({

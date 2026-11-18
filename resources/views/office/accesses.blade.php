@@ -494,6 +494,28 @@
             </div>
         </dialog>
 
+        <dialog class="admin-reset-dialog" id="accessThemeDialog" aria-labelledby="accessThemeTitle">
+            <form class="admin-reset-dialog__shell" id="accessThemeForm">
+                <header>
+                    <div>
+                        <h2 id="accessThemeTitle">Temas de Oficina</h2>
+                        <p id="accessThemeProfile"></p>
+                    </div>
+                </header>
+                <p>Claro y oscuro están disponibles para todos. Los temas adicionales se aplican a todos los usuarios del perfil.</p>
+                <label class="admin-check"><input name="heredar" type="checkbox"><span>Conservar los temas predeterminados</span></label>
+                <fieldset class="admin-form__section" id="accessThemeOptions">
+                    <legend>Temas adicionales habilitados</legend>
+                    <div id="accessThemeChoices"></div>
+                </fieldset>
+                <p class="form-error" id="accessThemeError" role="alert"></p>
+                <footer>
+                    <button class="secondary-button" id="cancelAccessTheme" type="button">Cancelar</button>
+                    <button class="primary-button" type="submit">Guardar temas</button>
+                </footer>
+            </form>
+        </dialog>
+
         <dialog class="admin-reset-dialog" id="operationalResetDialog" aria-labelledby="operationalResetTitle">
             <form class="admin-reset-dialog__shell" id="operationalResetForm" novalidate>
                 <header>

@@ -6,6 +6,7 @@ import {
 } from './shared/office-preferences.js';
 
 const tokenKey = 'estiba_wms_office_token';
+const identityKey = 'estiba_wms_office_identity';
 let contextToken = null;
 let controller = null;
 let generation = 0;
@@ -26,6 +27,18 @@ function contextState(label, detail, tone = 'neutral') {
     text('context-status', detail);
     const status = field('context-refresh');
     if (status) status.dataset.tone = tone;
+}
+
+function syncThemes(themes, personalThemes) {
+    if (!Array.isArray(themes)) return;
+    try {
+        const identity = JSON.parse(localStorage.getItem(identityKey) || 'null');
+        const personal = personalThemes || {};
+        if (!identity || (JSON.stringify(identity.temas_oficina) === JSON.stringify(themes)
+            && JSON.stringify(identity.temas_oficina_personales || {}) === JSON.stringify(personal))) return;
+        localStorage.setItem(identityKey, JSON.stringify({ ...identity, temas_oficina: themes, temas_oficina_personales: personal }));
+        window.dispatchEvent(new Event('estiba:office-themes'));
+    } catch { /* El contexto sigue disponible si la identidad local es ilegible. */ }
 }
 
 async function loadContext() {
@@ -51,6 +64,7 @@ async function loadContext() {
             || (data.temporada !== null && typeof data.temporada?.codigo !== 'string')
             || (data.planta !== null && typeof data.planta !== 'string')) throw new Error('Respuesta de contexto incompleta.');
         if (currentGeneration !== generation || currentToken !== token()) return;
+        syncThemes(data.temas_oficina, data.temas_oficina_personales);
         text('plant', data.planta || 'Sin configurar');
         text('season', data.temporada?.codigo || 'Sin temporada activa');
         renderNotices([...(Array.isArray(data.avisos_cierre) ? data.avisos_cierre : []), ...(Array.isArray(data.avisos_materiales) ? data.avisos_materiales : [])]);
@@ -198,6 +212,7 @@ export function initializeOfficeShell() {
     new ResizeObserver(size).observe(header);
     size();
     field('context-refresh').addEventListener('click', () => void loadContext());
+    window.addEventListener('estiba:access-profile-themes-saved', () => void loadContext());
     field('notices')?.addEventListener('click', (event) => {
         const button = event.target.closest('[data-read-notice]');
         if (button) void readNotice(button.dataset.readNotice);

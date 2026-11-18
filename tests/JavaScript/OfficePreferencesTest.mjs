@@ -60,3 +60,17 @@ test('serializa el estado persistente del menú lateral', () => {
     assert.equal(isOfficeMenuCollapsed('collapsed'), true);
     assert.equal(isOfficeMenuCollapsed('expanded'), false);
 });
+
+test('la configuración del perfil prevalece y los temas locales requieren metadatos autorizados', () => {
+    const perfil = { rol: 'administrador', temas_personales: ['dark-bit'], temas_oficina: [] };
+    assert.deepEqual(officeThemes(perfil), ['light-professional', 'dark-industrial']);
+    const asignado = { rol: 'consulta', temas_oficina: ['light-garden', 'dark-princess', 'personal-prueba'] };
+    assert.deepEqual(officeThemes(asignado), ['light-professional', 'dark-industrial', 'dark-princess', 'light-garden']);
+    assert.equal(officeThemeStorageKey(asignado), 'estiba_wms_office_personal_theme');
+    assert.equal(normalizeOfficeTheme('dark-rose', asignado), 'dark-princess');
+    assert.equal(normalizeOfficeTheme('dark-bit', asignado), 'dark-industrial');
+    assert.equal(normalizeOfficeTheme('personal-prueba', asignado), 'dark-industrial');
+    asignado.temas_oficina_personales = { 'personal-prueba': { nombre: 'Prueba' } };
+    assert.deepEqual(officeThemes(asignado), ['light-professional', 'dark-industrial', 'dark-princess', 'light-garden', 'personal-prueba']);
+    assert.equal(normalizeOfficeTheme('personal-prueba', asignado), 'personal-prueba');
+});

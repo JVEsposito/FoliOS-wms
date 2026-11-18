@@ -16,6 +16,7 @@ class IdentidadOficina
     public function __construct(
         private readonly AlcanceOperacionalUsuario $alcance,
         private readonly InicioOficina $inicio,
+        private readonly CatalogoTemasOficina $temas,
     ) {}
 
     /**
@@ -28,6 +29,7 @@ class IdentidadOficina
         }
 
         $capacidades = $this->alcance->capacidadesApi($usuario);
+        $preferencias = $this->temas->preferencias($usuario);
 
         $identidad = [
             'puede_revisar_porteria' => $capacidades['puede_revisar_porteria'],
@@ -38,7 +40,8 @@ class IdentidadOficina
             'nombre' => $usuario->name,
             'email' => $usuario->email,
             'rol' => $usuario->rol->value,
-            'temas_personales' => $this->temasPersonales($usuario),
+            ...$preferencias,
+            'temas_personales' => array_values(array_intersect($preferencias['temas_oficina'], ['dark-bit', 'dark-bit-neon'])),
             'perfil_acceso' => $capacidades['perfil_acceso'],
             'solo_consulta' => $capacidades['solo_consulta'],
             'modulos_acceso' => $capacidades['modulos_acceso'],
@@ -191,27 +194,5 @@ class IdentidadOficina
             'capacidades' => [],
             'inicio' => self::INICIO_CLIENTE,
         ];
-    }
-
-    /**
-     * Temas de Oficina adicionales de esta cuenta: los que trae su rol (config oficina.temas_por_rol)
-     * y los habilitados por su correo (config oficina.temas_personales), en el orden del catálogo.
-     *
-     * @return list<string>
-     */
-    private function temasPersonales(User $usuario): array
-    {
-        $catalogo = array_keys((array) config('oficina.temas_personales', []));
-        $porRol = (array) (config('oficina.temas_por_rol', [])[$usuario->rol->value] ?? []);
-        $correo = mb_strtolower(trim((string) $usuario->email));
-        $porCorreo = $correo === '' ? [] : array_keys(array_filter(
-            (array) config('oficina.temas_personales', []),
-            fn (mixed $correos): bool => in_array($correo, (array) $correos, true),
-        ));
-
-        return array_values(array_filter(
-            $catalogo,
-            fn (string $tema): bool => in_array($tema, $porRol, true) || in_array($tema, $porCorreo, true),
-        ));
     }
 }

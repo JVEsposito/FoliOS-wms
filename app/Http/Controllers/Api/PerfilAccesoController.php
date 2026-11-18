@@ -9,10 +9,13 @@ use App\Models\PerfilAcceso;
 use App\Services\Autorizacion\CatalogoModulosAcceso;
 use App\Services\Autorizacion\CatalogoOficinas;
 use App\Services\Autorizacion\CatalogoPermisosMateriales;
+use App\Services\Autorizacion\CatalogoTemasOficina;
 use DomainException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 class PerfilAccesoController extends Controller
@@ -22,7 +25,7 @@ class PerfilAccesoController extends Controller
         private readonly CatalogoOficinas $oficinas,
     ) {}
 
-    public function index(): JsonResponse
+    public function index(CatalogoTemasOficina $temas): JsonResponse
     {
         Gate::authorize('consultar-accesos');
 
@@ -36,6 +39,8 @@ class PerfilAccesoController extends Controller
             'catalogo' => $this->catalogo->macromodulos(),
             'catalogo_tablet' => $this->catalogo->macromodulosTablet(),
             'catalogo_permisos_materiales' => app(CatalogoPermisosMateriales::class)->catalogo(),
+            'catalogo_temas' => $temas->catalogo(),
+            'puede_editar_temas' => Gate::allows('administrar-accesos'),
             'pantallas_inicio' => array_map(
                 fn (array $oficina): array => [
                     'ruta' => $oficina['ruta'],
@@ -137,6 +142,24 @@ class PerfilAccesoController extends Controller
         ]);
     }
 
+    public function actualizarTemas(Request $request, PerfilAcceso $perfilAcceso, CatalogoTemasOficina $catalogo): JsonResponse
+    {
+        $claves = array_keys($catalogo->catalogo());
+        $datos = $request->validate([
+            'temas_oficina' => ['present', 'nullable', 'array', 'list', 'max:'.count($claves)],
+            'temas_oficina.*' => ['required', 'string', 'distinct', Rule::in($claves)],
+        ], [
+            'temas_oficina.*.in' => 'Selecciona un tema disponible en el catálogo de Oficina.',
+        ]);
+
+        $perfilAcceso->update([
+            'temas_oficina' => $datos['temas_oficina'] === null ? null : $catalogo->ordenar($datos['temas_oficina']),
+            'actualizado_por_user_id' => $request->user()->id,
+        ]);
+
+        return response()->json(['data' => $this->perfil($perfilAcceso->loadCount('usuarios'))]);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -155,6 +178,7 @@ class PerfilAccesoController extends Controller
             'permisos_materiales' => $perfil->permisos_materiales,
             'permisos_materiales_efectivos' => app(CatalogoPermisosMateriales::class)->efectivosPerfil($perfil),
             'pantalla_inicio' => $perfil->pantalla_inicio,
+            'temas_oficina' => $perfil->temas_oficina,
             'activo' => $perfil->activo,
             'predeterminado' => $perfil->predeterminado,
             'protegido' => $perfil->protegido,
