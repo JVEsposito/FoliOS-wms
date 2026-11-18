@@ -31,7 +31,7 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
                 }
                 if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
                 if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Prueba', temporada: { codigo: 'TEMP-PRUEBA' } } } });
-                if (path === `${prefix}/catalogos`) return route.fulfill({ json: { envases_retorno: [{ codigo: 'bins', nombre: 'BINS' }, { codigo: 'caja_3_4', nombre: 'CAJAS 3/4' }], tipos_resultado: [{ id: 'tipo', codigo: 'comercial', nombre: 'Comercial' }] } });
+                if (path === `${prefix}/catalogos`) return route.fulfill({ json: { envases_retorno: [{ codigo: 'bins', nombre: 'BINS' }, { codigo: 'caja_3_4', nombre: 'CAJAS 3/4' }], tipos_resultado: [{ id: 'tipo', codigo: 'comercial', nombre: 'Comercial', prefijo_sublote: 'CECOM' }] } });
                 if (path === `${prefix}/procesos`) return route.fulfill({ json: { data: [{ clave: 'proc', lote_materia_prima_id: 'lote', numero_lote: 'L-001', numero_orden: 'OP-001', linea_proceso: 'Línea 1', turno: 'A', viajes: 1, bins_enviados: 4, kilos_enviados: 1000 }] } });
                 if (path === `${prefix}/legacy`) return route.fulfill({ json: { data: [] } });
                 if (path === `${prefix}/resumen`) return route.fulfill({ json: { bins_registrados: 0, cajas_3_4_registradas: records[0]?.cantidad_envases || 0, kilos_registrados: records[0]?.kilos_totales || 0, pendientes_regularizacion: records.filter((r) => r.estado === 'pendiente_regularizacion').length, retornos_anteriores_pendientes: 0 } });
@@ -39,6 +39,7 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
                 if (path === `${prefix}/bins` && req.method() === 'POST') {
                     const payload = req.postDataJSON(); writes.push({ action: 'registrar', payload });
                     assert.equal(payload.tipo_envase, 'caja_3_4'); assert.equal(payload.cantidad_envases, 24);
+                    assert.equal(payload.folio_por_confirmar, 'FAG-POR-12');
                     records.push({ ...payload, id: 'retorno', folio_provisional: 'PR-000001', folio_definitivo: null, estado: 'pendiente_regularizacion',
                         kilos_totales_verdes: payload.kilos_totales, kilos_totales_definitivos: null, registrado_at: '2026-11-02T12:00:00Z', registrado_por: 'Digitadora',
                         regularizado_at: null, anulado_at: null, tipo_resultado: null,
@@ -48,13 +49,13 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
                 if (path === `${prefix}/bins/retorno` && req.method() === 'PUT') {
                     const payload = req.postDataJSON(); writes.push({ action: 'modificar', payload });
                     assert.equal(payload.tipo_envase, 'caja_3_4'); assert.equal(payload.cantidad_envases, 12); assert.ok(payload.motivo.length >= 5);
-                    Object.assign(records[0], { cantidad_envases: 12, modificado_at: '2026-11-02T12:05:00Z', modificado_por: 'Digitadora', motivo_ultima_modificacion: payload.motivo });
+                    Object.assign(records[0], { folio_por_confirmar: payload.folio_por_confirmar, cantidad_envases: 12, modificado_at: '2026-11-02T12:05:00Z', modificado_por: 'Digitadora', motivo_ultima_modificacion: payload.motivo });
                     return route.fulfill({ json: { data: records[0] } });
                 }
                 if (path === `${prefix}/bins/retorno/regularizar`) {
                     const payload = req.postDataJSON(); writes.push({ action: 'regularizar', payload });
                     Object.assign(records[0], { estado: 'regularizado', folio_definitivo: payload.folio_definitivo, kilos_totales_definitivos: payload.kilos_totales_definitivos,
-                        regularizado_at: '2026-11-02T12:10:00Z', tipo_resultado: { id: 'tipo', nombre: 'Comercial' }, nombre_resultado: 'Comercial' });
+                        regularizado_at: '2026-11-02T12:10:00Z', tipo_resultado: { id: 'tipo', nombre: 'Comercial', prefijo_sublote: 'CECOM' }, nombre_resultado: 'Comercial' });
                     records[0].origenes[0].kilos_aportados_definitivos = payload.kilos_totales_definitivos;
                     return route.fulfill({ json: { data: records[0] } });
                 }
@@ -72,6 +73,7 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
             await page.locator('#returnContainerType').selectOption('caja_3_4');
             assert.equal(await page.locator('#returnContainerQuantity').evaluate((n) => n.readOnly), false);
             await page.locator('#returnContainerQuantity').fill('0');
+            await page.locator('#binReturnForm [name="folio_por_confirmar"]').fill('FAG-POR-12');
             await page.locator('#binReturnForm button[type="submit"]').click();
             assert.match(await page.locator('#binReturnError').textContent(), /cantidad entera de cajas/); assert.equal(writes.length, 0);
             await page.locator('#returnContainerQuantity').fill('24');
@@ -85,24 +87,37 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
             await page.locator('#binReturnForm button[type="submit"]').click();
             await page.waitForFunction(() => document.querySelector('[data-edit-bin="retorno"]'));
             assert.match(await page.locator('#recentBins').textContent(), /24 CAJAS 3\/4/);
+            assert.match(await page.locator('#recentBins h3').textContent(), /PR-000001.*FAG-POR-12.*por confirmar/);
+            assert.equal(await page.locator('#binReturnForm [name="folio_por_confirmar"]').inputValue(), '');
             assert.equal(await page.locator('#registeredBoxes').textContent(), '24');
             await page.locator('#recentBins .office-action-select').selectOption({ label: 'Modificar' });
             assert.equal(await page.locator('#editReturnContainerType').inputValue(), 'caja_3_4');
             await page.locator('#editReturnContainerQuantity').fill('12');
+            assert.equal(await page.locator('#editBinForm [name="folio_por_confirmar"]').inputValue(), 'FAG-POR-12');
+            await page.locator('#editBinForm [name="folio_por_confirmar"]').fill('FAG-POR-13');
             await page.locator('#editBinForm [name="motivo"]').fill('Se contaron doce cajas al revisar el retorno.');
             await page.locator('#editBinForm button[value="default"]').click();
             await page.waitForFunction(() => !document.getElementById('editBinDialog').open);
             await page.locator('#recentBins').getByText('12 CAJAS 3/4', { exact: true }).waitFor();
             await page.locator('[data-return-section="pendientes"]').click();
             await page.locator('#pendingBinList .office-action-select').selectOption({ label: 'Regularizar folio y kilos' });
+            assert.equal(await page.locator('#regularizeForm [name="folio_definitivo"]').inputValue(), 'FAG-POR-13');
             await page.locator('#regularizeForm [name="folio_definitivo"]').fill('FAG-000012');
+            assert.equal(await page.locator('#regularizeForm [name="tipo_resultado_packing_id"] option[value="tipo"]').textContent(), 'CECOM · Comercial');
             await page.locator('#regularizeForm [name="tipo_resultado_packing_id"]').selectOption('tipo');
             await page.locator('#regularizeForm [name="kilos_totales_definitivos"]').fill('235');
             await page.locator('[data-regularize-kilos]').fill('235');
             await page.locator('#regularizeForm button[value="default"]').click();
             await page.waitForFunction(() => !document.getElementById('regularizeDialog').open);
+            assert.equal(records[0].folio_provisional, 'PR-000001');
+            assert.equal(records[0].folio_definitivo, 'FAG-000012');
+            assert.equal(records[0].folio_por_confirmar, 'FAG-POR-13');
             assert.equal(records[0].tipo_envase, 'caja_3_4'); assert.equal(records[0].cantidad_envases, 12);
             assert.deepEqual(writes.map((r) => r.action), ['registrar', 'modificar', 'regularizar']);
+            await page.locator('[data-return-section="recepcion"]').click();
+            await page.locator('#recentBins .office-action-select').selectOption({ label: 'Modificar' });
+            assert.equal(await page.locator('#editPendingFolioRow').isVisible(), false);
+            assert.equal(await page.locator('#editBinForm [name="folio_definitivo"]').inputValue(), 'FAG-000012');
             assert.deepEqual(errors, []);
             await context.close();
         }

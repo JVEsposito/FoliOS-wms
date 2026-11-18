@@ -67,7 +67,7 @@
 
                 <section class="return-panel" data-return-panel="recepcion">
                     <div class="return-panel__heading">
-                        <div><p class="eyebrow">NUEVO RETORNO FÍSICO</p><h2>Registrar retorno de fruta</h2><p>El WMS asignará un folio provisional PR-* al confirmar.</p></div>
+                        <div><p class="eyebrow">NUEVO RETORNO FÍSICO</p><h2>Registrar retorno de fruta</h2><p>El WMS siempre asignará un provisorio PR-*. Puedes agregar además un folio por confirmar.</p></div>
                     </div>
 
                     <form id="binReturnForm" class="bin-return-form" novalidate>
@@ -75,6 +75,7 @@
                             <label><span>Envase del retorno *</span><select name="tipo_envase" id="returnContainerType"><option value="bins">BINS</option><option value="caja_3_4">CAJAS 3/4</option></select></label>
                             <label><span id="returnContainerQuantityLabel">Cantidad de bins *</span><input name="cantidad_envases" id="returnContainerQuantity" type="number" min="1" max="1" step="1" value="1" inputmode="numeric" required></label>
                             <p class="field-wide">Cada folio identifica un bin o una agrupación de cajas 3/4. Los kilos corresponden al total de fruta retornada.</p>
+                            <label><span>Folio por confirmar</span><input name="folio_por_confirmar" maxlength="80" autocomplete="off" placeholder="Opcional: escanear o escribir"><small>Se conserva el PR-*; este folio se revisa al regularizar.</small></label>
                             <label><span>Kilos verdes totales del retorno *</span><input name="kilos_totales" id="binTotalKilos" type="number" min="0.001" max="999999999.999" step="0.001" inputmode="decimal" required></label>
                             <label class="field-wide"><span>Observación</span><textarea name="observacion" maxlength="2000" placeholder="Opcional"></textarea></label>
                         </div>
@@ -131,6 +132,7 @@
                 <div class="return-form-grid">
                     <label><span>Envase del retorno *</span><select name="tipo_envase" id="editReturnContainerType"><option value="bins">BINS</option><option value="caja_3_4">CAJAS 3/4</option></select></label>
                     <label><span id="editReturnContainerQuantityLabel">Cantidad de bins *</span><input name="cantidad_envases" id="editReturnContainerQuantity" type="number" min="1" step="1" inputmode="numeric" required></label>
+                    <label id="editPendingFolioRow"><span>Folio por confirmar</span><input name="folio_por_confirmar" maxlength="80" autocomplete="off" placeholder="Opcional"><small>No reemplaza el provisorio ni confirma el retorno.</small></label>
                     <label><span>Kilos verdes totales *</span><input name="kilos_totales" id="editGreenTotalKilos" type="number" min="0.001" max="999999999.999" step="0.001" inputmode="decimal" required></label>
                     <label class="field-wide"><span>Observación</span><textarea name="observacion" id="editBinObservation" maxlength="2000" placeholder="Opcional"></textarea></label>
                 </div>
@@ -170,7 +172,7 @@
                 </section>
                 <input name="bin_id" type="hidden">
                 <div class="return-form-grid">
-                    <label><span>Folio definitivo *</span><input name="folio_definitivo" maxlength="80" autocomplete="off" required></label>
+                    <label><span>Folio definitivo *</span><input name="folio_definitivo" maxlength="80" autocomplete="off" required><small>Revisa o corrige el folio propuesto. Se confirma al guardar esta regularización.</small></label>
                     <label><span>Clasificación *</span><select name="tipo_resultado_packing_id" required></select></label>
                     <label class="field-wide"><span>Nombre / detalle</span><input name="nombre_resultado" maxlength="100" autocomplete="off" placeholder="Opcional; usa el nombre del catálogo si queda vacío"></label>
                 </div>
@@ -189,6 +191,7 @@
             <form method="dialog" id="legacyMigrationForm" novalidate>
                 <div class="return-dialog__heading"><div><p class="eyebrow">MIGRAR RETORNO ANTERIOR</p><h2 id="legacyMigrationTitle">Convertir a bin provisional</h2><p id="legacyMigrationDescription"></p></div><button value="cancel" type="submit" aria-label="Cerrar">×</button></div>
                 <input name="retorno_id" type="hidden">
+                <label><span>Folio por confirmar</span><input name="folio_por_confirmar" maxlength="80" autocomplete="off" placeholder="Opcional"><small>También se generará el provisorio PR-*.</small></label>
                 <label class="migration-total"><span>Kilos totales del retorno *</span><input name="kilos_totales" id="migrationTotalKilos" type="number" min="0.001" step="0.001" required></label>
                 <div class="migration-origins" id="migrationOrigins"></div>
                 <div class="origin-balance" id="migrationBalance"><span>Distribuido</span><strong>0,000 / 0,000 kg</strong><small>Completa la distribución</small></div>
