@@ -74,9 +74,12 @@ class OperacionAhoraOfficeTest extends TestCase
             ->assertOk()
             ->assertSee('role="tablist"', false)
             ->assertSee('Personal y equipos')
+            ->assertSee('data-operation-panel="resumen" tabindex="0"', false)
+            ->assertSee('id="operationReceptionRows"', false)
+            ->assertSee('id="operationValidationRows"', false)
             ->assertDontSee('operation-now-dashboard', false);
 
-        foreach (['atencion', 'maniobras', 'plano', 'camaras', 'prefrio', 'despacho', 'personal'] as $pestana) {
+        foreach (['atencion', 'recepcion-mp', 'validacion-pt', 'maniobras', 'plano', 'camaras', 'prefrio', 'despacho', 'personal'] as $pestana) {
             $response
                 ->assertSee('data-operation-tab="'.$pestana.'"', false)
                 ->assertSee('id="operationTab-'.$pestana.'" aria-controls="operationPanel-'.$pestana.'"', false)
@@ -84,9 +87,10 @@ class OperacionAhoraOfficeTest extends TestCase
                 ->assertSee('data-operation-panel="'.$pestana.'"', false);
         }
 
-        // Atención abre por defecto; el resto espera su turno sin pintarse.
+        // Resumen abre por defecto; el resto espera su turno sin pintarse.
         $response
-            ->assertSee('aria-controls="operationPanel-atencion" aria-selected="true"', false)
+            ->assertSee('aria-controls="operationPanel-resumen" aria-selected="true"', false)
+            ->assertSee('data-operation-panel="atencion" tabindex="0" hidden', false)
             ->assertSee('data-operation-panel="plano" tabindex="0" hidden', false);
 
         $tabs = file_get_contents(resource_path('js/shared/operation-now-tabs.js'));

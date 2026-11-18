@@ -3,8 +3,8 @@
 // La pestaña vive en la dirección (#plano) para compartirla o volver a ella, y se
 // recuerda en el equipo. Una alerta nueva nunca cambia la pestaña: solo su insignia.
 
-export const OPERATION_TABS = Object.freeze(['atencion', 'maniobras', 'plano', 'camaras', 'prefrio', 'despacho', 'personal']);
-export const DEFAULT_OPERATION_TAB = 'atencion';
+export const OPERATION_TABS = Object.freeze(['resumen', 'atencion', 'recepcion-mp', 'validacion-pt', 'maniobras', 'plano', 'camaras', 'prefrio', 'despacho', 'personal']);
+export const DEFAULT_OPERATION_TAB = 'resumen';
 export const OPERATION_TAB_STORAGE_KEY = 'folios_operacion_ahora_pestana';
 
 export function tabFromHash(hash) {
@@ -95,7 +95,14 @@ export function createOperationTabs({
 
     root.addEventListener('click', (event) => {
         const button = event.target.closest?.('[data-operation-tab]');
-        if (button) activate(button.dataset.operationTab);
+        if (button) {
+            activate(button.dataset.operationTab);
+            return;
+        }
+        const link = event.target.closest?.('[data-operation-jump]');
+        if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        activate(link.dataset.operationJump, { focus: true });
     });
 
     root.addEventListener('keydown', (event) => {

@@ -49,6 +49,7 @@ class ServicioOperacionAhora
         private readonly ServicioPlanoPlanta $planos,
         private readonly ServicioPuestoMandoPlanificador $puestoMando,
         private readonly ServicioConciliacionPalletsHistoricos $conciliacion,
+        private readonly ResumenIngresosOperacion $ingresos,
     ) {}
 
     /**
@@ -84,6 +85,8 @@ class ServicioOperacionAhora
                 'nombre' => $temporada->nombre,
             ],
             'sincronizacion' => $this->sincronizacion($ahora),
+            'recepcion_mp' => $this->ingresos->recepcion($temporada->id, $ahora),
+            'validacion_pt' => $this->ingresos->validacion($temporada->id, $ahora),
             'camareros' => $this->camareros($temporada),
             'prefrio' => $prefrio,
             'incidencias' => $this->incidencias($temporada, $ahora),

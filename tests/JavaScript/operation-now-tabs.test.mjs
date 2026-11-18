@@ -19,13 +19,14 @@ test('la dirección manda y, sin ella, vuelve la última pestaña del equipo', (
     assert.equal(resolveInitialTab('#camaras', 'plano'), 'camaras');
     assert.equal(resolveInitialTab('', 'plano'), 'plano');
     assert.equal(resolveInitialTab('', 'inventada'), DEFAULT_OPERATION_TAB);
-    assert.equal(DEFAULT_OPERATION_TAB, 'atencion');
+    assert.equal(DEFAULT_OPERATION_TAB, 'resumen');
+    assert.equal(tabFromHash('#recepcion-mp'), 'recepcion-mp');
 });
 
 test('las flechas recorren las pestañas de forma circular', () => {
-    assert.equal(tabFromKey('atencion', 'ArrowRight'), 'maniobras');
-    assert.equal(tabFromKey('atencion', 'ArrowLeft'), 'personal');
-    assert.equal(tabFromKey('prefrio', 'Home'), 'atencion');
+    assert.equal(tabFromKey('atencion', 'ArrowRight'), 'recepcion-mp');
+    assert.equal(tabFromKey('resumen', 'ArrowLeft'), 'personal');
+    assert.equal(tabFromKey('prefrio', 'Home'), 'resumen');
     assert.equal(tabFromKey('maniobras', 'End'), 'personal');
     assert.equal(tabFromKey('maniobras', 'Enter'), null);
 });
@@ -76,8 +77,9 @@ test('abre la pestaña de la dirección, oculta las demás y la recuerda', () =>
 
     assert.equal(tabs.current, 'plano');
     assert.deepEqual(dom.panels.filter((panel) => !panel.hidden).map((panel) => panel.dataset.operationPanel), ['plano']);
-    assert.equal(dom.buttons[2].attributes['aria-selected'], 'true');
-    assert.equal(dom.buttons[2].tabIndex, 0);
+    const mapTab = dom.buttons.find((button) => button.dataset.operationTab === 'plano');
+    assert.equal(mapTab.attributes['aria-selected'], 'true');
+    assert.equal(mapTab.tabIndex, 0);
     assert.equal(dom.buttons[0].tabIndex, -1);
     assert.equal(dom.store.get(OPERATION_TAB_STORAGE_KEY), 'plano');
     assert.deepEqual(dom.history, [], 'la dirección ya era correcta');
@@ -97,15 +99,16 @@ test('clic, teclado y enlaces cambian la pestaña; nada más lo hace', () => {
     const dom = fakeDom('');
     const tabs = createOperationTabs({ root: dom.root, win: dom.win, storage: dom.storage });
 
-    dom.listeners.click({ target: dom.buttons[3] });
+    const cameraTab = dom.buttons.find((button) => button.dataset.operationTab === 'camaras');
+    dom.listeners.click({ target: cameraTab });
     assert.equal(tabs.current, 'camaras');
     assert.equal(dom.win.location.hash, '#camaras');
 
     let prevented = false;
-    dom.listeners.keydown({ target: dom.buttons[3], key: 'ArrowRight', preventDefault: () => { prevented = true; } });
+    dom.listeners.keydown({ target: cameraTab, key: 'ArrowRight', preventDefault: () => { prevented = true; } });
     assert.equal(tabs.current, 'prefrio');
     assert.ok(prevented);
-    assert.ok(dom.buttons[4].focused, 'el foco acompaña a la pestaña activa');
+    assert.ok(dom.buttons.find((button) => button.dataset.operationTab === 'prefrio').focused, 'el foco acompaña a la pestaña activa');
 
     dom.win.location.hash = '#maniobras';
     dom.listeners['window:hashchange']();
@@ -114,6 +117,19 @@ test('clic, teclado y enlaces cambian la pestaña; nada más lo hace', () => {
     dom.win.location.hash = '#otra-cosa';
     dom.listeners['window:hashchange']();
     assert.equal(tabs.current, 'maniobras', 'un ancla ajena no mueve la vista');
+});
+
+test('las tarjetas del resumen abren su pestaña y dejan el foco en ella', () => {
+    const dom = fakeDom('');
+    const tabs = createOperationTabs({ root: dom.root, win: dom.win, storage: dom.storage });
+    const link = { dataset: { operationJump: 'recepcion-mp' } };
+    dom.listeners.click({
+        target: { closest: (selector) => selector === '[data-operation-jump]' ? link : null },
+        preventDefault() {},
+    });
+    assert.equal(tabs.current, 'recepcion-mp');
+    assert.equal(dom.win.location.hash, '#recepcion-mp');
+    assert.ok(dom.buttons.find((button) => button.dataset.operationTab === 'recepcion-mp').focused);
 });
 
 test('sin almacenamiento local la pestaña sigue funcionando', () => {
