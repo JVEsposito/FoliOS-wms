@@ -97,6 +97,54 @@ class EmbarqueApiTest extends TestCase
         ]);
     }
 
+    public function test_recibidores_habituales_se_recuperan_por_cliente_y_temporada_fuera_de_la_semana_consultada(): void
+    {
+        $despachador = $this->usuario(RolUsuario::Despachador);
+        $cliente = $this->cliente($despachador, 'RC');
+        $otroCliente = $this->cliente($despachador, 'OT');
+        $payload = [
+            'cliente_id' => $cliente->id,
+            'fecha_programada' => '2026-08-01',
+            'hora_programada' => '09:00',
+            'modalidad' => 'maritimo',
+            'instructivos' => [
+                ['recibidor' => '  Frutas   Ñandú  '],
+                ['recibidor' => 'frutas ñandú'],
+                ['recibidor' => ''],
+                ['recibidor' => null],
+            ],
+        ];
+        $this->actingAs($despachador, 'sanctum')->postJson('/api/embarques', $payload)->assertCreated();
+        $this->postJson('/api/embarques', [
+            ...$payload, 'cliente_id' => $otroCliente->id, 'hora_programada' => '10:00',
+            'instructivos' => [['recibidor' => 'Recibidor otro cliente']],
+        ])->assertCreated();
+
+        $anterior = $this->postJson('/api/embarques', [
+            ...$payload, 'hora_programada' => '11:00',
+            'instructivos' => [['recibidor' => 'Recibidor otra temporada']],
+        ])->assertCreated();
+        $temporadaAnterior = Temporada::query()->create([
+            ...$this->vigenciaProductiva(),
+            'codigo' => 'REC-ANT', 'nombre' => 'Temporada anterior', 'activa' => false,
+        ]);
+        Embarque::query()->findOrFail($anterior->json('data.id'))->update(['temporada_id' => $temporadaAnterior->id]);
+
+        $url = '/api/embarques?desde=2026-08-31&hasta=2026-08-31';
+        $calendario = $this->getJson($url)->assertOk()->assertJsonCount(0, 'embarques')
+            ->assertJsonCount(2, 'catalogos.recibidores');
+        $habituales = collect($calendario->json('catalogos.recibidores'));
+        $this->assertSame('frutas ñandú', mb_strtolower($habituales->firstWhere('cliente_id', $cliente->id)['nombre']));
+        $this->assertSame('Recibidor otro cliente', $habituales->firstWhere('cliente_id', $otroCliente->id)['nombre']);
+
+        $this->postJson('/api/embarques', [
+            ...$payload, 'hora_programada' => '12:00',
+            'instructivos' => [['recibidor' => 'Recibidor nuevo']],
+        ])->assertCreated();
+        $this->getJson($url)->assertOk()->assertJsonCount(3, 'catalogos.recibidores')
+            ->assertJsonFragment(['cliente_id' => $cliente->id, 'nombre' => 'Recibidor nuevo']);
+    }
+
     public function test_confirmar_un_embarque_crea_una_sola_orden_car_para_todos_sus_instructivos(): void
     {
         $despachador = $this->usuario(RolUsuario::Despachador);

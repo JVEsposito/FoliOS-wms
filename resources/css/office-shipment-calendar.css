@@ -61,6 +61,7 @@
 .shipment-details[open] summary { margin-bottom: 12px; }
 .instructive-section, .load-confirmation { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: 11px; padding: 13px; }
 .instructive-list { display: grid; gap: 9px; }
+.instructive-section > p { margin: 0; color: var(--text-subtle, var(--muted)); font-size: .8rem; line-height: 1.4; }
 .instruction-card { border: 1px solid var(--line); border-radius: 9px; background: var(--surface-muted, var(--deep)); padding: 11px; }
 .instruction-card header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
 .instruction-card header button { width: 30px; min-height: 30px; }

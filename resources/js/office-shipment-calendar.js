@@ -12,6 +12,7 @@ const elements = {
     dialogEyebrow: byId('shipmentDialogEyebrow'), dialogHelp: byId('shipmentDialogHelp'),
     closeDialog: byId('closeShipmentDialog'), dismiss: byId('dismissShipment'), addInstruction: byId('addInstruction'),
     instructionList: byId('instructionList'), instructionTemplate: byId('instructionTemplate'),
+    receiverOptions: byId('shipmentReceiverOptions'),
     overbook: byId('overbookAuthorization'), overbookReason: byId('overbookReason'),
     loadConfirmation: byId('loadConfirmation'), save: byId('saveShipment'), confirm: byId('confirmShipment'),
     cancel: byId('cancelShipment'), loading: byId('officeLoading'), loadingText: byId('officeLoadingText'),
@@ -27,7 +28,7 @@ const state = {
     season: null,
     windows: [],
     shipments: [],
-    catalogs: { clientes: [], camaras: [], andenes: [], paises: [], puertos: [] },
+    catalogs: { clientes: [], recibidores: [], camaras: [], andenes: [], paises: [], puertos: [] },
     permissions: { gestionar: false, autorizar_sobrecupo: false },
     selected: null,
     requests: [],
@@ -223,10 +224,21 @@ function scrollToCurrentHour() {
 
 function populateCatalogs() {
     const form = elements.form.elements;
+    const clientId = form.cliente_id.value;
     form.cliente_id.innerHTML = '<option value="">Selecciona cliente</option>' + state.catalogs.clientes.map((client) => `<option value="${client.id}"${client.codigo_folio_materiales ? '' : ' disabled'}>${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}${client.codigo_folio_materiales ? '' : ' · sin sigla documental'}</option>`).join('');
+    form.cliente_id.value = clientId;
     form.camara_objetivo_id.innerHTML = '<option value="">Sin cámara objetivo</option>' + state.catalogs.camaras.map((camera) => `<option value="${camera.id}">${escapeHtml(camera.codigo)} · ${escapeHtml(camera.nombre)}</option>`).join('');
     form.anden_previsto_id.innerHTML = '<option value="">Sin andén previsto</option>' + state.catalogs.andenes.map((dock) => `<option value="${dock.id}">${escapeHtml(dock.codigo)} · ${escapeHtml(dock.nombre)}</option>`).join('');
     populateDeparturePoints();
+    populateReceiverOptions();
+}
+
+function populateReceiverOptions() {
+    const clientId = elements.form.elements.cliente_id.value;
+    const options = (state.catalogs.recibidores || [])
+        .filter((receiver) => receiver.cliente_id === clientId)
+        .map((receiver) => new Option(receiver.nombre, receiver.nombre));
+    elements.receiverOptions.replaceChildren(...options);
 }
 function populateDeparturePoints(selected = elements.form.elements.puerto_embarque_id.value) {
     const select = elements.form.elements.puerto_embarque_id;
@@ -331,6 +343,7 @@ async function openExisting(id, focusConfirmation = false) {
         elements.dialogHelp.textContent = `${shipment.cliente.codigo} · ${shipment.intervalo_minutos} minutos reservados`;
         const form = elements.form.elements;
         form.id.value = shipment.id; form.version_esperada.value = shipment.version; form.cliente_id.value = shipment.cliente.id;
+        populateReceiverOptions();
         for (const field of ['modalidad', 'fecha_programada', 'referencia_correo', 'observacion', 'nave_vuelo', 'transportista', 'puerto_embarque_id', 'contenedor', 'sello', 'patente_camion', 'patente_trasera', 'documentos']) form[field].value = shipment[field] ?? '';
         populateDeparturePoints(shipment.puerto_embarque_id ?? '');
         populateTimeOptions(shipment.hora_programada); form.hora_programada.value = shipment.hora_programada;
@@ -408,6 +421,7 @@ elements.instructionList.addEventListener('change', (event) => {
     populateInstructionPorts(country.closest('.instruction-card'), country.value);
 });
 elements.form.elements.modalidad.addEventListener('change', () => refreshTransportPoints());
+elements.form.elements.cliente_id.addEventListener('change', populateReceiverOptions);
 elements.form.elements.fecha_programada.addEventListener('change', () => populateTimeOptions(elements.form.elements.hora_programada.value));
 elements.form.elements.hora_programada.addEventListener('change', () => updateOverbookControls());
 elements.form.elements.autorizar_sobrecupo.addEventListener('change', () => updateOverbookControls());
