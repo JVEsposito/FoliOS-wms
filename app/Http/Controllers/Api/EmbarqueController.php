@@ -13,6 +13,7 @@ use App\Models\Anden;
 use App\Models\Camara;
 use App\Models\Cliente;
 use App\Models\Embarque;
+use App\Models\InstructivoEmbarque;
 use App\Models\Pais;
 use App\Models\Puerto;
 use App\Services\Embarques\ServicioCalendarioEmbarques;
@@ -65,6 +66,7 @@ class EmbarqueController extends Controller
             'catalogos' => [
                 'clientes' => Cliente::query()->where('activo', true)
                     ->orderBy('codigo')->get(['id', 'codigo', 'nombre', 'codigo_folio_materiales']),
+                'recibidores' => $this->recibidoresHabituales($temporada->id),
                 'camaras' => Camara::query()
                     ->where('estado', EstadoCamara::Activa->value)
                     ->where('contenido', ContenidoCamara::Productos->value)
@@ -94,6 +96,26 @@ class EmbarqueController extends Controller
         $embarque = $servicio->crear($request->validated(), $request->user());
 
         return response()->json(['data' => $this->embarque($embarque)], Response::HTTP_CREATED);
+    }
+
+    /** @return array<int, array{cliente_id: string, nombre: string}> */
+    private function recibidoresHabituales(string $temporadaId): array
+    {
+        return InstructivoEmbarque::query()
+            ->join('embarques', 'embarques.id', '=', 'instructivos_embarque.embarque_id')
+            ->where('embarques.temporada_id', $temporadaId)
+            ->whereNotNull('instructivos_embarque.recibidor')
+            ->distinct()
+            ->get(['embarques.cliente_id', 'instructivos_embarque.recibidor'])
+            ->map(fn ($fila): array => [
+                'cliente_id' => $fila->cliente_id,
+                'nombre' => trim(preg_replace('/\s+/u', ' ', $fila->recibidor)),
+            ])
+            ->filter(fn (array $fila): bool => $fila['nombre'] !== '')
+            ->unique(fn (array $fila): string => $fila['cliente_id'].'|'.mb_strtolower($fila['nombre']))
+            ->sortBy('nombre', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
     }
 
     public function show(

@@ -100,6 +100,7 @@
 
                 <section class="instructive-section">
                     <div class="instructive-heading"><div><p class="eyebrow">DOCUMENTACIÓN</p><h3>Instructivos del embarque</h3></div><button class="secondary-button" id="addInstruction" type="button">+ Agregar instructivo</button></div>
+                    <p id="shipmentReceiverHelp">En Recibidor puedes elegir un nombre habitual del cliente o escribir uno nuevo. Al guardar estará disponible en los siguientes embarques de la temporada.</p>
                     <div class="instructive-list" id="instructionList"></div>
                 </section>
 
@@ -131,7 +132,7 @@
                 <header><strong>Instructivo <span data-instruction-number></span></strong><button data-remove-instruction type="button" aria-label="Quitar instructivo">×</button></header>
                 <div class="shipment-form-grid instruction-fields">
                     <label class="field"><span>N.º externo</span><input data-field="numero_externo" maxlength="150"></label>
-                    <label class="field"><span>Recibidor</span><input data-field="recibidor" maxlength="180"></label>
+                    <div class="field"><span>Recibidor</span><div data-receiver-picker></div></div>
                     <label class="field"><span>País destino</span><select data-field="pais_destino_id"></select></label>
                     <label class="field"><span>Puerto / aeropuerto / paso destino</span><select data-field="puerto_destino_id" disabled></select></label>
                     <label class="field"><span>Pallets</span><input data-field="cantidad_pallets" type="number" min="0" max="999"></label>

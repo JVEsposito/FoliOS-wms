@@ -1,4 +1,5 @@
 import { showOfficeToast } from './office-toast.js';
+import { createSearchSelect } from './shared/search-select.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -19,6 +20,7 @@ const elements = {
 };
 
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
+const receiverPickers = new WeakMap();
 const state = {
     token: localStorage.getItem(keys.token),
     identity: readJson(keys.identity),
@@ -27,7 +29,7 @@ const state = {
     season: null,
     windows: [],
     shipments: [],
-    catalogs: { clientes: [], camaras: [], andenes: [], paises: [], puertos: [] },
+    catalogs: { clientes: [], recibidores: [], camaras: [], andenes: [], paises: [], puertos: [] },
     permissions: { gestionar: false, autorizar_sobrecupo: false },
     selected: null,
     requests: [],
@@ -223,10 +225,23 @@ function scrollToCurrentHour() {
 
 function populateCatalogs() {
     const form = elements.form.elements;
+    const clientId = form.cliente_id.value;
     form.cliente_id.innerHTML = '<option value="">Selecciona cliente</option>' + state.catalogs.clientes.map((client) => `<option value="${client.id}"${client.codigo_folio_materiales ? '' : ' disabled'}>${escapeHtml(client.codigo)} · ${escapeHtml(client.nombre)}${client.codigo_folio_materiales ? '' : ' · sin sigla documental'}</option>`).join('');
+    form.cliente_id.value = clientId;
     form.camara_objetivo_id.innerHTML = '<option value="">Sin cámara objetivo</option>' + state.catalogs.camaras.map((camera) => `<option value="${camera.id}">${escapeHtml(camera.codigo)} · ${escapeHtml(camera.nombre)}</option>`).join('');
     form.anden_previsto_id.innerHTML = '<option value="">Sin andén previsto</option>' + state.catalogs.andenes.map((dock) => `<option value="${dock.id}">${escapeHtml(dock.codigo)} · ${escapeHtml(dock.nombre)}</option>`).join('');
     populateDeparturePoints();
+    populateReceiverOptions();
+}
+
+function populateReceiverOptions() {
+    const clientId = elements.form.elements.cliente_id.value;
+    const options = (state.catalogs.recibidores || [])
+        .filter((receiver) => receiver.cliente_id === clientId)
+        .map((receiver) => ({ label: receiver.nombre, value: receiver.nombre }));
+    elements.instructionList.querySelectorAll('.instruction-card').forEach((card) => {
+        receiverPickers.get(card)?.setOptions(options);
+    });
 }
 function populateDeparturePoints(selected = elements.form.elements.puerto_embarque_id.value) {
     const select = elements.form.elements.puerto_embarque_id;
@@ -271,6 +286,16 @@ function updateOverbookControls(force = false) {
 function addInstruction(data = {}) {
     const fragment = elements.instructionTemplate.content.cloneNode(true);
     const card = fragment.querySelector('.instruction-card');
+    const receiver = createSearchSelect(card.querySelector('[data-receiver-picker]'), {
+        label: 'Recibidor', placeholder: 'Elige o escribe un recibidor',
+        emptyText: 'Puedes escribir un recibidor nuevo.', allowCustomValue: true,
+    });
+    const receiverInput = card.querySelector('[data-receiver-picker] input');
+    receiverInput.dataset.field = 'recibidor';
+    receiverInput.maxLength = 180;
+    receiverInput.setAttribute('aria-describedby', 'shipmentReceiverHelp');
+    receiver.setValue(data.recibidor ?? '');
+    receiverPickers.set(card, receiver);
     if (data.id) card.dataset.instructivoId = data.id;
     const country = card.querySelector('[data-field="pais_destino_id"]');
     country.innerHTML = '<option value="">Selecciona país</option>' + state.catalogs.paises.map((item) => `<option value="${item.id}">${escapeHtml(item.iso_alpha2)} · ${escapeHtml(item.nombre_es)}</option>`).join('');
@@ -279,7 +304,7 @@ function addInstruction(data = {}) {
     card.querySelectorAll('[data-field]').forEach((input) => {
         if (!['pais_destino_id', 'puerto_destino_id'].includes(input.dataset.field)) input.value = data[input.dataset.field] ?? '';
     });
-    elements.instructionList.append(fragment); renumberInstructions();
+    elements.instructionList.append(fragment); renumberInstructions(); populateReceiverOptions();
 }
 function populateInstructionPorts(card, countryId, selected = '') {
     const port = card.querySelector('[data-field="puerto_destino_id"]');
@@ -331,6 +356,7 @@ async function openExisting(id, focusConfirmation = false) {
         elements.dialogHelp.textContent = `${shipment.cliente.codigo} · ${shipment.intervalo_minutos} minutos reservados`;
         const form = elements.form.elements;
         form.id.value = shipment.id; form.version_esperada.value = shipment.version; form.cliente_id.value = shipment.cliente.id;
+        populateReceiverOptions();
         for (const field of ['modalidad', 'fecha_programada', 'referencia_correo', 'observacion', 'nave_vuelo', 'transportista', 'puerto_embarque_id', 'contenedor', 'sello', 'patente_camion', 'patente_trasera', 'documentos']) form[field].value = shipment[field] ?? '';
         populateDeparturePoints(shipment.puerto_embarque_id ?? '');
         populateTimeOptions(shipment.hora_programada); form.hora_programada.value = shipment.hora_programada;
@@ -408,6 +434,7 @@ elements.instructionList.addEventListener('change', (event) => {
     populateInstructionPorts(country.closest('.instruction-card'), country.value);
 });
 elements.form.elements.modalidad.addEventListener('change', () => refreshTransportPoints());
+elements.form.elements.cliente_id.addEventListener('change', populateReceiverOptions);
 elements.form.elements.fecha_programada.addEventListener('change', () => populateTimeOptions(elements.form.elements.hora_programada.value));
 elements.form.elements.hora_programada.addEventListener('change', () => updateOverbookControls());
 elements.form.elements.autorizar_sobrecupo.addEventListener('change', () => updateOverbookControls());
