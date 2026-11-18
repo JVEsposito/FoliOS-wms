@@ -55,14 +55,14 @@ const controlFixture = (pallets, extra = {}) => ({
 
 function harness({ closedWithPdf = false } = {}) {
   const cache = new Map();
-  const calls = { loads: 0, start: [], position: [], save: [], temperatures: [], sharedPdf: 0 };
+  const calls = { loads: 0, start: [], position: [], save: [], temperatures: [], sharedPdf: 0, sharedPdfArgs: null };
   const storage = new Map();
   let sequence = 0;
   let failNextPosition = false;
   let current = controlFixture([pallet('A1', 'cargado', 1), pallet('A2', 'en_anden'), pallet('A3', 'en_anden')]);
   if (closedWithPdf) {
     current = controlFixture([{ ...pallet('A1', 'cargado', 1), posicion: { ...pallet('A1', 'cargado', 1).posicion, temperatura: 0.2 } }], {
-      estado: 'cerrado', cerrado_por: 'Consolidador', faltantes_cierre: [], fotos_pendientes: [],
+      estado: 'cerrado', referencia_embarque: 'F025', archivos: { planilla: 'R-24_F025.xlsx', fotos: 'R-24_fotos_F025.pdf' }, cerrado_por: 'Consolidador', faltantes_cierre: [], fotos_pendientes: [],
       fotos: [{ id: 'ph1', tipo: 'camion_patentes', orden: 1, url: null, miniatura_url: null, subida_at: null, archivada: true, pagina_pdf: 1 },
         { id: 'ph2', tipo: 'general', orden: 1, url: null, miniatura_url: null, subida_at: null, archivada: true, pagina_pdf: 1 }],
       fotos_pdf: { url: '/api/control-despacho/controles/c1/fotos.pdf', bytes: 348160, cantidad: 2, generado_at: null },
@@ -79,7 +79,7 @@ function harness({ closedWithPdf = false } = {}) {
   const api = {
     catalog: async () => catalog,
     loads: async () => { calls.loads += 1; return [{ id: 'g1', codigo: 'CAR-0007', estado: 'despachada', exportadora: 'Subsole', embarque: 'EMB-1', contenedor: 'MSCU1', anden: 'AND-1', patente: 'ABCD12', pallets: 3, en_anden: 2, cargados: 1, control: closedWithPdf ? { id: 'c1', estado: 'cerrado', posicionados: 1 } : null }]; },
-    sharePhotosPdf: async () => { calls.sharedPdf += 1; },
+    sharePhotosPdf: async (...args) => { calls.sharedPdf += 1; calls.sharedPdfArgs = args; },
     thumbnail: async () => null,
     start: async (loadId, operation) => { calls.start.push({ loadId, operation }); return current; },
     detail: async () => current,
@@ -279,5 +279,7 @@ test('con la planilla cerrada las fotos se ven en el PDF y se comparten desde ah
     assert.equal(closed.pressable('Quitar'), undefined, 'Cerrada no se quitan fotos');
     await closed.press('Compartir PDF de fotos');
     assert.equal(closed.calls.sharedPdf, 1);
+    assert.deepEqual(closed.calls.sharedPdfArgs, ['c1', 'F025', 'R-24_fotos_F025.pdf']);
+    assert.match(closed.text(), /R-24 · embarque F025 · carga CAR-0007/);
   } finally { await closed.unmount(); }
 });
