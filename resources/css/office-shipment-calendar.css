@@ -1,3 +1,5 @@
+@import './office-search-select.css';
+
 .shipment-access-brand {
     background: radial-gradient(circle at 18% 22%, rgba(70, 201, 115, .15), transparent 25rem), linear-gradient(145deg, #0f3b35, #071017 72%);
 }
@@ -53,7 +55,7 @@
 .shipment-dialog__close { width: 38px; min-height: 38px; font-size: 1.25rem; }
 .shipment-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .shipment-form-grid .field { display: grid; gap: 5px; }
-.shipment-form-grid .field span, .shipment-dialog > form > .field span { color: var(--muted); font-size: .64rem; font-weight: 900; text-transform: uppercase; }
+.shipment-form-grid .field > span, .shipment-dialog > form > .field span { color: var(--muted); font-size: .64rem; font-weight: 900; text-transform: uppercase; }
 .shipment-form-grid input, .shipment-form-grid select, .shipment-form-grid textarea, .shipment-dialog textarea { min-height: 42px; border-radius: 8px; padding: 0 10px; }
 .shipment-form-grid .field--wide { grid-column: span 2; }
 .shipment-details { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-muted, var(--deep)); padding: 12px; }

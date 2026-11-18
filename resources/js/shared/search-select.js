@@ -4,6 +4,7 @@ import { filterOptions } from './validation-correction-logic.js';
  * Selector con búsqueda (patrón combobox de ARIA): se abre como una lista y, al escribir,
  * filtra por cada palabra en el nombre, el detalle o el código. Flechas para moverse,
  * Enter para elegir, Escape para cerrar sin cambiar lo elegido.
+ * allowCustomValue permite conservar el texto escrito aunque no figure en las opciones.
  */
 const VISIBLE_LIMIT = 80;
 let counter = 0;
@@ -12,7 +13,7 @@ function escapeHtml(value) {
     return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
-export function createSearchSelect(container, { label, placeholder = 'Buscar…', emptyText = 'Sin coincidencias', onChange = () => {} }) {
+export function createSearchSelect(container, { label, placeholder = 'Buscar…', emptyText = 'Sin coincidencias', allowCustomValue = false, onChange = () => {} }) {
     counter += 1;
     const id = `search-select-${counter}`;
     container.classList.add('search-select');
@@ -26,7 +27,7 @@ export function createSearchSelect(container, { label, placeholder = 'Buscar…'
     let open = false;
 
     const selected = () => options.find((option) => option.value === value) || null;
-    const restore = () => { input.value = selected()?.label || ''; };
+    const restore = () => { input.value = selected()?.label || (allowCustomValue ? value : ''); };
 
     function render(query) {
         const matches = filterOptions(options, query);
@@ -47,7 +48,8 @@ export function createSearchSelect(container, { label, placeholder = 'Buscar…'
         list.hidden = false;
         input.setAttribute('aria-expanded', 'true');
         container.classList.add('is-open');
-        active = query ? 0 : Math.max(0, filterOptions(options, '').findIndex((option) => option.value === value));
+        active = -1;
+        if (!allowCustomValue) active = query ? 0 : Math.max(0, filterOptions(options, '').findIndex((option) => option.value === value));
         render(query);
     }
 
@@ -69,7 +71,13 @@ export function createSearchSelect(container, { label, placeholder = 'Buscar…'
 
     input.addEventListener('focus', () => { show(''); input.select(); });
     input.addEventListener('click', () => { if (!open) show(''); });
-    input.addEventListener('input', () => { active = 0; show(input.value); });
+    input.addEventListener('input', () => {
+        if (allowCustomValue) {
+            value = input.value;
+            onChange(value);
+        }
+        show(input.value);
+    });
     input.addEventListener('keydown', (event) => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
@@ -81,6 +89,7 @@ export function createSearchSelect(container, { label, placeholder = 'Buscar…'
             if (open) {
                 event.preventDefault();
                 if (visible[active]) choose(visible[active]);
+                else if (allowCustomValue) hide();
             }
         } else if (event.key === 'Escape') {
             if (open) {
@@ -108,12 +117,12 @@ export function createSearchSelect(container, { label, placeholder = 'Buscar…'
         get value() { return value; },
         setOptions(next) {
             options = next;
-            if (value && !options.some((option) => option.value === value)) value = '';
+            if (!allowCustomValue && value && !options.some((option) => option.value === value)) value = '';
             restore();
             if (open) render(input.value);
         },
         setValue(next) {
-            value = options.some((option) => option.value === next) ? next : '';
+            value = allowCustomValue || options.some((option) => option.value === next) ? next : '';
             restore();
         },
         setDisabled(disabled) {
