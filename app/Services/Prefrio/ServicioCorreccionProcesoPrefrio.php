@@ -37,21 +37,34 @@ class ServicioCorreccionProcesoPrefrio
         private readonly MotorTransicionesOperacionales $motorTransiciones,
     ) {}
 
+    /** @param array<string, mixed> $datos */
+    public function corregirHoras(ProcesoPrefrio $proceso, array $datos, User $usuario): ProcesoPrefrio
+    {
+        return $this->ejecutarCorreccion($proceso, $datos, $usuario, true);
+    }
+
+    /** @param array<string, mixed> $datos */
+    public function corregir(ProcesoPrefrio $proceso, array $datos, User $usuario): ProcesoPrefrio
+    {
+        return $this->ejecutarCorreccion($proceso, $datos, $usuario, false);
+    }
+
     /**
      * @param  array<string, mixed>  $datos
      */
-    public function corregir(
+    private function ejecutarCorreccion(
         ProcesoPrefrio $proceso,
         array $datos,
         User $usuario,
+        bool $soloHoras,
     ): ProcesoPrefrio {
         $this->asegurarAdministrador($usuario);
-        $payload = $this->normalizar($datos);
+        $payload = $this->normalizar($soloHoras ? [...$datos, 'solo_horas' => true] : $datos);
         $payloadHash = $this->calcularHash($payload);
 
         $comando = new ComandoTransicionOperacional(
             dominio: DominioTransicionOperacional::Administracion,
-            tipo: 'prefrio.corregir',
+            tipo: $soloHoras ? 'prefrio.corregir_horas' : 'prefrio.corregir',
             usuario: $usuario,
             payload: $payload,
             operacionId: $datos['operacion_id'],
@@ -64,6 +77,7 @@ class ServicioCorreccionProcesoPrefrio
             $datos,
             $usuario,
             $payloadHash,
+            $soloHoras,
         ): ProcesoPrefrio {
             $proceso = ProcesoPrefrio::query()->lockForUpdate()->findOrFail($proceso->id);
             $existente = EventoPrefrio::query()
@@ -92,10 +106,14 @@ class ServicioCorreccionProcesoPrefrio
             $cambios = [];
             $antesProceso = $this->snapshot($proceso, $this->camposProceso());
 
-            $this->actualizarEventos($proceso, $datos['eventos'], $cambios);
-            $this->actualizarFolios($proceso, $datos['folios'], $usuario, $cambios);
+            $this->actualizarEventos($proceso, $datos['eventos'], $cambios, $soloHoras);
+            if ($soloHoras) {
+                $this->actualizarHorasSinEvento($proceso, $datos['folios'] ?? [], $cambios);
+            } else {
+                $this->actualizarFolios($proceso, $datos['folios'], $usuario, $cambios);
+            }
 
-            if (! empty($datos['nuevo_folio'])) {
+            if (! $soloHoras && ! empty($datos['nuevo_folio'])) {
                 $this->agregarFolioHistorico(
                     $proceso,
                     $datos['nuevo_folio'],
@@ -104,7 +122,7 @@ class ServicioCorreccionProcesoPrefrio
                 );
             }
 
-            $proceso->fill([
+            $proceso->fill($soloHoras ? $this->hitosDesdeEventos($proceso) : [
                 'setpoint' => $datos['proceso']['setpoint'],
                 'duracion_objetivo_minutos' => $datos['proceso']['duracion_objetivo_minutos'] ?? null,
                 'formato_referencia' => $this->textoOpcional(
@@ -140,8 +158,9 @@ class ServicioCorreccionProcesoPrefrio
                 'datos' => [
                     'motivo' => $this->textoObligatorio($datos['motivo']),
                     'cambios' => $cambios,
-                    'estado_operacional_folios_sincronizado' => true,
-                    'resultado_termico_folios_sincronizado' => true,
+                    'solo_horas' => $soloHoras,
+                    'estado_operacional_folios_sincronizado' => ! $soloHoras,
+                    'resultado_termico_folios_sincronizado' => ! $soloHoras,
                 ],
                 'observacion' => $this->textoObligatorio($datos['motivo']),
             ]);
@@ -160,6 +179,7 @@ class ServicioCorreccionProcesoPrefrio
         ProcesoPrefrio $proceso,
         array $eventos,
         array &$cambios,
+        bool $soloHoras = false,
     ): void {
         foreach ($eventos as $datosEvento) {
             $evento = EventoPrefrio::query()->lockForUpdate()->findOrFail($datosEvento['id']);
@@ -171,7 +191,7 @@ class ServicioCorreccionProcesoPrefrio
             if ($evento->tipo === TipoEventoPrefrio::CorreccionAdministrativa) {
                 throw new DomainException('Las correcciones administrativas previas no pueden reescribirse.');
             }
-            if (in_array($evento->tipo, [TipoEventoPrefrio::FinalizacionParcial, TipoEventoPrefrio::RetiroParcialConfirmado], true)) {
+            if (! $soloHoras && in_array($evento->tipo, [TipoEventoPrefrio::FinalizacionParcial, TipoEventoPrefrio::RetiroParcialConfirmado], true)) {
                 throw new DomainException('La finalización y el retiro parcial se conservan como eventos de terreno.');
             }
 
@@ -180,7 +200,7 @@ class ServicioCorreccionProcesoPrefrio
             $antes = $this->snapshot($evento, $campos);
             $evento->fill([
                 'ocurrido_at' => $momento,
-                'observacion' => $this->textoOpcional($datosEvento['observacion'] ?? null),
+                'observacion' => $soloHoras ? $evento->observacion : $this->textoOpcional($datosEvento['observacion'] ?? null),
             ]);
 
             if (! $evento->isDirty()) {
@@ -188,6 +208,9 @@ class ServicioCorreccionProcesoPrefrio
             }
 
             $evento->save();
+            if ($soloHoras) {
+                $this->sincronizarHoraEvento($proceso, $evento, $cambios);
+            }
             $cambios[] = [
                 'entidad' => 'evento',
                 'id' => $evento->id,
@@ -196,6 +219,71 @@ class ServicioCorreccionProcesoPrefrio
                 'despues' => $this->snapshot($evento, $campos),
             ];
         }
+    }
+
+    /** Mantiene los hitos del folio de este proceso alineados con su evento, sin cambiar estados. */
+    private function sincronizarHoraEvento(ProcesoPrefrio $proceso, EventoPrefrio $evento, array &$cambios): void
+    {
+        $campo = match ($evento->tipo) {
+            TipoEventoPrefrio::PalletAgregado => 'cargado_at',
+            TipoEventoPrefrio::PalletRetirado, TipoEventoPrefrio::RetiroParcialConfirmado => 'retirado_at',
+            TipoEventoPrefrio::FinalizacionParcial => 'finalizado_parcial_at',
+            default => null,
+        };
+        if ($campo === null) {
+            return;
+        }
+        $consulta = $proceso->folios()->lockForUpdate();
+        if ($evento->proceso_prefrio_folio_id) {
+            $consulta->whereKey($evento->proceso_prefrio_folio_id);
+        } else {
+            $ids = $evento->tipo === TipoEventoPrefrio::FinalizacionParcial
+                ? array_column($evento->datos['resultados'] ?? [], 'folio_id')
+                : ($evento->datos['folios'] ?? []);
+            $consulta->whereIn('folio_id', $ids);
+        }
+        foreach ($consulta->get() as $asignacion) {
+            $this->guardarHoraFolio($asignacion, $campo, $evento->ocurrido_at, $cambios);
+        }
+    }
+
+    /** Retiros confirmados por labores e incorporaciones históricas pueden no tener un evento propio. */
+    private function actualizarHorasSinEvento(ProcesoPrefrio $proceso, array $folios, array &$cambios): void
+    {
+        foreach ($folios as $datosFolio) {
+            $asignacion = $proceso->folios()->lockForUpdate()->findOrFail($datosFolio['id']);
+            foreach (['cargado_at', 'retirado_at'] as $campo) {
+                if (! isset($datosFolio[$campo])) {
+                    continue;
+                }
+                if ($asignacion->{$campo} === null) {
+                    throw new DomainException('Solo puedes corregir una carga o retiro que ya esté registrado.');
+                }
+                $tipos = $campo === 'cargado_at' ? [TipoEventoPrefrio::PalletAgregado] : [TipoEventoPrefrio::PalletRetirado, TipoEventoPrefrio::RetiroParcialConfirmado];
+                $vinculado = $proceso->eventos()->whereIn('tipo', $tipos)->get()->contains(
+                    fn (EventoPrefrio $evento): bool => $evento->proceso_prefrio_folio_id === $asignacion->id
+                        || ($evento->tipo === TipoEventoPrefrio::RetiroParcialConfirmado && in_array($asignacion->folio_id, $evento->datos['folios'] ?? [], true)),
+                );
+                if ($vinculado) {
+                    throw new DomainException('Corrige la hora desde el evento de carga o retiro correspondiente.');
+                }
+                $this->guardarHoraFolio($asignacion, $campo, $this->momento($datosFolio[$campo]), $cambios);
+            }
+        }
+    }
+
+    private function guardarHoraFolio(ProcesoPrefrioFolio $asignacion, string $campo, DateTimeInterface $momento, array &$cambios): void
+    {
+        $antes = $this->snapshot($asignacion, [$campo]);
+        $asignacion->{$campo} = $momento;
+        if (! $asignacion->isDirty($campo)) {
+            return;
+        }
+        $asignacion->save();
+        $cambios[] = [
+            'entidad' => 'folio_hora', 'id' => $asignacion->id, 'folio_id' => $asignacion->folio_id,
+            'antes' => $antes, 'despues' => $this->snapshot($asignacion, [$campo]),
+        ];
     }
 
     /**
@@ -475,6 +563,18 @@ class ServicioCorreccionProcesoPrefrio
                 throw new ConflictoOperacion(
                     'Los eventos operacionales no pueden quedar después de la verificación final.',
                 );
+            }
+        }
+
+        foreach ($proceso->folios()->lockForUpdate()->get() as $asignacion) {
+            $parcial = $asignacion->finalizado_parcial_at;
+            $retiro = $asignacion->retirado_at;
+            if ($parcial && $inicio && $parcial->lessThan($inicio)) {
+                throw new ConflictoOperacion('La finalización parcial no puede quedar antes del inicio.');
+            }
+            if ($retiro && (($asignacion->cargado_at && $retiro->lessThan($asignacion->cargado_at))
+                || ($parcial && $retiro->lessThan($parcial)))) {
+                throw new ConflictoOperacion('El retiro no puede quedar antes de la carga o de su finalización parcial.');
             }
         }
 
