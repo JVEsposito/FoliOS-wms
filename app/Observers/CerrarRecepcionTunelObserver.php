@@ -7,13 +7,16 @@ use App\Enums\EstadoTareaMovimiento;
 use App\Enums\TipoPlanOperacional;
 use App\Models\PlanOperacional;
 use App\Models\TareaMovimiento;
+use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 
 class CerrarRecepcionTunelObserver
 {
     public function updated(TareaMovimiento $tarea): void
     {
-        if (! $tarea->wasChanged('estado')
-            || $tarea->estado !== EstadoTareaMovimiento::Completada) {
+        $completada = $tarea->wasChanged('estado') && $tarea->estado === EstadoTareaMovimiento::Completada;
+        // Un retiro de REPA cumplido fuera del planificador (el camarero ubicó el pallet) también resuelve su objetivo.
+        $cumplidaFuera = $tarea->wasChanged('contexto') && $this->cumplidaFueraPlanificador($tarea);
+        if (! $completada && ! $cumplidaFuera) {
             return;
         }
 
@@ -73,8 +76,8 @@ class CerrarRecepcionTunelObserver
 
         $plan->update([
             'estado' => EstadoPlanOperacional::Completado,
-            'completado_por_user_id' => $disparadora->responsable_user_id,
-            'completado_at' => $disparadora->completada_at ?? now(),
+            'completado_por_user_id' => $disparadora->responsable_user_id ?? $disparadora->cancelada_por_user_id,
+            'completado_at' => $disparadora->completada_at ?? $disparadora->cancelada_at ?? now(),
             'version' => $plan->version + 1,
         ]);
     }
@@ -93,7 +96,7 @@ class CerrarRecepcionTunelObserver
         $visitadas = [];
 
         while (! in_array($actual->id, $visitadas, true)) {
-            if ($actual->estado === EstadoTareaMovimiento::Completada) {
+            if ($actual->estado === EstadoTareaMovimiento::Completada || $this->cumplidaFueraPlanificador($actual)) {
                 return true;
             }
             if ($actual->estado !== EstadoTareaMovimiento::Cancelada
@@ -109,5 +112,11 @@ class CerrarRecepcionTunelObserver
         }
 
         return false;
+    }
+
+    private function cumplidaFueraPlanificador(TareaMovimiento $tarea): bool
+    {
+        return $tarea->estado === EstadoTareaMovimiento::Cancelada
+            && data_get($tarea->contexto, ServicioDepuracionIngresosCamara::CUMPLIDA_FUERA_PLANIFICADOR) === true;
     }
 }
