@@ -78,7 +78,7 @@ async function loadList(page = state.page) {
         elements.next.disabled = state.page >= state.lastPage;
         elements.rows.innerHTML = result.data.length ? result.data.map((row) => `
             <tr data-id="${escapeHtml(row.id)}" tabindex="0" aria-selected="${state.control?.id === row.id}">
-                <td><strong>${escapeHtml(row.carga.codigo)}</strong>${row.embarque ? `<small>${escapeHtml(row.embarque)}</small>` : ''}</td>
+                <td><strong>${escapeHtml(row.referencia_embarque || row.carga.codigo)}</strong>${row.referencia_embarque ? `<small>Carga ${escapeHtml(row.carga.codigo)}</small>` : ''}${row.embarque ? `<small>${escapeHtml(row.embarque)}</small>` : ''}</td>
                 <td>${escapeHtml(row.exportadora || '—')}</td>
                 <td>${escapeHtml(row.contenedor || '—')}${row.tipo_camion ? `<small>${escapeHtml(textoValor(row.tipo_camion))}</small>` : ''}</td>
                 <td>${row.pallets}</td>
@@ -115,8 +115,9 @@ function renderControl(control) {
     const catalog = state.catalog;
     elements.detail.classList.remove('is-hidden');
     elements.detailState.textContent = `${stateLabel(control.estado).toUpperCase()} · POEMP R-24`;
-    elements.detailTitle.textContent = `Carga ${control.carga.codigo}`;
+    elements.detailTitle.textContent = control.referencia_embarque ? `Embarque ${control.referencia_embarque}` : `Carga ${control.carga.codigo}`;
     elements.detailMeta.textContent = [
+        `Carga ${control.carga.codigo}`,
         control.carga.embarque ? `Embarque ${control.carga.embarque}` : null,
         control.carga.anden ? `Andén ${control.carga.anden}` : null,
         `Iniciada ${formatDate(control.iniciado_at)} por ${control.iniciado_por || '—'}`,
@@ -225,7 +226,7 @@ async function download() {
         const url = URL.createObjectURL(await response.blob());
         const link = document.createElement('a');
         link.href = url;
-        link.download = `R-24_${control.carga.codigo}.xlsx`;
+        link.download = control.archivos?.planilla || `R-24_${control.carga.codigo}.xlsx`;
         document.body.append(link);
         link.click();
         link.remove();

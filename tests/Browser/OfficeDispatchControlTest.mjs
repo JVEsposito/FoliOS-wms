@@ -37,7 +37,7 @@ const pallet = (folio, posicion, temperatura, estado = 'cargado') => ({
     posicion: posicion ? { id: `p-${folio}`, posicion, codigo_pe: 'P', cajas: 80, temperatura, registrado_at: '2026-11-11T17:10:00Z', registrado_por: 'Consolidador' } : null,
 });
 const control = (extra = {}) => ({
-    id: 'c1', estado: 'cerrado', version: 4,
+    id: 'c1', estado: 'cerrado', version: 4, referencia_embarque: 'F025', archivos: { planilla: 'R-24_F025.xlsx', fotos: 'R-24_fotos_F025.pdf' },
     carga: { id: 'g1', codigo: 'CAR-0042', estado: 'cerrada', embarque: 'EMB-0099', anden: 'AND-2', patente: 'ABCD12' },
     encabezado: { tipo_camion: 'contenedor', exportadora: 'Subsole', fecha_carga: '2026-11-11', contenedor: 'MSCU1234567', conductor: null },
     sugerido: { encabezado: {}, cierre: {} },
@@ -69,7 +69,7 @@ async function open(browser, { width = 1280, user = identity(), detail = control
         if (path === '/api/acceso-oficina' && request.method() === 'GET') return route.fulfill({ json: { usuario: serverIdentity } });
         if (path === '/api/control-despacho/catalogo') return route.fulfill({ json: { data: catalogo } });
         if (path === '/api/control-despacho/controles') {
-            const rows = url.searchParams.get('estado') === 'borrador' ? [] : [{ id: 'c1', estado: current.estado, carga: { id: 'g1', codigo: 'CAR-0042', estado: 'cerrada' }, embarque: 'EMB-0099', exportadora: 'Subsole', contenedor: 'MSCU1234567', tipo_camion: 'contenedor', pallets: 2, iniciado_at: current.iniciado_at, iniciado_por: 'Consolidador', cerrado_at: current.cerrado_at, cerrado_por: current.cerrado_por }];
+            const rows = url.searchParams.get('estado') === 'borrador' ? [] : [{ id: 'c1', estado: current.estado, referencia_embarque: current.referencia_embarque, carga: { id: 'g1', codigo: 'CAR-0042', estado: 'cerrada' }, embarque: 'EMB-0099', exportadora: 'Subsole', contenedor: 'MSCU1234567', tipo_camion: 'contenedor', pallets: 2, iniciado_at: current.iniciado_at, iniciado_por: 'Consolidador', cerrado_at: current.cerrado_at, cerrado_por: current.cerrado_por }];
             return route.fulfill({ json: { data: rows, meta: { current_page: 1, last_page: 1, total: rows.length } } });
         }
         if (path === '/api/control-despacho/controles/c1') return route.fulfill({ json: { data: current } });
@@ -105,8 +105,9 @@ for (const width of [1280, 390]) test(`lista las planillas y abre el detalle con
         const { context, page, requests, errors } = await open(browser, { width });
         await page.locator('#dcxRows tr[data-id="c1"]').waitFor();
         assert.match(await page.locator('#dcxCount').innerText(), /1 planilla/);
+        assert.match(await page.locator('#dcxRows tr[data-id="c1"] strong').innerText(), /F025/);
         await page.locator('#dcxRows tr[data-id="c1"]').click();
-        await page.locator('#dcxDetailTitle', { hasText: 'CAR-0042' }).waitFor();
+        await page.locator('#dcxDetailTitle', { hasText: 'Embarque F025' }).waitFor();
         assert.match(await page.locator('#dcxDetailState').innerText(), /CERRADA/);
         assert.match(await page.locator('#dcxHeader').innerText(), /Tipo de camión\s*Contenedor/);
         assert.match(await page.locator('#dcxHeader').innerText(), /11-11-2026/);
@@ -128,7 +129,7 @@ for (const width of [1280, 390]) test(`lista las planillas y abre el detalle con
 
         const download = page.waitForEvent('download');
         await page.locator('#dcxDownload').click();
-        assert.equal((await download).suggestedFilename(), 'R-24_CAR-0042.xlsx');
+        assert.equal((await download).suggestedFilename(), 'R-24_F025.xlsx');
         assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }
@@ -166,7 +167,7 @@ test('sin permiso de reapertura no se ofrece reabrir', async () => {
     try {
         const { context, page, errors } = await open(browser, { user: identity({ puede_reabrir_control_despacho: false }) });
         await page.locator('#dcxRows tr[data-id="c1"]').click();
-        await page.locator('#dcxDetailTitle', { hasText: 'CAR-0042' }).waitFor();
+        await page.locator('#dcxDetailTitle', { hasText: 'Embarque F025' }).waitFor();
         assert.equal(await page.locator('#dcxReopen').isVisible(), false);
         assert.deepEqual(errors, []);
         await context.close();
@@ -183,7 +184,7 @@ test('antes de descargar pide completar la T° de pulpa y luego descarga', async
         });
         const { context, page, requests, errors } = await open(browser, { user: identity({ puede_registrar_control_despacho: true }), detail: incompleta });
         await page.locator('#dcxRows tr[data-id="c1"]').click();
-        await page.locator('#dcxDetailTitle', { hasText: 'CAR-0042' }).waitFor();
+        await page.locator('#dcxDetailTitle', { hasText: 'Embarque F025' }).waitFor();
         assert.match(await page.locator('#dcxPhotosPending').innerText(), /Placa patente.*El cierre aún no las exige/);
         await page.locator('#dcxDownload').click();
         await page.locator('#dcxPrint').waitFor();
@@ -195,7 +196,7 @@ test('antes de descargar pide completar la T° de pulpa y luego descarga', async
         await page.locator('#dcxPrintTemps input').fill('-0,3');
         const download = page.waitForEvent('download');
         await page.locator('#dcxPrintForm button').click();
-        assert.equal((await download).suggestedFilename(), 'R-24_CAR-0042.xlsx');
+        assert.equal((await download).suggestedFilename(), 'R-24_F025.xlsx');
         const write = requests.find((r) => r.path.endsWith('/temperaturas'));
         assert.deepEqual(write.body.temperaturas, [{ posicion_id: 'p-A000002', temperatura: -0.3 }]);
         assert.equal(await page.locator('#dcxPrint').isVisible(), false);
