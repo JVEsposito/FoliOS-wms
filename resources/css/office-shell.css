@@ -262,7 +262,10 @@
 }
 
 .estiba-office-shell .estiba-office-theme-select {
+    width: auto;
+    min-width: 0;
     height: 36px;
+    min-height: 36px;
     max-width: 100%;
     padding: 0 8px 0 11px;
     border: 1.5px solid var(--input-border, #7a8d95);
