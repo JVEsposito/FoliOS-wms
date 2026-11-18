@@ -45,7 +45,7 @@ class PlanillaControlDespacho
                             ->whereIn('estado', EstadoCargaFolio::valoresFueraDeCamara()))))
                 // Una planilla abierta se puede terminar aunque el despacho ya se haya cerrado.
                 ->orWhereHas('controlDespacho', fn (Builder $control): Builder => $control->where('estado', ControlDespacho::BORRADOR)))
-            ->with(['embarque.cliente:id,nombre', 'presenciaAndenActiva.anden:id,codigo,nombre', 'andenPrevisto:id,codigo,nombre', 'controlDespacho'])
+            ->with(['embarque.cliente:id,nombre', 'embarque.instructivos', 'presenciaAndenActiva.anden:id,codigo,nombre', 'andenPrevisto:id,codigo,nombre', 'controlDespacho'])
             ->withCount([
                 'asignacionesActuales as pallets_activos',
                 'asignacionesActuales as pallets_en_anden' => fn (Builder $asignacion): Builder => $asignacion->where('estado', EstadoCargaFolio::EnAnden->value),
@@ -68,6 +68,9 @@ class PlanillaControlDespacho
             'estado' => $carga->estado->value,
             'exportadora' => $carga->embarque?->cliente?->nombre,
             'embarque' => $carga->embarque?->codigo,
+            'instructivos' => $carga->embarque?->instructivos
+                ->pluck('numero_externo')->filter(fn ($numero): bool => trim((string) $numero) !== '')
+                ->unique()->values()->all() ?? [],
             'contenedor' => $carga->embarque?->contenedor,
             'anden' => $presencia?->anden?->codigo ?? $carga->andenPrevisto?->codigo,
             'patente' => $presencia?->patente ?? $carga->patente,

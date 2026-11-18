@@ -78,7 +78,7 @@ function harness({ closedWithPdf = false } = {}) {
   };
   const api = {
     catalog: async () => catalog,
-    loads: async () => { calls.loads += 1; return [{ id: 'g1', codigo: 'CAR-0007', estado: 'despachada', exportadora: 'Subsole', embarque: 'EMB-1', contenedor: 'MSCU1', anden: 'AND-1', patente: 'ABCD12', pallets: 3, en_anden: 2, cargados: 1, control: closedWithPdf ? { id: 'c1', estado: 'cerrado', posicionados: 1 } : null }]; },
+    loads: async () => { calls.loads += 1; return [{ id: 'g1', codigo: 'CAR-0007', estado: 'despachada', exportadora: 'Subsole', embarque: 'EMB-1', instructivos: ['F026', 'F027'], contenedor: 'MSCU1', anden: 'AND-1', patente: 'ABCD12', pallets: 3, en_anden: 2, cargados: 1, control: closedWithPdf ? { id: 'c1', estado: 'cerrado', posicionados: 1 } : null }]; },
     sharePhotosPdf: async () => { calls.sharedPdf += 1; },
     thumbnail: async () => null,
     start: async (loadId, operation) => { calls.start.push({ loadId, operation }); return current; },
@@ -168,6 +168,8 @@ test('consolidación abre la planilla, sube pallets con su posición y reintenta
     await h.mount();
     assert.equal(h.calls.loads, 1);
     assert.match(h.text(), /CAR-0007/);
+    assert.match(h.text(), /Instructivos: F026 · F027/);
+    assert.match(h.text(), /ABCD12/);
     assert.match(h.text(), /1\/3 cargados · 2 en andén/);
     await h.press('Iniciar planilla R-24', { containing: true });
     assert.equal(h.calls.start.length, 1);

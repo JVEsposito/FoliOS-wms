@@ -286,6 +286,7 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
           <View style={s.between}><EntityCode value={load.codigo} large />
             <EstibaSignal label={load.control ? (load.control.estado === 'cerrado' ? 'R-24 cerrada' : 'R-24 en curso') : 'Sin planilla'} tone={load.control?.estado === 'cerrado' ? 'success' : load.control ? 'warning' : 'neutral'} /></View>
           <Text style={s.body}>{[load.exportadora, load.contenedor, load.anden ? `Andén ${load.anden}` : null, load.patente].filter(Boolean).join(' · ') || 'Sin datos de embarque'}</Text>
+          <Text style={s.body}>{load.instructivos?.length ? `Instructivo${load.instructivos.length > 1 ? 's' : ''}: ${load.instructivos.join(' · ')}` : 'Sin instructivo de referencia'}</Text>
           <Text style={s.muted}>{load.cargados}/{load.pallets} cargados · {load.en_anden} en andén{load.control ? ` · ${load.control.posicionados} con posición` : ''}</Text>
           <Text style={s.link}>{load.control ? 'Abrir planilla' : canRegister ? 'Iniciar planilla R-24' : 'Sin planilla'}</Text>
         </Pressable>)}

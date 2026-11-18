@@ -223,3 +223,11 @@ equipo guardó antes, la respuesta es 409.
 - `tests/JavaScript/DispatchControlTest.mjs`
 - `mobile/tests/consolidation.test.mjs`
 - `mobile/tests/consolidationScreen.test.mjs`
+
+### Instructivos y envío de fotografías desde la app
+
+El lobby de Consolidación muestra los números externos de todos los instructivos del embarque de cada carga, junto a la exportadora y patente. Cuando no hay instructivos informa «Sin instructivo de referencia». La consulta precarga la relación para no consultar cada instructivo por separado.
+
+Las fotos se envían con `expo/fetch` y un `File` real del dispositivo, compatible con el codificador multipart de Expo 57. Se comprueba que el archivo exista, tenga contenido y no supere 8 MiB. El servidor genera el límite efectivo de carga: un HTTP 413 se informa como límite del servidor y los rechazos de validación conservan su detalle. Un corte o tiempo de espera mantiene el envío sin confirmar y permite reintentar con el mismo archivo y `operacion_id`; el servidor conserva su idempotencia.
+
+La advertencia de número de contenedor faltante corresponde al encabezado de la planilla. No impide subir una foto y no demuestra por sí misma una pérdida de conexión.
