@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Enums\ContenidoCamara;
 use App\Enums\RolUsuario;
+use App\Exceptions\ConflictoOperacion;
 use App\Models\BinRetornoPacking;
 use App\Models\BinRetornoPackingOrigen;
 use App\Models\CalibreValidacion;
@@ -31,6 +32,104 @@ class BinRetornoPackingApiTest extends TestCase
 {
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
+
+    public function test_codigos_de_planta_agregan_congelado_y_desecho_sin_renumerar_retornos_anteriores(): void
+    {
+        $contexto = $this->prepararEntrega('CODIGOS', 'OP-CODIGOS');
+        $ids = TipoResultadoPacking::whereIn('codigo', ['comercial', 'precalibre', 'descarte'])->pluck('id', 'codigo');
+        $comercial = TipoResultadoPacking::where('codigo', 'comercial')->sole();
+        $comercial->update(['prefijo_sublote' => 'CO']);
+        $retorno = $this->registrarRetornoLegacy($contexto, $comercial, 1, 100);
+        $anterior = $retorno->resultados()->sole();
+        $this->assertStringStartsWith('CO-', $anterior->numero_sublote);
+
+        $migracion = require database_path('migrations/2026_11_18_120000_codigos_resultados_packing_planta.php');
+        $migracion->up();
+        $migracion->up();
+        $this->assertSame($ids->all(), TipoResultadoPacking::whereIn('codigo', $ids->keys())->pluck('id', 'codigo')->all());
+        $this->assertSame($anterior->numero_sublote, $anterior->fresh()->numero_sublote);
+        $this->assertSame('Comercial', $anterior->fresh()->nombre_resultado);
+        $esperados = ['comercial' => 'CECOM', 'congelado' => 'CECONG', 'desecho' => 'CEDES', 'descarte' => 'CEDCA', 'precalibre' => 'CEPRE'];
+        $catalogo = $this->getJson('/api/materia-prima/fruta-proceso/retornos-bin/catalogos')->assertOk();
+        foreach ($esperados as $codigo => $prefijo) {
+            $tipo = TipoResultadoPacking::where('codigo', $codigo)->sole();
+            $catalogo->assertJsonFragment(['codigo' => $codigo, 'nombre' => $tipo->nombre, 'prefijo_sublote' => $prefijo]);
+            $nuevo = $this->registrarRetornoLegacy($contexto, $tipo, 1, 100)->resultados()->sole();
+            $this->assertStringStartsWith($prefijo.'-', $nuevo->numero_sublote);
+        }
+        $this->assertNotSame(TipoResultadoPacking::where('codigo', 'desecho')->value('id'), TipoResultadoPacking::where('codigo', 'descarte')->value('id'));
+        $this->assertDatabaseHas('tipos_resultado_packing', ['codigo' => 'otro', 'prefijo_sublote' => 'OT']);
+    }
+
+    public function test_folio_por_confirmar_conserva_el_pr_y_requiere_confirmacion_con_unicidad_del_definitivo(): void
+    {
+        $c = $this->prepararEntrega('PORCONF', 'OP-PORCONF');
+        $this->actingAs($c['camarero'], 'sanctum');
+        $payload = [...$this->payloadBin($c, (string) Str::uuid(), 400), 'folio_por_confirmar' => ' 000abc12 '];
+        $a = $this->postJson('/api/materia-prima/fruta-proceso/retornos-bin/bins', $payload)->assertCreated()
+            ->assertJsonPath('data.folio_por_confirmar', '000ABC12')->assertJsonPath('data.folio_definitivo', null)
+            ->assertJsonPath('data.estado', 'pendiente_regularizacion')->json('data');
+        $this->assertStringStartsWith('PR-', $a['folio_provisional']);
+        $this->postJson('/api/materia-prima/fruta-proceso/retornos-bin/bins', $payload)->assertCreated()->assertJsonPath('data.id', $a['id']);
+        $this->postJson('/api/materia-prima/fruta-proceso/retornos-bin/bins', [...$payload, 'folio_por_confirmar' => 'OTRO'])->assertConflict();
+        $this->getJson('/api/materia-prima/fruta-proceso/retornos-bin/bins?buscar=000ABC12')->assertOk()->assertJsonPath('data.0.id', $a['id']);
+        $this->assertDatabaseHas('bins_retorno_packing', ['id' => $a['id'], 'folio_definitivo_vigente' => null]);
+        try {
+            app(ServicioDespachoComercialRetorno::class)->crear(['bins' => [$a['id']], 'destinatario' => 'Destino prueba'], $c['supervisor']);
+            $this->fail('Un folio por confirmar no habilita el despacho del bin.');
+        } catch (ConflictoOperacion $e) {
+            $this->assertStringContainsString('regularizados', $e->getMessage());
+        }
+
+        $b = $this->postJson('/api/materia-prima/fruta-proceso/retornos-bin/bins', [...$payload, 'operacion_id' => (string) Str::uuid()])->assertCreated()->json('data');
+        $this->assertNotSame($a['folio_provisional'], $b['folio_provisional']);
+        $tipo = TipoResultadoPacking::where('codigo', 'comercial')->sole();
+        $this->actingAs($c['supervisor'], 'sanctum');
+        foreach ([$a, $b] as $indice => $bin) {
+            $confirmar = ['operacion_id' => (string) Str::uuid(), 'folio_definitivo' => '000ABC12',
+                'tipo_resultado_packing_id' => $tipo->id, 'kilos_totales_definitivos' => 399,
+                'origenes' => [['origen_id' => $bin['origenes'][0]['id'], 'kilos_aportados_definitivos' => 399]]];
+            $ruta = '/api/materia-prima/fruta-proceso/retornos-bin/bins/'.$bin['id'].'/regularizar';
+            if ($indice === 1) {
+                $this->postJson($ruta, $confirmar)->assertUnprocessable()->assertJsonValidationErrors('folio_definitivo');
+                $confirmar['folio_definitivo'] = '000ABC13';
+            }
+            $this->postJson($ruta, $confirmar)->assertOk()->assertJsonPath('data.estado', 'regularizado')
+                ->assertJsonPath('data.folio_provisional', $bin['folio_provisional'])
+                ->assertJsonPath('data.folio_por_confirmar', '000ABC12')
+                ->assertJsonPath('data.folio_definitivo', $confirmar['folio_definitivo']);
+        }
+    }
+
+    public function test_folio_por_confirmar_es_opcional_y_sus_cambios_quedan_auditados(): void
+    {
+        $c = $this->prepararEntrega('EDITCONF', 'OP-EDITCONF');
+        $this->actingAs($c['camarero'], 'sanctum');
+        $payload = $this->payloadBin($c, (string) Str::uuid(), 400);
+        foreach ([str_repeat('A', 81), "ABC\n123"] as $invalido) {
+            $this->postJson('/api/materia-prima/fruta-proceso/retornos-bin/bins', [...$payload, 'folio_por_confirmar' => $invalido])
+                ->assertUnprocessable()->assertJsonValidationErrors('folio_por_confirmar');
+        }
+        $bin = $this->postJson('/api/materia-prima/fruta-proceso/retornos-bin/bins', $payload)->assertCreated()->json('data');
+        // Enviar el nuevo campo vacío no altera el hash de una operación de un cliente anterior.
+        $this->postJson('/api/materia-prima/fruta-proceso/retornos-bin/bins', [...$payload, 'folio_por_confirmar' => null])->assertCreated()->assertJsonPath('data.id', $bin['id']);
+        $this->actingAs($c['supervisor'], 'sanctum');
+        $cambio = ['operacion_id' => (string) Str::uuid(), 'motivo' => 'Se informa la etiqueta esperada del retorno.',
+            'kilos_totales' => 400, 'folio_por_confirmar' => ' 00f-012 ',
+            'origenes' => [['origen_id' => $bin['origenes'][0]['id'], 'kilos_aportados' => 400]]];
+        $ruta = '/api/materia-prima/fruta-proceso/retornos-bin/bins/'.$bin['id'];
+        $this->putJson($ruta, $cambio)->assertOk()->assertJsonPath('data.folio_por_confirmar', '00F-012');
+        $this->putJson($ruta, $cambio)->assertOk();
+        $this->putJson($ruta, [...$cambio, 'folio_por_confirmar' => 'DISTINTO'])->assertConflict();
+        $auditoria = ModificacionBinRetornoPacking::where('operacion_id', $cambio['operacion_id'])->sole();
+        $this->assertNull($auditoria->datos_anteriores['folio_por_confirmar']);
+        $this->assertSame('00F-012', $auditoria->datos_nuevos['folio_por_confirmar']);
+        $sinCampo = $cambio;
+        unset($sinCampo['folio_por_confirmar']);
+        $this->putJson($ruta, [...$sinCampo, 'operacion_id' => (string) Str::uuid()])->assertOk()->assertJsonPath('data.folio_por_confirmar', '00F-012');
+        $this->putJson($ruta, [...$cambio, 'operacion_id' => (string) Str::uuid(), 'folio_por_confirmar' => null])
+            ->assertOk()->assertJsonPath('data.folio_por_confirmar', null)->assertJsonPath('data.folio_provisional', $bin['folio_provisional']);
+    }
 
     public function test_registra_rutas_y_esquema_del_nuevo_modelo_por_bin(): void
     {
@@ -228,6 +327,7 @@ class BinRetornoPackingApiTest extends TestCase
         $this->postJson($ruta, $payload)
             ->assertOk()
             ->assertJsonPath('data.folio_definitivo', 'MP-RET-0001')
+            ->assertJsonPath('data.tipo_resultado.prefijo_sublote', 'TR')
             ->assertJsonPath('data.kilos_totales_verdes', 412.125)
             ->assertJsonPath('data.kilos_totales_definitivos', 410.375)
             ->assertJsonPath('data.origenes.0.kilos_aportados_verdes', 412.125)
@@ -607,6 +707,7 @@ class BinRetornoPackingApiTest extends TestCase
             'operacion_id' => $operacionMigracion,
             'kilos_totales' => 400,
             'motivo' => 'Conversión controlada al modelo por bin.',
+            'folio_por_confirmar' => 'MIG-001',
             'origenes' => [$this->origen($contexto, 400)],
         ];
         $rutaMigracion = "/api/materia-prima/fruta-proceso/retornos-bin/legacy/{$retornoMigrable->id}/migrar";
@@ -615,6 +716,7 @@ class BinRetornoPackingApiTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.kilos_totales', 400)
             ->assertJsonPath('data.retorno_legacy', $retornoMigrable->numero)
+            ->assertJsonPath('data.folio_por_confirmar', 'MIG-001')
             ->json('data');
 
         $this->assertDatabaseHas('bins_retorno_packing', [

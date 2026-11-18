@@ -53,6 +53,7 @@ class ControlDespachoApiTest extends TestCase
         $this->enviarAlAnden($contexto, $carga, $segundo);
         $this->enviarAlAnden($contexto, $otra, $contexto['folios'][4]);
         $this->conToken($token)->getJson('/api/control-despacho/cargas')->assertOk()
+            ->assertJsonPath('data.0.instructivos', [])
             ->assertJsonFragment(['codigo' => $carga->codigo, 'en_anden' => 2, 'control' => null]);
 
         $operacion = (string) Str::uuid();
@@ -142,13 +143,26 @@ class ControlDespachoApiTest extends TestCase
         $embarque->instructivos()->create(['orden' => 1, 'numero_externo' => 'INS-77', 'pais_destino_id' => $mexico->id, 'destino_pais' => $mexico->nombre_es,
             'puerto_destino_id' => $manzanillo->id, 'destino_ciudad' => $manzanillo->nombre, 'cantidad_pallets' => 1]);
         [$token] = $this->consolidador('R24P');
+        $this->conToken($token)->getJson('/api/control-despacho/cargas')->assertOk()
+            ->assertJsonPath('data.0.instructivos', ['INS-77']);
 
         $control = $this->iniciar($token, $carga);
+        $this->assertSame('INS-77', $control['referencia_embarque']);
+        $this->assertSame('R-24_INS-77.xlsx', $control['archivos']['planilla']);
         $this->assertSame('Manzanillo, México', $control['encabezado']['destino']);
         $this->assertSame('Manzanillo', $control['encabezado']['puerto_destino']);
         $this->assertSame('San Antonio', $control['encabezado']['puerto_zarpe']);
         $this->conToken($token)->getJson("/api/control-despacho/controles/{$control['id']}")->assertOk()
             ->assertJsonPath('data.encabezado.destino', 'Manzanillo, México');
+        $embarque->instructivos()->create(['orden' => 2, 'numero_externo' => 'INS-78']);
+        $this->conToken($token)->getJson("/api/control-despacho/controles/{$control['id']}")->assertOk()
+            ->assertJsonPath('data.referencia_embarque', 'INS-77 / INS-78')
+            ->assertJsonPath('data.archivos.planilla', 'R-24_INS-77_INS-78.xlsx');
+        $this->conToken($token)->getJson('/api/control-despacho/controles?buscar=INS-78')->assertOk()
+            ->assertJsonPath('data.0.referencia_embarque', 'INS-77 / INS-78');
+        $this->conToken($token)->getJson('/api/control-despacho/cargas')->assertOk()
+            ->assertJsonPath('data.0.referencia_embarque', 'INS-77 / INS-78')
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.instructivos', ['INS-77', 'INS-78']);
     }
 
     public function test_cerrar_exige_inspeccion_y_posiciones_y_congela_la_planilla(): void
@@ -171,7 +185,7 @@ class ControlDespachoApiTest extends TestCase
         $guardado = $this->conToken($token)->putJson("/api/control-despacho/controles/{$control['id']}", [
             'operacion_id' => (string) Str::uuid(),
             'version' => $control['version'],
-            'encabezado' => ['tipo_camion' => 'contenedor', 'contenedor' => ' mscu1234567 ', 'empresa_consolidacion' => 'Consolida SpA', 'exportadora' => 'Exportadora corregida'],
+            'encabezado' => ['tipo_camion' => 'contenedor', 'contenedor' => ' mscu1234567 ', 'empresa_consolidacion' => 'Consolida SpA', 'exportadora' => 'Exportadora corregida', 'referencia_embarque' => 'F025'],
             'inspeccion' => $inspeccion,
             'cierre' => ['jefe_seccion' => 'Jefa Turno', 'pallets_chep_1000' => 2],
         ])->assertOk()
@@ -192,9 +206,11 @@ class ControlDespachoApiTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('inspeccion.puertas');
 
         $this->posicion($token, $control['id'], $segundo->numero_folio, 2, ['temperatura' => 1.2])->assertOk();
+        $carga->update(['numero_orden_externa' => 'CAMBIADA-EN-CALENDARIO']);
         $cerrada = $this->cerrar($token, $control['id'], $guardado['version'])
             ->assertOk()
             ->assertJsonPath('data.estado', 'cerrado')
+            ->assertJsonPath('data.referencia_embarque', 'F025')
             ->assertJsonPath('data.cierre.responsable', $usuario->name)
             ->assertJsonPath('data.encabezado.empresa_consolidacion', 'Consolida SpA')
             ->assertJsonPath('data.faltantes_cierre', [])
@@ -251,7 +267,7 @@ class ControlDespachoApiTest extends TestCase
         $this->posicion($token, $control['id'], $segundo->numero_folio, 24, ['codigo_pe' => 'E'])->assertOk();
         $this->conToken($token)->putJson("/api/control-despacho/controles/{$control['id']}", [
             'operacion_id' => (string) Str::uuid(), 'version' => 1,
-            'encabezado' => ['tipo_camion' => 'thermo', 'patente_camion' => 'abcd12'],
+            'encabezado' => ['tipo_camion' => 'thermo', 'patente_camion' => 'abcd12', 'referencia_embarque' => 'F025'],
             'inspeccion' => ['puertas' => 'no'],
             'cierre' => ['observaciones' => 'Carga revisada sin observaciones relevantes para el cliente final.'],
         ])->assertOk();
@@ -265,7 +281,7 @@ class ControlDespachoApiTest extends TestCase
         ])->assertOk()->assertJsonPath('data.faltantes_impresion', []);
 
         $respuesta = $this->conToken($token)->get("/api/control-despacho/controles/{$control['id']}/planilla.xlsx")->assertOk();
-        $this->assertStringContainsString("R-24_{$carga->codigo}.xlsx", (string) $respuesta->headers->get('content-disposition'));
+        $this->assertStringContainsString('R-24_F025.xlsx', (string) $respuesta->headers->get('content-disposition'));
         $zip = new ZipArchive;
         $this->assertTrue($zip->open($respuesta->baseResponse->getFile()->getPathname()));
         $libro = $zip->getFromName('xl/workbook.xml');
@@ -280,6 +296,10 @@ class ControlDespachoApiTest extends TestCase
         $this->assertMatchesRegularExpression('/<c r="AD6"[^>]*t="inlineStr"><is><t xml:space="preserve">X<\/t>/', $primera);
         $this->assertMatchesRegularExpression('/<c r="N27"[^>]*t="inlineStr"><is><t xml:space="preserve">X<\/t>/', $primera);
         $this->assertStringContainsString('BORRADOR: planilla sin cerrar', $primera);
+        foreach ([$primera, $segunda] as $hoja) {
+            $this->assertStringContainsString('Embarque F025', $hoja);
+            $this->assertMatchesRegularExpression('/<c r="F8"[^>]*>.*?F025/s', $hoja);
+        }
         $this->assertStringNotContainsString($segundo->numero_folio, $primera);
         // La hoja 2 parte en 23 | 24: la posición 24 es la primera fila de la derecha.
         $this->assertMatchesRegularExpression('/<c r="T33"[^>]*t="inlineStr"><is><t xml:space="preserve">'.preg_quote($segundo->numero_folio, '/').'<\/t>/', $segunda);
@@ -414,6 +434,7 @@ class ControlDespachoApiTest extends TestCase
         }
         $this->conToken($token)->get("/api/control-despacho/controles/{$control['id']}/fotos.pdf")->assertUnprocessable();
 
+        $carga->update(['numero_orden_externa' => 'CAMBIADA-EN-CALENDARIO']);
         $cerrada = $this->cerrar($token, $control['id'], $guardado['version'])->assertOk()
             ->assertJsonPath('data.fotos_pdf.cantidad', 2)
             ->assertJsonPath('data.fotos.0.archivada', true)

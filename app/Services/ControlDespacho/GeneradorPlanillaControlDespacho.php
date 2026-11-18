@@ -84,8 +84,8 @@ class GeneradorPlanillaControlDespacho
      */
     private const ESTILO_DE = ['F6' => 'F7', 'K15' => 'F15', 'F16' => 'F15', 'E48' => 'B50', 'E49' => 'B50'];
 
-    /** Datos del contenedor: letra normal que se reduce si el valor no cabe. */
-    private const AJUSTADAS = ['U13', 'Y13', 'AB13'];
+    /** Referencias y datos del contenedor: reducir hasta ajustar si el valor no cabe. */
+    private const AJUSTADAS = ['F8', 'U13', 'Y13', 'AB13'];
 
     /** Estilo agregado a la plantilla: valor con «reducir hasta ajustar». */
     private ?int $estiloAjustado = null;
@@ -290,7 +290,8 @@ class GeneradorPlanillaControlDespacho
     private function pie(array $planilla): string
     {
         $zona = config('app.operational_timezone', config('app.timezone'));
-        $partes = ['Registrada en FoliOS', 'Carga '.(($planilla['carga'] ?? [])['codigo'] ?? '')];
+        $referencia = ReferenciaControlDespacho::dePlanilla($planilla);
+        $partes = ['Registrada en FoliOS', $referencia ? 'Embarque '.$referencia : 'Sin referencia de embarque', 'Carga '.(($planilla['carga'] ?? [])['codigo'] ?? '')];
         if (! empty($planilla['cerrado_at'])) {
             $partes[] = sprintf('Cerrada %s por %s', CarbonImmutable::parse($planilla['cerrado_at'])->setTimezone($zona)->format('d-m-Y H:i'), $planilla['cerrado_por'] ?? '');
         } else {

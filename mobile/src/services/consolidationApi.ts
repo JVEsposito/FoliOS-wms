@@ -1,4 +1,5 @@
 import { File, Paths } from 'expo-file-system';
+import { fetch as expoFetch } from 'expo/fetch';
 import * as Sharing from 'expo-sharing';
 import type { ConsolidationCatalog, ConsolidationControl, ConsolidationLoad, ConsolidationPhoto, ConsolidationValues } from '../domain/consolidation';
 import { ApiError } from './apiError';
@@ -48,11 +49,41 @@ export function createConsolidationApi(baseUrl: string, token: string) {
     close: async (id: string, operacionId: string, version: number) =>
       (await request<{ data: ConsolidationControl }>(`${control(id)}/cerrar`, { method: 'POST', body: JSON.stringify({ operacion_id: operacionId, version }) })).data,
     async uploadPhoto(id: string, tipo: string, operacionId: string, archivo: { uri: string; name: string; type: string }): Promise<ConsolidationPhoto> {
+      if (!baseUrl) throw new ApiError('Configura el servidor.', 0);
+      let file: File;
+      try {
+        file = new File(archivo.uri);
+        if (!file.exists || file.size <= 0) throw new Error('Unreadable local image');
+      } catch {
+        throw new ApiError('No se puede leer la foto seleccionada. Vuelve a elegirla antes de enviar.', 422);
+      }
+      if (file.size > 8 * 1024 * 1024) throw new ApiError('La foto supera los 8 MB. Elige otra imagen o vuelve a tomarla.', 422);
       const body = new FormData();
       body.append('tipo', tipo);
       body.append('operacion_id', operacionId);
-      body.append('archivo', archivo as unknown as Blob);
-      return (await request<{ data: ConsolidationPhoto }>(`${control(id)}/fotos`, { method: 'POST', body }, 60_000)).data;
+      // Expo 57 serializa File/Blob; el descriptor legacy de React Native no contiene los bytes.
+      body.append('archivo', file);
+      const controller = new AbortController();
+      let expired = false;
+      const timer = setTimeout(() => { expired = true; controller.abort(); }, 60_000);
+      try {
+        const r = await expoFetch(root + `${control(id)}/fotos`, {
+          method: 'POST', body, signal: controller.signal,
+          headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        });
+        const data = await r.json().catch(() => null);
+        if (r.status === 413) throw new ApiError('La foto supera el límite de carga del servidor. Elige una imagen más pequeña o solicita revisar ese límite.', 413);
+        if (!r.ok) throw new ApiError(Object.values(data?.errors ?? {}).flat().slice(0, 4).join('\n') || data?.message || `El servidor rechazó la foto (HTTP ${r.status}).`, r.status, data);
+        if (!data?.data?.id) throw new ApiError('El servidor no confirmó la foto. Reintenta el mismo envío para comprobarla sin duplicarla.', 0);
+        return data.data as ConsolidationPhoto;
+      } catch (error) {
+        if (error instanceof ApiError) throw error;
+        throw new ApiError(expired
+          ? 'El servidor tardó más de 60 segundos en confirmar la foto. Reintenta el mismo envío para comprobarla sin duplicarla.'
+          : 'No se pudo confirmar el envío de la foto. Revisa la conexión y reintenta el mismo envío para evitar duplicados.', 0);
+      } finally {
+        clearTimeout(timer);
+      }
     },
     removePhoto: (id: string, photoId: string) => request<null>(`${control(id)}/fotos/${encodeURIComponent(photoId)}`, { method: 'DELETE' }),
     /** Miniatura autenticada como data URI: no queda en la caché de imágenes del equipo. */
@@ -68,23 +99,23 @@ export function createConsolidationApi(baseUrl: string, token: string) {
         reader.readAsDataURL(blob);
       });
     },
-    async sharePhotosPdf(id: string, code: string) {
+    async sharePhotosPdf(id: string, code: string, filename?: string) {
       if (!await Sharing.isAvailableAsync()) throw new Error('Este equipo no permite compartir archivos. Descarga el PDF desde Oficina.');
       const r = await response(`${control(id)}/fotos.pdf`, {}, 60_000);
       if (!r.ok) { const data = await r.json().catch(() => ({})); throw new ApiError(data.message || 'No se pudo descargar el PDF de fotos.', r.status, data); }
       const bytes = new Uint8Array(await r.arrayBuffer());
       if (bytes[0] !== 0x25 || bytes[1] !== 0x50) throw new Error('El servidor no devolvió el PDF de fotos.');
-      const file = new File(Paths.cache, `R-24_fotos_${code.replace(/[^A-Za-z0-9_-]+/g, '_')}_${Date.now()}.pdf`);
+      const file = new File(Paths.cache, filename?.replace(/[^\p{L}\p{N}_.-]+/gu, '_') || `R-24_fotos_${code.replace(/[^A-Za-z0-9_-]+/g, '_')}_${Date.now()}.pdf`);
       file.write(bytes);
       await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'Fotos R-24' });
     },
-    async shareSheet(id: string, code: string) {
+    async shareSheet(id: string, code: string, filename?: string) {
       if (!await Sharing.isAvailableAsync()) throw new Error('Este equipo no permite compartir archivos. Descarga la planilla desde Oficina.');
       const r = await response(`${control(id)}/planilla.xlsx`, {}, 60_000);
       if (!r.ok) { const data = await r.json().catch(() => ({})); throw new ApiError(data.message || 'No se pudo descargar la planilla.', r.status, data); }
       const bytes = new Uint8Array(await r.arrayBuffer());
       if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error('El servidor no devolvió la planilla R-24.');
-      const file = new File(Paths.cache, `R-24_${code.replace(/[^A-Za-z0-9_-]+/g, '_')}_${Date.now()}.xlsx`);
+      const file = new File(Paths.cache, filename?.replace(/[^\p{L}\p{N}_.-]+/gu, '_') || `R-24_${code.replace(/[^A-Za-z0-9_-]+/g, '_')}_${Date.now()}.xlsx`);
       file.write(bytes);
       await Sharing.shareAsync(file.uri, { mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', dialogTitle: 'Planilla R-24' });
     },

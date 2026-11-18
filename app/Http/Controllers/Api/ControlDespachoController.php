@@ -13,6 +13,7 @@ use App\Services\ControlDespacho\ArchivoFotosControlDespacho;
 use App\Services\ControlDespacho\FormularioControlDespacho;
 use App\Services\ControlDespacho\GeneradorPlanillaControlDespacho;
 use App\Services\ControlDespacho\PlanillaControlDespacho;
+use App\Services\ControlDespacho\ReferenciaControlDespacho;
 use App\Services\ControlDespacho\ServicioControlDespacho;
 use App\Services\ControlDespacho\ServicioFotosControlDespacho;
 use App\Services\Jornadas\CalendarioOperativo;
@@ -62,10 +63,13 @@ class ControlDespachoController extends Controller
             ->tap(fn (Builder $consulta) => app(CalendarioOperativo::class)
                 ->filtrar($consulta, 'iniciado_at', $filtros['desde'] ?? null, $filtros['hasta'] ?? null))
             ->when($buscar !== '', fn (Builder $consulta): Builder => $consulta->where(fn (Builder $texto): Builder => $texto
-                ->whereHas('carga', fn (Builder $carga): Builder => $carga->where('codigo', 'like', "%{$buscar}%")
-                    ->orWhereHas('embarque', fn (Builder $embarque): Builder => $embarque->where('codigo', 'like', "%{$buscar}%")->orWhere('contenedor', 'like', "%{$buscar}%")))
+                ->where('encabezado->referencia_embarque', 'like', "%{$buscar}%")
+                ->orWhereHas('carga', fn (Builder $carga): Builder => $carga->where('codigo', 'like', "%{$buscar}%")
+                    ->orWhere('numero_orden_externa', 'like', "%{$buscar}%")
+                    ->orWhereHas('embarque', fn (Builder $embarque): Builder => $embarque->where('codigo', 'like', "%{$buscar}%")->orWhere('contenedor', 'like', "%{$buscar}%")
+                        ->orWhereHas('instructivos', fn (Builder $instructivo): Builder => $instructivo->where('numero_externo', 'like', "%{$buscar}%"))))
                 ->orWhereHas('posiciones.folio', fn (Builder $folio): Builder => $folio->where('numero_folio', 'like', "%{$buscar}%"))))
-            ->with(['carga:id,codigo,estado', 'carga.embarque:id,carga_id,codigo,contenedor,cliente_id', 'carga.embarque.cliente:id,nombre', 'iniciadoPor:id,name', 'cerradoPor:id,name'])
+            ->with(['carga:id,codigo,estado,numero_orden_externa', 'carga.embarque:id,carga_id,codigo,contenedor,cliente_id', 'carga.embarque.instructivos', 'carga.embarque.cliente:id,nombre', 'iniciadoPor:id,name', 'cerradoPor:id,name'])
             ->withCount('posiciones')
             ->orderByDesc('iniciado_at')
             ->paginate(25)
@@ -75,6 +79,7 @@ class ControlDespachoController extends Controller
             'data' => collect($pagina->items())->map(fn (ControlDespacho $control): array => [
                 'id' => $control->id,
                 'estado' => $control->estado,
+                'referencia_embarque' => ReferenciaControlDespacho::deControl($control),
                 'carga' => ['id' => $control->carga?->id, 'codigo' => $control->carga?->codigo, 'estado' => $control->carga?->estado?->value],
                 'embarque' => $control->carga?->embarque?->codigo,
                 'exportadora' => ($control->encabezado ?? [])['exportadora'] ?? $control->carga?->embarque?->cliente?->nombre,
@@ -240,7 +245,7 @@ class ControlDespachoController extends Controller
         if (! $ruta) {
             return $this->json(['message' => 'La planilla no tiene fotos.', 'codigo' => 'sin_fotos'], 404);
         }
-        $nombre = 'R-24_fotos_'.preg_replace('/[^\p{L}\p{N}_-]+/u', '_', $controlDespacho->carga()->value('codigo') ?: $controlDespacho->id).'.pdf';
+        $nombre = ReferenciaControlDespacho::nombreArchivo(ReferenciaControlDespacho::deControl($controlDespacho), $controlDespacho->carga()->value('codigo') ?: $controlDespacho->id, fotos: true);
         $respuesta = response()->file(Storage::disk('local')->path($ruta), [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$nombre.'"',
@@ -264,7 +269,7 @@ class ControlDespachoController extends Controller
             ], 422);
         }
         $ruta = $generador->generar($detalle);
-        $nombre = 'R-24_'.preg_replace('/[^\p{L}\p{N}_-]+/u', '_', $controlDespacho->carga()->value('codigo') ?: $controlDespacho->id).'.xlsx';
+        $nombre = $detalle['archivos']['planilla'];
 
         return response()->download($ruta, $nombre, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

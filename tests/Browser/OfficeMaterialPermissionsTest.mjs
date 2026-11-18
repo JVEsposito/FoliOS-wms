@@ -8,9 +8,11 @@ import { chromium } from 'playwright';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const exported = readFileSync(resolve(root, 'storage/app/ui/oficina/accesos.html'), 'utf8');
 const form = exported.match(/<form\b[^>]*id="accessProfileForm"[^>]*>[\s\S]*?<\/form>/)?.[0];
+const dialog = exported.match(/<dialog\b[^>]*id="accessThemeDialog"[^>]*>[\s\S]*?<\/dialog>/)?.[0];
 assert.ok(form, 'El formulario de perfiles debe formar parte de Oficina');
+assert.ok(dialog, 'El diálogo de temas debe formar parte de Oficina');
 const html = exported.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '').replace(/<body\b[^>]*>[\s\S]*<\/body>/,
-    `<body><main style="padding:12px;max-width:1100px;margin:auto">${form}<p id="accessProfilesSummary"></p><table><tbody id="accessProfilesTableBody"></tbody></table></main><script type="module" src="/profiles.js"></script></body>`);
+    `<body><main style="padding:12px;max-width:1100px;margin:auto">${form}<p id="accessProfilesSummary"></p><table><tbody id="accessProfilesTableBody"></tbody></table>${dialog}</main><script type="module" src="/profiles.js"></script></body>`);
 const modules = ['materiales.etiquetas', 'materiales.inventario'];
 const groups = [
     { clave: 'recepciones', nombre: 'Recepciones', modulos: ['materiales.etiquetas'], preparado: false, acciones: [
@@ -36,13 +38,14 @@ test('perfiles guarda acciones independientes, quita dependencias y deshabilita 
                 if (path.startsWith('/build/')) return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: path.endsWith('.css') ? 'text/css' : 'text/javascript' });
                 if (path === '/test') return route.fulfill({ contentType: 'text/html', body: html });
                 if (path === '/profiles.js') return route.fulfill({ contentType: 'text/javascript', body: readFileSync(resolve(root, 'resources/js/office-access-profiles.js')) });
-                if (request.method() === 'PUT') {
+                if (['PUT', 'PATCH'].includes(request.method())) {
                     const data = request.postDataJSON(); writes.push(data); profile = { ...profile, ...data };
                     return route.fulfill({ json: { data: profile, sesiones_revocadas: true } });
                 }
                 return route.fulfill({ json: { data: [{ ...profile, permisos_materiales_efectivos: profile.permisos_materiales }],
                     catalogo: [{ clave: 'materiales', nombre: 'Materiales', descripcion: '', modulos: modules.map(clave => ({ clave, nombre: clave, descripcion: '' })) }],
                     catalogo_tablet: [], catalogo_permisos_materiales: groups, pantallas_inicio: [],
+                    puede_editar_temas: true, catalogo_temas: { 'dark-bit': 'Modo bit' },
                     roles_base: ['supervisor_materiales', 'consulta'].map(clave => ({ clave, nombre: clave, modulos_disponibles: modules, modulos_sugeridos: modules, modulos_tablet_sugeridos: [] })),
                 } });
             });
@@ -68,6 +71,18 @@ test('perfiles guarda acciones independientes, quita dependencias y deshabilita 
             await page.waitForFunction(() => document.getElementById('accessProfileForm').elements.id.value === '');
             assert.deepEqual(writes[1].permisos_materiales, []);
             assert.equal(writes[1].rol_base, 'consulta');
+            await page.getByRole('button', { name: 'Temas de Bodega' }).click();
+            const temas = page.getByRole('dialog', { name: 'Temas de Oficina' });
+            const predeterminados = temas.getByRole('checkbox', { name: 'Conservar los temas predeterminados' });
+            const bit = temas.getByRole('checkbox', { name: 'Modo bit' });
+            assert.equal(await bit.isDisabled(), true);
+            await predeterminados.uncheck();
+            await bit.check();
+            await temas.getByRole('button', { name: 'Guardar temas' }).click();
+            await temas.waitFor({ state: 'hidden' });
+            assert.deepEqual(writes[2], { temas_oficina: ['dark-bit'] });
+            await page.getByRole('button', { name: 'Temas de Bodega' }).click();
+            assert.equal(await bit.isChecked(), true);
             assert.deepEqual(errors, []);
             await context.close();
         }

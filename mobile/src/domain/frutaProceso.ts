@@ -24,6 +24,10 @@ export type ProcessDelivery = {
 };
 
 export type ProcessResultType = { id: string; codigo: string; nombre: string; prefijo_sublote: string };
+
+export function processResultLabel(type: ProcessResultType): string {
+  return type.prefijo_sublote ? type.prefijo_sublote + ' · ' + type.nombre : type.nombre;
+}
 export type ProcessCamera = { id: string; codigo: string; nombre: string };
 export type ProcessSublot = {
   id: string;

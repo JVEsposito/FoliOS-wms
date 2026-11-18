@@ -223,3 +223,19 @@ equipo guardó antes, la respuesta es 409.
 - `tests/JavaScript/DispatchControlTest.mjs`
 - `mobile/tests/consolidation.test.mjs`
 - `mobile/tests/consolidationScreen.test.mjs`
+
+## Referencia de embarque
+
+La R-24 se identifica por la referencia externa de embarque (por ejemplo, F025) en la consulta de Oficina, la PDA y las descargas Excel/PDF de fotos. La carga CAR se conserva como vínculo interno. El buscador permite encontrar la referencia confirmada y los números de los instructivos.
+
+Si el camión tiene varios instructivos, se muestran todas sus referencias, ordenadas y sin repetir. Por ejemplo, F025 / F026 genera R-24_F025_F026.xlsx. El encabezado y el pie de cada hoja conservan la referencia. Una referencia confirmada por consolidación prevalece sobre la sugerencia; una planilla cerrada mantiene su dato histórico aunque cambie el calendario.
+
+Los registros antiguos que no tienen referencia siguen disponibles bajo su código de carga. No se sustituye una referencia comercial faltante por un código interno de embarque. No se agregan migraciones ni se modifican planillas cerradas o PDF ya archivados.
+
+### Instructivos y envío de fotografías desde la app
+
+El lobby de Consolidación muestra los números externos de todos los instructivos del embarque de cada carga, junto a la exportadora y patente. Cuando no hay instructivos informa «Sin instructivo de referencia». La consulta precarga la relación para no consultar cada instructivo por separado.
+
+Las fotos se envían con `expo/fetch` y un `File` real del dispositivo, compatible con el codificador multipart de Expo 57. Se comprueba que el archivo exista, tenga contenido y no supere 8 MiB. El servidor genera el límite efectivo de carga: un HTTP 413 se informa como límite del servidor y los rechazos de validación conservan su detalle. Un corte o tiempo de espera mantiene el envío sin confirmar y permite reintentar con el mismo archivo y `operacion_id`; el servidor conserva su idempotencia.
+
+La advertencia de número de contenedor faltante corresponde al encabezado de la planilla. No impide subir una foto y no demuestra por sí misma una pérdida de conexión.

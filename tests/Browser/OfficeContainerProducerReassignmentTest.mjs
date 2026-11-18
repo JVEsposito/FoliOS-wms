@@ -120,7 +120,8 @@ test('reasigna parte de un movimiento a otro CSG de la cuenta, con razón social
                 envases: [{ tipo_envase: 'bins', cantidad: 1 }, { tipo_envase: 'totes', cantidad: 9 }], motivo: 'Parte de la guía es de Agrícola Tres.' });
             assert.match(calls[1].operacion_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
             // El kardex interno anota a quién pasó; el diálogo muestra el reparto y su historial.
-            await page.locator('#movementsBody').getByText(/1 a CSG CSG-C \(desde CSG CSG-B\)/).waitFor();
+            // La tabla se recarga después de cerrar el diálogo: se espera la recarga en vez de leerla al instante.
+            await page.waitForFunction(() => /1 a CSG CSG-C \(desde CSG CSG-B\)/.test(document.getElementById('movementsBody').textContent));
             await page.locator('#movementsBody .office-action-select').selectOption({ label: 'Reasignar movimiento a otro productor / CSG' });
             await dialog.locator('[name="documento_clave"]').first().waitFor();
             assert.deepEqual(await dialog.locator('[name="productor_origen"] option').allTextContents(), ['CSG CSG-B · Agrícola Dos', 'CSG CSG-C · Agrícola Tres']);

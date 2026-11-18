@@ -39,7 +39,7 @@
                         <p>Planilla de control de despacho del área de frío: inspección del camión o contenedor, posición y temperatura de cada pallet. La llena el equipo de consolidación desde la PDA.</p>
                     </div>
                     <form class="dcx-filters" id="dcxFilters" role="search">
-                        <label><span>Buscar</span><input name="buscar" maxlength="60" autocomplete="off" placeholder="Carga, embarque, contenedor o folio"></label>
+                        <label><span>Buscar</span><input name="buscar" maxlength="60" autocomplete="off" placeholder="Referencia embarque, carga, contenedor o folio"></label>
                         <label><span>Estado</span>
                             <select name="estado">
                                 <option value="">Todas</option>
@@ -61,7 +61,7 @@
                     <div class="dcx-table-wrap">
                         <table class="dcx-table">
                             <thead>
-                                <tr><th>Carga</th><th>Exportadora</th><th>Contenedor</th><th>Pallets</th><th>Estado</th><th>Inicio</th><th>Cierre</th></tr>
+                                <tr><th>Referencia embarque / carga</th><th>Exportadora</th><th>Contenedor</th><th>Pallets</th><th>Estado</th><th>Inicio</th><th>Cierre</th></tr>
                             </thead>
                             <tbody id="dcxRows"><tr><td colspan="7">Cargando…</td></tr></tbody>
                         </table>

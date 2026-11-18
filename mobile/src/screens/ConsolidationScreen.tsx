@@ -225,7 +225,7 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
       setTab('pallets');
       throw new Error(`Antes de imprimir: ${control.faltantes_impresion.join(' ')}`);
     }
-    await api.shareSheet(control.id, control.carga.codigo);
+    await api.shareSheet(control.id, control.referencia_embarque || control.carga.codigo, control.archivos?.planilla);
   }
 
   async function removePosition(target: ConsolidationPallet) {
@@ -271,7 +271,7 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
 
   return <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-      <FieldHeader area="frigorifico" auth={auth} busy={busy} title="Consolidación" subtitle={control ? `R-24 · carga ${control.carga.codigo}` : 'Planilla de control de despacho R-24'} onLogout={onLogout} />
+      <FieldHeader area="frigorifico" auth={auth} busy={busy} title="Consolidación" subtitle={control ? `R-24 · ${control.referencia_embarque ? `embarque ${control.referencia_embarque} · ` : ''}carga ${control.carga.codigo}` : 'Planilla de control de despacho R-24'} onLogout={onLogout} />
       {error ? <EstibaAlert title="No se pudo completar" detail={error} tone="critical" live /> : null}
       {notice ? <EstibaAlert title={notice} tone="success" live /> : null}
       {pending ? <EstibaPanel title="Envío sin confirmar">
@@ -283,9 +283,10 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
         {loads.length === 0 ? <Text style={s.body}>No hay cargas en el andén. La planilla se abre cuando llega el camión o el primer pallet.</Text> : null}
         {loads.map((load) => <Pressable key={load.id} accessibilityRole="button" disabled={blocked || (!load.control && !canRegister)}
           onPress={() => void run(() => openLoad(load))} style={[s.card, (!load.control && !canRegister) && s.dim]}>
-          <View style={s.between}><EntityCode value={load.codigo} large />
+          <View style={s.between}><EntityCode value={load.referencia_embarque || load.codigo} large />
             <EstibaSignal label={load.control ? (load.control.estado === 'cerrado' ? 'R-24 cerrada' : 'R-24 en curso') : 'Sin planilla'} tone={load.control?.estado === 'cerrado' ? 'success' : load.control ? 'warning' : 'neutral'} /></View>
-          <Text style={s.body}>{[load.exportadora, load.contenedor, load.anden ? `Andén ${load.anden}` : null, load.patente].filter(Boolean).join(' · ') || 'Sin datos de embarque'}</Text>
+          <Text style={s.body}>{[load.referencia_embarque ? `Carga ${load.codigo}` : null, load.exportadora, load.contenedor, load.anden ? `Andén ${load.anden}` : null, load.patente].filter(Boolean).join(' · ') || 'Sin datos de embarque'}</Text>
+          <Text style={s.body}>{load.instructivos?.length ? `Instructivo${load.instructivos.length > 1 ? 's' : ''}: ${load.instructivos.join(' · ')}` : 'Sin instructivo de referencia'}</Text>
           <Text style={s.muted}>{load.cargados}/{load.pallets} cargados · {load.en_anden} en andén{load.control ? ` · ${load.control.posicionados} con posición` : ''}</Text>
           <Text style={s.link}>{load.control ? 'Abrir planilla' : canRegister ? 'Iniciar planilla R-24' : 'Sin planilla'}</Text>
         </Pressable>)}
@@ -482,7 +483,7 @@ function PhotosPanel({ api, control, catalog, editable, onChange, onError }: {
 
   async function sharePdf() {
     setBusy(true);
-    try { await api.sharePhotosPdf(control.id, control.carga.codigo); }
+    try { await api.sharePhotosPdf(control.id, control.referencia_embarque || control.carga.codigo, control.archivos?.fotos); }
     catch (e) { onError(message(e)); }
     finally { setBusy(false); }
   }

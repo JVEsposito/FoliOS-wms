@@ -10,10 +10,12 @@ use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
 use App\Models\Camara;
+use App\Models\Dispositivo;
 use App\Models\Folio;
 use App\Models\PlanOperacional;
 use App\Models\Posicion;
 use App\Models\Repaletizaje;
+use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\UbicacionActual;
 use App\Models\User;
@@ -314,6 +316,99 @@ class RecepcionRepaletizajeRollingTest extends TestCase
         $this->assertSame('cancelado', $plan->refresh()->estado->value);
         $this->assertSame('cancelada', $plan->tareas()->firstOrFail()->estado->value);
         $this->assertSame($usuario->id, $plan->cancelado_por_user_id);
+    }
+
+    public function test_si_el_camarero_ubica_el_pallet_de_repa_el_retiro_se_cumple_y_baja_la_prioridad(): void
+    {
+        $this->habilitarGeneracion();
+        config(['planificador.repa_buffer_high_from_pallets' => 2, 'planificador.repa_buffer_max_pallets' => 3]);
+        [$temporada, $usuario] = $this->contexto();
+        foreach (range(1, 3) as $indice) {
+            $this->registrar($temporada, $usuario, "DIRECTO-{$indice}", CondicionTermicaFolio::PrefrioAprobado);
+        }
+        $tareas = TareaMovimiento::query()->with('planOperacional')->orderBy('created_at')->orderBy('id')->get();
+        $this->assertTrue($tareas->every(fn (TareaMovimiento $tarea): bool => $tarea->prioridad->value === 'urgente'));
+        $retiro = $tareas->firstWhere('folio.numero_folio', 'RES-DIRECTO-1');
+        $this->assertSame('ubicacion_inicial', $retiro->tipo_movimiento->value);
+
+        // El camarero lo ubica directamente, sin tomar la labor del planificador.
+        [$camarero, $token, $camara] = $this->camarero('CAM-09', 'Camara 09');
+        $posicion = Posicion::create(['camara_id' => $camara->id, 'banda' => 2, 'posicion' => 1, 'nivel' => 1, 'etiqueta' => 'B02-P01-N1']);
+        $sesion = $this->withToken($token)->postJson("/api/camaras/{$camara->id}/sesiones")->assertCreated()->json('data');
+        $this->withToken($token)->postJson('/api/movimientos/ubicar', [
+            'operacion_id' => (string) Str::uuid(), 'numero_folio' => 'RES-DIRECTO-1', 'tipo_bulto' => 'pallet',
+            'posicion_destino_id' => $posicion->id, 'sesion_destino_id' => $sesion['id'], 'version_destino_conocida' => 0,
+            'generado_dispositivo_at' => now()->toAtomString(),
+        ])->assertOk();
+
+        $retiro->refresh();
+        $this->assertSame(EstadoTareaMovimiento::Cancelada, $retiro->estado);
+        $this->assertSame('RES-DIRECTO-1 ya está ubicado en Camara 09 · B02-P01-N1: el retiro de REPA se da por cumplido.', $retiro->motivo_cancelacion);
+        $this->assertTrue($retiro->contexto['cumplida_fuera_planificador']);
+        $this->assertSame($camarero->id, $retiro->cancelada_por_user_id);
+        $this->assertSame('cancelada', $retiro->maniobraOperacional()->firstOrFail()->estado->value);
+        $plan = $retiro->planOperacional->refresh();
+        $this->assertSame('completado', $plan->estado->value);
+        $this->assertSame($camarero->id, $plan->completado_por_user_id);
+
+        // Quedan dos pallets en REPA: la prioridad compartida baja de urgente a alta.
+        $restantes = $tareas->reject(fn (TareaMovimiento $tarea): bool => $tarea->id === $retiro->id);
+        foreach ($restantes as $tarea) {
+            $tarea->refresh();
+            $this->assertSame(EstadoTareaMovimiento::Pendiente, $tarea->estado);
+            $this->assertSame('alta', $tarea->prioridad->value);
+            $this->assertSame(2, $tarea->planOperacional->refresh()->contexto['buffer_repa_pallets_pendientes']);
+        }
+    }
+
+    public function test_el_barrido_cierra_retiros_de_repa_de_pallets_que_ya_salieron_y_respeta_los_que_siguen_en_repa(): void
+    {
+        $this->habilitarGeneracion();
+        [$temporada, $usuario] = $this->contexto();
+        $this->registrar($temporada, $usuario, 'UBICADO', CondicionTermicaFolio::PrefrioAprobado);
+        $this->registrar($temporada, $usuario, 'ENREPA', CondicionTermicaFolio::PrefrioAprobado);
+        [$repaConOrigen] = $this->registrar($temporada, $usuario, 'ORIGEN', CondicionTermicaFolio::PrefrioAprobado, conUbicacion: true);
+        $retiros = TareaMovimiento::query()->with('folio')->get()->keyBy('folio.numero_folio');
+        $camara = Camara::create(['codigo' => 'CAM-09', 'nombre' => 'Camara 09']);
+        $lugar = fn (int $posicion): Posicion => Posicion::create(['camara_id' => $camara->id, 'banda' => 1, 'posicion' => $posicion, 'nivel' => 1, 'etiqueta' => "B01-P0{$posicion}-N1"]);
+
+        // Como en planta: el pallet quedó ubicado antes de que existiera el cierre automático.
+        UbicacionActual::create(['folio_id' => $retiros['RES-UBICADO']->folio_id, 'camara_id' => $camara->id, 'posicion_id' => $lugar(1)->id, 'ubicado_at' => now()]);
+        $this->assertSame('traslado_entre_camaras', $retiros['RES-ORIGEN']->tipo_movimiento->value);
+
+        $this->artisan('planificador:recalcular-arbitraje')->expectsOutputToContain('Ingresos a cámara soltados: 1.')->assertSuccessful();
+        $this->assertSame(EstadoTareaMovimiento::Cancelada, $retiros['RES-UBICADO']->refresh()->estado);
+        $this->assertSame('completado', $retiros['RES-UBICADO']->planOperacional->estado->value);
+        $this->assertSame(EstadoTareaMovimiento::Pendiente, $retiros['RES-ENREPA']->refresh()->estado);
+        // Sigue en la posición donde lo dejó la repa: su retiro sigue vigente.
+        $this->assertSame(EstadoTareaMovimiento::Pendiente, $retiros['RES-ORIGEN']->refresh()->estado);
+
+        // El camarero lo mueve por su cuenta desde esa posición: el retiro también queda cumplido.
+        [, $token] = $this->camarero('CAM-ORIGEN', null);
+        $origen = UbicacionActual::query()->where('folio_id', $retiros['RES-ORIGEN']->folio_id)->firstOrFail();
+        $sesionOrigen = $this->withToken($token)->postJson("/api/camaras/{$origen->camara_id}/sesiones")->assertCreated()->json('data');
+        $sesionDestino = $this->withToken($token)->postJson("/api/camaras/{$camara->id}/sesiones")->assertCreated()->json('data');
+        $this->withToken($token)->postJson('/api/movimientos/mover', [
+            'operacion_id' => (string) Str::uuid(), 'folio_id' => $retiros['RES-ORIGEN']->folio_id,
+            'posicion_destino_id' => $lugar(2)->id, 'sesion_origen_id' => $sesionOrigen['id'], 'sesion_destino_id' => $sesionDestino['id'],
+            'version_origen_conocida' => Camara::findOrFail($origen->camara_id)->version_plano, 'version_destino_conocida' => $camara->refresh()->version_plano,
+            'generado_dispositivo_at' => now()->toAtomString(),
+        ])->assertOk();
+
+        $this->assertSame(EstadoTareaMovimiento::Cancelada, $retiros['RES-ORIGEN']->refresh()->estado);
+        $this->assertSame('RES-ORIGEN ya está ubicado en Camara 09 · B01-P02-N1: el retiro de REPA se da por cumplido.', $retiros['RES-ORIGEN']->motivo_cancelacion);
+        $this->assertSame('completado', PlanOperacional::query()->where('referencia_id', $repaConOrigen->id)->firstOrFail()->estado->value);
+        $this->assertSame(EstadoTareaMovimiento::Pendiente, $retiros['RES-ENREPA']->refresh()->estado);
+    }
+
+    /** @return array{User, string, ?Camara} */
+    private function camarero(string $codigo, ?string $nombreCamara): array
+    {
+        $camarero = User::factory()->create(['rol' => RolUsuario::CamareroFrio, 'activo' => true]);
+        $dispositivo = Dispositivo::create(['codigo' => 'TAB-'.Str::upper(Str::random(6)), 'nombre' => 'Tablet cámara', 'activo' => true]);
+        $token = $camarero->crearTokenParaDispositivo($dispositivo, 'tablet-estiba')->plainTextToken;
+
+        return [$camarero, $token, $nombreCamara ? Camara::create(['codigo' => $codigo, 'nombre' => $nombreCamara]) : null];
     }
 
     /** @return array{Temporada, User} */

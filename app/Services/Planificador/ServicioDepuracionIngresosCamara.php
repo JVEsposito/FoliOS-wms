@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
+use App\Services\Validacion\ServicioPrioridadBufferRepaletizaje;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -33,6 +34,10 @@ use Throwable;
  *   la salida se da por cumplida y no se vuelve a pedir. Si quedó fuera de afinidad, lo corrige el
  *   reordenamiento, nunca otra salida de túnel.
  *
+ * - un resultado de REPA que ya salió de REPA: el camarero lo ubicó directamente (o lo movió desde la posición
+ *   donde lo dejó la repa). El retiro se da por cumplido, no se vuelve a pedir moverlo, el objetivo REPA se cierra
+ *   cuando ya no le quedan pallets por retirar y la prioridad del buffer REPA se recalcula con lo que de verdad falta.
+ *
  * Un paso «en movimiento» de un pallet que ya está ubicado nunca podrá completarse, así que también se cierra.
  * Una maniobra con custodia temporal activa se respeta. Si la maniobra estaba pausada por una discrepancia,
  * la discrepancia queda resuelta como cancelación con el mismo motivo.
@@ -45,6 +50,9 @@ class ServicioDepuracionIngresosCamara
     private const ESTADOS_SIN_INICIAR = [EstadoTareaMovimiento::Bloqueada, EstadoTareaMovimiento::Pendiente, EstadoTareaMovimiento::Asumida];
 
     private const ESTADOS_ACTIVOS = [...self::ESTADOS_SIN_INICIAR, EstadoTareaMovimiento::EnProceso];
+
+    /** Marca en la tarea que el retiro de REPA se cumplió fuera del planificador (cierra el objetivo). */
+    public const CUMPLIDA_FUERA_PLANIFICADOR = 'cumplida_fuera_planificador';
 
     public function __construct(private readonly ServicioPlanesOperacionales $planes) {}
 
@@ -81,7 +89,14 @@ class ServicioDepuracionIngresosCamara
                     ->where(fn ($paso) => $paso->whereNull('tipo_paso_maniobra')->orWhere('tipo_paso_maniobra', TipoPasoManiobra::MovimientoPermanente->value))
                     ->whereHas('planOperacional', fn ($plan) => $plan->whereIn('tipo', array_map(fn ($t) => $t->value, self::PLANES_INGRESO)))
                     ->whereHas('folio', fn ($folio) => $folio->where('tipo_bulto', '!=', TipoBulto::Pallet->value)
-                        ->orWhereHas('ubicacionActual', fn ($ubicacion) => $ubicacion->whereNotNull('posicion_id')))))
+                        ->orWhereHas('ubicacionActual', fn ($ubicacion) => $ubicacion->whereNotNull('posicion_id'))))
+                ->orWhere(fn ($repa) => $repa
+                    ->where(fn ($paso) => $paso->whereNull('tipo_paso_maniobra')->orWhere('tipo_paso_maniobra', TipoPasoManiobra::MovimientoPermanente->value))
+                    ->whereHas('planOperacional', fn ($plan) => $plan->where('tipo', TipoPlanOperacional::RecepcionRepaletizaje->value))
+                    // Ubicado en una posición distinta de la que tenía al nacer el retiro: ya salió de REPA.
+                    ->whereHas('folio.ubicacionActual', fn ($ubicacion) => $ubicacion->whereNotNull('ubicaciones_actuales.posicion_id')
+                        ->where(fn ($q) => $q->whereNull('tareas_movimiento.posicion_origen_id')
+                            ->orWhereColumn('ubicaciones_actuales.posicion_id', '!=', 'tareas_movimiento.posicion_origen_id')))))
             ->with(['folio.ubicacionActual.camara', 'folio.ubicacionActual.posicion', 'planOperacional.creadoPor']);
     }
 
@@ -90,6 +105,7 @@ class ServicioDepuracionIngresosCamara
     {
         $soltadas = 0;
         $temporadas = [];
+        $temporadasRepa = [];
         foreach ($tareas as $tarea) {
             try {
                 $resultado = DB::transaction(function () use ($tarea, $usuario): ?TareaMovimiento {
@@ -108,8 +124,9 @@ class ServicioDepuracionIngresosCamara
                     if ($motivo === null || ! $responsable) {
                         return null;
                     }
+                    $retiroRepaCumplido = $this->retiroRepaCumplido($actual);
                     if ($actual->maniobra_operacional_id) {
-                        return $this->cancelarManiobra($actual, $responsable, $motivo);
+                        return $this->marcarRetiroRepaCumplido($this->cancelarManiobra($actual, $responsable, $motivo), $retiroRepaCumplido);
                     }
                     if (! ElegibilidadFolioPlanificador::operable($actual->folio)) {
                         // Los registros anteriores a maniobras también pueden conservar un paso en proceso.
@@ -123,14 +140,28 @@ class ServicioDepuracionIngresosCamara
                         return $actual;
                     }
 
-                    return $this->planes->cancelarPorReplanificacion($actual, $responsable, $motivo);
+                    return $this->marcarRetiroRepaCumplido(
+                        $this->planes->cancelarPorReplanificacion($actual, $responsable, $motivo),
+                        $retiroRepaCumplido,
+                    );
                 }, attempts: 3);
                 if ($resultado?->estado === EstadoTareaMovimiento::Cancelada) {
                     $soltadas++;
                     $temporadas[$resultado->planOperacional->temporada_id] = true;
+                    if ($resultado->planOperacional->tipo === TipoPlanOperacional::RecepcionRepaletizaje) {
+                        $temporadasRepa[$resultado->planOperacional->temporada_id] = true;
+                    }
                 }
             } catch (Throwable $error) {
                 // Un conflicto de un pallet no frena el barrido del resto.
+                report($error);
+            }
+        }
+        // Lo que queda en REPA define su prioridad: ya no cuentan los pallets que salieron.
+        foreach (array_keys($temporadasRepa) as $temporadaId) {
+            try {
+                app(ServicioPrioridadBufferRepaletizaje::class)->recalcular($temporadaId);
+            } catch (Throwable $error) {
                 report($error);
             }
         }
@@ -210,6 +241,12 @@ class ServicioDepuracionIngresosCamara
             && ! ElegibilidadFolioPlanificador::operable($folio)) {
             return ElegibilidadFolioPlanificador::motivo($folio);
         }
+        if ($folio instanceof Folio && $this->retiroRepaCumplido($tarea)) {
+            $ubicacion = $folio->ubicacionActual;
+            $lugar = trim(($ubicacion->camara?->nombre ?? 'cámara').' · '.($ubicacion->posicion?->etiqueta ?? ''), ' ·');
+
+            return "{$folio->numero_folio} ya está ubicado en {$lugar}: el retiro de REPA se da por cumplido.";
+        }
         if (! $folio instanceof Folio
             || $tarea->tipo_movimiento !== TipoMovimiento::UbicacionInicial
             || ! in_array($tarea->estado, self::ESTADOS_ACTIVOS, true)
@@ -237,5 +274,44 @@ class ServicioDepuracionIngresosCamara
         $lugar = trim(($ubicacion->camara?->nombre ?? 'cámara').' · '.($ubicacion->posicion?->etiqueta ?? ''), ' ·');
 
         return "{$folio->numero_folio} ya está ubicado en {$lugar}: la salida se da por cumplida.";
+    }
+
+    /**
+     * El retiro de un resultado de REPA está cumplido si el pallet ya quedó en una posición de cámara distinta de la que
+     * tenía al nacer el retiro (por ejemplo, el camarero lo ubicó directamente) y ninguna otra labor activa lo saca de ahí.
+     */
+    public function retiroRepaCumplido(TareaMovimiento $tarea): bool
+    {
+        $tarea->loadMissing(['planOperacional', 'folio.ubicacionActual']);
+        $folio = $tarea->folio;
+        $ubicacion = $folio?->ubicacionActual;
+        if ($tarea->planOperacional?->tipo !== TipoPlanOperacional::RecepcionRepaletizaje
+            || ! in_array($tarea->estado, self::ESTADOS_ACTIVOS, true)
+            || ! in_array($tarea->tipo_paso_maniobra, [null, TipoPasoManiobra::MovimientoPermanente], true)
+            || ! $folio instanceof Folio || ! $folio->activo || $folio->tipo_bulto !== TipoBulto::Pallet
+            || $ubicacion?->posicion_id === null
+            || ($tarea->posicion_origen_id !== null && $ubicacion->posicion_id === $tarea->posicion_origen_id)) {
+            return false;
+        }
+
+        return ! TareaMovimiento::query()->where('folio_id', $folio->id)->whereKeyNot($tarea->id)
+            ->whereIn('estado', array_map(fn ($e) => $e->value, self::ESTADOS_ACTIVOS))
+            ->where('tipo_movimiento', '!=', TipoMovimiento::UbicacionInicial->value)
+            ->whereDoesntHave('planOperacional', fn ($plan) => $plan->where('tipo', TipoPlanOperacional::RecepcionRepaletizaje->value))
+            ->exists();
+    }
+
+    /** Deja constancia de que el retiro se cumplió fuera del planificador; con eso el objetivo REPA puede cerrarse. */
+    private function marcarRetiroRepaCumplido(?TareaMovimiento $tarea, bool $cumplido): ?TareaMovimiento
+    {
+        if (! $cumplido || $tarea?->estado !== EstadoTareaMovimiento::Cancelada) {
+            return $tarea;
+        }
+        $tarea->update([
+            'contexto' => [...($tarea->contexto ?? []), self::CUMPLIDA_FUERA_PLANIFICADOR => true],
+            'version' => $tarea->version + 1,
+        ]);
+
+        return $tarea;
     }
 }
