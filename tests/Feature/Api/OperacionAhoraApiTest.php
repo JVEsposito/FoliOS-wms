@@ -25,6 +25,7 @@ use App\Models\Camara;
 use App\Models\Carga;
 use App\Models\CargaFolio;
 use App\Models\CicloArbitrajeManiobras;
+use App\Models\Cliente;
 use App\Models\DecisionArbitrajeManiobra;
 use App\Models\DiscrepanciaManiobra;
 use App\Models\Dispositivo;
@@ -37,12 +38,14 @@ use App\Models\Posicion;
 use App\Models\PosicionTunelPrefrio;
 use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
+use App\Models\RecepcionRomana;
 use App\Models\RegistroControlAmbiental;
 use App\Models\SesionEstiba;
 use App\Models\TareaMovimiento;
 use App\Models\Temporada;
 use App\Models\TunelPrefrio;
 use App\Models\User;
+use App\Models\ValidacionPallet;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioSesionEstiba;
 use App\Services\Planificador\ServicioEstadoArbitrajePlanificador;
@@ -50,12 +53,109 @@ use App\Services\Verificaciones\VentanasVerificacion;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class OperacionAhoraApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_recepcion_mp_muestra_fruta_en_curso_y_atribuye_los_kilos_a_la_jornada_de_ingreso(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-10 01:30:00', 'UTC'));
+        $temporada = $this->crearTemporada();
+        $anterior = Temporada::create(['codigo' => 'PREVIA', 'nombre' => 'Temporada previa', 'fecha_inicio' => '2025-08-01', 'activa' => false]);
+        $usuario = User::factory()->create(['rol' => RolUsuario::Consulta]);
+        $cliente = Cliente::create(['codigo' => 'CLI-MP', 'nombre' => 'La Aguada', 'activo' => true]);
+
+        $recepcion = function (string $numero, string $estado, array $cambios = []) use ($temporada, $usuario, $cliente): RecepcionRomana {
+            return RecepcionRomana::create([
+                'operacion_id' => (string) Str::uuid(), 'payload_hash' => hash('sha256', $numero),
+                'numero_recepcion' => $numero, 'numero_guia_despacho' => $numero,
+                'temporada_id' => $temporada->id, 'temporada_codigo_snapshot' => $temporada->codigo, 'temporada_nombre_snapshot' => $temporada->nombre,
+                'cliente_id' => $cliente->id, 'cliente_nombre_snapshot' => $cliente->nombre,
+                'tipo_recepcion' => 'fruta_con_envases', 'tipo_servicio' => 'proceso',
+                'cantidad_envases_declarados' => 10, 'tipo_envase_declarado' => 'bins',
+                'patente_camion' => 'ABCD12', 'tipo_camion' => 'termo', 'rut_conductor' => '12345678-5', 'nombre_conductor' => 'Conductor',
+                'estado' => $estado, 'estado_validacion_mp' => 'pendiente',
+                'peso_bruto' => 14000, 'ingreso_at' => '2026-11-09 23:00:00', 'creado_por_user_id' => $usuario->id,
+                ...$cambios,
+            ]);
+        };
+
+        $pendiente = $recepcion('REC-DESTARE', 'en_bascula_salida', [
+            'ingreso_at' => '2026-11-09 22:00:00', 'estado_validacion_mp' => 'validada',
+        ]);
+        foreach (['1511', '1512'] as $i => $guia) {
+            $pendiente->guiasRecepcion()->create([
+                'temporada_id' => $temporada->id, 'cliente_id' => $cliente->id, 'secuencia' => $i + 1,
+                'numero_guia_despacho' => $guia, 'envases' => [], 'vigente' => 1,
+            ]);
+        }
+        $recepcion('REC-INGRESO', 'en_bascula_ingreso');
+        $recepcion('REC-PESAJE', 'en_pesaje_envases', ['tipo_recepcion' => 'fruta_pesaje_envases']);
+        $recepcion('REC-ENVASES', 'en_bascula_ingreso', ['tipo_recepcion' => 'solo_envases']);
+        $recepcion('REC-ELIMINADA', 'en_bascula_salida', ['eliminada_at' => now()]);
+        $recepcion('REC-ANULADA', 'anulada');
+        $recepcion('REC-OTRA-TEMP', 'en_bascula_ingreso', ['temporada_id' => $anterior->id]);
+        $recepcion('REC-CERRADA', 'cerrado', ['peso_neto' => 5750.5, 'salida_at' => '2026-11-10 01:10:00']);
+        $recepcion('REC-ANTERIOR', 'cerrado', ['peso_neto' => 4200, 'ingreso_at' => '2026-11-09 00:00:00']);
+        $recepcion('REC-ENV-CERRADA', 'cerrado', ['tipo_recepcion' => 'solo_envases', 'peso_neto' => 600]);
+
+        $this->actingAs($usuario, 'sanctum')->getJson('/api/operacion-ahora')->assertOk()
+            ->assertJsonPath('data.recepcion_mp.en_curso', 3)
+            ->assertJsonPath('data.recepcion_mp.en_ingreso', 1)
+            ->assertJsonPath('data.recepcion_mp.en_pesaje', 1)
+            ->assertJsonPath('data.recepcion_mp.pendientes_destare', 1)
+            ->assertJsonPath('data.recepcion_mp.cerradas_jornada', 1)
+            ->assertJsonPath('data.recepcion_mp.kilos_netos_jornada', 5750.5)
+            ->assertJsonCount(3, 'data.recepcion_mp.recepciones')
+            ->assertJsonPath('data.recepcion_mp.recepciones.0.numero', 'REC-DESTARE')
+            ->assertJsonPath('data.recepcion_mp.recepciones.0.guias', ['1511', '1512'])
+            ->assertJsonPath('data.recepcion_mp.recepciones.0.validacion_mp', 'validada')
+            ->assertJsonMissingPath('data.recepcion_mp.recepciones.0.rut_conductor');
+    }
+
+    public function test_validacion_pt_distingue_resultados_vigentes_de_conflictos_y_anulaciones(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-10 01:30:00', 'UTC'));
+        $temporada = $this->crearTemporada();
+        $usuario = User::factory()->create(['rol' => RolUsuario::Consulta]);
+        $dispositivo = Dispositivo::create(['codigo' => 'PT-CONTROL', 'nombre' => 'PDA', 'plataforma' => 'android', 'activo' => true]);
+        $articulo = (string) Str::uuid();
+        $origen = (string) Str::uuid();
+        DB::table('articulos_validacion')->insert(['id' => $articulo, 'temporada_id' => $temporada->id, 'especie' => 'Cereza', 'variedad' => 'Santina', 'calibre' => '2J', 'envase' => '5 kg']);
+        DB::table('origenes_validacion')->insert(['id' => $origen, 'temporada_id' => $temporada->id, 'cliente' => 'DIS', 'marca' => 'ATLAS', 'csg' => '105410']);
+
+        foreach ([
+            ['aceptada', 'aprobado', '2026-11-10 01:00:00'],
+            ['aceptada', 'observado', '2026-11-10 01:10:00'],
+            ['conflicto', 'aprobado', '2026-11-10 01:20:00'],
+            ['anulada', 'aprobado', '2026-11-10 01:25:00'],
+            ['aceptada', 'rechazado', '2026-11-09 04:00:00'],
+        ] as $i => [$estado, $resultado, $captura]) {
+            ValidacionPallet::create([
+                'operacion_id' => (string) Str::uuid(), 'payload_hash' => str_repeat('a', 64),
+                'numero_folio' => (string) (6000000000 + $i), 'numero_intento' => 1, 'tipo_bulto' => 'pallet',
+                'cantidad_cajas' => 120, 'linea_proceso' => 1, 'turno' => 'B', 'temporada_id' => $temporada->id,
+                'articulo_validacion_id' => $articulo, 'origen_validacion_id' => $origen,
+                'resultado' => $resultado, 'estado' => $estado,
+                'catalogo_version_dispositivo' => 1, 'catalogo_version_servidor' => 1,
+                'snapshot' => [], 'user_id' => $usuario->id, 'dispositivo_id' => $dispositivo->id,
+                'generado_dispositivo_at' => $captura, 'recibido_servidor_at' => $captura,
+            ]);
+        }
+
+        $this->actingAs($usuario, 'sanctum')->getJson('/api/operacion-ahora')->assertOk()
+            ->assertJsonPath('data.validacion_pt.procesadas', 2)
+            ->assertJsonPath('data.validacion_pt.aprobadas', 1)
+            ->assertJsonPath('data.validacion_pt.observadas', 1)
+            ->assertJsonPath('data.validacion_pt.rechazadas', 0)
+            ->assertJsonPath('data.validacion_pt.conflictos', 1)
+            ->assertJsonCount(3, 'data.validacion_pt.recientes')
+            ->assertJsonPath('data.validacion_pt.recientes.0.resultado', 'conflicto');
+    }
 
     public function test_lectura_guided_no_calcula_ni_persiste_arbitraje(): void
     {

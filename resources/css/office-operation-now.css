@@ -363,6 +363,68 @@
     font-size: .8rem;
 }
 
+.operation-now-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+    gap: 12px;
+}
+
+.operation-now-overview__card {
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    min-width: 0;
+    padding: 13px 16px;
+    border: 1px solid var(--corporate-border);
+    border-block-start: 2px solid var(--corporate-blue);
+    border-radius: var(--eui-radius-panel);
+    background: var(--corporate-card);
+    color: var(--text);
+    text-decoration: none;
+}
+
+.operation-now-overview__card:hover { background: var(--surface-hover); }
+.operation-now-overview__card:focus-visible { outline: 3px solid var(--corporate-blue); outline-offset: 2px; }
+.operation-now-overview__card > span { font-weight: 700; }
+
+.operation-now-overview__card > strong {
+    color: var(--text-strong);
+    font-size: 1.8rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+}
+
+.operation-now-overview__card > small,
+.operation-now-flow-metrics dt,
+.operation-now-flow-caption {
+    color: var(--text-secondary);
+    font-size: .82rem;
+}
+
+.operation-now-flow-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+    gap: 1px;
+    margin: 0;
+    border-block-end: 1px solid var(--corporate-border);
+    background: var(--corporate-border);
+}
+
+.operation-now-flow-metrics > div {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+    padding: 10px 16px;
+    background: var(--corporate-card);
+}
+
+.operation-now-flow-metrics dd { margin: 0; color: var(--text-strong); font-size: 1.3rem; font-weight: 800; }
+.operation-now-flow-metrics [data-tone="success"] dd { color: var(--success-text); }
+.operation-now-flow-metrics [data-tone="warning"] dd { color: var(--warning-text); }
+.operation-now-flow-metrics [data-tone="critical"] dd { color: var(--danger-text); }
+.operation-now-flow-caption { margin: 0; padding: 9px 16px; }
+.operation-now-table--flow { min-width: 650px; }
+
 /* Paneles ------------------------------------------------------------------------ */
 .operation-now-panel {
     min-width: 0;
@@ -1677,6 +1739,7 @@
 }
 
 .operation-now-action:hover { border-color: var(--corporate-blue); background: var(--surface-hover); }
+.operation-now-action[hidden] { display: none; }
 
 /* Atención --------------------------------------------------------------------------
    Una fila por condición: severidad (forma y texto), qué pasa, dónde, de qué fuente y

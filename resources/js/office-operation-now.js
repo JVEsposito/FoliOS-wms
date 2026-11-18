@@ -498,6 +498,13 @@ function renderMetrics(data) {
     setText('cameraPanelSummary', `${number(productCameras.length)} ${productCameras.length === 1 ? 'cámara' : 'cámaras'} · ${percent(occupancy)} ocupado · ${number(environmentalDue)} con control pendiente`);
     setText('operatorPanelCount', number(operators.length));
     setText('precoolingPanelSummary', `${number(precooling.procesos_activos)} en proceso · ${number(precooling.procesos_fuera_objetivo)} fuera de objetivo`);
+    setText('operationOverviewCold', capacity ? percent(occupancy) : '—');
+    setText('operationOverviewColdDetail', `${number(occupied)} de ${number(capacity)} posiciones PT · ${number(precooling.procesos_activos)} en prefrío`);
+    const dispatch = data.despacho?.resumen;
+    setText('operationOverviewDispatch', number(dispatch?.activas));
+    setText('operationOverviewDispatchDetail', dispatch
+        ? `Cargas activas · ${number(dispatch.cargando)} en carguío`
+        : 'Cargas activas');
 
     const cameraSummary = byId('cameraPanelSummary');
     if (cameraSummary) {
@@ -506,6 +513,72 @@ function renderMetrics(data) {
 
     const operatorCount = byId('operatorPanelCount');
     if (operatorCount) operatorCount.title = `${number(activeTasks)} con tarea vigente`;
+}
+
+const receptionStages = {
+    en_bascula_ingreso: ['En ingreso', 'info'],
+    en_pesaje_envases: ['Pesaje de envases', 'info'],
+    en_bascula_salida: ['Pendiente de destare', 'warning'],
+};
+const mpValidationStages = {
+    pendiente: ['Pendiente', 'neutral'],
+    en_curso: ['En curso', 'info'],
+    validada: ['Validada', 'success'],
+};
+const ptValidationResults = {
+    aprobado: ['Aprobada', 'success'],
+    observado: ['Observada', 'warning'],
+    rechazado: ['Rechazada', 'critical'],
+    conflicto: ['Conflicto', 'critical'],
+};
+
+function renderReceptionRows(id, receptions, available) {
+    const target = byId(id);
+    if (!target) return;
+    target.innerHTML = receptions.length ? receptions.map((row) => `<tr>
+        <td><strong>${escapeHtml(row.numero)}</strong><span class="operation-now-subtext">${escapeHtml(row.guias?.join(' · ') || 'Sin guía')}</span></td>
+        <td>${escapeHtml(row.cliente || '—')}</td>
+        <td>${escapeHtml(row.patente || '—')}</td>
+        <td>${escapeHtml(dateTime(row.ingreso_at))}</td>
+        <td>${signal(...(receptionStages[row.estado] || ['—']))}</td>
+        <td>${signal(...(mpValidationStages[row.validacion_mp] || ['—']))}</td>
+    </tr>`).join('') : `<tr><td colspan="6">${available
+        ? empty('Sin camiones con fruta en curso', 'Los ingresos abiertos de Romana aparecerán aquí.')
+        : empty('Recepción MP sin datos', 'La lectura actual no incluye datos de Romana.')}</td></tr>`;
+}
+
+function renderPlantFlow({ recepcion_mp: reception, validacion_pt: validation }) {
+    setText('operationOverviewMp', number(reception?.en_curso));
+    setText('operationOverviewPt', number(validation?.procesadas));
+    const kilos = reception ? `${number(reception.kilos_netos_jornada, 2)} kg` : '—';
+    setText('operationOverviewMpDetail', reception ? `Camiones en curso · ${kilos} netos en la jornada` : 'Camiones con fruta en curso');
+    setText('operationMpEntry', number(reception?.en_ingreso));
+    setText('operationMpWeighing', number(reception?.en_pesaje));
+    setText('operationMpTare', number(reception?.pendientes_destare));
+    setText('operationMpClosed', number(reception?.cerradas_jornada));
+    setText('operationMpKilos', kilos);
+    const rows = reception?.recepciones || [];
+    setText('operationMpQueue', reception && rows.length < reception.en_curso
+        ? `Mostrando las ${number(rows.length)} recepciones más antiguas de ${number(reception.en_curso)} abiertas`
+        : 'Recepciones abiertas por antigüedad de ingreso');
+    renderReceptionRows('operationOverviewReceptionRows', rows.slice(0, 5), Boolean(reception));
+    renderReceptionRows('operationReceptionRows', rows, Boolean(reception));
+
+    setText('operationPtApproved', number(validation?.aprobadas));
+    setText('operationPtObserved', number(validation?.observadas));
+    setText('operationPtRejected', number(validation?.rechazadas));
+    setText('operationPtConflicts', number(validation?.conflictos));
+    const target = byId('operationValidationRows');
+    if (!target) return;
+    target.innerHTML = validation?.recientes?.length ? validation.recientes.map((row) => `<tr>
+        <td><strong>${escapeHtml(row.folio)}</strong></td>
+        <td>${escapeHtml(row.linea ?? '—')}</td>
+        <td>${escapeHtml(row.turno || '—')}</td>
+        <td>${escapeHtml(dateTime(row.recibido_at))}</td>
+        <td>${signal(...(ptValidationResults[row.resultado] || ['—']))}</td>
+    </tr>`).join('') : `<tr><td colspan="5">${validation
+        ? empty('Sin validaciones PT en la jornada', 'Los registros aparecerán al sincronizarse.')
+        : empty('Validación PT sin datos', 'La lectura actual no incluye registros de validación.')}</td></tr>`;
 }
 
 // Minutos entre un registro y la lectura vigente: la edad se mide contra el servidor,
@@ -1352,6 +1425,7 @@ function render(data) {
     if (sag) { sag.hidden = !(data.retenciones_sag || []).length; sag.innerHTML = sagLotAlertsHtml(data.retenciones_sag || []); }
     renderHeader(data);
     renderMetrics(data);
+    renderPlantFlow(data);
     renderSync(data.sincronizacion, data.generado_at);
     renderPlanner(data.planificador);
     renderCameras(data.camaras);
@@ -2011,6 +2085,10 @@ async function boot() {
     elements.app.classList.remove('is-hidden');
     const shiftDutiesLink = byId('operationShiftDutiesOpen');
     if (shiftDutiesLink) shiftDutiesLink.hidden = !can('puede_supervisar_camaras_productos') || !hasModule('frigorifico.camaras');
+    const romanaLink = byId('operationOpenRomana');
+    if (romanaLink) romanaLink.hidden = !can('puede_consultar_romana') || !hasModule('materia-prima.romana');
+    const validationLink = byId('operationOpenValidation');
+    if (validationLink) validationLink.hidden = !can('puede_consultar_validaciones_pallet') || !hasModule('frigorifico.validacion');
     if (pinElements.open) pinElements.open.hidden = !can('puede_gestionar_pines_operadores');
 
     if (!navigator.onLine) showConnectionIssue(new ApiError('El equipo no tiene conexión de red.'));

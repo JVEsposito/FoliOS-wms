@@ -115,12 +115,14 @@ test('sin evidencia no hay filas y las fuentes quedan en cero', () => {
 });
 
 test('las insignias dan contexto neutro y solo Atención lleva severidad', () => {
-    const data = snapshot();
+    const data = snapshot({ recepcion_mp: { en_curso: 3 }, validacion_pt: { procesadas: 1 } });
     const attention = buildAttention(data);
     const badges = buildOperationTabBadges(data, attention);
 
     assert.equal(badges.atencion.tone, 'critical');
     assert.equal(badges.atencion.text, String(attention.total));
+    assert.deepEqual(badges['recepcion-mp'], { text: '3 en curso', tone: 'neutral' });
+    assert.deepEqual(badges['validacion-pt'], { text: '1 registro', tone: 'neutral' });
     assert.deepEqual(badges.maniobras, { text: '2 en curso', tone: 'neutral' });
     assert.equal(badges.plano, null);
     assert.equal(badges.camaras.text, '61 %');
@@ -133,7 +135,7 @@ test('las insignias en cero desaparecen', () => {
     const empty = { camaras: [], prefrio: { resumen: { procesos_activos: 0 }, tuneles: [] }, camareros: [] };
     const badges = buildOperationTabBadges(empty, buildAttention(empty));
 
-    assert.deepEqual(badges, { atencion: null, maniobras: null, plano: null, camaras: null, prefrio: null, despacho: null, personal: null });
+    assert.ok(Object.values(badges).every((badge) => badge === null));
 });
 
 test('la insignia de Despacho cuenta las cargas publicadas en separación o carguío', () => {

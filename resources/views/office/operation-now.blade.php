@@ -49,21 +49,23 @@
 
                 <nav class="operation-now-tabs" aria-label="Secciones de Operación ahora">
                     <div class="operation-now-tabs__list" role="tablist">
-                        <button type="button" class="operation-now-tab" role="tab" id="operationTab-atencion" aria-controls="operationPanel-atencion" aria-selected="true" tabindex="0" data-operation-tab="atencion"><span>Atención</span><span class="operation-now-tab__badge" data-tab-badge="atencion" data-tone="neutral" hidden></span></button>
+                        <button type="button" class="operation-now-tab" role="tab" id="operationTab-resumen" aria-controls="operationPanel-resumen" aria-selected="true" tabindex="0" data-operation-tab="resumen"><span>Resumen</span></button>
+                        <button type="button" class="operation-now-tab" role="tab" id="operationTab-atencion" aria-controls="operationPanel-atencion" aria-selected="false" tabindex="-1" data-operation-tab="atencion"><span>Atención</span><span class="operation-now-tab__badge" data-tab-badge="atencion" data-tone="neutral" hidden></span></button>
+                        <button type="button" class="operation-now-tab" role="tab" id="operationTab-recepcion-mp" aria-controls="operationPanel-recepcion-mp" aria-selected="false" tabindex="-1" data-operation-tab="recepcion-mp"><span>Recepción MP</span><span class="operation-now-tab__badge" data-tab-badge="recepcion-mp" data-tone="neutral" hidden></span></button>
+                        <button type="button" class="operation-now-tab" role="tab" id="operationTab-validacion-pt" aria-controls="operationPanel-validacion-pt" aria-selected="false" tabindex="-1" data-operation-tab="validacion-pt"><span>Validación PT</span><span class="operation-now-tab__badge" data-tab-badge="validacion-pt" data-tone="neutral" hidden></span></button>
                         <button type="button" class="operation-now-tab" role="tab" id="operationTab-maniobras" aria-controls="operationPanel-maniobras" aria-selected="false" tabindex="-1" data-operation-tab="maniobras"><span>Maniobras</span><span class="operation-now-tab__badge" data-tab-badge="maniobras" data-tone="neutral" hidden></span></button>
                         <button type="button" class="operation-now-tab" role="tab" id="operationTab-plano" aria-controls="operationPanel-plano" aria-selected="false" tabindex="-1" data-operation-tab="plano"><span>Plano</span><span class="operation-now-tab__badge" data-tab-badge="plano" data-tone="neutral" hidden></span></button>
                         <button type="button" class="operation-now-tab" role="tab" id="operationTab-camaras" aria-controls="operationPanel-camaras" aria-selected="false" tabindex="-1" data-operation-tab="camaras"><span>Cámaras</span><span class="operation-now-tab__badge" data-tab-badge="camaras" data-tone="neutral" hidden></span></button>
                         <button type="button" class="operation-now-tab" role="tab" id="operationTab-prefrio" aria-controls="operationPanel-prefrio" aria-selected="false" tabindex="-1" data-operation-tab="prefrio"><span>Prefrío</span><span class="operation-now-tab__badge" data-tab-badge="prefrio" data-tone="neutral" hidden></span></button>
-                        <button type="button" class="operation-now-tab" role="tab" id="operationTab-despacho" aria-controls="operationPanel-despacho" aria-selected="false" tabindex="-1" data-operation-tab="despacho"><span>Despacho</span><span class="operation-now-tab__badge" data-tab-badge="despacho" data-tone="neutral" hidden></span></button>
+                        <button type="button" class="operation-now-tab" role="tab" id="operationTab-despacho" aria-controls="operationPanel-despacho" aria-selected="false" tabindex="-1" data-operation-tab="despacho"><span>Despacho PT</span><span class="operation-now-tab__badge" data-tab-badge="despacho" data-tone="neutral" hidden></span></button>
                         <button type="button" class="operation-now-tab" role="tab" id="operationTab-personal" aria-controls="operationPanel-personal" aria-selected="false" tabindex="-1" data-operation-tab="personal"><span>Personal y equipos</span><span class="operation-now-tab__badge" data-tab-badge="personal" data-tone="neutral" hidden></span></button>
                     </div>
                 </nav>
 
-                {{-- Una pestaña por pregunta de supervisión: lo que exige atención, lo que ordena el
-                     planificador, la planta, las cámaras, el prefrío y quién trabaja con qué equipo. --}}
                 <section id="operationSagLotAlerts" class="panel" role="status" hidden></section>
                 <div class="operation-now-workspace" aria-busy="true" id="operationWorkspace">
-                    <section class="operation-now-tabpanel operation-now-tabpanel--atencion" role="tabpanel" id="operationPanel-atencion" aria-labelledby="operationTab-atencion" data-operation-panel="atencion" tabindex="0">
+                    @include('office.partials.operation-now-control')
+                    <section class="operation-now-tabpanel operation-now-tabpanel--atencion" role="tabpanel" id="operationPanel-atencion" aria-labelledby="operationTab-atencion" data-operation-panel="atencion" tabindex="0" hidden>
                         <div class="operation-now-attention">
                             <section class="operation-now-panel operation-now-panel--alerts" id="operationAlertsPanel" data-tone="neutral" aria-labelledby="operationAlertsTitle">
                                 <header class="operation-now-panel__heading">

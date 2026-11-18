@@ -280,6 +280,8 @@ export function buildOperationTabBadges(snapshot = {}, attention = buildAttentio
     const operators = (snapshot.camareros || []).length;
     const loads = numeric(snapshot.despacho?.resumen?.activas);
     const reentries = numeric(snapshot.despacho?.resumen?.pendientes_reingreso);
+    const reception = numeric(snapshot.recepcion_mp?.en_curso);
+    const validation = numeric(snapshot.validacion_pt?.procesadas);
 
     return {
         atencion: attention.total
@@ -289,6 +291,8 @@ export function buildOperationTabBadges(snapshot = {}, attention = buildAttentio
                 label: plural(attention.total, ['condición abierta', 'condiciones abiertas']),
             }
             : null,
+        'recepcion-mp': reception ? { text: `${formatNumber(reception)} en curso`, tone: 'neutral' } : null,
+        'validacion-pt': validation ? { text: plural(validation, ['registro', 'registros']), tone: 'neutral' } : null,
         maniobras: cycle && running ? { text: `${formatNumber(running)} en curso`, tone: 'neutral' } : null,
         plano: null,
         camaras: occupancy
