@@ -296,3 +296,11 @@ No puede anular lotes confirmados ni operar posiciones de cámara.
 Oficina y PDA presentan el código junto al nombre de la clasificación. Congelado, desecho y descarte son resultados distintos. La migración conserva los identificadores de las clasificaciones existentes y agrega congelado y desecho; amplía el prefijo para admitir CECONG completo. No renumera sublotes, folios definitivos, kilos ni orígenes. Los OT históricos no se reclasifican por deducción: se revisan por el procedimiento de regularización/corrección. Otro se conserva como excepción manual.
 
 Los códigos internos del catálogo (`comercial`, `precalibre`, etc.) y sus UUID se mantienen para compatibilidad con integraciones. Los nuevos sublotes usan los prefijos de planta y el mismo correlativo global. La actualización móvil requiere distribuir la APK/OTA correspondiente; las clasificaciones se reciben del catálogo del servidor.
+
+### Folio por confirmar en retornos
+
+Además del provisorio automático PR-*, se puede ingresar un folio por confirmar, opcional, al registrar un retorno físico o migrar uno anterior. Mientras el retorno esté pendiente, puede agregarse, corregirse o quitarse mediante Modificar, con motivo e historial de antes/después. El buscador reconoce ambos folios.
+
+El folio por confirmar es solo una propuesta: no reemplaza el PR-*, no reserva un folio definitivo y no regulariza kilos ni habilita el despacho comercial. Cuadraturas lo encuentra propuesto en Folio definitivo y debe revisarlo o corregirlo al guardar la regularización. Se aplica la unicidad habitual del folio definitivo. El PR-*, el último folio propuesto y la auditoría de sus cambios se conservan, incluso si se confirma otro número. Una vez regularizado, las correcciones se hacen sobre el definitivo.
+
+La migración agrega una columna nullable; los retornos existentes siguen sin propuesta. Los reenvíos de clientes anteriores mantienen sus identificadores y hashes al omitir el campo o enviarlo vacío.

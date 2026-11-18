@@ -174,6 +174,7 @@ function filteredBins() {
         const searchable = [
             bin.folio_provisional,
             bin.folio_definitivo,
+            bin.folio_por_confirmar,
             bin.observacion,
             bin.envase,
             bin.tipo_envase,
@@ -209,7 +210,7 @@ function binCard(bin, pending = false) {
     const audit = bin.anulado_at
         ? `<div class="return-annulment"><strong>Anulado ${escapeHtml(formatDate(bin.anulado_at))}</strong><span>${escapeHtml(bin.anulado_por || 'Usuario')} · ${escapeHtml(bin.motivo_anulacion || 'Sin motivo')}</span></div>`
         : '';
-    return `<article class="bin-card"><div class="bin-card__heading"><div><h3>${escapeHtml(bin.folio_provisional)}${bin.folio_definitivo ? ` → ${escapeHtml(bin.folio_definitivo)}` : ''}</h3><p>${escapeHtml(formatDate(bin.registrado_at))} · ${escapeHtml(bin.registrado_por || 'Usuario')}${bin.retorno_legacy ? ` · migrado desde ${escapeHtml(bin.retorno_legacy)}` : ''}</p></div><span class="return-status${bin.estado === 'pendiente_regularizacion' ? ' is-warning' : ''}">${escapeHtml(label(bin.estado))}</span></div><div class="bin-facts"><div><span>ENVASES</span><strong>${escapeHtml(packingReturnQuantity(bin))}</strong></div><div><span>PESO VERDE</span><strong>${escapeHtml(formatKilos(bin.kilos_totales_verdes ?? bin.kilos_totales))}</strong></div><div><span>PESO DEFINITIVO</span><strong>${bin.kilos_totales_definitivos === null ? 'Pendiente' : escapeHtml(formatKilos(bin.kilos_totales_definitivos))}</strong></div><div><span>PROCESOS</span><strong>${formatNumber(bin.origenes.length)}</strong></div><div><span>CLASIFICACIÓN</span><strong>${escapeHtml(packingReturnResultLabel(bin.tipo_resultado, bin.nombre_resultado))}</strong></div></div>${binOriginsMarkup(bin)}${correction}${audit}${actions.length ? `<div class="bin-card__actions" data-office-action-menu>${actions.join('')}</div>` : ''}</article>`;
+    return `<article class="bin-card"><div class="bin-card__heading"><div><h3>${escapeHtml(bin.folio_provisional)}${bin.folio_definitivo ? ` → ${escapeHtml(bin.folio_definitivo)}` : bin.folio_por_confirmar ? ` · ${escapeHtml(bin.folio_por_confirmar)} (por confirmar)` : ''}</h3><p>${escapeHtml(formatDate(bin.registrado_at))} · ${escapeHtml(bin.registrado_por || 'Usuario')}${bin.retorno_legacy ? ` · migrado desde ${escapeHtml(bin.retorno_legacy)}` : ''}</p></div><span class="return-status${bin.estado === 'pendiente_regularizacion' ? ' is-warning' : ''}">${escapeHtml(label(bin.estado))}</span></div><div class="bin-facts"><div><span>ENVASES</span><strong>${escapeHtml(packingReturnQuantity(bin))}</strong></div><div><span>PESO VERDE</span><strong>${escapeHtml(formatKilos(bin.kilos_totales_verdes ?? bin.kilos_totales))}</strong></div><div><span>PESO DEFINITIVO</span><strong>${bin.kilos_totales_definitivos === null ? 'Pendiente' : escapeHtml(formatKilos(bin.kilos_totales_definitivos))}</strong></div><div><span>PROCESOS</span><strong>${formatNumber(bin.origenes.length)}</strong></div><div><span>CLASIFICACIÓN</span><strong>${escapeHtml(packingReturnResultLabel(bin.tipo_resultado, bin.nombre_resultado))}</strong></div></div>${binOriginsMarkup(bin)}${correction}${audit}${actions.length ? `<div class="bin-card__actions" data-office-action-menu>${actions.join('')}</div>` : ''}</article>`;
 }
 function renderBins() {
     const visibleBins = filteredBins();
@@ -261,6 +262,8 @@ async function submitBin() {
     if (state.origins.some((origin) => Number(origin.kilos_aportados || 0) <= 0)) { elements.binError.textContent = 'Informa los kilos aportados por cada proceso.'; return; }
     if (!balanceData.ok) { elements.binError.textContent = 'Los kilos por proceso deben cuadrar exactamente con el peso total del retorno.'; return; }
     const payload = { operacion_id: uuid(), ...container, kilos_totales: Number(data.get('kilos_totales')), observacion: String(data.get('observacion') || '').trim() || null, origenes: originPayload() };
+    const pendingFolio = String(data.get('folio_por_confirmar') || '').trim();
+    if (pendingFolio) payload.folio_por_confirmar = pendingFolio;
     setBusy(true, 'Registrando retorno…'); elements.binError.textContent = '';
     try {
         const response = await api('/api/materia-prima/fruta-proceso/retornos-bin/bins', { method: 'POST', body: JSON.stringify(payload) });
@@ -278,6 +281,9 @@ function openEdit(id) {
     elements.editForm.reset();
     elements.editForm.elements.bin_id.value = bin.id;
     elements.editTitle.textContent = `Modificar ${bin.folio_provisional}`;
+    elements.editForm.elements.folio_por_confirmar.value = bin.folio_por_confirmar || '';
+    elements.editForm.elements.folio_por_confirmar.disabled = regularized;
+    document.getElementById('editPendingFolioRow').classList.toggle('is-hidden', regularized);
     elements.editDescription.textContent = regularized
         ? 'Corrige los procesos de origen, los datos verdes y los definitivos. El folio provisional se conservará.'
         : 'Corrige los procesos de origen, los kilos verdes o la observación antes de regularizar.';
@@ -420,6 +426,7 @@ async function submitEdit() {
         observacion: String(data.get('observacion') || '').trim() || null,
         origenes: origins,
     };
+    if (!regularized) payload.folio_por_confirmar = String(data.get('folio_por_confirmar') || '').trim() || null;
     if (regularized) {
         const folio = String(data.get('folio_definitivo') || '').trim();
         const type = String(data.get('tipo_resultado_packing_id') || '');
@@ -468,6 +475,7 @@ function openRegularize(id) {
     const bin = state.bins.find((item) => item.id === id); if (!bin) return;
     state.selectedBin = bin; elements.regularizeForm.reset(); elements.regularizeForm.elements.bin_id.value = bin.id;
     state.regularizationOperationId = uuid();
+    elements.regularizeForm.elements.folio_definitivo.value = bin.folio_por_confirmar || '';
     elements.regularizeTitle.textContent = `Regularizar ${bin.folio_provisional}`;
     elements.regularizeDescription.textContent = `${packingReturnQuantity(bin)} · Peso verde registrado: ${formatKilos(bin.kilos_totales_verdes ?? bin.kilos_totales)}. Cuadraturas debe confirmar el total y cada proceso; el folio provisional se conservará.`;
     const sourceObservation = String(bin.observacion || '').trim();
@@ -534,7 +542,7 @@ async function submitMigration() {
     if (!origins.length || !balanceData.ok) { elements.migrationError.textContent = 'Distribuye exactamente el peso total entre los procesos que aportaron kilos.'; return; }
     setBusy(true, 'Migrando retorno anterior…');
     try {
-        const response = await api(`/api/materia-prima/fruta-proceso/retornos-bin/legacy/${state.selectedLegacy.id}/migrar`, { method: 'POST', body: JSON.stringify({ operacion_id: uuid(), kilos_totales: Number(data.get('kilos_totales')), motivo: String(data.get('motivo') || '').trim() || null, origenes: origins }) });
+        const response = await api(`/api/materia-prima/fruta-proceso/retornos-bin/legacy/${state.selectedLegacy.id}/migrar`, { method: 'POST', body: JSON.stringify({ operacion_id: uuid(), kilos_totales: Number(data.get('kilos_totales')), motivo: String(data.get('motivo') || '').trim() || null, folio_por_confirmar: String(data.get('folio_por_confirmar') || '').trim() || null, origenes: origins }) });
         elements.migrationDialog.close(); toast(`${state.selectedLegacy.numero} migrado como ${response.data.folio_provisional}.`); await load({ silent: true });
     } catch (error) { elements.migrationError.textContent = error.message; }
     finally { setBusy(false); }

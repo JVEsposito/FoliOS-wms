@@ -120,6 +120,7 @@ class BinRetornoPackingController extends Controller
                 $consulta->where(function (Builder $subconsulta) use ($buscar): void {
                     $subconsulta
                         ->where('folio_provisional', 'like', "%{$buscar}%")
+                        ->orWhere('folio_por_confirmar', 'like', "%{$buscar}%")
                         ->orWhere('folio_definitivo', 'like', "%{$buscar}%")
                         ->orWhere('observacion', 'like', "%{$buscar}%")
                         ->orWhereHas('origenes', fn (Builder $origenes) => $origenes
@@ -304,6 +305,7 @@ class BinRetornoPackingController extends Controller
         return [
             'id' => $bin->id,
             'folio_provisional' => $bin->folio_provisional,
+            'folio_por_confirmar' => $bin->folio_por_confirmar,
             'tipo_envase' => $bin->tipo_envase->value,
             'envase' => $bin->tipo_envase->etiqueta(),
             'cantidad_envases' => $bin->cantidad_envases,

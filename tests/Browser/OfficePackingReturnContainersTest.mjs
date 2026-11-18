@@ -39,6 +39,7 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
                 if (path === `${prefix}/bins` && req.method() === 'POST') {
                     const payload = req.postDataJSON(); writes.push({ action: 'registrar', payload });
                     assert.equal(payload.tipo_envase, 'caja_3_4'); assert.equal(payload.cantidad_envases, 24);
+                    assert.equal(payload.folio_por_confirmar, 'FAG-POR-12');
                     records.push({ ...payload, id: 'retorno', folio_provisional: 'PR-000001', folio_definitivo: null, estado: 'pendiente_regularizacion',
                         kilos_totales_verdes: payload.kilos_totales, kilos_totales_definitivos: null, registrado_at: '2026-11-02T12:00:00Z', registrado_por: 'Digitadora',
                         regularizado_at: null, anulado_at: null, tipo_resultado: null,
@@ -48,7 +49,7 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
                 if (path === `${prefix}/bins/retorno` && req.method() === 'PUT') {
                     const payload = req.postDataJSON(); writes.push({ action: 'modificar', payload });
                     assert.equal(payload.tipo_envase, 'caja_3_4'); assert.equal(payload.cantidad_envases, 12); assert.ok(payload.motivo.length >= 5);
-                    Object.assign(records[0], { cantidad_envases: 12, modificado_at: '2026-11-02T12:05:00Z', modificado_por: 'Digitadora', motivo_ultima_modificacion: payload.motivo });
+                    Object.assign(records[0], { folio_por_confirmar: payload.folio_por_confirmar, cantidad_envases: 12, modificado_at: '2026-11-02T12:05:00Z', modificado_por: 'Digitadora', motivo_ultima_modificacion: payload.motivo });
                     return route.fulfill({ json: { data: records[0] } });
                 }
                 if (path === `${prefix}/bins/retorno/regularizar`) {
@@ -72,6 +73,7 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
             await page.locator('#returnContainerType').selectOption('caja_3_4');
             assert.equal(await page.locator('#returnContainerQuantity').evaluate((n) => n.readOnly), false);
             await page.locator('#returnContainerQuantity').fill('0');
+            await page.locator('#binReturnForm [name="folio_por_confirmar"]').fill('FAG-POR-12');
             await page.locator('#binReturnForm button[type="submit"]').click();
             assert.match(await page.locator('#binReturnError').textContent(), /cantidad entera de cajas/); assert.equal(writes.length, 0);
             await page.locator('#returnContainerQuantity').fill('24');
@@ -85,16 +87,21 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
             await page.locator('#binReturnForm button[type="submit"]').click();
             await page.waitForFunction(() => document.querySelector('[data-edit-bin="retorno"]'));
             assert.match(await page.locator('#recentBins').textContent(), /24 CAJAS 3\/4/);
+            assert.match(await page.locator('#recentBins h3').textContent(), /PR-000001.*FAG-POR-12.*por confirmar/);
+            assert.equal(await page.locator('#binReturnForm [name="folio_por_confirmar"]').inputValue(), '');
             assert.equal(await page.locator('#registeredBoxes').textContent(), '24');
             await page.locator('#recentBins .office-action-select').selectOption({ label: 'Modificar' });
             assert.equal(await page.locator('#editReturnContainerType').inputValue(), 'caja_3_4');
             await page.locator('#editReturnContainerQuantity').fill('12');
+            assert.equal(await page.locator('#editBinForm [name="folio_por_confirmar"]').inputValue(), 'FAG-POR-12');
+            await page.locator('#editBinForm [name="folio_por_confirmar"]').fill('FAG-POR-13');
             await page.locator('#editBinForm [name="motivo"]').fill('Se contaron doce cajas al revisar el retorno.');
             await page.locator('#editBinForm button[value="default"]').click();
             await page.waitForFunction(() => !document.getElementById('editBinDialog').open);
             await page.locator('#recentBins').getByText('12 CAJAS 3/4', { exact: true }).waitFor();
             await page.locator('[data-return-section="pendientes"]').click();
             await page.locator('#pendingBinList .office-action-select').selectOption({ label: 'Regularizar folio y kilos' });
+            assert.equal(await page.locator('#regularizeForm [name="folio_definitivo"]').inputValue(), 'FAG-POR-13');
             await page.locator('#regularizeForm [name="folio_definitivo"]').fill('FAG-000012');
             assert.equal(await page.locator('#regularizeForm [name="tipo_resultado_packing_id"] option[value="tipo"]').textContent(), 'CECOM · Comercial');
             await page.locator('#regularizeForm [name="tipo_resultado_packing_id"]').selectOption('tipo');
@@ -102,8 +109,15 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
             await page.locator('[data-regularize-kilos]').fill('235');
             await page.locator('#regularizeForm button[value="default"]').click();
             await page.waitForFunction(() => !document.getElementById('regularizeDialog').open);
+            assert.equal(records[0].folio_provisional, 'PR-000001');
+            assert.equal(records[0].folio_definitivo, 'FAG-000012');
+            assert.equal(records[0].folio_por_confirmar, 'FAG-POR-13');
             assert.equal(records[0].tipo_envase, 'caja_3_4'); assert.equal(records[0].cantidad_envases, 12);
             assert.deepEqual(writes.map((r) => r.action), ['registrar', 'modificar', 'regularizar']);
+            await page.locator('[data-return-section="recepcion"]').click();
+            await page.locator('#recentBins .office-action-select').selectOption({ label: 'Modificar' });
+            assert.equal(await page.locator('#editPendingFolioRow').isVisible(), false);
+            assert.equal(await page.locator('#editBinForm [name="folio_definitivo"]').inputValue(), 'FAG-000012');
             assert.deepEqual(errors, []);
             await context.close();
         }

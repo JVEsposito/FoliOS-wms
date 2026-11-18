@@ -17,6 +17,7 @@ class MigrarRetornoPackingLegacyRequest extends FormRequest
     {
         return [
             'operacion_id' => ['required', 'uuid'],
+            'folio_por_confirmar' => ['nullable', 'string', 'max:80', 'not_regex:/[\x00-\x1f\x7f]/u'],
             'kilos_totales' => ['required', 'numeric', 'min:0.001', 'max:999999999.999'],
             'motivo' => ['nullable', 'string', 'max:2000'],
             'origenes' => ['required', 'array', 'min:1', 'max:20'],
