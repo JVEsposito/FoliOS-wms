@@ -129,7 +129,15 @@ test('afilia a salud con FUN y precio de plan Isapre y mantiene separado al empl
         const { page, context, writes, errors } = await setup(browser, { payroll: true });
         await page.locator('#rnTab').click(); await page.waitForFunction(() => document.getElementById('rnPerson').options.length > 1);
         await page.selectOption('#rnPerson', 'persona-1'); await page.locator('#rnLoad').click(); await page.locator('#rpNewAffiliation').click();
-        const f = page.locator('#rpAffiliationForm'); await f.locator('[name=regimen]').selectOption('salud');
+        const f = page.locator('#rpAffiliationForm');
+        // Cambiar el régimen vuelve a cargar las instituciones y reemplaza las opciones: se elige
+        // después de esa carga, o la respuesta tardía borra la elección y oculta el plan.
+        await f.locator('[name=institucion_id] option[value="isapre-1"]').evaluate((option) => { option.dataset.anterior = ''; });
+        await f.locator('[name=regimen]').selectOption('salud');
+        await page.waitForFunction(() => {
+            const select = document.querySelector('#rpAffiliationForm [name=institucion_id]');
+            return select.options.length > 1 && !select.querySelector('option[data-anterior]');
+        });
         await f.locator('[name=institucion_id]').selectOption('isapre-1');
         assert.equal(await page.locator('#rpPlan').isVisible(), true);
         for (const [name, value] of Object.entries({ desde: '2026-10-01', referencia: 'FUN-2026-001', precio_plan: '3.45', respaldo: 'FUN firmado y precio mensual revisado' })) await f.locator(`[name=${name}]`).fill(value);

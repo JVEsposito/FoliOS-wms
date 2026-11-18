@@ -23,7 +23,7 @@ function boot({ local = {}, session = {}, path = '/oficina/materia-prima', searc
     const metas = { 'meta[name="color-scheme"]': element(), 'meta[name="theme-color"]': element() };
     const appended = [];
     const replaced = [];
-    const storage = (values) => ({ getItem: (key) => values[key] ?? null });
+    const storage = (values) => ({ getItem: (key) => values[key] ?? null, removeItem: (key) => { delete values[key]; } });
     const window = {
         localStorage: storage(local),
         sessionStorage: storage(session),
@@ -37,7 +37,7 @@ function boot({ local = {}, session = {}, path = '/oficina/materia-prima', searc
         },
     };
     vm.runInNewContext(source, { window });
-    return { root, metas, appended, replaced };
+    return { root, metas, appended, replaced, local };
 }
 
 const session = { estiba_wms_office_token: '12|abcdefghijklmnopqrstuvwxyz', estiba_wms_office_identity: '{"nombre":"Ana"}' };
@@ -128,6 +128,38 @@ test('el primer pintado respeta el perfil y la clave de preferencia de la cuenta
     const privateTheme = { ...granted, estiba_wms_office_personal_theme: 'personal-prueba',
         estiba_wms_office_identity: '{"temas_oficina":["personal-prueba"],"temas_oficina_personales":{"personal-prueba":{"claro":true}}}' };
     assert.equal(boot({ local: privateTheme }).root.attrs['data-office-theme'], 'light-professional');
+});
+
+test('el paquete personal ya descargado en la sesión se aplica antes de pintar', () => {
+    const identityWithTheme = JSON.stringify({ temas_oficina: ['personal-prueba'],
+        temas_oficina_personales: { 'personal-prueba': { nombre: 'Prueba', claro: false, color: '#112233' } } });
+    const css = ':root[data-office-personal-theme="personal-prueba"] { --corporate-canvas: #102030; }';
+    const remembered = (overrides = {}) => JSON.stringify({ sesion: session.estiba_wms_office_token.slice(-16), tema: 'personal-prueba', css, ...overrides });
+    const local = { ...session, estiba_wms_office_identity: identityWithTheme, estiba_wms_office_personal_theme: 'personal-prueba' };
+
+    const shown = boot({ local: { ...local, estiba_wms_office_personal_css: remembered() } });
+    assert.equal(shown.root.attrs['data-office-theme'], 'dark-industrial');
+    assert.equal(shown.root.attrs['data-office-personal-theme'], 'personal-prueba');
+    assert.deepEqual(shown.appended.map((node) => [node.id, node.textContent]), [['officePersonalTheme', css]]);
+    assert.equal(shown.metas['meta[name="theme-color"]'].attrs.content, '#112233');
+    assert.equal(shown.metas['meta[name="color-scheme"]'].attrs.content, 'dark');
+
+    // La copia de otra sesión, de otro paquete o ilegible no se aplica: se espera la descarga.
+    for (const copy of [remembered({ sesion: 'otra-sesion-1234' }), remembered({ tema: 'personal-otro' }), '{', remembered({ css: null })]) {
+        const waiting = boot({ local: { ...local, estiba_wms_office_personal_css: copy } });
+        assert.equal(waiting.root.attrs['data-office-personal-theme'], undefined);
+        assert.deepEqual(waiting.appended, []);
+        assert.equal(waiting.metas['meta[name="theme-color"]'].attrs.content, OFFICE_THEME_COLORS['dark-industrial']);
+    }
+    // Tampoco si el perfil ya no lo habilita.
+    const revoked = boot({ local: { ...local, estiba_wms_office_personal_css: remembered(),
+        estiba_wms_office_identity: '{"temas_oficina":[],"temas_oficina_personales":{}}' } });
+    assert.equal(revoked.root.attrs['data-office-personal-theme'], undefined);
+    assert.deepEqual(revoked.appended, []);
+
+    // Al cerrar sesión, la próxima página descarta la copia.
+    const loggedOut = boot({ local: { estiba_wms_office_personal_css: remembered() }, soloTema: true });
+    assert.equal(loggedOut.local.estiba_wms_office_personal_css, undefined);
 });
 
 test('la entrada única solo toma el tema', () => {

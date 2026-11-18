@@ -14,7 +14,7 @@ const identity = { nombre: 'Rosa Romana', rol: 'operador_romana' };
 /**
  * Por defecto bloquea los módulos de Vite para observar el primer pintado.
  */
-async function firstPaint(browser, storage, { modules = false, contextData = {}, personalCss = '' } = {}) {
+async function firstPaint(browser, storage, { modules = false, contextData = {}, personalCss = '', personalGate = () => null } = {}) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     await context.addInitScript(({ local, session }) => {
         if (sessionStorage.getItem('estiba_prueba_preparada')) return;
@@ -32,7 +32,7 @@ async function firstPaint(browser, storage, { modules = false, contextData = {},
         }
         if (pathname === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Planta de prueba', temporada: null, ...contextData } } });
         if (pathname === '/api/oficina/tema-personal/personal-prueba' && route.request().headers().authorization === `Bearer ${token}`) {
-            return route.fulfill({ body: personalCss, contentType: 'text/css' });
+            return Promise.resolve(personalGate()).then(() => route.fulfill({ body: personalCss, contentType: 'text/css' }));
         }
         if (pathname === '/oficina/materia-prima') return route.fulfill({ body: html, contentType: 'text/html' });
         if (pathname === '/FoliOS') return route.fulfill({ body: '<p id="entrada">FoliOS</p>', contentType: 'text/html' });
@@ -53,6 +53,7 @@ test('el tema personal se descarga con sesión y se retira al actualizar el perf
             temas_oficina: ['personal-prueba'],
             temas_oficina_personales: { 'personal-prueba': { nombre: 'Prueba', claro: true, color: '#112233' } },
         };
+        const hold = { until: null };
         const { context, page, visited } = await firstPaint(browser, {
             local: {
                 estiba_wms_office_token: token,
@@ -64,6 +65,7 @@ test('el tema personal se descarga con sesión y se retira al actualizar el perf
             modules: true,
             contextData,
             personalCss: ':root[data-office-personal-theme="personal-prueba"] { --corporate-canvas: #102030; }',
+            personalGate: () => hold.until,
         });
 
         const select = page.getByRole('combobox', { name: 'Tema de Oficina' });
@@ -75,6 +77,37 @@ test('el tema personal se descarga con sesión y se retira al actualizar el perf
         await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(16, 32, 48)');
         assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'light-professional');
         assert.ok(visited.includes('/api/oficina/tema-personal/personal-prueba'));
+
+        // En la próxima oficina se pinta con la copia de la sesión, sin esperar la hoja: antes se
+        // veía un instante el tema base. La copia va detrás de los estilos de Oficina para ganarles.
+        let release;
+        hold.until = new Promise((resolve) => { release = resolve; });
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        assert.deepEqual(await page.evaluate(() => {
+            const style = document.getElementById('officePersonalTheme');
+            return {
+                fondo: getComputedStyle(document.body).backgroundColor,
+                tema: document.documentElement.dataset.officePersonalTheme,
+                color: document.querySelector('meta[name="theme-color"]').content,
+                ultima: [...document.querySelectorAll('link[rel="stylesheet"]')]
+                    .every((link) => link.compareDocumentPosition(style) & Node.DOCUMENT_POSITION_FOLLOWING),
+            };
+        }), { fondo: 'rgb(16, 32, 48)', tema: 'personal-prueba', color: '#112233', ultima: true });
+        // Al llegar la hoja se revalida sobre la misma etiqueta, sin quitarla.
+        await page.evaluate(() => {
+            window.cambiosTema = [];
+            new MutationObserver((records) => window.cambiosTema.push(...records.map((record) => record.attributeName || 'head')))
+                .observe(document.documentElement, { attributes: true, attributeFilter: ['data-office-personal-theme'] });
+            new MutationObserver(() => window.cambiosTema.push('head')).observe(document.head, { childList: true });
+        });
+        const requests = visited.filter((path) => path === '/api/oficina/tema-personal/personal-prueba').length;
+        release();
+        await page.waitForFunction(() => document.readyState === 'complete');
+        await page.waitForTimeout(150);
+        assert.ok(visited.filter((path) => path === '/api/oficina/tema-personal/personal-prueba').length >= requests);
+        assert.deepEqual(await page.evaluate(() => window.cambiosTema), []);
+        assert.equal(await page.locator('style#officePersonalTheme').count(), 1);
+        hold.until = null;
 
         contextData.temas_oficina = [];
         contextData.temas_oficina_personales = {};

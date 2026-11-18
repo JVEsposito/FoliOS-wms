@@ -24,6 +24,12 @@
         }
     }
 
+    function forget(key) {
+        try {
+            if (window.localStorage.getItem(key) !== null) window.localStorage.removeItem(key);
+        } catch (error) { /* Almacenamiento no disponible. */ }
+    }
+
     var soloTema = script && script.hasAttribute('data-solo-tema');
     var token = read('estiba_wms_office_token');
     var storedIdentity = read('estiba_wms_office_identity');
@@ -55,18 +61,23 @@
     var commonKey = 'estiba_wms_office_theme';
     var preferenceKey = administrator ? 'estiba_wms_office_admin_theme' : allowed.length > 2 ? 'estiba_wms_office_personal_theme' : commonKey;
     var theme = read(preferenceKey) || read(commonKey);
+    var personalColor = null;
     if (theme === 'dark-rose') theme = 'dark-princess';
     if (!allowed.includes(theme)) {
         theme = /^personal-[a-z0-9-]+$/.test(theme) || (themes.includes(theme) && theme.startsWith('dark-')) ? 'dark-industrial' : 'light-professional';
     } else if (Object.hasOwn(personalThemes, theme)) {
-        // El paquete personal se carga después; antes de pintar se usa su base clara u oscura.
+        // Un paquete personal se pinta sobre su base clara u oscura. La copia que esta sesión ya
+        // descargó se aplica antes de pintar; si no, se ve la base hasta que llega la hoja.
+        personalColor = applyRememberedPersonalTheme(theme, token) ? personalThemes[theme].color : null;
         theme = personalThemes[theme].claro ? 'light-professional' : 'dark-industrial';
     }
+    // Sin sesión se descarta la copia del paquete personal de la sesión anterior.
+    if (!token) forget('estiba_wms_office_personal_css');
     root.setAttribute('data-office-theme', theme);
     var scheme = document.querySelector('meta[name="color-scheme"]');
     if (scheme) scheme.setAttribute('content', theme.startsWith('dark-') ? 'dark' : 'light');
     var color = document.querySelector('meta[name="theme-color"]');
-    if (color) color.setAttribute('content', themeColors[theme]);
+    if (color) color.setAttribute('content', personalColor || themeColors[theme]);
 
     // La entrada /FoliOS solo toma el tema: ella misma decide qué mostrar.
     if (soloTema) return;
@@ -88,6 +99,27 @@
         ? path + window.location.search + window.location.hash
         : '';
     window.location.replace('/FoliOS' + (back ? '?volver=' + encodeURIComponent(back) : ''));
+
+    // office-navigation.js guarda la última hoja personal descargada, atada a la sesión. Va al
+    // final de <head> (office/partials/arranque la mueve detrás de los estilos de Oficina), porque
+    // sus reglas tienen la misma especificidad que las del tema base y deben ganarle.
+    function applyRememberedPersonalTheme(personalTheme, currentToken) {
+        var remembered = null;
+        try {
+            remembered = JSON.parse(read('estiba_wms_office_personal_css') || 'null');
+        } catch (error) {
+            return false;
+        }
+        if (!remembered || remembered.sesion !== currentToken.slice(-16) || remembered.tema !== personalTheme
+            || typeof remembered.css !== 'string') return false;
+
+        var style = document.createElement('style');
+        style.id = 'officePersonalTheme';
+        style.textContent = remembered.css;
+        document.head.appendChild(style);
+        root.setAttribute('data-office-personal-theme', personalTheme);
+        return true;
+    }
 
     // El menú se arma igual en todas las oficinas y office-navigation.js oculta lo que el
     // perfil no habilita. Esa lista se recuerda en la pestaña y se aplica aquí, para que un

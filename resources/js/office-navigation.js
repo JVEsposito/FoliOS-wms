@@ -46,7 +46,7 @@ const themeLabels = {
     'dark-bit': '👾 Modo bit',
     'dark-bit-neon': '⚡ Modo neón',
 };
-let personalStyle;
+const PERSONAL_THEME_CSS_KEY = 'estiba_wms_office_personal_css';
 let personalRequest;
 let themeToken;
 
@@ -78,36 +78,72 @@ function paintTheme(theme, color) {
     );
 }
 
+// La hoja personal que office-arranque.js aplicó antes de pintar, o la que se descargó aquí.
+function personalThemeStyle() {
+    return document.getElementById('officePersonalTheme');
+}
+function removePersonalTheme() {
+    personalThemeStyle()?.remove();
+    delete document.documentElement.dataset.officePersonalTheme;
+}
+// Copia de la última hoja descargada, atada a la sesión, para que el arranque la aplique antes
+// del primer pintado en la próxima oficina. Solo se escribe si cambió: cada escritura avisa a
+// las demás pestañas.
+function rememberPersonalTheme(theme, css) {
+    const remembered = JSON.stringify({ sesion: themeToken.slice(-16), tema: theme, css });
+    try {
+        if (localStorage.getItem(PERSONAL_THEME_CSS_KEY) !== remembered) localStorage.setItem(PERSONAL_THEME_CSS_KEY, remembered);
+    } catch { /* Sin espacio: la hoja se descarga en cada oficina, como antes. */ }
+}
+function forgetPersonalTheme() {
+    try { localStorage.removeItem(PERSONAL_THEME_CSS_KEY); } catch { /* Copia opcional. */ }
+}
 async function loadPersonalTheme(theme, personal) {
     const request = new AbortController();
     personalRequest = request;
+    const current = () => !request.signal.aborted && themeToken === storedToken();
     try {
         const response = await fetch(`/api/oficina/tema-personal/${encodeURIComponent(theme)}`, {
             headers: { Authorization: `Bearer ${themeToken}` },
             signal: request.signal,
             cache: 'no-store',
         });
+        if (response.status === 403 || response.status === 404) {
+            // Ya no está disponible para esta cuenta: se retira la copia y se vuelve a la base.
+            if (!current()) return;
+            removePersonalTheme();
+            forgetPersonalTheme();
+            paintTheme(document.documentElement.dataset.officeTheme, OFFICE_THEME_COLORS[document.documentElement.dataset.officeTheme]);
+            return;
+        }
         if (!response.ok || !response.headers.get('Content-Type')?.startsWith('text/css')) return;
         const css = await response.text();
-        if (request.signal.aborted || themeToken !== storedToken()) return;
-        personalStyle = document.createElement('style');
-        personalStyle.textContent = css;
-        document.head.append(personalStyle);
-        document.documentElement.dataset.officePersonalTheme = theme;
+        if (!current()) return;
+        let style = personalThemeStyle();
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'officePersonalTheme';
+            document.head.append(style);
+        }
+        if (style.textContent !== css) style.textContent = css;
+        if (document.documentElement.dataset.officePersonalTheme !== theme) document.documentElement.dataset.officePersonalTheme = theme;
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', personal.color);
-    } catch { /* Se conserva el tema base si falla la hoja opcional. */ }
+        rememberPersonalTheme(theme, css);
+    } catch { /* Se conserva lo que ya se ve si falla la hoja opcional. */ }
 }
 
 function applyOfficeTheme(theme, { persist = true } = {}) {
     const identity = themeIdentity();
     themeToken = storedToken();
     officeTheme = normalizeOfficeTheme(theme, identity);
-    personalStyle?.remove();
     personalRequest?.abort();
-    delete document.documentElement.dataset.officePersonalTheme;
     const personal = identity?.temas_oficina_personales?.[officeTheme];
     const baseTheme = personal ? (personal.claro ? 'light-professional' : 'dark-industrial') : officeTheme;
-    paintTheme(baseTheme, OFFICE_THEME_COLORS[baseTheme]);
+    // Si ya se ve este mismo paquete (lo aplicó el arranque o una vuelta anterior), se mantiene
+    // mientras se revalida: quitarlo y volver a ponerlo es el parpadeo al cambiar de oficina.
+    const shown = Boolean(personal) && document.documentElement.dataset.officePersonalTheme === officeTheme && Boolean(personalThemeStyle());
+    if (!shown) removePersonalTheme();
+    paintTheme(baseTheme, shown ? personal.color : OFFICE_THEME_COLORS[baseTheme]);
     if (personal) void loadPersonalTheme(officeTheme, personal);
     if (persist) {
         try { localStorage.setItem(officeThemeStorageKey(identity), officeTheme); } catch { /* Preferencia opcional. */ }
