@@ -57,32 +57,68 @@ class TemasPerfilApiTest extends TestCase
         }
     }
 
-    public function test_el_tema_local_se_entrega_solo_a_la_cuenta_autorizada_y_si_lo_permite_su_perfil(): void
+    public function test_el_tema_local_se_entrega_por_correo_o_por_asignacion_de_perfil(): void
     {
         $disco = Storage::fake('local');
         $disco->put('temas-oficina/catalogo.json', json_encode([
             'personal-prueba' => ['correo' => 'personal@folios.test', 'nombre' => 'Tema de prueba', 'color' => '#123456'],
+            'personal-por-perfil' => ['nombre' => 'Tema por perfil', 'color' => '#abcdef'],
             'personal-sin-archivo' => ['correo' => 'personal@folios.test', 'nombre' => 'Sin archivo', 'color' => '#123456'],
         ]));
         $disco->put('temas-oficina/personal-prueba.css', ':root { --background: #123456; }');
+        $disco->put('temas-oficina/personal-por-perfil.css', ':root { --background: #abcdef; }');
         $ruta = '/api/oficina/tema-personal/personal-prueba';
+        $rutaPorPerfil = '/api/oficina/tema-personal/personal-por-perfil';
         $this->getJson($ruta)->assertUnauthorized();
 
         $perfil = PerfilAcceso::where('predeterminado', true)->where('rol_base', RolUsuario::SupervisorFrio)->firstOrFail();
         $autorizado = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => $perfil->id, 'email' => 'personal@folios.test']);
+        $porPerfil = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => $perfil->id]);
+        $sinPerfil = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => null]);
         Sanctum::actingAs($autorizado);
         $this->getJson('/api/oficina/contexto')->assertOk()
             ->assertJsonPath('data.temas_oficina', ['personal-prueba'])
             ->assertJsonPath('data.temas_oficina_personales.personal-prueba.nombre', 'Tema de prueba')
             ->assertJsonMissingPath('data.temas_oficina_personales.personal-prueba.correo');
         $this->get($ruta)->assertOk()->assertHeader('Content-Type', 'text/css; charset=UTF-8');
+        $this->get($rutaPorPerfil)->assertNotFound();
 
-        Sanctum::actingAs(User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => $perfil->id]));
+        Sanctum::actingAs($porPerfil);
         $this->getJson('/api/oficina/contexto')->assertOk()->assertJsonPath('data.temas_oficina', []);
         $this->getJson($ruta)->assertNotFound();
+        $this->getJson($rutaPorPerfil)->assertNotFound();
 
-        $perfil->update(['temas_oficina' => []]);
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $rutaAsignacion = "/api/administracion/perfiles-acceso/{$perfil->id}/temas";
+        Sanctum::actingAs($administrador);
+        $this->getJson('/api/administracion/perfiles-acceso')->assertOk()
+            ->assertJsonPath('catalogo_temas.personal-por-perfil', 'Tema por perfil')
+            ->assertJsonMissingPath('catalogo_temas.personal-sin-archivo');
+        $this->patchJson($rutaAsignacion, ['temas_oficina' => ['personal-prueba', 'personal-por-perfil']])->assertOk();
+
+        Sanctum::actingAs($porPerfil->fresh());
+        $this->getJson('/api/oficina/contexto')->assertOk()
+            ->assertJsonPath('data.temas_oficina', ['personal-prueba', 'personal-por-perfil'])
+            ->assertJsonPath('data.temas_oficina_personales.personal-por-perfil.nombre', 'Tema por perfil')
+            ->assertJsonMissingPath('data.temas_oficina_personales.personal-prueba.correo');
+        $this->get($ruta)->assertOk();
+        $this->get($rutaPorPerfil)->assertOk()->assertHeader('Content-Type', 'text/css; charset=UTF-8');
+
+        Sanctum::actingAs($sinPerfil);
+        $this->getJson($ruta)->assertNotFound();
+        $this->getJson($rutaPorPerfil)->assertNotFound();
+
+        Sanctum::actingAs($administrador);
+        $this->patchJson($rutaAsignacion, ['temas_oficina' => []])->assertOk();
+        Sanctum::actingAs($porPerfil->fresh());
+        $this->getJson($rutaPorPerfil)->assertNotFound();
         Sanctum::actingAs($autorizado->fresh());
         $this->getJson($ruta)->assertNotFound();
+
+        Sanctum::actingAs($administrador);
+        $this->patchJson($rutaAsignacion, ['temas_oficina' => null])->assertOk();
+        Sanctum::actingAs($autorizado->fresh());
+        $this->get($ruta)->assertOk();
+        $this->getJson($rutaPorPerfil)->assertNotFound();
     }
 }

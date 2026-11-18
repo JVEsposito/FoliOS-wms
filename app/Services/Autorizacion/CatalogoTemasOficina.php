@@ -30,9 +30,10 @@ final class CatalogoTemasOficina
             $correo = mb_strtolower(trim((string) $usuario->email));
             $perfil = $usuario->loadMissing('perfilAcceso')->perfilAcceso;
             if ($perfil === null || $perfil->activo) {
-                $personales = array_filter($this->personales(), fn (array $tema): bool => $tema['correo'] === $correo);
-                $permitidos = $perfil?->temas_oficina ?? [...$this->predeterminados($usuario, $correo), ...array_keys($personales)];
-                $temas = array_values(array_intersect($this->ordenar($permitidos), [...array_keys(self::ADICIONALES), ...array_keys($personales)]));
+                $personales = $this->personales();
+                $porCorreo = array_filter($personales, fn (array $tema): bool => $tema['correo'] === $correo);
+                $permitidos = $perfil?->temas_oficina ?? [...$this->predeterminados($usuario, $correo), ...array_keys($porCorreo)];
+                $temas = $this->ordenar($permitidos);
                 $personales = array_intersect_key($personales, array_flip($temas));
             }
         }
@@ -94,11 +95,12 @@ final class CatalogoTemasOficina
 
         $catalogo = json_decode(file_get_contents($ruta), true);
         foreach (is_array($catalogo) ? $catalogo : [] as $clave => $tema) {
+            $correo = $tema['correo'] ?? null;
             if (! preg_match('/\Apersonal-[a-z0-9-]{1,40}\z/', (string) $clave)
                 || ! is_array($tema)
                 || ! is_string($tema['nombre'] ?? null)
                 || trim($tema['nombre']) === ''
-                || ! filter_var($tema['correo'] ?? null, FILTER_VALIDATE_EMAIL)
+                || ($correo !== null && (! is_string($correo) || ! filter_var($correo, FILTER_VALIDATE_EMAIL)))
                 || ! is_string($tema['color'] ?? null)
                 || ! preg_match('/\A#[a-fA-F0-9]{6}\z/', $tema['color'])
                 || ! is_file($this->rutaPersonal($clave))
@@ -108,7 +110,7 @@ final class CatalogoTemasOficina
             $this->personales[$clave] = [
                 'clave' => $clave,
                 'nombre' => $tema['nombre'],
-                'correo' => mb_strtolower($tema['correo']),
+                'correo' => $correo === null ? null : mb_strtolower($correo),
                 'color' => $tema['color'],
                 'claro' => ($tema['claro'] ?? false) === true,
             ];
