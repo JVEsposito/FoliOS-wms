@@ -845,6 +845,10 @@ class ServicioMovimientoEstiba
         );
         if ($tareaEnEjecucion) {
             $this->reservasTareas->completar($tareaEnEjecucion, $movimiento);
+        } elseif ($folioBloqueado->tipo_bulto === TipoBulto::Pallet) {
+            // Movido sin la tarea del planificador: si salió de REPA, su retiro queda cumplido.
+            $folioId = $folioBloqueado->id;
+            DB::afterCommit(fn () => app(ServicioDepuracionIngresosCamara::class)->depurarFolio($folioId, $usuario));
         }
         $this->planificadorDespachoDirecto->sincronizarTrasMovimiento($movimiento, $usuario);
 
