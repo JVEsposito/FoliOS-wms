@@ -564,7 +564,7 @@ class ServicioBinRetornoPacking
     {
         return $bin->load([
             'origenes.lote:id,numero_lote',
-            'tipoResultado:id,codigo,nombre',
+            'tipoResultado:id,codigo,nombre,prefijo_sublote',
             'registradoPor:id,name',
             'regularizadoPor:id,name',
             'anuladoPor:id,name',

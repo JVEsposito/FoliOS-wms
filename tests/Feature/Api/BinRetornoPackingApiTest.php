@@ -32,6 +32,34 @@ class BinRetornoPackingApiTest extends TestCase
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
+    public function test_codigos_de_planta_agregan_congelado_y_desecho_sin_renumerar_retornos_anteriores(): void
+    {
+        $contexto = $this->prepararEntrega('CODIGOS', 'OP-CODIGOS');
+        $ids = TipoResultadoPacking::whereIn('codigo', ['comercial', 'precalibre', 'descarte'])->pluck('id', 'codigo');
+        $comercial = TipoResultadoPacking::where('codigo', 'comercial')->sole();
+        $comercial->update(['prefijo_sublote' => 'CO']);
+        $retorno = $this->registrarRetornoLegacy($contexto, $comercial, 1, 100);
+        $anterior = $retorno->resultados()->sole();
+        $this->assertStringStartsWith('CO-', $anterior->numero_sublote);
+
+        $migracion = require database_path('migrations/2026_11_18_120000_codigos_resultados_packing_planta.php');
+        $migracion->up();
+        $migracion->up();
+        $this->assertSame($ids->all(), TipoResultadoPacking::whereIn('codigo', $ids->keys())->pluck('id', 'codigo')->all());
+        $this->assertSame($anterior->numero_sublote, $anterior->fresh()->numero_sublote);
+        $this->assertSame('Comercial', $anterior->fresh()->nombre_resultado);
+        $esperados = ['comercial' => 'CECOM', 'congelado' => 'CECONG', 'desecho' => 'CEDES', 'descarte' => 'CEDCA', 'precalibre' => 'CEPRE'];
+        $catalogo = $this->getJson('/api/materia-prima/fruta-proceso/retornos-bin/catalogos')->assertOk();
+        foreach ($esperados as $codigo => $prefijo) {
+            $tipo = TipoResultadoPacking::where('codigo', $codigo)->sole();
+            $catalogo->assertJsonFragment(['codigo' => $codigo, 'nombre' => $tipo->nombre, 'prefijo_sublote' => $prefijo]);
+            $nuevo = $this->registrarRetornoLegacy($contexto, $tipo, 1, 100)->resultados()->sole();
+            $this->assertStringStartsWith($prefijo.'-', $nuevo->numero_sublote);
+        }
+        $this->assertNotSame(TipoResultadoPacking::where('codigo', 'desecho')->value('id'), TipoResultadoPacking::where('codigo', 'descarte')->value('id'));
+        $this->assertDatabaseHas('tipos_resultado_packing', ['codigo' => 'otro', 'prefijo_sublote' => 'OT']);
+    }
+
     public function test_registra_rutas_y_esquema_del_nuevo_modelo_por_bin(): void
     {
         $this->assertTrue(Schema::hasTable('bins_retorno_packing'));
@@ -228,6 +256,7 @@ class BinRetornoPackingApiTest extends TestCase
         $this->postJson($ruta, $payload)
             ->assertOk()
             ->assertJsonPath('data.folio_definitivo', 'MP-RET-0001')
+            ->assertJsonPath('data.tipo_resultado.prefijo_sublote', 'TR')
             ->assertJsonPath('data.kilos_totales_verdes', 412.125)
             ->assertJsonPath('data.kilos_totales_definitivos', 410.375)
             ->assertJsonPath('data.origenes.0.kilos_aportados_verdes', 412.125)

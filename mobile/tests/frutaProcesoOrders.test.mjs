@@ -8,6 +8,7 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 import ts from 'typescript';
 import * as packingReturnContainers from '../src/domain/packingReturnContainers.ts';
+import * as frutaProceso from '../src/domain/frutaProceso.ts';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const require = createRequire(import.meta.url);
@@ -48,6 +49,7 @@ async function harness({ availableOrders, cached = false }) {
       if (id.endsWith('/hooks/useOperationalPolling')) return { useOperationalPolling: () => {} };
       if (id.endsWith('/config/polling')) return { OPERATIONAL_POLL_INTERVAL_MS: 10000 };
       if (id.endsWith('/domain/cameras')) return { cameraDisplayName: () => 'Hidrocooler' };
+      if (id.endsWith('/domain/frutaProceso')) return frutaProceso;
       if (id.endsWith('/domain/packingReturnContainers')) return packingReturnContainers;
       if (id.endsWith('/theme/colors')) return { colors: new Proxy({}, { get: () => '#000000' }) };
       return require(id);
@@ -95,4 +97,11 @@ test('conserva la orden tocada aunque el servidor devuelva otra primero', async 
     assert.equal(form.props.mode, 'orden');
     assert.equal(app.root().findByType('Modal').props.visible, true);
   } finally { await app.close(); }
+});
+
+test('las clasificaciones de planta distinguen desecho, descarte y congelado en la PDA', () => {
+  assert.equal(frutaProceso.processResultLabel({ nombre: 'Desecho', prefijo_sublote: 'CEDES' }), 'CEDES · Desecho');
+  assert.equal(frutaProceso.processResultLabel({ nombre: 'Descarte', prefijo_sublote: 'CEDCA' }), 'CEDCA · Descarte');
+  assert.equal(frutaProceso.processResultLabel({ nombre: 'Congelado', prefijo_sublote: 'CECONG' }), 'CECONG · Congelado');
+  assert.equal(frutaProceso.processResultLabel({ nombre: 'Comercial' }), 'Comercial');
 });

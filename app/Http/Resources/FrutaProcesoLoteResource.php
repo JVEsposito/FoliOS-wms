@@ -258,6 +258,7 @@ class FrutaProcesoLoteResource extends JsonResource
                         'id' => $sublote->tipoResultado?->id,
                         'codigo' => $sublote->tipoResultado?->codigo,
                         'nombre' => $sublote->tipoResultado?->nombre,
+                        'prefijo_sublote' => $sublote->tipoResultado?->prefijo_sublote,
                     ],
                     'nombre_resultado' => $sublote->nombre_resultado,
                     'cantidad_bins' => $sublote->cantidad_bins,

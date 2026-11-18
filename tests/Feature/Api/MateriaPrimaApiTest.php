@@ -1771,7 +1771,7 @@ class MateriaPrimaApiTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['codigo' => 'MP-ORIGEN-PACK'])
             ->assertJsonFragment(['codigo' => 'MP-RETORNO-PACK'])
-            ->assertJsonCount(4, 'tipos_resultado')
+            ->assertJsonCount(6, 'tipos_resultado')
             ->json();
         $tipos = collect($catalogos['tipos_resultado'])->keyBy('codigo');
 
@@ -1844,7 +1844,7 @@ class MateriaPrimaApiTest extends TestCase
         );
         $this->assertNotNull($resultadoPrecalibre);
         $this->assertMatchesRegularExpression(
-            '/^PC-\d{6}$/',
+            '/^CEPRE-\d{6}$/',
             $resultadoPrecalibre['numero_sublote'],
         );
         $this->assertDatabaseCount('retornos_packing', 2);

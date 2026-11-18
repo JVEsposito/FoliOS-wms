@@ -1,3 +1,4 @@
+import { packingReturnResultLabel } from './shared/packing-return-results';
 import { createOperationalPoller } from './shared/operational-poller';
 import { packingReturnQuantity } from './shared/packing-return-containers';
 
@@ -177,6 +178,8 @@ function filteredBins() {
             bin.envase,
             bin.tipo_envase,
             bin.nombre_resultado,
+            bin.tipo_resultado?.prefijo_sublote,
+            bin.tipo_resultado?.nombre,
             ...bin.origenes.flatMap((origin) => [
                 origin.numero_lote,
                 origin.numero_orden,
@@ -206,7 +209,7 @@ function binCard(bin, pending = false) {
     const audit = bin.anulado_at
         ? `<div class="return-annulment"><strong>Anulado ${escapeHtml(formatDate(bin.anulado_at))}</strong><span>${escapeHtml(bin.anulado_por || 'Usuario')} · ${escapeHtml(bin.motivo_anulacion || 'Sin motivo')}</span></div>`
         : '';
-    return `<article class="bin-card"><div class="bin-card__heading"><div><h3>${escapeHtml(bin.folio_provisional)}${bin.folio_definitivo ? ` → ${escapeHtml(bin.folio_definitivo)}` : ''}</h3><p>${escapeHtml(formatDate(bin.registrado_at))} · ${escapeHtml(bin.registrado_por || 'Usuario')}${bin.retorno_legacy ? ` · migrado desde ${escapeHtml(bin.retorno_legacy)}` : ''}</p></div><span class="return-status${bin.estado === 'pendiente_regularizacion' ? ' is-warning' : ''}">${escapeHtml(label(bin.estado))}</span></div><div class="bin-facts"><div><span>ENVASES</span><strong>${escapeHtml(packingReturnQuantity(bin))}</strong></div><div><span>PESO VERDE</span><strong>${escapeHtml(formatKilos(bin.kilos_totales_verdes ?? bin.kilos_totales))}</strong></div><div><span>PESO DEFINITIVO</span><strong>${bin.kilos_totales_definitivos === null ? 'Pendiente' : escapeHtml(formatKilos(bin.kilos_totales_definitivos))}</strong></div><div><span>PROCESOS</span><strong>${formatNumber(bin.origenes.length)}</strong></div><div><span>CLASIFICACIÓN</span><strong>${escapeHtml(bin.nombre_resultado || bin.tipo_resultado?.nombre || 'Pendiente')}</strong></div></div>${binOriginsMarkup(bin)}${correction}${audit}${actions.length ? `<div class="bin-card__actions" data-office-action-menu>${actions.join('')}</div>` : ''}</article>`;
+    return `<article class="bin-card"><div class="bin-card__heading"><div><h3>${escapeHtml(bin.folio_provisional)}${bin.folio_definitivo ? ` → ${escapeHtml(bin.folio_definitivo)}` : ''}</h3><p>${escapeHtml(formatDate(bin.registrado_at))} · ${escapeHtml(bin.registrado_por || 'Usuario')}${bin.retorno_legacy ? ` · migrado desde ${escapeHtml(bin.retorno_legacy)}` : ''}</p></div><span class="return-status${bin.estado === 'pendiente_regularizacion' ? ' is-warning' : ''}">${escapeHtml(label(bin.estado))}</span></div><div class="bin-facts"><div><span>ENVASES</span><strong>${escapeHtml(packingReturnQuantity(bin))}</strong></div><div><span>PESO VERDE</span><strong>${escapeHtml(formatKilos(bin.kilos_totales_verdes ?? bin.kilos_totales))}</strong></div><div><span>PESO DEFINITIVO</span><strong>${bin.kilos_totales_definitivos === null ? 'Pendiente' : escapeHtml(formatKilos(bin.kilos_totales_definitivos))}</strong></div><div><span>PROCESOS</span><strong>${formatNumber(bin.origenes.length)}</strong></div><div><span>CLASIFICACIÓN</span><strong>${escapeHtml(packingReturnResultLabel(bin.tipo_resultado, bin.nombre_resultado))}</strong></div></div>${binOriginsMarkup(bin)}${correction}${audit}${actions.length ? `<div class="bin-card__actions" data-office-action-menu>${actions.join('')}</div>` : ''}</article>`;
 }
 function renderBins() {
     const visibleBins = filteredBins();
@@ -295,7 +298,7 @@ function openEdit(id) {
     if (regularized && bin.tipo_resultado && !types.some((type) => type.id === bin.tipo_resultado.id)) {
         types.push(bin.tipo_resultado);
     }
-    elements.editForm.elements.tipo_resultado_packing_id.innerHTML = `<option value="">Seleccionar</option>${types.map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(type.codigo)} · ${escapeHtml(type.nombre)}</option>`).join('')}`;
+    elements.editForm.elements.tipo_resultado_packing_id.innerHTML = `<option value="">Seleccionar</option>${types.map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(packingReturnResultLabel(type))}</option>`).join('')}`;
     elements.editForm.elements.folio_definitivo.value = regularized ? (bin.folio_definitivo || '') : '';
     elements.editForm.elements.tipo_resultado_packing_id.value = regularized ? (bin.tipo_resultado?.id || '') : '';
     elements.editForm.elements.nombre_resultado.value = regularized ? (bin.nombre_resultado || '') : '';
@@ -470,7 +473,7 @@ function openRegularize(id) {
     const sourceObservation = String(bin.observacion || '').trim();
     elements.regularizeObservation.textContent = sourceObservation || 'Sin observación registrada.';
     elements.regularizeObservation.closest('.return-source-observation')?.classList.toggle('is-empty', !sourceObservation);
-    elements.regularizeForm.elements.tipo_resultado_packing_id.innerHTML = `<option value="">Seleccionar</option>${state.catalogs.tipos_resultado.map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(type.codigo)} · ${escapeHtml(type.nombre)}</option>`).join('')}`;
+    elements.regularizeForm.elements.tipo_resultado_packing_id.innerHTML = `<option value="">Seleccionar</option>${state.catalogs.tipos_resultado.map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(packingReturnResultLabel(type))}</option>`).join('')}`;
     elements.regularizeTotal.value = bin.kilos_totales_definitivos ?? bin.kilos_totales;
     elements.regularizeOrigins.innerHTML = bin.origenes.map((origin) => `<div class="migration-origin" data-regularize-origin-id="${escapeHtml(origin.id)}"><div class="migration-origin__identity"><strong>${escapeHtml(processLabel(origin))}</strong><small>Kilos verdes registrados: ${escapeHtml(formatKilos(origin.kilos_aportados_verdes ?? origin.kilos_aportados))}</small></div><input data-regularize-kilos type="number" min="0.001" max="999999999.999" step="0.001" inputmode="decimal" value="${escapeHtml(origin.kilos_aportados_definitivos ?? origin.kilos_aportados)}" aria-label="Kilos definitivos de ${escapeHtml(processLabel(origin))}"></div>`).join('');
     renderRegularizeBalance();

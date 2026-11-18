@@ -31,7 +31,7 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
                 }
                 if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
                 if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Prueba', temporada: { codigo: 'TEMP-PRUEBA' } } } });
-                if (path === `${prefix}/catalogos`) return route.fulfill({ json: { envases_retorno: [{ codigo: 'bins', nombre: 'BINS' }, { codigo: 'caja_3_4', nombre: 'CAJAS 3/4' }], tipos_resultado: [{ id: 'tipo', codigo: 'comercial', nombre: 'Comercial' }] } });
+                if (path === `${prefix}/catalogos`) return route.fulfill({ json: { envases_retorno: [{ codigo: 'bins', nombre: 'BINS' }, { codigo: 'caja_3_4', nombre: 'CAJAS 3/4' }], tipos_resultado: [{ id: 'tipo', codigo: 'comercial', nombre: 'Comercial', prefijo_sublote: 'CECOM' }] } });
                 if (path === `${prefix}/procesos`) return route.fulfill({ json: { data: [{ clave: 'proc', lote_materia_prima_id: 'lote', numero_lote: 'L-001', numero_orden: 'OP-001', linea_proceso: 'Línea 1', turno: 'A', viajes: 1, bins_enviados: 4, kilos_enviados: 1000 }] } });
                 if (path === `${prefix}/legacy`) return route.fulfill({ json: { data: [] } });
                 if (path === `${prefix}/resumen`) return route.fulfill({ json: { bins_registrados: 0, cajas_3_4_registradas: records[0]?.cantidad_envases || 0, kilos_registrados: records[0]?.kilos_totales || 0, pendientes_regularizacion: records.filter((r) => r.estado === 'pendiente_regularizacion').length, retornos_anteriores_pendientes: 0 } });
@@ -54,7 +54,7 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
                 if (path === `${prefix}/bins/retorno/regularizar`) {
                     const payload = req.postDataJSON(); writes.push({ action: 'regularizar', payload });
                     Object.assign(records[0], { estado: 'regularizado', folio_definitivo: payload.folio_definitivo, kilos_totales_definitivos: payload.kilos_totales_definitivos,
-                        regularizado_at: '2026-11-02T12:10:00Z', tipo_resultado: { id: 'tipo', nombre: 'Comercial' }, nombre_resultado: 'Comercial' });
+                        regularizado_at: '2026-11-02T12:10:00Z', tipo_resultado: { id: 'tipo', nombre: 'Comercial', prefijo_sublote: 'CECOM' }, nombre_resultado: 'Comercial' });
                     records[0].origenes[0].kilos_aportados_definitivos = payload.kilos_totales_definitivos;
                     return route.fulfill({ json: { data: records[0] } });
                 }
@@ -96,6 +96,7 @@ test('Oficina registra cajas, corrige cantidades con motivo y conserva el envase
             await page.locator('[data-return-section="pendientes"]').click();
             await page.locator('#pendingBinList .office-action-select').selectOption({ label: 'Regularizar folio y kilos' });
             await page.locator('#regularizeForm [name="folio_definitivo"]').fill('FAG-000012');
+            assert.equal(await page.locator('#regularizeForm [name="tipo_resultado_packing_id"] option[value="tipo"]').textContent(), 'CECOM · Comercial');
             await page.locator('#regularizeForm [name="tipo_resultado_packing_id"]').selectOption('tipo');
             await page.locator('#regularizeForm [name="kilos_totales_definitivos"]').fill('235');
             await page.locator('[data-regularize-kilos]').fill('235');
