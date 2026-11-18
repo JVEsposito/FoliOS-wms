@@ -20,7 +20,7 @@ export type ConsolidationCatalog = {
 };
 
 export type ConsolidationLoad = {
-  id: string; codigo: string; estado: string; exportadora: string | null; embarque: string | null; contenedor: string | null;
+  id: string; codigo: string; referencia_embarque?: string | null; estado: string; exportadora: string | null; embarque: string | null; contenedor: string | null;
   instructivos?: string[];
   anden: string | null; patente: string | null; pallets: number; en_anden: number; cargados: number;
   control: { id: string; estado: 'borrador' | 'cerrado'; posicionados: number } | null;
@@ -39,6 +39,8 @@ export type ConsolidationPhotosPdf = { url: string; bytes: number; cantidad: num
 export type ConsolidationValues = Record<string, string | number | null>;
 export type ConsolidationControl = {
   id: string; estado: 'borrador' | 'cerrado'; version: number;
+  referencia_embarque?: string | null;
+  archivos?: { planilla: string; fotos: string };
   carga: { id: string; codigo: string; estado: string; embarque: string | null; anden: string | null; patente: string | null };
   encabezado: ConsolidationValues; sugerido: { encabezado: ConsolidationValues; cierre: ConsolidationValues };
   inspeccion: Record<string, 'si' | 'no' | 'na' | null>; cierre: ConsolidationValues;

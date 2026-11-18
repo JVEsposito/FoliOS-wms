@@ -65,6 +65,7 @@ class PlanillaControlDespacho
         return [
             'id' => $carga->id,
             'codigo' => $carga->codigo,
+            'referencia_embarque' => $control ? ReferenciaControlDespacho::deControl($control, $carga) : ReferenciaControlDespacho::deCarga($carga),
             'estado' => $carga->estado->value,
             'exportadora' => $carga->embarque?->cliente?->nombre,
             'embarque' => $carga->embarque?->codigo,
@@ -111,9 +112,15 @@ class PlanillaControlDespacho
             ->mapWithKeys(fn (array $campo, string $clave): array => [$clave => ($control->inspeccion ?? [])[$clave] ?? null])
             ->all();
         $totales = $this->totales($pallets);
+        $referencia = ReferenciaControlDespacho::dePlanilla(['encabezado' => $encabezado]);
 
         $detalle = [
             'id' => $control->id,
+            'referencia_embarque' => $referencia,
+            'archivos' => [
+                'planilla' => ReferenciaControlDespacho::nombreArchivo($referencia, $carga->codigo),
+                'fotos' => ReferenciaControlDespacho::nombreArchivo($referencia, $carga->codigo, fotos: true),
+            ],
             'estado' => $control->estado,
             'version' => $control->version,
             'carga' => [
@@ -242,7 +249,7 @@ class PlanillaControlDespacho
                 },
                 'tipo_camion' => filled($embarque?->contenedor) ? 'contenedor' : null,
                 'exportadora' => $embarque?->cliente?->nombre ?? $comun($exportadoras),
-                'referencia_embarque' => $comun($instructivos->pluck('numero_externo')) ?? $carga->numero_orden_externa ?? $embarque?->codigo,
+                'referencia_embarque' => ReferenciaControlDespacho::deCarga($carga),
                 'fecha_instructivo' => $embarque?->fecha_programada?->toDateString(),
                 'hora_instructivo' => $embarque?->hora_programada ? substr((string) $embarque->hora_programada, 0, 5) : null,
                 'fecha_carga' => ($inicio ?? now()->setTimezone($zona))->format('Y-m-d'),

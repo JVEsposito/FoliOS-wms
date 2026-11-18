@@ -18,6 +18,7 @@ class RegistrarBinRetornoPackingRequest extends FormRequest
     {
         return [
             'operacion_id' => ['required', 'uuid'],
+            'folio_por_confirmar' => ['nullable', 'string', 'max:80', 'not_regex:/[\x00-\x1f\x7f]/u'],
             'tipo_envase' => ['sometimes', Rule::enum(TipoEnvaseRetornoPacking::class)],
             'cantidad_envases' => ['required_if:tipo_envase,caja_3_4', 'integer', 'min:1', 'max:100000',
                 Rule::when($this->input('tipo_envase', 'bins') === 'bins', 'max:1')],

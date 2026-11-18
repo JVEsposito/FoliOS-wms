@@ -306,6 +306,12 @@
     font-weight: 800;
 }
 
+:root:is([data-office-theme="dark-princess"], [data-office-theme="light-garden"]) .operation-now-tab[aria-selected="true"] {
+    border-radius: var(--radius-control) var(--radius-control) 0 0;
+    background: var(--surface-selected);
+    color: var(--primary);
+}
+
 .operation-now-tab:focus-visible {
     outline: 3px solid var(--focus-ring, var(--eui-color-frost));
     outline-offset: -3px;
@@ -708,6 +714,25 @@
 .operation-now-dispatch-instruction .operation-now-code { font-size: .78rem; }
 .operation-now-dispatch-load > td { border-top: 2px solid var(--corporate-border); }
 .operation-now-dispatch-load > td[rowspan] { vertical-align: top; }
+
+:root:is([data-office-theme="dark-princess"], [data-office-theme="light-garden"]) .operation-now-table--dispatch .operation-now-signal {
+    padding: 4px 8px;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-control);
+    background: var(--surface-muted);
+}
+
+:root:is([data-office-theme="dark-princess"], [data-office-theme="light-garden"]) .operation-now-table--dispatch .operation-now-signal[data-tone="success"] {
+    background: var(--success-bg);
+}
+
+:root:is([data-office-theme="dark-princess"], [data-office-theme="light-garden"]) .operation-now-table--dispatch .operation-now-signal[data-tone="warning"] {
+    background: var(--warning-bg);
+}
+
+:root:is([data-office-theme="dark-princess"], [data-office-theme="light-garden"]) .operation-now-dispatch-progress .operation-now-meter {
+    border-radius: 99px;
+}
 .operation-now-table--reentry { min-width: 720px; table-layout: fixed; }
 .operation-now-table--reentry :where(th, td):nth-child(1) { width: 20%; }
 .operation-now-table--reentry :where(th, td):nth-child(2) { width: 30%; }
@@ -1007,7 +1032,7 @@
 }
 
 :root[data-office-theme="dark-industrial"] :is(.plant-view, .operation-map-dialog),
-:root[data-office-theme="dark-rose"] :is(.plant-view, .operation-map-dialog),
+:root[data-office-theme="dark-princess"] :is(.plant-view, .operation-map-dialog),
 :root[data-office-theme="dark-bit"] :is(.plant-view, .operation-map-dialog),
 :root[data-office-theme="dark-bit-neon"] :is(.plant-view, .operation-map-dialog) {
     --plant-canvas: #13222c;
@@ -1045,7 +1070,7 @@
     --plant-door: #5fc4d6;
 }
 
-:root:is([data-office-theme="dark-rose"], [data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"]) :is(.plant-view, .operation-map-dialog) {
+:root:is([data-office-theme="dark-princess"], [data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"]) :is(.plant-view, .operation-map-dialog) {
     --plant-canvas: var(--deep);
     --plant-grid: rgba(198, 170, 188, .07);
     --plant-grid-major: rgba(198, 170, 188, .13);

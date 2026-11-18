@@ -12,6 +12,7 @@ use App\Http\Requests\AprobarProcesoPrefrioRequest;
 use App\Http\Requests\CancelarProcesoPrefrioRequest;
 use App\Http\Requests\ConfirmarRetiroParcialPrefrioRequest;
 use App\Http\Requests\ConsultarProcesosPrefrioRequest;
+use App\Http\Requests\CorregirHorasProcesoPrefrioRequest;
 use App\Http\Requests\CorregirProcesoPrefrioRequest;
 use App\Http\Requests\CrearProcesoPrefrioRequest;
 use App\Http\Requests\FinalizarParcialProcesoPrefrioRequest;
@@ -378,6 +379,16 @@ class ProcesoPrefrioController extends Controller
             $request->validated(),
             $request->user(),
             $this->dispositivo($request),
+        ));
+    }
+
+    public function corregirHoras(
+        CorregirHorasProcesoPrefrioRequest $request,
+        ProcesoPrefrio $procesoPrefrio,
+        ServicioCorreccionProcesoPrefrio $servicio,
+    ): ProcesoPrefrioResource {
+        return new ProcesoPrefrioResource($servicio->corregirHoras(
+            $procesoPrefrio, $request->validated(), $request->user(),
         ));
     }
 

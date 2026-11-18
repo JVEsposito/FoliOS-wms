@@ -158,16 +158,17 @@ class ArchivoFotosControlDespacho
     {
         $encabezado = $control->encabezado ?? [];
         $codigo = $control->carga()->value('codigo');
+        $referencia = ReferenciaControlDespacho::deControl($control);
 
         return [
-            'titulo' => "SET FOTOGRÁFICO · POEMP R-24 · CARGA {$codigo}",
+            'titulo' => 'SET FOTOGRÁFICO · R-24 · '.($referencia ? 'EMBARQUE '.$referencia : 'CARGA '.$codigo),
             // La pizarra identificatoria del set, más la patente.
             'detalle' => collect(FormularioControlDespacho::pizarra($encabezado))
                 ->filter(fn (array $dato): bool => $dato['valor'] !== null)
                 ->map(fn (array $dato): string => "{$dato['etiqueta']} {$dato['valor']}")
                 ->push(filled($encabezado['patente_camion'] ?? null) ? 'Patente '.$encabezado['patente_camion'] : null)
                 ->filter()->implode(' · '),
-            'pie' => sprintf('FoliOS · %d fotos · Generado %s', $cantidad, $this->hora(now())),
+            'pie' => sprintf('FoliOS · Carga %s · %d fotos · Generado %s', $codigo, $cantidad, $this->hora(now())),
         ];
     }
 

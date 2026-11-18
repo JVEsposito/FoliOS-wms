@@ -937,6 +937,8 @@ class ServicioProcesoPrefrio
 
         $ultimoEvento = EventoPrefrio::query()
             ->where('proceso_prefrio_id', $proceso->id)
+            // La auditoría registra cuándo se corrigió; no es una acción física del ciclo.
+            ->where('tipo', '!=', TipoEventoPrefrio::CorreccionAdministrativa->value)
             // Una vez iniciado el ciclo, la cronología se mide desde el inicio térmico.
             // La captura del armado puede haberse realizado después en la tablet.
             ->when($proceso->iniciado_at !== null, fn ($consulta) => $consulta->whereNotIn('tipo', [

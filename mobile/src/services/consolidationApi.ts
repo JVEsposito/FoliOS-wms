@@ -99,23 +99,23 @@ export function createConsolidationApi(baseUrl: string, token: string) {
         reader.readAsDataURL(blob);
       });
     },
-    async sharePhotosPdf(id: string, code: string) {
+    async sharePhotosPdf(id: string, code: string, filename?: string) {
       if (!await Sharing.isAvailableAsync()) throw new Error('Este equipo no permite compartir archivos. Descarga el PDF desde Oficina.');
       const r = await response(`${control(id)}/fotos.pdf`, {}, 60_000);
       if (!r.ok) { const data = await r.json().catch(() => ({})); throw new ApiError(data.message || 'No se pudo descargar el PDF de fotos.', r.status, data); }
       const bytes = new Uint8Array(await r.arrayBuffer());
       if (bytes[0] !== 0x25 || bytes[1] !== 0x50) throw new Error('El servidor no devolvió el PDF de fotos.');
-      const file = new File(Paths.cache, `R-24_fotos_${code.replace(/[^A-Za-z0-9_-]+/g, '_')}_${Date.now()}.pdf`);
+      const file = new File(Paths.cache, filename?.replace(/[^\p{L}\p{N}_.-]+/gu, '_') || `R-24_fotos_${code.replace(/[^A-Za-z0-9_-]+/g, '_')}_${Date.now()}.pdf`);
       file.write(bytes);
       await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'Fotos R-24' });
     },
-    async shareSheet(id: string, code: string) {
+    async shareSheet(id: string, code: string, filename?: string) {
       if (!await Sharing.isAvailableAsync()) throw new Error('Este equipo no permite compartir archivos. Descarga la planilla desde Oficina.');
       const r = await response(`${control(id)}/planilla.xlsx`, {}, 60_000);
       if (!r.ok) { const data = await r.json().catch(() => ({})); throw new ApiError(data.message || 'No se pudo descargar la planilla.', r.status, data); }
       const bytes = new Uint8Array(await r.arrayBuffer());
       if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error('El servidor no devolvió la planilla R-24.');
-      const file = new File(Paths.cache, `R-24_${code.replace(/[^A-Za-z0-9_-]+/g, '_')}_${Date.now()}.xlsx`);
+      const file = new File(Paths.cache, filename?.replace(/[^\p{L}\p{N}_.-]+/gu, '_') || `R-24_${code.replace(/[^A-Za-z0-9_-]+/g, '_')}_${Date.now()}.xlsx`);
       file.write(bytes);
       await Sharing.shareAsync(file.uri, { mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', dialogTitle: 'Planilla R-24' });
     },

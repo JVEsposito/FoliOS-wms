@@ -65,6 +65,7 @@ class ServicioBinRetornoPacking
                 'operacion_id' => $datos['operacion_id'],
                 'payload_hash' => $hash,
                 'folio_provisional' => $folioProvisional,
+                'folio_por_confirmar' => $payload['folio_por_confirmar'] ?? null,
                 'kilos_totales' => $payload['kilos_totales'],
                 'tipo_envase' => $payload['tipo_envase'] ?? 'bins',
                 'cantidad_envases' => $payload['cantidad_envases'] ?? 1,
@@ -137,6 +138,11 @@ class ServicioBinRetornoPacking
             );
 
             $regularizado = $bin->regularizado_at !== null;
+            if ($regularizado && array_key_exists('folio_por_confirmar', $payload)) {
+                throw ValidationException::withMessages([
+                    'folio_por_confirmar' => 'El retorno ya fue regularizado. Corrige su folio definitivo si corresponde.',
+                ]);
+            }
             $tipo = null;
             if ($regularizado) {
                 $folioOcupado = BinRetornoPacking::query()
@@ -210,6 +216,9 @@ class ServicioBinRetornoPacking
                 'tipo_envase' => $payload['tipo_envase'] ?? $bin->tipo_envase->value,
                 'cantidad_envases' => $payload['cantidad_envases'] ?? $bin->cantidad_envases,
             ];
+            if (array_key_exists('folio_por_confirmar', $payload)) {
+                $datosBin['folio_por_confirmar'] = $payload['folio_por_confirmar'];
+            }
             if ($regularizado && $tipo) {
                 $datosBin = [
                     ...$datosBin,
@@ -470,6 +479,7 @@ class ServicioBinRetornoPacking
                 'operacion_id' => $datos['operacion_id'],
                 'payload_hash' => $hash,
                 'folio_provisional' => $folioProvisional,
+                'folio_por_confirmar' => $payload['folio_por_confirmar'] ?? null,
                 'kilos_totales' => $payload['kilos_totales'],
                 'estado' => 'pendiente_regularizacion',
                 'retorno_packing_legacy_id' => $retorno->id,
@@ -564,7 +574,7 @@ class ServicioBinRetornoPacking
     {
         return $bin->load([
             'origenes.lote:id,numero_lote',
-            'tipoResultado:id,codigo,nombre',
+            'tipoResultado:id,codigo,nombre,prefijo_sublote',
             'registradoPor:id,name',
             'regularizadoPor:id,name',
             'anuladoPor:id,name',
@@ -577,6 +587,7 @@ class ServicioBinRetornoPacking
     private function payloadBin(array $datos): array
     {
         $envase = $this->payloadEnvase($datos);
+        $folioPorConfirmar = $this->normalizarFolioPorConfirmar($datos['folio_por_confirmar'] ?? null);
 
         return [
             'kilos_totales' => $this->decimal($datos['kilos_totales']),
@@ -586,6 +597,7 @@ class ServicioBinRetornoPacking
             'origenes' => $this->normalizarOrigenes($datos['origenes']),
             // Conserva el hash histórico para reenvíos de un bin sin campos nuevos.
             ...($envase['tipo_envase'] === 'bins' ? [] : $envase),
+            ...($folioPorConfirmar !== null ? ['folio_por_confirmar' => $folioPorConfirmar] : []),
         ];
     }
 
@@ -661,6 +673,9 @@ class ServicioBinRetornoPacking
         ];
         if (isset($datos['tipo_envase'])) {
             $payload = [...$payload, ...$this->payloadEnvase($datos)];
+        }
+        if (array_key_exists('folio_por_confirmar', $datos)) {
+            $payload['folio_por_confirmar'] = $this->normalizarFolioPorConfirmar($datos['folio_por_confirmar']);
         }
         if ($regularizado) {
             $payload = [
@@ -739,6 +754,7 @@ class ServicioBinRetornoPacking
             'tipo_envase' => $bin->tipo_envase->value,
             'cantidad_envases' => $bin->cantidad_envases,
             'folio_provisional' => $bin->folio_provisional,
+            'folio_por_confirmar' => $bin->folio_por_confirmar,
             'folio_definitivo' => $bin->folio_definitivo,
             'kilos_totales' => $this->decimal($bin->kilos_totales),
             'kilos_totales_definitivos' => $bin->kilos_totales_definitivos !== null
@@ -793,13 +809,28 @@ class ServicioBinRetornoPacking
     /** @param array<string, mixed> $datos */
     private function payloadMigracion(array $datos): array
     {
+        $folioPorConfirmar = $this->normalizarFolioPorConfirmar($datos['folio_por_confirmar'] ?? null);
+
         return [
             'kilos_totales' => $this->decimal($datos['kilos_totales']),
             'motivo' => filled($datos['motivo'] ?? null)
                 ? trim((string) $datos['motivo'])
                 : null,
             'origenes' => $this->normalizarOrigenes($datos['origenes']),
+            ...($folioPorConfirmar !== null ? ['folio_por_confirmar' => $folioPorConfirmar] : []),
         ];
+    }
+
+    private function normalizarFolioPorConfirmar(?string $folio): ?string
+    {
+        $folio = mb_strtoupper(trim($folio ?? ''));
+        if (mb_strlen($folio) > 80 || preg_match('/[\x00-\x1f\x7f]/u', $folio)) {
+            throw ValidationException::withMessages([
+                'folio_por_confirmar' => 'El folio por confirmar debe tener hasta 80 caracteres y no admite saltos de línea.',
+            ]);
+        }
+
+        return $folio !== '' ? $folio : null;
     }
 
     /** @param array<int, array<string, mixed>> $origenes */

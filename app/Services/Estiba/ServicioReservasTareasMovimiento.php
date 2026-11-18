@@ -290,10 +290,14 @@ class ServicioReservasTareasMovimiento
             );
         }
 
+        // El mutex del usuario ya serializa sus inicios. Acotar la lectura actual
+        // por operador y estado evita bloquear tareas ajenas al recorrer el índice
+        // global de estados o la PK. Esta tarea sigue asumida: no hace falta excluir
+        // su ID, predicado que puede desviar el plan de acceso de MySQL.
         $otraEnProceso = TareaMovimiento::query()
-            ->where('id', '!=', $tareaBloqueada->id)
-            ->where('estado', EstadoTareaMovimiento::EnProceso->value)
             ->where('responsable_user_id', $usuario->id)
+            ->where('estado', EstadoTareaMovimiento::EnProceso->value)
+            ->when(DB::getDriverName() === 'mysql', fn ($consulta) => $consulta->forceIndex('tareas_responsable_estado_idx'))
             ->lockForUpdate()
             ->exists();
         if ($otraEnProceso) {

@@ -108,7 +108,7 @@ class BinRetornoPackingController extends Controller
             ->whereHas('temporada', fn (Builder $consulta) => $consulta->whereKey(app(ServicioTemporadaActiva::class)->buscar()?->id))
             ->with([
                 'origenes.lote:id,numero_lote',
-                'tipoResultado:id,codigo,nombre',
+                'tipoResultado:id,codigo,nombre,prefijo_sublote',
                 'registradoPor:id,name',
                 'regularizadoPor:id,name',
                 'anuladoPor:id,name',
@@ -120,6 +120,7 @@ class BinRetornoPackingController extends Controller
                 $consulta->where(function (Builder $subconsulta) use ($buscar): void {
                     $subconsulta
                         ->where('folio_provisional', 'like', "%{$buscar}%")
+                        ->orWhere('folio_por_confirmar', 'like', "%{$buscar}%")
                         ->orWhere('folio_definitivo', 'like', "%{$buscar}%")
                         ->orWhere('observacion', 'like', "%{$buscar}%")
                         ->orWhereHas('origenes', fn (Builder $origenes) => $origenes
@@ -147,7 +148,7 @@ class BinRetornoPackingController extends Controller
             )
             ->with([
                 'entregas.lote:id,numero_lote',
-                'resultados.tipoResultado:id,codigo,nombre',
+                'resultados.tipoResultado:id,codigo,nombre,prefijo_sublote',
                 'registradoPor:id,name',
             ])
             ->whereNull('anulado_at')
@@ -210,7 +211,7 @@ class BinRetornoPackingController extends Controller
                 ->where('activo', true)
                 ->orderBy('orden')
                 ->orderBy('nombre')
-                ->get(['id', 'codigo', 'nombre']),
+                ->get(['id', 'codigo', 'nombre', 'prefijo_sublote']),
         ]);
     }
 
@@ -304,6 +305,7 @@ class BinRetornoPackingController extends Controller
         return [
             'id' => $bin->id,
             'folio_provisional' => $bin->folio_provisional,
+            'folio_por_confirmar' => $bin->folio_por_confirmar,
             'tipo_envase' => $bin->tipo_envase->value,
             'envase' => $bin->tipo_envase->etiqueta(),
             'cantidad_envases' => $bin->cantidad_envases,
@@ -318,6 +320,7 @@ class BinRetornoPackingController extends Controller
                 'id' => $bin->tipoResultado->id,
                 'codigo' => $bin->tipoResultado->codigo,
                 'nombre' => $bin->tipoResultado->nombre,
+                'prefijo_sublote' => $bin->tipoResultado->prefijo_sublote,
             ] : null,
             'nombre_resultado' => $bin->nombre_resultado,
             'origenes' => $bin->origenes->map(fn ($origen): array => [

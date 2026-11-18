@@ -15,3 +15,9 @@ Ejecutar la migración `2026_10_30_120000_habilitar_sesiones_estiba_por_tarea`, 
 ## Comprobación operacional
 
 Con dos usuarios y dispositivos distintos, asumir labores con pallets y bandas diferentes de una misma cámara, iniciar ambas y confirmar los dos movimientos. Comprobar que un destino compartido o una banda comprometida se rechaza; que finalizar una labor no cierra la sesión de la otra; y que las sesiones previas de edición manual conservan sus controles.
+
+## Inicio de movimientos: lectura acotada al camarero
+
+La comprobación de «otro pallet físicamente en movimiento» utiliza el índice existente `tareas_responsable_estado_idx` por responsable y estado. El paso actual todavía está asumido, por lo que no se necesita excluir su ID. Esa desigualdad permitía que MySQL eligiera un recorrido global de tareas; su lectura bloqueante alcanzaba filas ajenas y podía cruzarse con el incremento de revisión de una cámara al liberar otra reserva.
+
+Se conserva la lectura actual con bloqueo y el mutex del usuario: un camarero sigue sin poder iniciar dos pallets desde tablets distintas. La prueba de aislamiento mantiene bloqueada una tarea en proceso de un operador mientras los otros dos inician sus propios retiros; comprueba que ninguno necesite la fila ajena. La prueba completa de tres camareros conserva los 84 movimientos, liberaciones, retomas, vencimientos y verificaciones contra intrusiones de otra tablet. No requiere migraciones ni cambios móviles.

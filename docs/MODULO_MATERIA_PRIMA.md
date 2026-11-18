@@ -215,12 +215,14 @@ Un camarero puede anular solamente su última entrega mientras el lote todavía 
 
 Cada retorno se registra contra una entrega física concreta. Puede ser parcial o cerrar definitivamente esa entrega y admite varios resultados en una misma operación:
 
-- precalibre;
-- comercial;
-- descarte;
-- otro resultado con nombre manual.
+- CECOM: comercial;
+- CECONG: congelado;
+- CEDES: desecho;
+- CEDCA: descarte;
+- CEPRE: precalibre;
+- otro resultado con nombre manual, para excepciones.
 
-Cada resultado crea un sublote interno correlativo (`PC-`, `CO-`, `DE-` u `OT-`) vinculado al lote original, la recepción y la entrega. Los bins de salida pueden diferir de los enviados porque Packing puede vaciar y volver a llenar envases. Los kilos recuperados son opcionales; si la entrega y sus resultados informan kilos, al cerrar se calcula la merma.
+Cada resultado crea un sublote interno correlativo (`CECOM-`, `CECONG-`, `CEDES-`, `CEDCA-`, `CEPRE-` u `OT-` para excepciones) vinculado al lote original, la recepción y la entrega. Los bins de salida pueden diferir de los enviados porque Packing puede vaciar y volver a llenar envases. Los kilos recuperados son opcionales; si la entrega y sus resultados informan kilos, al cerrar se calcula la merma.
 
 Los sublotes nacen en `pendiente_ubicacion`. El camarero los asigna a una cámara activa exclusiva de materia prima, sin crear una recepción nueva ni duplicar la fruta. Un retorno puede anularse con motivo solamente antes de ubicar cualquiera de sus sublotes; la anulación conserva toda la trazabilidad y excluye sus cantidades de los totales vigentes.
 
@@ -288,3 +290,17 @@ Todas las mutaciones usan UUID de operación. Las transiciones y correcciones ge
 No puede anular lotes confirmados ni operar posiciones de cámara.
 
 `camarero_frio` puede consultar Fruta a proceso, registrar viajes y retornos, y ubicar sus sublotes. `supervisor_frio` y `administrador` pueden además realizar correcciones supervisadas. Los perfiles configurables deben tener habilitados tanto `materia-prima.fruta-proceso` como el módulo tablet `fruta_proceso` cuando corresponda usar la APK.
+
+### Códigos de planta en retornos (18-11-2026)
+
+Oficina y PDA presentan el código junto al nombre de la clasificación. Congelado, desecho y descarte son resultados distintos. La migración conserva los identificadores de las clasificaciones existentes y agrega congelado y desecho; amplía el prefijo para admitir CECONG completo. No renumera sublotes, folios definitivos, kilos ni orígenes. Los OT históricos no se reclasifican por deducción: se revisan por el procedimiento de regularización/corrección. Otro se conserva como excepción manual.
+
+Los códigos internos del catálogo (`comercial`, `precalibre`, etc.) y sus UUID se mantienen para compatibilidad con integraciones. Los nuevos sublotes usan los prefijos de planta y el mismo correlativo global. La actualización móvil requiere distribuir la APK/OTA correspondiente; las clasificaciones se reciben del catálogo del servidor.
+
+### Folio por confirmar en retornos
+
+Además del provisorio automático PR-*, se puede ingresar un folio por confirmar, opcional, al registrar un retorno físico o migrar uno anterior. Mientras el retorno esté pendiente, puede agregarse, corregirse o quitarse mediante Modificar, con motivo e historial de antes/después. El buscador reconoce ambos folios.
+
+El folio por confirmar es solo una propuesta: no reemplaza el PR-*, no reserva un folio definitivo y no regulariza kilos ni habilita el despacho comercial. Cuadraturas lo encuentra propuesto en Folio definitivo y debe revisarlo o corregirlo al guardar la regularización. Se aplica la unicidad habitual del folio definitivo. El PR-*, el último folio propuesto y la auditoría de sus cambios se conservan, incluso si se confirma otro número. Una vez regularizado, las correcciones se hacen sobre el definitivo.
+
+La migración agrega una columna nullable; los retornos existentes siguen sin propuesta. Los reenvíos de clientes anteriores mantienen sus identificadores y hashes al omitir el campo o enviarlo vacío.
