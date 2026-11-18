@@ -143,6 +143,10 @@ La entrada única es `/FoliOS` (por ejemplo, `http://192.168.1.20:8000/FoliOS`; 
 | `/oficina/materiales` | Catálogo, proveedores, inventario, despachos y kardex |
 | `/oficina/gerencia` | Indicadores operacionales de solo lectura |
 
+### Temas de Oficina instalados en planta
+
+Para usar los temas de planta en Oficina, instala `personal-gundam.webp` y `personal-omegamon-x.webp` en `storage/app/private/temas-oficina/`. FoliOS detecta cada ilustración y usa los estilos que vienen con la versión desplegada. En **Administración → Perfiles → Temas**, habilita **Gundam RX-78-2**, **Omegamon X** o ambos en los perfiles correspondientes. Los usuarios pueden elegir un tema desde el selector superior de Oficina. Las instalaciones comerciales se distribuyen sin este paquete de ilustraciones.
+
 ## Aplicación móvil
 
 La aplicación habilita módulos según las capacidades del usuario:

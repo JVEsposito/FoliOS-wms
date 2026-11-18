@@ -11,7 +11,7 @@ use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Illuminate\Http\Response;
 
 class ContextoOficinaController extends Controller
 {
@@ -55,13 +55,13 @@ class ContextoOficinaController extends Controller
         ]])->header('Cache-Control', 'no-store, private');
     }
 
-    public function tema(Request $request, string $tema, AlcanceOperacionalUsuario $alcance, CatalogoTemasOficina $temas): BinaryFileResponse
+    public function tema(Request $request, string $tema, AlcanceOperacionalUsuario $alcance, CatalogoTemasOficina $temas): Response
     {
         abort_unless($alcance->puedeAccederOficina($request->user()), 403);
-        $ruta = $temas->hojaPersonal($request->user(), $tema);
-        abort_if($ruta === null || ! is_file($ruta), 404);
+        $css = $temas->hojaPersonal($request->user(), $tema);
+        abort_if($css === null, 404);
 
-        return response()->file($ruta, [
+        return response($css, 200, [
             'Content-Type' => 'text/css; charset=UTF-8',
             'Cache-Control' => 'private, no-store',
         ]);

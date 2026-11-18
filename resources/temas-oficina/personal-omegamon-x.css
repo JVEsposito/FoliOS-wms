@@ -1,0 +1,469 @@
+/* Omegamon X · FoliOS Oficina. El arte está incluido en esta hoja. */
+@media screen {
+    :root[data-office-personal-theme="personal-omegamon-x"] {
+        color-scheme: dark;
+        --bg: #0d111b;
+        --deep: #0b1019;
+        --panel: #151e2e;
+        --raised: #1e2b40;
+        --soft: #29394f;
+        --line: #4d6380;
+        --line-soft: #31425b;
+        --border: var(--line);
+        --input-border: #7799c1;
+        --text: #edf4ff;
+        --text-strong: #fff;
+        --text-secondary: #ccd9ec;
+        --text-subtle: #adbed6;
+        --muted: var(--text-subtle);
+        --corporate-text: var(--text);
+        --corporate-text-muted: var(--text-subtle);
+        --corporate-navy: #0d1421;
+        --corporate-canvas: var(--bg);
+        --corporate-card: var(--panel);
+        --corporate-border: var(--line-soft);
+        --corporate-blue: #8ccaff;
+        --corporate-blue-dark: #22508a;
+        --corporate-orange: #f7bd57;
+        --corporate-gold: #f5ce66;
+        --corporate-shadow: 0 4px 16px #05091066;
+        --corporate-shadow-raised: 0 18px 40px #03060dcc;
+        --header-bg: var(--deep);
+        --subnav-bg: #101725;
+        --surface-muted: #202d42;
+        --surface-hover: #243955;
+        --surface-selected: #203f65;
+        --input-bg: #111b2a;
+        --table-head: #24344d;
+        --row-bg: #141d2b;
+        --row-alt: #192437;
+        --row-hover: #243753;
+        --button-secondary: #152439;
+        --button-secondary-hover: #233e60;
+        --icon-surface: #243551;
+        --primary: #9ed8ff;
+        --primary-hover: #d1ebff;
+        --on-primary: #0c1829;
+        --accent: var(--primary);
+        --info-bg: #142f50;
+        --info-text: #b9dfff;
+        --focus-ring: #9ed8ff;
+        --selection-bg: #457dbb66;
+        --brand-gradient: linear-gradient(132deg, #0b1019 8%, #13253c 70%, #234265);
+        --kpi-surface: var(--raised);
+        --logo-border: var(--input-border);
+        --logo-bg: var(--deep);
+        --cyan: var(--primary);
+        --cyan-light: #daf0ff;
+        --frost: var(--corporate-blue);
+        --frost-strong: var(--cyan-light);
+        --area-operacion-ink: var(--corporate-blue);
+        --area-operacion-text: var(--cyan-light);
+        --area-operacion-tint: var(--info-bg);
+        --area-operacion-line: var(--line);
+        --area-operacion-bright: var(--primary);
+        --hydro-blue: var(--corporate-blue);
+        --hydro-ice: var(--cyan-light);
+        --series-product: var(--corporate-blue);
+        --series-material: #f5ce66;
+        --chart-grid: var(--line);
+        --chart-text: var(--text-secondary);
+        --chart-tooltip-bg: var(--raised);
+        --chart-tooltip-border: var(--line);
+        --omega-header: linear-gradient(104deg, #0a0e17 15%, #132137 74%, #0d1423);
+        --omega-rail: linear-gradient(90deg, #2a456b, #7cbfff 68%, #afddff 83%, #425c83);
+        --omega-steel: linear-gradient(160deg, #202c41, #151e2e 64%, #18273c);
+        --omega-tab: linear-gradient(174deg, #345986, #1b3254 70%);
+        --omega-gold: #f5ce66;
+        --omega-frame: #597397;
+        --omega-cut: polygon(0 9px, 9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+        --omega-x: polygon(0 0, 50% 36%, 100% 0, 64% 50%, 100% 100%, 50% 64%, 0 100%, 36% 50%);
+        --omega-hero: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-ui {
+        --eui-color-navy: var(--corporate-navy);
+        --eui-color-navy-hover: var(--surface-hover);
+        --eui-color-canvas: var(--corporate-canvas);
+        --eui-color-surface: var(--corporate-card);
+        --eui-color-subtle: var(--surface-muted);
+        --eui-color-border: var(--corporate-border);
+        --eui-color-border-soft: var(--line-soft);
+        --eui-color-input-border: var(--input-border);
+        --eui-color-text: var(--text);
+        --eui-color-text-secondary: var(--text-secondary);
+        --eui-color-muted: var(--text-subtle);
+        --eui-color-primary: var(--primary);
+        --eui-color-primary-hover: var(--primary-hover);
+        --eui-color-on-primary: var(--on-primary);
+        --eui-color-selected: var(--surface-selected);
+        --eui-color-focus: var(--primary);
+        --eui-color-disabled-surface: var(--soft);
+        --eui-color-disabled-text: var(--text-subtle);
+        --eui-color-frost: var(--frost);
+        --eui-color-frost-strong: var(--frost-strong);
+        --eui-color-frost-bright: var(--frost);
+        --eui-signal-info-text: var(--info-text);
+        --eui-signal-info-surface: var(--info-bg);
+        --eui-signal-info-border: var(--line);
+        --eui-radius-control: 2px;
+        --eui-radius-card: 2px;
+        --eui-radius-panel: 2px;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-shell {
+        --shell-navy: var(--corporate-navy);
+        --shell-navy-hover: var(--surface-hover);
+        --shell-strong: var(--text-strong);
+        --shell-ink: var(--text);
+        --shell-muted: var(--text-secondary);
+        --shell-faint: var(--text-subtle);
+        --shell-line: var(--line);
+        --shell-gajo: var(--line);
+        --shell-active-bg: #2e2a20;
+        --shell-active-ink: var(--text-strong);
+        --shell-active-gajo: var(--omega-gold);
+        --shell-focus: var(--primary);
+        --eui-shell-frost: var(--omega-gold);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-header {
+        isolation: isolate;
+        background: var(--omega-header);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-header::after {
+        left: 0;
+        height: 2px;
+        background: var(--omega-rail);
+        box-shadow: 0 1px 10px #6ab8ff55;
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-brand,
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-home {
+        position: relative;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-home .folios-logo--office-dark {
+        clip-path: inset(0 0 0 23%);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-home::before,
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-signature::after {
+        background: linear-gradient(150deg, #dfedff 18%, #589df2 44%, #e2f4ff 53%, #24518d 65%, #8fd3ff);
+        clip-path: var(--omega-x);
+        content: "";
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-home::before {
+        position: absolute;
+        inset-block-start: 44%;
+        inset-inline-start: 0;
+        width: 25%;
+        height: 92%;
+        transform: translateY(-50%);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-sidebar {
+        border-inline-end: 1px solid var(--line-soft);
+        background-color: var(--corporate-navy);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-sidebar {
+        background-image: linear-gradient(155deg, #131c2c, #0b111c 72%);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-sidebar :is(.estiba-office-area.is-active, .estiba-office-offices a.is-active) {
+        border-radius: 0;
+        background: linear-gradient(90deg, #3a3120, #25231f 84%);
+        color: var(--shell-active-ink);
+        box-shadow: inset 3px 0 var(--omega-gold);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-search input {
+        border-radius: 2px;
+        background: #e4edf9;
+        color: #0f1a29;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-search input::placeholder { color: #384b63; opacity: 1; }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-search button {
+        border-color: var(--omega-gold);
+        border-radius: 2px;
+        background: var(--omega-gold);
+        color: #19150e;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-search button:hover { background: #ffdf88; }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-shell :is(.estiba-office-menu, .estiba-office-theme-select, .estiba-office-communications, #officeLogoutButton) {
+        border-color: var(--input-border);
+        border-radius: 2px;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-shell .estiba-office-theme-select {
+        background: var(--button-secondary);
+        box-shadow: inset 2px 0 var(--omega-gold);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-shell .estiba-office-communications { background: var(--button-secondary); }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-shell :is(.estiba-office-theme-select, .estiba-office-communications):hover {
+        border-color: var(--primary);
+        background: var(--button-secondary-hover);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-signature::after {
+        display: block;
+        width: 40px;
+        height: 30px;
+        margin-block-start: 16px;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .office-app table th {
+        background: var(--table-head) !important;
+        color: var(--text) !important;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .office-app .office-panel-tab[aria-selected="true"] {
+        border-block-end-color: var(--corporate-blue);
+        background: var(--omega-tab);
+        color: var(--text-strong);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now {
+        padding-inline: clamp(14px, 1.4vw, 24px);
+        font-family: var(--font-sans, "Archivo Variable", "Segoe UI", Arial, sans-serif);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-command {
+        gap: 10px 18px;
+        padding-block: 6px 12px;
+        background: var(--corporate-canvas);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-command__title h1 {
+        color: var(--text-strong);
+        font-family: inherit;
+        font-style: italic;
+        font-stretch: 95%;
+        letter-spacing: -.035em;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--frost-strong);
+        letter-spacing: .07em;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-eyebrow::before {
+        width: 17px;
+        height: 14px;
+        flex: 0 0 17px;
+        background: linear-gradient(160deg, #e7f5ff, #509fe9 51%, #edf8ff 52%, #4071a3);
+        clip-path: var(--omega-x);
+        content: "";
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-tabs {
+        margin-inline: 0;
+        padding-inline: 0;
+        border-color: var(--omega-frame);
+        background: var(--corporate-canvas);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-tabs__list { gap: 1px; }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-tab { border-radius: 0; }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-tab[aria-selected="true"] {
+        border-block-end-color: #63ccff;
+        background: var(--omega-tab);
+        color: var(--text-strong);
+        clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-tab[aria-selected="true"]:focus-visible {
+        outline-offset: -4px;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-tab__badge { border-radius: 2px; }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now :is(.operation-now-overview__card, .operation-now-panel) {
+        position: relative;
+        isolation: isolate;
+        border: 1px solid transparent;
+        border-radius: 0;
+        background: var(--omega-frame);
+        clip-path: var(--omega-cut);
+        box-shadow: none;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now :is(.operation-now-overview__card, .operation-now-panel)::before {
+        position: absolute;
+        z-index: -1;
+        inset: 0;
+        background: var(--omega-steel);
+        clip-path: var(--omega-cut);
+        content: "";
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now .operation-now-overview__card:is(:hover, :focus-visible)::before {
+        background: var(--surface-hover);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now .operation-now-overview__card:focus-visible::before {
+        box-shadow: inset 0 0 0 3px var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-overview__card {
+        grid-template-columns: 34px minmax(0, 1fr);
+        gap: 4px 12px;
+        align-content: center;
+        min-height: 96px;
+        padding: 12px 14px;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-overview__card::after {
+        display: block;
+        grid-area: 1 / 1 / span 3;
+        align-self: center;
+        width: 34px;
+        height: 34px;
+        background: var(--primary);
+        mask: var(--omega-kpi-icon) center / contain no-repeat;
+        content: "";
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-overview__card[data-operation-jump="recepcion-mp"] {
+        --omega-kpi-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.5%22%3E%3Cpath%20d%3D%22m12%203%204.5%202.5L12%208%207.5%205.5%2012%203ZM7%206.5l4.5%202.5v5L7%2011.5v-5Zm10%200L12.5%209v5l4.5-2.5v-5ZM6.5%2013%2011%2015.5%206.5%2018%202%2015.5%206.5%2013Zm11%200%204.5%202.5-4.5%202.5-4.5-2.5%204.5-2.5ZM2%2016.5%206.5%2019v2L2%2018.5v-2Zm9%200v2L6.5%2021v-2l4.5-2.5Zm2%200%204.5%202.5v2L13%2018.5v-2Zm9%200v2L17.5%2021v-2l4.5-2.5Z%22%20%2F%3E%3C%2Fsvg%3E");
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-overview__card[data-operation-jump="validacion-pt"] {
+        --omega-kpi-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.5%22%3E%3Cpath%20d%3D%22m5%2012%204%204L19%206%22%20%2F%3E%3C%2Fsvg%3E");
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-overview__card[data-operation-jump="camaras"] {
+        --omega-kpi-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.5%22%3E%3Cpath%20d%3D%22M12%202v20M4%206l16%2012M20%206%204%2018M8.5%204%2012%206l3.5-2M8.5%2020l3.5-2%203.5%202M3.5%2010%207%2012l-.5%204M20.5%2010%2017%2012l.5%204%22%20%2F%3E%3C%2Fsvg%3E");
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-overview__card[data-operation-jump="despacho"] {
+        --omega-kpi-icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.5%22%3E%3Cpath%20d%3D%22M3%2016V7h10v9%22%20%2F%3E%3Cpath%20d%3D%22M13%2011h5l3%203v2h-3%22%20%2F%3E%3Ccircle%20cx%3D%227%22%20cy%3D%2218%22%20r%3D%222%22%20%2F%3E%3Ccircle%20cx%3D%2217%22%20cy%3D%2218%22%20r%3D%222%22%20%2F%3E%3Cpath%20d%3D%22M3%2018h2m6%200h4%22%20%2F%3E%3C%2Fsvg%3E");
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-overview__card > strong {
+        font-size: clamp(1.45rem, 1.8vw, 1.9rem);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-panel__heading {
+        border-block-end-color: var(--omega-frame);
+        background: var(--omega-steel);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-panel__title :is(svg, .eui-icon) { color: var(--primary); }
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-panel__title h2 { font-family: inherit; font-stretch: 100%; }
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-table th { letter-spacing: .07em; }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-table tbody { background: var(--row-bg); }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now :is(.operation-now-action, .operation-now-refresh, .operation-now-planner__compare) {
+        border-color: var(--input-border);
+        border-radius: 2px;
+        background: var(--button-secondary);
+        color: var(--text-strong);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now :is(.operation-now-action, .operation-now-refresh, .operation-now-planner__compare):hover {
+        background: var(--button-secondary-hover);
+    }
+}
+
+/* La primera fila muestra la identidad y la ilustración. La segunda mantiene los controles de Oficina. */
+@media screen and (min-width: 1200px) {
+    :root[data-office-personal-theme="personal-omegamon-x"] .office-app:has(> [data-office-shell]) { --office-header-height: 134px; }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-header {
+        grid-template-rows: 74px minmax(60px, auto);
+        background: linear-gradient(90deg, #0a101b, #0d1725);
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-header::before {
+        position: absolute;
+        z-index: -1;
+        inset: 0;
+        background:
+            linear-gradient(0deg, #0c1525bb 0, transparent 26px) right top / clamp(370px, 37vw, 660px) 132px no-repeat,
+            var(--omega-hero) right -5px top -2px / auto 137px no-repeat,
+            radial-gradient(ellipse at center, #30598b6b, transparent 66%) right 4% top / 45% 132px no-repeat,
+            radial-gradient(circle, #9bd9ff 42%, transparent 53%) right 44% top 18px / 5px 5px no-repeat,
+            radial-gradient(circle, #65bfff 42%, transparent 53%) right 41% top 42px / 4px 4px no-repeat,
+            radial-gradient(circle, #65bfff 42%, transparent 53%) right 49% top 57px / 4px 4px no-repeat,
+            linear-gradient(90deg, #335984, #7ac9ff) right 44% top 20px / 102px 1px no-repeat,
+            linear-gradient(135deg, transparent 47%, #6eaedc 48% 52%, transparent 53%) right 41% top 20px / 23px 23px no-repeat,
+            linear-gradient(90deg, #335984, #6eaedc) right 49% top 59px / 122px 1px no-repeat,
+            linear-gradient(135deg, transparent 47%, #6eaedc 48% 52%, transparent 53%) right 40% top 42px / 18px 18px no-repeat,
+            linear-gradient(90deg, #385172, #50759f 58%, transparent 79%) left top 73px / 100% 1px no-repeat;
+        content: "";
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-brand {
+        grid-column: 1;
+        grid-row: 1;
+        align-self: stretch;
+        padding-block: 10px;
+        background-color: #0a101bd9;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-context { grid-area: 2 / 2; }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-shell .estiba-office-status {
+        grid-area: 2 / 3;
+        padding-block: 4px;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-tools { grid-area: 2 / 4; }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-replenishment { grid-row: 3; }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-command {
+        grid-template-columns: minmax(145px, 1fr) minmax(155px, max-content) auto auto;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-header[data-active-office="operacion-ahora"] .estiba-office-context::before {
+        position: absolute;
+        inset-block-start: 18px;
+        inset-inline-start: calc(var(--office-brand-width) + 23px);
+        color: var(--text-strong);
+        font: italic 800 clamp(1.6rem, 2.3vw, 2.45rem)/1.06 var(--font-sans, "Archivo Variable", "Segoe UI", sans-serif);
+        letter-spacing: -.045em;
+        text-shadow: 0 2px #324762;
+        content: "Operación ahora" / "";
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-omegamon-x"] .operation-now-app:has(.estiba-office-header[data-active-office="operacion-ahora"]) .operation-now-command__title h1 {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        white-space: nowrap;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+}
+
+@media screen and (max-width: 1199px) {
+    :root[data-office-personal-theme="personal-omegamon-x"] .estiba-office-brand {
+        background:
+            linear-gradient(90deg, #0d1421 51%, #0d14214d 77%, #0d1421dd),
+            var(--omega-hero) right center / auto 64px no-repeat,
+            var(--corporate-navy);
+    }
+}
