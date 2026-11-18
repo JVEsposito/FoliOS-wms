@@ -87,6 +87,9 @@ test('los modos bit y neón se aplican antes de pintar solo a la cuenta habilita
     const both = { ...neon, estiba_wms_office_identity: '{"temas_personales":["dark-bit","dark-bit-neon"]}' };
     assert.equal(boot({ local: both }).root.attrs['data-office-theme'], 'dark-bit-neon');
     assert.equal(boot({ local: both }).metas['meta[name="theme-color"]'].attrs.content, '#0b0820');
+    const admin = { ...session, estiba_wms_office_theme: 'light-professional', estiba_wms_office_admin_theme: 'dark-bit-neon',
+        estiba_wms_office_identity: '{"rol":"administrador","temas_personales":["dark-bit","dark-bit-neon"]}' };
+    assert.equal(boot({ local: admin }).root.attrs['data-office-theme'], 'dark-bit-neon', 'el Administrador guarda bit y neón en su clave');
     const other = { ...session, estiba_wms_office_theme: 'dark-bit', estiba_wms_office_identity: '{"rol":"administrador"}' };
     assert.equal(boot({ local: other }).root.attrs['data-office-theme'], 'dark-industrial');
 });

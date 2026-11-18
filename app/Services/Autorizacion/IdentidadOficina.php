@@ -194,20 +194,24 @@ class IdentidadOficina
     }
 
     /**
-     * Temas de Oficina habilitados solo para esta cuenta (config oficina.temas_personales).
+     * Temas de Oficina adicionales de esta cuenta: los que trae su rol (config oficina.temas_por_rol)
+     * y los habilitados por su correo (config oficina.temas_personales), en el orden del catálogo.
      *
      * @return list<string>
      */
     private function temasPersonales(User $usuario): array
     {
+        $catalogo = array_keys((array) config('oficina.temas_personales', []));
+        $porRol = (array) (config('oficina.temas_por_rol', [])[$usuario->rol->value] ?? []);
         $correo = mb_strtolower(trim((string) $usuario->email));
-        if ($correo === '') {
-            return [];
-        }
-
-        return array_values(array_keys(array_filter(
+        $porCorreo = $correo === '' ? [] : array_keys(array_filter(
             (array) config('oficina.temas_personales', []),
             fn (mixed $correos): bool => in_array($correo, (array) $correos, true),
-        )));
+        ));
+
+        return array_values(array_filter(
+            $catalogo,
+            fn (string $tema): bool => in_array($tema, $porRol, true) || in_array($tema, $porCorreo, true),
+        ));
     }
 }

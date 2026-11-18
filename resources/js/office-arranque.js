@@ -33,8 +33,8 @@
     // Temas personales: solo para las cuentas que el servidor habilita (identidad.temas_personales).
     var personales = token && !soloTema && Array.isArray(identity?.temas_personales) ? identity.temas_personales : [];
     var personal = personales.indexOf('dark-bit') !== -1 || personales.indexOf('dark-bit-neon') !== -1;
-    var theme = (personal && read('estiba_wms_office_personal_theme'))
-        || (administrator && read('estiba_wms_office_admin_theme'))
+    var theme = (administrator && read('estiba_wms_office_admin_theme'))
+        || (personal && read('estiba_wms_office_personal_theme'))
         || read('estiba_wms_office_theme');
     if (theme === 'dark-rose' && !administrator) theme = 'dark-industrial';
     if ((theme === 'dark-bit' || theme === 'dark-bit-neon') && personales.indexOf(theme) === -1) theme = 'dark-industrial';

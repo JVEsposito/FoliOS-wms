@@ -20,8 +20,9 @@ export function officePersonalThemes(identity) {
 }
 
 export function officeThemeStorageKey(identity) {
-    if (officePersonalThemes(identity).length) return OFFICE_PERSONAL_THEME_KEY;
-    return identity?.rol === 'administrador' ? OFFICE_ADMIN_THEME_KEY : OFFICE_THEME_KEY;
+    // El Administrador conserva su clave (rosado incluido) aunque también tenga temas personales.
+    if (identity?.rol === 'administrador') return OFFICE_ADMIN_THEME_KEY;
+    return officePersonalThemes(identity).length ? OFFICE_PERSONAL_THEME_KEY : OFFICE_THEME_KEY;
 }
 
 export function officeThemes(identity) {
