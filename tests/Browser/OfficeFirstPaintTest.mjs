@@ -86,7 +86,7 @@ test('con sesión, la oficina se pinta directo, con su tema y el menú del perfi
     }
 });
 
-test('el Administrador puede elegir rosado y el siguiente perfil recupera su tema', async () => {
+test('el desplegable del Administrador recupera el rosado anterior y guarda los nuevos temas', async () => {
     const browser = await chromium.launch({
         executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
         args: ['--no-sandbox', '--disable-gpu'],
@@ -95,27 +95,44 @@ test('el Administrador puede elegir rosado y el siguiente perfil recupera su tem
         const { context, page } = await firstPaint(browser, {
             local: {
                 estiba_wms_office_token: token,
-                estiba_wms_office_identity: JSON.stringify({ ...identity, rol: 'administrador' }),
+                estiba_wms_office_identity: JSON.stringify({ ...identity, rol: 'administrador', temas_personales: ['dark-bit', 'dark-bit-neon'] }),
                 estiba_wms_office_theme: 'light-professional',
+                estiba_wms_office_admin_theme: 'dark-rose',
             },
             session: {},
         }, { modules: true });
-        await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
-        await page.getByRole('button', { name: 'Activar modo rosado' }).click();
-        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-rose');
-        await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(20, 14, 19)');
-        assert.equal(await page.locator('#officeSidebar').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgb(23, 14, 20)');
+        const select = page.getByRole('combobox', { name: 'Tema de Oficina' });
+        await select.waitFor();
+        assert.deepEqual(await select.locator('option').evaluateAll((options) => options.map((option) => option.value)),
+            ['light-professional', 'dark-industrial', 'dark-princess', 'light-garden', 'dark-bit', 'dark-bit-neon']);
+        assert.equal(await select.inputValue(), 'dark-princess');
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-princess');
+        await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(24, 20, 46)');
+        assert.equal(await page.locator('#officeSidebar').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgb(27, 21, 50)');
+        const art = page.locator('.estiba-office-theme-art');
+        assert.match(await art.evaluate((el) => getComputedStyle(el).backgroundImage), /princesa-estelar/);
+
+        await select.selectOption('light-garden');
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'light-garden');
+        assert.equal(await page.locator('meta[name="color-scheme"]').getAttribute('content'), 'light');
+        await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(255, 243, 247)');
+        assert.equal(await page.locator('#officeSidebar').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgb(251, 227, 236)');
+        assert.match(await art.evaluate((el) => getComputedStyle(el).backgroundImage), /jardin-encantado/);
         await page.reload();
-        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-rose');
+        await select.waitFor();
+        assert.equal(await select.inputValue(), 'light-garden');
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'light-garden');
 
         await page.evaluate((user) => {
             localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
             window.dispatchEvent(new CustomEvent('estiba:office-session'));
         }, { ...identity, puede_consultar_romana: true });
         assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'light-professional');
-        await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
-        await page.getByRole('button', { name: 'Activar modo claro' }).waitFor();
-        assert.equal(await page.evaluate(() => window.EstibaOfficeTheme.themes.includes('dark-rose')), false);
+        assert.deepEqual(await select.locator('option').evaluateAll((options) => options.map((option) => option.value)),
+            ['light-professional', 'dark-industrial']);
+        assert.equal(await art.isVisible(), false);
+        await select.selectOption('dark-industrial');
+        assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-industrial');
         await context.close();
     } finally {
         await browser.close();
@@ -136,13 +153,13 @@ test('los modos bit y neón solo los ofrece la cuenta habilitada y se recuperan 
             },
             session: {},
         }, { modules: true });
-        await page.getByRole('button', { name: 'Activar modo oscuro' }).click();
-        await page.getByRole('button', { name: 'Activar modo bit' }).click();
+        const select = page.getByRole('combobox', { name: 'Tema de Oficina' });
+        await select.selectOption('dark-bit');
         assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-bit');
         await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(26, 28, 44)');
         assert.match(await page.locator('.estiba-office-signature strong').evaluate((el) => getComputedStyle(el).fontFamily), /Silkscreen/);
         assert.match(await page.locator('.estiba-office-signature').evaluate((el) => getComputedStyle(el, '::before').backgroundImage), /^url\("data:image\/svg\+xml/);
-        await page.getByRole('button', { name: 'Activar modo neón' }).click();
+        await select.selectOption('dark-bit-neon');
         assert.equal(await page.locator('html').getAttribute('data-office-theme'), 'dark-bit-neon');
         await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(11, 8, 32)');
         await page.reload();

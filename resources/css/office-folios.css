@@ -20,8 +20,8 @@
 @import './folios-components.css';
 @import './office-tema-bit.css';
 
-:where(:root[data-office-theme="dark-rose"], :root[data-office-theme="dark-bit"], :root[data-office-theme="dark-bit-neon"]) .estiba-ui {
-    color-scheme: dark;
+:where(:root:is([data-office-theme="dark-princess"], [data-office-theme="light-garden"], [data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"])) .estiba-ui {
+    color-scheme: inherit;
     --eui-color-navy: var(--corporate-navy);
     --eui-color-navy-hover: var(--surface-hover);
     --eui-color-on-navy-muted: var(--text-secondary);
@@ -74,6 +74,12 @@
     --eui-signal-blocked-text: var(--eui-signal-critical-text);
     --eui-signal-blocked-surface: var(--eui-signal-critical-surface);
     --eui-signal-blocked-border: var(--eui-signal-critical-border);
+}
+
+:where(:root[data-office-theme="light-garden"]) .estiba-ui {
+    --eui-signal-temporary-text: var(--warning-text);
+    --eui-signal-temporary-surface: var(--warning-bg);
+    --eui-signal-temporary-border: var(--input-border);
 }
 
 /* 1. Tipografía ------------------------------------------------------------------ */

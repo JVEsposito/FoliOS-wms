@@ -5,10 +5,10 @@ import { initializeOfficeShell, refreshOfficeShell } from './office-shell.js';
 import { initializeOfficeProfile } from './office-profile.js';
 import { initializeCommunications } from './office-communications-launcher.js';
 import {
-    nextOfficeTheme,
     normalizeOfficeTheme,
     OFFICE_THEME_COLORS,
     OFFICE_THEME_KEY,
+    officeThemeColorScheme,
     officeThemeStorageKey,
     officeThemes,
 } from './shared/office-preferences.js';
@@ -38,20 +38,25 @@ function storedOfficeTheme() {
 }
 
 let officeTheme = storedOfficeTheme();
-const themeLabels = { 'light-professional': 'Modo claro', 'dark-industrial': 'Modo oscuro', 'dark-rose': 'Modo rosado', 'dark-bit': 'Modo bit', 'dark-bit-neon': 'Modo neón' };
+const themeLabels = {
+    'light-professional': '☀️ Modo claro',
+    'dark-industrial': '◐ Modo oscuro',
+    'dark-princess': '🌙 Princesa Estelar',
+    'light-garden': '🌸 Jardín Encantado',
+    'dark-bit': '👾 Modo bit',
+    'dark-bit-neon': '⚡ Modo neón',
+};
 
 function refreshOfficeThemeControls() {
-    const dark = officeTheme !== 'light-professional';
-    const next = nextOfficeTheme(officeTheme, themeIdentity());
-    const labelText = themeLabels[next];
-    const action = `Activar ${labelText.toLowerCase()}`;
-    document.querySelectorAll('[data-office-theme-toggle]').forEach((button) => {
-        button.setAttribute('aria-pressed', String(dark));
-        button.setAttribute('aria-label', action);
-        button.title = action;
-        const label = button.querySelector('[data-office-theme-label]');
-        if (label) label.textContent = labelText;
-    });
+    const select = document.querySelector('[data-office-theme-select]');
+    if (!select) return;
+
+    const themes = officeThemes(themeIdentity());
+    if (select.length !== themes.length || themes.some((theme, index) => select.options[index].value !== theme)) {
+        select.replaceChildren(...themes.map((theme) => new Option(themeLabels[theme], theme)));
+    }
+    select.value = officeTheme;
+    select.hidden = false;
 }
 
 function applyOfficeTheme(theme, { persist = true } = {}) {
@@ -60,7 +65,7 @@ function applyOfficeTheme(theme, { persist = true } = {}) {
     document.documentElement.dataset.officeTheme = officeTheme;
     document.querySelector('meta[name="color-scheme"]')?.setAttribute(
         'content',
-        officeTheme === 'light-professional' ? 'light' : 'dark',
+        officeThemeColorScheme(officeTheme),
     );
     document.querySelector('meta[name="theme-color"]')?.setAttribute(
         'content',
@@ -608,9 +613,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeOfficeShell();
     initializeOfficeProfile();
     initializeCommunications();
-    refreshOfficeThemeControls();
-    document.querySelectorAll('[data-office-theme-toggle]').forEach((button) => {
-        button.addEventListener('click', () => applyOfficeTheme(nextOfficeTheme(officeTheme, themeIdentity())));
+    document.querySelector('[data-office-theme-select]')?.addEventListener('change', (event) => {
+        applyOfficeTheme(event.currentTarget.value);
     });
     refreshNavigation();
     observeApplication();

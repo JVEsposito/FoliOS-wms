@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+import { OFFICE_THEMES } from '../../resources/js/shared/office-preferences.js';
+
 const css = readFileSync(new URL('../../resources/css/office-corporate.css', import.meta.url), 'utf8');
 const operationCss = readFileSync(new URL('../../resources/css/office-operation-now.css', import.meta.url), 'utf8');
 
@@ -31,19 +33,14 @@ function themeVariables(selector) {
         [...block.matchAll(/--([\w-]+):\s*(#[\da-fA-F]{6})\s*;/g)]
             .map((match) => [match[1], match[2]]),
     );
-    return /dark-(rose|bit)/.test(selector) ? { ...themeVariables(':root[data-office-theme="dark-industrial"]'), ...variables } : variables;
+    if (/dark-(princess|bit)/.test(selector)) return { ...themeVariables(':root[data-office-theme="dark-industrial"]'), ...variables };
+    if (selector.includes('light-garden')) return { ...themeVariables(':root[data-office-theme="light-professional"]'), ...variables };
+    return variables;
 }
 
 test('los temas mantienen contraste AA en contenido, acciones y selección', () => {
-    const themes = [
-        themeVariables(':root[data-office-theme="light-professional"]'),
-        themeVariables(':root[data-office-theme="dark-industrial"]'),
-        themeVariables(':root[data-office-theme="dark-rose"]'),
-        themeVariables(':root[data-office-theme="dark-bit"]'),
-        themeVariables(':root[data-office-theme="dark-bit-neon"]'),
-    ];
-
-    themes.forEach((variables) => {
+    for (const theme of OFFICE_THEMES) {
+        const variables = themeVariables(`:root[data-office-theme="${theme}"]`);
         assert.ok(contrast(variables.text, variables['corporate-canvas']) >= 4.5);
         assert.ok(contrast(variables.text, variables['corporate-card']) >= 4.5);
         assert.ok(contrast(variables.muted, variables['corporate-card']) >= 4.5);
@@ -58,13 +55,13 @@ test('los temas mantienen contraste AA en contenido, acciones y selección', () 
         for (const text of ['text-strong', 'text-secondary', 'success-text', 'info-text', 'warning-text', 'danger-text']) {
             assert.ok(contrast(variables[text], variables.panel) >= 4.5, `${text} sobre el panel gerencial`);
         }
-    });
+    }
 });
 
 test('Operación ahora mantiene contraste con filas alternas y superficies de cada estado', () => {
     function colorProperty(selector, property, variables) {
         const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const block = operationCss.match(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`))?.[1];
+        const block = operationCss.match(new RegExp(`^${escaped}\\s*\\{([^}]+)\\}`, 'm'))?.[1];
         assert.ok(block, `Regla ausente: ${selector}`);
         const value = block.match(new RegExp(`(?:^|;)\\s*${property}:\\s*([^;]+)`))?.[1].trim();
         assert.ok(value, `${selector}: ${property}`);
@@ -74,7 +71,7 @@ test('Operación ahora mantiene contraste con filas alternas y superficies de ca
         return color.length === 4 ? `#${[...color.slice(1)].map((c) => c + c).join('')}` : color;
     }
 
-    for (const theme of ['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit', 'dark-bit-neon']) {
+    for (const theme of OFFICE_THEMES) {
         const variables = themeVariables(`:root[data-office-theme="${theme}"]`);
         const scope = operationCss.match(/\.operation-now\s*\{([^}]+)\}/)[1];
         for (const [, name, reference] of scope.matchAll(/--([\w-]+):\s*var\(--([\w-]+)\)/g)) {

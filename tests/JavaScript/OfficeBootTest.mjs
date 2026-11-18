@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 import { menuMemory, menuSelector } from '../../resources/js/shared/office-menu-memory.js';
-import { DEFAULT_OFFICE_THEME, OFFICE_THEME_COLORS } from '../../resources/js/shared/office-preferences.js';
+import { DEFAULT_OFFICE_THEME, OFFICE_THEME_COLORS, normalizeOfficeTheme, officeThemeColorScheme } from '../../resources/js/shared/office-preferences.js';
 
 const source = readFileSync(new URL('../../resources/js/office-arranque.js', import.meta.url), 'utf8');
 
@@ -56,21 +56,30 @@ test('el tema por omisión es el mismo de las preferencias de Oficina', () => {
     assert.equal(boot({ local: { ...session, estiba_wms_office_theme: 'otro' } }).root.attrs['data-office-theme'], DEFAULT_OFFICE_THEME);
     const navigation = readFileSync(new URL('../../resources/js/office-navigation.js', import.meta.url), 'utf8');
     assert.match(navigation, /OFFICE_THEME_COLORS\[officeTheme\]/);
-    assert.match(source, /'#0f1c24' : '#102f43'/);
-    // El arranque pinta el mismo color de barra que las preferencias.
-    for (const [theme, color] of Object.entries(OFFICE_THEME_COLORS)) assert.match(source, new RegExp(theme === 'light-professional' ? `: '${color}'` : `'${color}'`));
+    for (const [theme, color] of Object.entries(OFFICE_THEME_COLORS)) {
+        const identity = { rol: 'administrador', temas_personales: ['dark-bit', 'dark-bit-neon'] };
+        const { root, metas } = boot({ local: {
+            ...session,
+            estiba_wms_office_identity: JSON.stringify(identity),
+            estiba_wms_office_admin_theme: theme,
+        } });
+        assert.equal(root.attrs['data-office-theme'], normalizeOfficeTheme(theme, identity));
+        assert.equal(metas['meta[name="theme-color"]'].attrs.content, color);
+        assert.equal(metas['meta[name="color-scheme"]'].attrs.content, officeThemeColorScheme(theme));
+    }
 });
 
-test('el tema rosado se aplica antes de pintar solo al Administrador en Oficina', () => {
+test('la preferencia rosada anterior se recupera como Princesa Estelar solo con la sesión de Administrador', () => {
     const local = { ...session, estiba_wms_office_theme: 'light-professional', estiba_wms_office_admin_theme: 'dark-rose' };
     const admin = { ...local, estiba_wms_office_identity: '{"rol":"administrador"}' };
     const { root, metas } = boot({ local: admin });
-    assert.equal(root.attrs['data-office-theme'], 'dark-rose');
+    assert.equal(root.attrs['data-office-theme'], 'dark-princess');
     assert.equal(metas['meta[name="color-scheme"]'].attrs.content, 'dark');
-    assert.equal(metas['meta[name="theme-color"]'].attrs.content, '#170e14');
+    assert.equal(metas['meta[name="theme-color"]'].attrs.content, OFFICE_THEME_COLORS['dark-princess']);
     assert.equal(boot({ local }).root.attrs['data-office-theme'], 'light-professional');
     assert.equal(boot({ local: admin, soloTema: true }).root.attrs['data-office-theme'], 'light-professional');
     assert.equal(boot({ local: { ...admin, estiba_wms_office_token: null } }).root.attrs['data-office-theme'], 'light-professional');
+    assert.equal(boot({ local: { ...local, estiba_wms_office_theme: 'light-garden' } }).root.attrs['data-office-theme'], 'light-professional');
 });
 
 test('los modos bit y neón se aplican antes de pintar solo a la cuenta habilitada', () => {

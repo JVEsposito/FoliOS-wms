@@ -4,48 +4,45 @@ import test from 'node:test';
 import {
     DEFAULT_OFFICE_THEME,
     isOfficeMenuCollapsed,
-    nextOfficeTheme,
     normalizeOfficeTheme,
     OFFICE_THEME_COLORS,
     OFFICE_THEMES,
+    officeThemeColorScheme,
     officeThemes,
     officeThemeStorageKey,
     officeMenuPreference,
 } from '../../resources/js/shared/office-preferences.js';
 
-test('las cuentas sin rol Administrador alternan entre los temas claro y oscuro', () => {
+test('las cuentas sin rol Administrador ven los temas claro y oscuro', () => {
     assert.equal(normalizeOfficeTheme('dark-industrial'), 'dark-industrial');
     assert.equal(normalizeOfficeTheme('light-professional'), 'light-professional');
     assert.equal(normalizeOfficeTheme('light-warm'), DEFAULT_OFFICE_THEME);
     assert.equal(normalizeOfficeTheme(null), DEFAULT_OFFICE_THEME);
-    assert.equal(nextOfficeTheme('light-professional'), 'dark-industrial');
-    assert.equal(nextOfficeTheme('dark-industrial'), 'light-professional');
     const supervisor = { rol: 'supervisor_frio', puede_administrar_accesos: true };
     assert.equal(normalizeOfficeTheme('dark-rose', supervisor), 'dark-industrial');
-    assert.equal(nextOfficeTheme('dark-industrial', supervisor), 'light-professional');
+    assert.equal(normalizeOfficeTheme('dark-princess', supervisor), 'dark-industrial');
+    assert.equal(normalizeOfficeTheme('light-garden', supervisor), 'light-professional');
     assert.deepEqual(officeThemes(supervisor), ['light-professional', 'dark-industrial']);
 });
 
-test('el Administrador tiene un tercer tema y guarda su elección por separado', () => {
+test('el Administrador puede elegir Estelar o Jardín y recuperar su preferencia anterior', () => {
     const admin = { rol: 'administrador' };
-    assert.deepEqual(officeThemes(admin), ['light-professional', 'dark-industrial', 'dark-rose']);
-    assert.equal(nextOfficeTheme('dark-industrial', admin), 'dark-rose');
-    assert.equal(nextOfficeTheme('dark-rose', admin), 'light-professional');
+    assert.deepEqual(officeThemes(admin), ['light-professional', 'dark-industrial', 'dark-princess', 'light-garden']);
+    assert.equal(normalizeOfficeTheme('dark-rose', admin), 'dark-princess');
+    assert.equal(normalizeOfficeTheme('light-garden', admin), 'light-garden');
+    assert.equal(officeThemeColorScheme('dark-princess'), 'dark');
+    assert.equal(officeThemeColorScheme('light-garden'), 'light');
     assert.notEqual(officeThemeStorageKey(admin), officeThemeStorageKey({ rol: 'supervisor_frio' }));
 });
 
 test('los modos bit y neón solo aparecen en las cuentas que el servidor habilita y guardan su elección aparte', () => {
     const personal = { rol: 'supervisor_frio', temas_personales: ['dark-bit'] };
     assert.deepEqual(officeThemes(personal), ['light-professional', 'dark-industrial', 'dark-bit']);
-    assert.equal(nextOfficeTheme('dark-industrial', personal), 'dark-bit');
-    assert.equal(nextOfficeTheme('dark-bit', personal), 'light-professional');
     assert.equal(normalizeOfficeTheme('dark-rose', personal), 'dark-industrial');
     const adminPersonal = { rol: 'administrador', temas_personales: ['dark-bit', 'dark-bit-neon', 'tema-desconocido'] };
-    assert.deepEqual(officeThemes(adminPersonal), ['light-professional', 'dark-industrial', 'dark-rose', 'dark-bit', 'dark-bit-neon']);
-    assert.equal(nextOfficeTheme('dark-bit', adminPersonal), 'dark-bit-neon');
-    assert.equal(nextOfficeTheme('dark-bit-neon', adminPersonal), 'light-professional');
+    assert.deepEqual(officeThemes(adminPersonal), ['light-professional', 'dark-industrial', 'dark-princess', 'light-garden', 'dark-bit', 'dark-bit-neon']);
     assert.equal(normalizeOfficeTheme('dark-bit-neon', personal), 'dark-industrial');
-    // El Administrador conserva su clave (con el rosado) y la cuenta habilitada por correo usa la personal.
+    // El Administrador conserva su clave y la cuenta habilitada por correo usa la personal.
     assert.equal(officeThemeStorageKey(adminPersonal), officeThemeStorageKey({ rol: 'administrador' }));
     assert.notEqual(officeThemeStorageKey(personal), officeThemeStorageKey({ rol: 'supervisor_frio' }));
     assert.notEqual(officeThemeStorageKey(personal), officeThemeStorageKey(adminPersonal));
