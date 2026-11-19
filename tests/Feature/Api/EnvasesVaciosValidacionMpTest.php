@@ -18,6 +18,7 @@ use App\Services\Envases\ServicioCuentaCorrienteEnvases;
 use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Tests\Concerns\PreparaInspeccionesEnvases;
@@ -44,6 +45,8 @@ class EnvasesVaciosValidacionMpTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 40]);
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 2]);
         $this->temporada = Temporada::query()->where('activa', true)->firstOrFail();
         $this->operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
         $this->validador = User::factory()->create(['rol' => RolUsuario::ValidadorMp]);
@@ -114,6 +117,8 @@ class EnvasesVaciosValidacionMpTest extends TestCase
      */
     public function test_rec_2611_0022_cuenta_corriente_destare_y_rpr01_usan_lo_validado(): void
     {
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 43]);
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 0.89]);
         $this->travelTo(CarbonImmutable::parse('2026-11-08 17:26:00', 'UTC'));
         $recepcion = $this->actingAs($this->operador, 'sanctum')->postJson('/api/romana/recepciones', [
             ...$this->datosRecepcion(), 'numero_guia_despacho' => '1524-1525', 'peso_bruto' => 22680,
@@ -198,6 +203,7 @@ class EnvasesVaciosValidacionMpTest extends TestCase
 
     public function test_en_pesaje_acumulativo_el_neto_por_envase_se_rehace_sin_los_vacios(): void
     {
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 50]);
         $datos = [...$this->datosRecepcion(), 'tipo_recepcion' => 'fruta_pesaje_envases', 'envases' => [['tipo_envase' => 'bins', 'cantidad' => 4]],
             'tipo_envase_pesaje' => 'bins', 'tara_unitaria_envase' => 50];
         unset($datos['peso_bruto']);
