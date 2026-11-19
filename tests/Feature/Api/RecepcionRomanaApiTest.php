@@ -25,6 +25,15 @@ class RecepcionRomanaApiTest extends TestCase
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
+
+    /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 40]);
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 2]);
+    }
+
     public function test_declara_propiedad_por_tipo_y_la_conserva_al_editar_con_un_cliente_anterior(): void
     {
         $this->actingAs(User::factory()->create(['rol' => RolUsuario::OperadorRomana]), 'sanctum');
