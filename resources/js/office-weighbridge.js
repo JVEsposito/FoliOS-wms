@@ -14,6 +14,7 @@ const elements = {
     userName: byId('officeUserName'), userRole: byId('officeUserRole'), initials: byId('officeInitials'), logout: byId('officeLogoutButton'),
     managementNav: byId('officeManagementNav'), rawMaterialNav: byId('officeRawMaterialNav'), containerAccountsNav: byId('officeContainerAccountsNav'), camerasNav: byId('officeCamerasNav'), loadsNav: byId('officeLoadsNav'), materialsNav: byId('officeMaterialsNav'), validationNav: byId('officeValidationNav'), prefrioNav: byId('officePrefrioNav'), accessesNav: byId('officeAccessesNav'),
     rc02Reception: byId('downloadRc02ReceptionButton'), rc02Dispatch: byId('downloadRc02DispatchButton'), inspectionPanel: byId('dispatchInspectionPanel'), inspectionItems: byId('dispatchInspectionItems'), inspectionObservation: byId('dispatchInspectionObservation'),
+    tareSettingsButton: byId('tareSettingsButton'), tareSettingsDialog: byId('tareSettingsDialog'), tareSettingsForm: byId('tareSettingsForm'), tareSettingsError: byId('tareSettingsError'),
     reload: byId('reloadButton'), blankWeighingForm: byId('downloadBlankWeighingFormButton'), newReception: byId('newReceptionButton'), filters: byId('receptionFilters'), tableBody: byId('receptionTableBody'),
     entryCount: byId('entryCount'), containerWeighingCount: byId('containerWeighingCount'), exitCount: byId('exitCount'), closedCount: byId('closedCount'), netWeight: byId('netWeight'),
     paginationSummary: byId('paginationSummary'), previousPage: byId('previousPageButton'), nextPage: byId('nextPageButton'),
@@ -33,7 +34,7 @@ const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_id
 const state = {
     token: localStorage.getItem(keys.token),
     identity: readJson(keys.identity),
-    catalogs: { temporadas: [], clientes: [], especies: [], tipos_servicio: [], tipos_envase: [], tipos_recepcion: [], conceptos_envases: [] },
+    catalogs: { temporadas: [], clientes: [], especies: [], tipos_servicio: [], tipos_envase: [], tipos_recepcion: [], conceptos_envases: [], taras_romana: {} },
     receptions: [],
     selected: null,
     page: 1,
@@ -247,6 +248,17 @@ function syncContainerProperties() {
  * el total a pesar, la tara por envase y su propiedad; las tandas pueden mezclarlos.
  */
 function fruitContainerTypes() { return state.catalogs.tipos_envase.filter((t) => t.contiene_fruta); }
+/** Las taras oficiales quedan congeladas en la recepción al ingresar. */
+function fixedTare(type, reception = null) {
+    if (!['bins', 'totes'].includes(type)) return null;
+    const previous = reception?.envases?.find((row) => row.tipo_envase === type)?.tara_unitaria_salida;
+    const value = reception?.taras_romana_snapshot?.[type] ?? previous ?? state.catalogs.taras_romana?.[type];
+    return value == null ? null : Number(value);
+}
+function currentWeighingTare(line) {
+    const fixed = fixedTare(line.tipo_envase);
+    return line.tara_unitaria === '' || line.tara_unitaria == null ? (fixed ?? '') : line.tara_unitaria;
+}
 function readWeighingLines() {
     return [...elements.containerWeighingLines.querySelectorAll('[data-weighing-line]')].map((row) => ({
         tipo_envase: row.querySelector('[data-line="tipo_envase"]').value,
@@ -261,7 +273,7 @@ function renderWeighingLines(lines) {
     elements.containerWeighingLines.innerHTML = rows.map((line, index) => `<div class="container-weighing-line" data-weighing-line>
         <label><span>Tipo de envase</span><select data-line="tipo_envase" aria-label="Tipo de envase ${index + 1}">${types.map((t) => `<option value="${escapeHtml(t.codigo)}"${t.codigo === line.tipo_envase ? ' selected' : ''}>${escapeHtml(t.nombre)}</option>`).join('')}</select></label>
         <label><span>Total a pesar</span><input data-line="cantidad" type="number" min="1" max="100000" value="${escapeHtml(line.cantidad ?? '1')}" aria-label="Total a pesar ${index + 1}"></label>
-        <label class="weight-field"><span>Tara por envase</span><div><input data-line="tara_unitaria" type="number" min="0.001" max="1000" step="0.001" inputmode="decimal" value="${escapeHtml(line.tara_unitaria ?? '')}" aria-label="Tara por envase ${index + 1}"><b>kg</b></div></label>
+        <label class="weight-field"><span>Tara por envase</span><div><input data-line="tara_unitaria" type="number" min="0.001" max="1000" step="0.001" inputmode="decimal" value="${escapeHtml(currentWeighingTare(line))}" aria-label="Tara por envase ${index + 1}"${fixedTare(line.tipo_envase) !== null ? ' readonly title="Tara fijada por administración"' : ''}><b>kg</b></div></label>
         <label><span>Propiedad del envase *</span><select data-line="propiedad" aria-label="Propiedad del envase ${index + 1}">${propertyOptions(line.propiedad || '')}</select></label>
         <button type="button" data-remove-weighing-line aria-label="Quitar tipo de envase ${index + 1}" title="Quitar este tipo de envase"${rows.length === 1 ? ' disabled' : ''}>×</button>
     </div>`).join('');
@@ -275,6 +287,14 @@ elements.addContainerWeighingLine.addEventListener('click', () => {
     if (!next) return;
     renderWeighingLines([...lines, { tipo_envase: next.codigo, cantidad: '1', tara_unitaria: '', propiedad: '' }]);
     elements.containerWeighingLines.querySelectorAll('[data-weighing-line]')[lines.length]?.querySelector('[data-line="cantidad"]').focus();
+});
+elements.containerWeighingLines.addEventListener('change', (event) => {
+    if (event.target.dataset.line !== 'tipo_envase') return;
+    const input = event.target.closest('[data-weighing-line]').querySelector('[data-line="tara_unitaria"]');
+    const fixed = fixedTare(event.target.value);
+    input.value = fixed ?? '';
+    input.readOnly = fixed !== null;
+    input.title = fixed !== null ? 'Tara fijada por administración' : '';
 });
 elements.containerWeighingLines.addEventListener('click', (event) => {
     const button = event.target.closest('[data-remove-weighing-line]');
@@ -330,7 +350,39 @@ function renderList(payload) {
     }).join('');
 }
 
-async function loadCatalogs() { const [catalogs, containers] = await Promise.all([api('/api/romana/catalogos'), loadContainerCatalog(api)]); state.catalogs = { ...catalogs, tipos_envase: containers }; fillCatalogs(); }
+async function loadCatalogs() {
+    const [catalogs, containers] = await Promise.all([api('/api/romana/catalogos'), loadContainerCatalog(api)]);
+    state.catalogs = { ...catalogs, tipos_envase: containers };
+    elements.tareSettingsButton.classList.toggle('is-hidden', catalogs.puede_configurar_taras_romana !== true);
+    fillCatalogs();
+}
+function fillTareSettings() {
+    const form = elements.tareSettingsForm.elements;
+    form.tara_unitaria.value = state.catalogs.taras_romana?.[form.tipo_envase.value] ?? '';
+}
+elements.tareSettingsButton.addEventListener('click', () => {
+    elements.tareSettingsForm.reset();
+    elements.tareSettingsError.textContent = '';
+    fillTareSettings();
+    elements.tareSettingsDialog.showModal();
+});
+elements.tareSettingsForm.elements.tipo_envase.addEventListener('change', fillTareSettings);
+byId('tareSettingsCancel').addEventListener('click', () => elements.tareSettingsDialog.close());
+elements.tareSettingsForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    elements.tareSettingsError.textContent = '';
+    const data = Object.fromEntries(new FormData(elements.tareSettingsForm));
+    setBusy(true, 'Guardando tara oficial y auditoría…');
+    try {
+        await api(`/api/romana/taras/${encodeURIComponent(data.tipo_envase)}`, {
+            method: 'PUT', body: JSON.stringify({ tara_unitaria: Number(data.tara_unitaria), motivo: data.motivo.trim() }),
+        });
+        elements.tareSettingsDialog.close();
+        await loadCatalogs();
+        toast('Tara oficial actualizada. Se aplicará a nuevas recepciones.');
+    } catch (error) { elements.tareSettingsError.textContent = error.message; }
+    finally { setBusy(false); }
+});
 async function loadReceptions({ silent = false } = {}) {
     const payload = await api(`/api/romana/recepciones?${filterQuery()}`); renderList(payload);
     if (state.selected) {
@@ -982,9 +1034,13 @@ function openTareDialog(correcting) {
 elements.correctExit.addEventListener('click', () => openTareDialog(true));
 
 function exitRow(type, validated = 0, tare = '', extra = false) {
+    const official = fixedTare(type, state.selected);
+    const value = (tare === '' || tare == null) ? (official ?? '') : tare;
+    const fixed = official !== null;
+    const sponge = ['esponjas', 'esponja_tote'].includes(type);
     return `<div data-exit-row="${escapeHtml(type)}" data-validated="${validated}">
         <label class="field"><span>${escapeHtml(label(type))} · entraron ${validated} validados</span><input data-exit-quantity="${escapeHtml(type)}" type="number" min="0" max="100000" step="1" value="${validated}" required></label>
-        <label class="field"><span>Tara unitaria (kg) *</span><input data-container-tare="${escapeHtml(type)}" type="number" min="0.001" max="1000" step="0.001" inputmode="decimal" value="${escapeHtml(tare ?? '')}" required></label>
+        <label class="field"><span>Tara unitaria (kg) *</span><input data-container-tare="${escapeHtml(type)}" type="number" min="0.001" max="1000" step="0.001" inputmode="decimal" value="${escapeHtml(value)}"${fixed ? ' readonly title="Solo administración configura esta tara"' : ''} required>${sponge ? '<small>Pesar las esponjas de este camión y registrar su tara real por unidad.</small>' : fixed ? '<small>Tara oficial de planta, no editable en Romana.</small>' : ''}</label>
         ${extra ? '<button type="button" class="secondary-button" data-remove-exit-type>Quitar tipo</button>' : ''}
     </div>`;
 }
