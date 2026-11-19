@@ -1285,16 +1285,25 @@ function dispatchLoadState(load) {
     return signal(DISPATCH_STATES[load.estado] || humanize(load.estado), load.prioridad === 'urgente' ? 'warning' : 'neutral');
 }
 
-function dispatchRow(load, { instruction = false, parent = '', dockRows = 1 } = {}) {
+function instructionTitle(instruction) {
+    return instruction.id ? `Instructivo ${instruction.numero_externo || instruction.orden}` : 'Sin instructivo asignado';
+}
+function instructionReference(instruction) {
+    return [instruction.destino, instruction.booking && `Booking ${instruction.booking}`, instruction.recibidor,
+        `${number(instruction.pallets_asignados)} asignados${instruction.pallets_programados == null ? '' : ` · ${number(instruction.pallets_programados)} programados`}`].filter(Boolean).join(' · ');
+}
+
+function dispatchRow(load, { instruction = false, parent = '', dockRows = 1, single = null } = {}) {
     const separation = load.separacion || {};
     const loading = load.carguio || {};
-    const title = instruction
-        ? (load.id ? `Instructivo ${load.numero_externo || load.orden}` : 'Sin instructivo asignado')
-        : load.codigo;
+    const title = instruction ? instructionTitle(load) : load.codigo;
     const reference = instruction
-        ? [load.destino, load.booking && `Booking ${load.booking}`, load.recibidor,
-            `${number(load.pallets_asignados)} asignados${load.pallets_programados == null ? '' : ` · ${number(load.pallets_programados)} programados`}`].filter(Boolean).join(' · ')
+        ? instructionReference(load)
         : [load.numero_orden_externa, load.embarque, (load.clientes || []).join(' · ')].filter(Boolean).join(' · ');
+    // Con un solo instructivo la carga sigue en una fila: sus datos van bajo el código, sin repetir avances.
+    const singleInstruction = single
+        ? `<span class="operation-now-subtext operation-now-dispatch-single" data-single-instruction="${escapeHtml(single.id || 'sin-instructivo')}">${escapeHtml([instructionTitle(single), instructionReference(single)].join(' · '))}</span>`
+        : '';
     const separationTone = separation.total && separation.acopiados >= separation.total ? 'success' : (separation.cumple_umbral ? 'info' : 'warning');
     const separationDetail = [separation.en_anden
         ? `${number(separation.en_anden)} en andén · ${percent(separation.porcentaje)}`
@@ -1310,7 +1319,7 @@ function dispatchRow(load, { instruction = false, parent = '', dockRows = 1 } = 
     return `<tr class="${instruction ? 'operation-now-dispatch-instruction' : 'operation-now-dispatch-load'}"${instruction
         ? ` data-parent-load="${escapeHtml(parent)}" data-instruction-id="${escapeHtml(load.id || 'sin-instructivo')}"`
         : ` data-dispatch-load="${escapeHtml(load.id)}"`}>
-        <td><span class="operation-now-code">${escapeHtml(title)}${instruction ? `<span class="office-visually-hidden"> de la carga ${escapeHtml(parent)}</span>` : ''}</span><span class="operation-now-subtext">${escapeHtml(reference || 'Sin orden externa')}</span></td>
+        <td><span class="operation-now-code">${escapeHtml(title)}${instruction ? `<span class="office-visually-hidden"> de la carga ${escapeHtml(parent)}</span>` : ''}</span><span class="operation-now-subtext">${escapeHtml(reference || 'Sin orden externa')}</span>${singleInstruction}</td>
         <td>${dispatchMeter(separation.acopiados, separation.total, separationTone, separationDetail)}</td>
         <td>${dispatchMeter(loading.cargados, loading.total, loading.total && loading.cargados >= loading.total ? 'success' : 'info', loadingDetail)}</td>
         ${instruction ? '' : `<td rowspan="${dockRows}"><strong>${escapeHtml(load.anden || '—')}</strong><span class="operation-now-subtext">${escapeHtml(truck)}</span></td>`}
@@ -1330,7 +1339,7 @@ function renderDispatch(dispatch = {}) {
     }
     elements.dispatchRows.innerHTML = loads.map((load) => {
         const instructions = load.instructivos?.length > 1 ? load.instructivos : [];
-        return dispatchRow(load, { dockRows: instructions.length + 1 })
+        return dispatchRow(load, { dockRows: instructions.length + 1, single: load.instructivos?.length === 1 ? load.instructivos[0] : null })
             + instructions.map((instruction) => dispatchRow(instruction, { instruction: true, parent: load.codigo })).join('');
     }).join('');
 }
