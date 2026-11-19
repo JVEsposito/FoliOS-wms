@@ -19,7 +19,7 @@ class ConfiguracionTarasRomanaController extends Controller
             'tara_unitaria' => ['required', 'numeric', 'gt:0', 'max:1000', 'decimal:0,3'],
             'motivo' => ['required', 'string', 'min:5', 'max:500'],
         ]);
-        if (! in_array($tipo, ['bins', 'totes'], true)) {
+        if (!in_array($tipo, ['bins', 'totes'], true)) {
             abort(404);
         }
 
