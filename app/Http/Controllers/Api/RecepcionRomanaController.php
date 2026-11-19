@@ -19,6 +19,7 @@ use App\Http\Requests\CorregirFechaRealRomanaRequest;
 use App\Http\Requests\CorregirPesoBrutoRomanaRequest;
 use App\Http\Requests\CorregirRecepcionRomanaRequest;
 use App\Http\Requests\CorregirSalidaEnvasesRomanaRequest;
+use App\Http\Requests\CorregirTaraRomanaRequest;
 use App\Http\Requests\CrearRecepcionRomanaRequest;
 use App\Http\Requests\RegistrarPesajeEnvasesRomanaRequest;
 use App\Models\Cliente;
@@ -232,6 +233,17 @@ class RecepcionRomanaController extends Controller
         ServicioRecepcionRomana $servicio,
     ): JsonResponse {
         $recepcion = $servicio->corregirPesoBruto($recepcion, $request->validated(), $request->user());
+
+        return response()->json(['data' => $this->recepcion($recepcion, true)]);
+    }
+
+    /** Administración corrige la tara aunque la recepción ya tenga lotes, entregas a proceso o validación. */
+    public function corregirTara(
+        CorregirTaraRomanaRequest $request,
+        RecepcionRomana $recepcion,
+        ServicioRecepcionRomana $servicio,
+    ): JsonResponse {
+        $recepcion = $servicio->corregirTara($recepcion, $request->validated(), $request->user());
 
         return response()->json(['data' => $this->recepcion($recepcion, true)]);
     }
@@ -557,6 +569,10 @@ class RecepcionRomanaController extends Controller
             'puede_corregir_peso_bruto' => Gate::allows('corregir-peso-bruto-romana')
                 && $recepcion->estado !== EstadoRecepcionRomana::Anulada && $recepcion->eliminada_at === null
                 && ! $esSoloEnvases && (! $esPesajeEnvases || $cantidadPesada > 0),
+            // Tara transversal: con destare por camión, tras cerrar; con pesaje acumulativo, en cualquier etapa.
+            'puede_corregir_tara' => Gate::allows('corregir-tara-romana')
+                && $recepcion->estado !== EstadoRecepcionRomana::Anulada && $recepcion->eliminada_at === null
+                && ! $esSoloEnvases && ($esPesajeEnvases || $recepcion->estado === EstadoRecepcionRomana::Cerrado),
             'puede_corregir_fecha_real' => $conEventos && app(ServicioFechaRealRecepcionRomana::class)->disponible($recepcion, request()->user()),
             'puede_anular' => Gate::allows('anular-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,
             'puede_eliminar' => Gate::allows('eliminar-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,

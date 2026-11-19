@@ -1148,7 +1148,13 @@ class ServicioLoteMateriaPrima
     }
 
     /** Distribuye el destare usando la proporción congelada y respeta lotes ya entregados. */
-    public function conciliarDestare(RecepcionRomana $recepcion, User $usuario, ?array $correccionPeso = null): void
+    /**
+     * Reparte el neto de Romana entre los lotes vigentes de la recepción. Con una corrección de
+     * peso, rehace también los lotes confirmados; las entregas a proceso la bloquean salvo que
+     * administración corrija la tara de forma transversal ($aunConEntregas): las entregas
+     * registran envases, no kilos, y el lote queda con el neto corregido y la marca en su evento.
+     */
+    public function conciliarDestare(RecepcionRomana $recepcion, User $usuario, ?array $correccionPeso = null, bool $aunConEntregas = false): void
     {
         if ($recepcion->peso_neto === null || ! $recepcion->tipo_envase_calculo_neto) {
             throw new ConflictoOperacion('Romana aún no dispone del neto para conciliar los lotes.');
@@ -1159,13 +1165,17 @@ class ServicioLoteMateriaPrima
         $lotes = LoteMateriaPrima::query()->where('recepcion_romana_id', $recepcion->id)
             ->where('estado', '!=', EstadoLoteMateriaPrima::Anulado->value)->with('envasesDetalle')
             ->orderBy('secuencia_creacion')->orderBy('created_at')->orderBy('id')->lockForUpdate()->get();
+        $conEntregas = [];
         if ($correccionPeso !== null) {
             foreach ($lotes as $lote) {
                 // Lectura actual tras bloquear el lote: una entrega concurrente puede
                 // haber terminado después de abrir el snapshot de la recepción.
                 if (in_array($lote->estado, [EstadoLoteMateriaPrima::EntregaParcialProceso, EstadoLoteMateriaPrima::EntregadoProceso], true)
                     || $lote->entregasProceso()->whereNull('anulado_at')->lockForUpdate()->exists()) {
-                    throw new ConflictoOperacion("El lote {$lote->numero_lote} ya tiene entregas a proceso. El peso no se modificó. Requiere conciliación con sus entregas.");
+                    if (! $aunConEntregas) {
+                        throw new ConflictoOperacion("El lote {$lote->numero_lote} ya tiene entregas a proceso. El peso no se modificó. Requiere conciliación con sus entregas.");
+                    }
+                    $conEntregas[$lote->id] = true;
                 }
             }
         }
@@ -1198,7 +1208,8 @@ class ServicioLoteMateriaPrima
             $this->registrarEvento($lote, $correccionPeso === null ? 'destare_conciliado' : 'peso_romana_conciliado', $usuario, null, $estado,
                 $estado, ['kilos_netos_calculados' => $kilos / 1000, 'version' => $lote->version,
                     ...($correccionPeso === null ? [] : [...$correccionPeso, 'recepcion_romana_id' => $recepcion->id,
-                        'anterior' => $anterior, 'posterior' => $lote->only(['kilos_brutos', 'kilos_netos_calculados', 'kilos_netos_confirmados'])])]);
+                        'anterior' => $anterior, 'posterior' => $lote->only(['kilos_brutos', 'kilos_netos_calculados', 'kilos_netos_confirmados'])]),
+                    ...(isset($conEntregas[$lote->id]) ? ['con_entregas_proceso' => true] : [])]);
             $asignados += $kilos;
         }
     }

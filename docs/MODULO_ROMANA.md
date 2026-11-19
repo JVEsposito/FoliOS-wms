@@ -100,7 +100,8 @@ registra los valores anterior y nuevo, usuario y fecha.
 
 Al crear una recepción, FoliOS conserva una copia de las taras oficiales vigentes.
 Si administración las modifica luego, **esa recepción y las que ya están cerradas
-conservan sus valores y kilos**. Las recepciones anteriores al cambio que ya tenían
+conservan sus valores y kilos**; para reparar una recepción ya registrada se usa
+**Corregir tara** (ver más abajo). Las recepciones anteriores al cambio que ya tenían
 una tara documentada también la conservan. En recepciones antiguas aún sin destare
 se utiliza la configuración vigente al momento de cerrarlas.
 
@@ -126,6 +127,39 @@ El cuadro muestra los lotes de la recepción, incluidos los anulados, y el enlac
 **Anterior/Siguiente** permite recorrer todos los resultados, en páginas de 100.
 Un lote confirmado deja de aparecer en segmentos pendientes, pero permanece
 en **Lotes de la temporada** con su estado actual. No anularlo para corregir peso.
+
+### Corrección transversal de tara por el administrador
+
+En el expediente, **Corregir tara** se muestra solo a usuarios con rol
+**administrador** (incluye el perfil Superadmin) y acceso a Romana. El backend
+rechaza la operación para cualquier otro rol, incluso por API directa. Existe para
+reparar recepciones registradas con una tara equivocada, sea cual sea lo que haya
+ocurrido después: Validación MP, lotes confirmados, ubicación en cámara o entregas
+a proceso.
+
+- **Fruta con envases (destare por camión)**: disponible tras el cierre. Corrige la
+  tara del camión vacío y la tara unitaria de cada tipo de envase. La tara de
+  envases se recalcula como en el destare: (validados − los que salieron) × tara
+  unitaria. También se actualiza la tara de las salidas registradas.
+- **Pesaje acumulativo**: disponible en cualquier etapa. Corrige la tara unitaria
+  de cada tipo; cada tanda vigente recalcula su tara y reparte su nuevo neto entre
+  sus envases con las mismas proporciones medidas (los bins que solo contienen
+  totes siguen sin neto propio). Las tandas siguientes usan la tara corregida. Si la
+  recepción ya está validada, el neto por envase vuelve a repartirse con el conteo
+  de la PDA, sin vacíos.
+- Se exige un motivo y al menos un cambio; el neto debe quedar mayor que cero.
+- Se recalculan el neto, el neto por envase y los kilos netos y brutos de **todos**
+  los lotes vigentes, incluso con entregas a proceso. Las entregas registran
+  envases, no kilos: se conservan, igual que el número, estado y ubicación del lote.
+  El evento del lote indica que tenía entregas a proceso.
+- No cambian guías, cantidades de envases ni la cuenta corriente de envases.
+- Las taras oficiales congeladas en la recepción (bins y totes) pasan a ser las
+  corregidas, para que correcciones posteriores usen el mismo valor.
+- Romana registra la tara y el neto anteriores y posteriores, cada tanda
+  recalculada, los kilos de cada lote, el administrador y el motivo. La operación
+  es idempotente: repetir el mismo envío no duplica la corrección.
+
+La corrección de peso bruto mantiene su regla: con entregas a proceso se rechaza.
 
 ### Corrección del N° de guía de ingreso por el administrador
 

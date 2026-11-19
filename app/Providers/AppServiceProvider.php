@@ -522,6 +522,9 @@ class AppServiceProvider extends ServiceProvider
             && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarRomana($usuario));
         Gate::define('corregir-peso-bruto-romana', fn (User $usuario): bool => $usuario->activo
             && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarRomana($usuario));
+        // Corrección transversal de tara: rehace neto y lotes aunque existan entregas a proceso. Solo administración.
+        Gate::define('corregir-tara-romana', fn (User $usuario): bool => $usuario->activo
+            && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarRomana($usuario));
         // Corrección de una recepción ya validada (guías, envases, conteos y destare): solo administración.
         Gate::define('corregir-recepciones-validadas', fn (User $usuario): bool => $usuario->activo
             && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarRomana($usuario));

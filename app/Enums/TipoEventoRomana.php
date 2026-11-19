@@ -25,4 +25,6 @@ enum TipoEventoRomana: string
     case NumeroGuiaCorregido = 'numero_guia_corregido';
     // La recepción se digitó después: se corrigió la fecha y hora reales del camión.
     case FechaRealCorregida = 'fecha_real_corregida';
+    // Administración corrigió la tara (camión o envases) y rehízo neto y kilos de lotes, con o sin procesos posteriores.
+    case TaraCorregida = 'tara_corregida';
 }
