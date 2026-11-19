@@ -10,6 +10,7 @@ use App\Enums\TipoRecepcionRomana;
 use App\Enums\TipoServicioRomana;
 use App\Rules\RutChileno;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Models\RecepcionRomana;
 use App\Services\Romana\ServicioTarasRomana;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
@@ -196,12 +197,12 @@ class CrearRecepcionRomanaRequest extends FormRequest
                 if ($taras->esFija($tipo->value)) {
                     $recepcion = $this->route('recepcion');
                     $valorOficial = $taras->paraRecepcion(
-                        $recepcion instanceof \App\Models\RecepcionRomana ? $recepcion : null,
+                        $recepcion instanceof RecepcionRomana ? $recepcion : null,
                         $tipo->value,
                     );
                     if ($tara !== null && $tara !== '' && abs((float) $tara - $valorOficial) > 0.0005) {
                         $validator->errors()->add("envases.{$indice}.tara_unitaria",
-                            "La tara oficial de {$tipo->etiqueta()} es ".number_format($valorOficial, 3, ',', '.')." kg y no se edita en Romana.");
+                            "La tara oficial de {$tipo->etiqueta()} es ".number_format($valorOficial, 3, ',', '.') . ' kg y no se edita en Romana.');
                     }
                     continue;
                 }
