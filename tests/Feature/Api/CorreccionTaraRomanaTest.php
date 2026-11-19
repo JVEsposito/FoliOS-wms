@@ -113,7 +113,7 @@ class CorreccionTaraRomanaTest extends TestCase
             'cantidad_bandas' => 1, 'posiciones_por_banda' => 1, 'cantidad_niveles' => 1]);
         $this->postJson("/api/materia-prima/lotes/{$lote['id']}/asignar-camara", ['operacion_id' => (string) Str::uuid(), 'camara_id' => $camara->id])->assertOk();
         $this->postJson("/api/materia-prima/fruta-proceso/lotes/{$lote['id']}/entregas", ['operacion_id' => (string) Str::uuid(), 'camara_origen_id' => $camara->id,
-            'cantidad_envases' => $acumulativo ? 5 : 12, 'linea_proceso' => 'Línea 1', 'turno' => 'A', 'numero_orden' => 'OP-TARA'])->assertOk();
+            'cantidad_envases' => $acumulativo ? 1 : 12, 'linea_proceso' => 'Línea 1', 'turno' => 'A', 'numero_orden' => 'OP-TARA'])->assertOk();
 
         return [$this->getJson("/api/romana/recepciones/{$id}")->assertOk()->json('data'), LoteMateriaPrima::findOrFail($lote['id'])];
     }
