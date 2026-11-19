@@ -7,6 +7,7 @@ use App\Models\Cliente;
 use App\Models\EspecieValidacion;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Romana\ServicioTarasRomana;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -133,10 +134,10 @@ class ConfiguracionTarasRomanaTest extends TestCase
 
     public function test_esponjas_permanecen_variables_en_cada_camion(): void
     {
-        $this->assertNull(app(\App\Services\Romana\ServicioTarasRomana::class)->paraRecepcion(null, 'esponjas'));
-        $this->assertNull(app(\App\Services\Romana\ServicioTarasRomana::class)->paraRecepcion(null, 'esponja_tote'));
-        app(\App\Services\Romana\ServicioTarasRomana::class)->asegurarValor('esponjas', 7.4);
-        app(\App\Services\Romana\ServicioTarasRomana::class)->asegurarValor('esponjas', 6.8);
+        $this->assertNull(app(ServicioTarasRomana::class)->paraRecepcion(null, 'esponjas'));
+        $this->assertNull(app(ServicioTarasRomana::class)->paraRecepcion(null, 'esponja_tote'));
+        app(ServicioTarasRomana::class)->asegurarValor('esponjas', 7.4);
+        app(ServicioTarasRomana::class)->asegurarValor('esponjas', 6.8);
         $this->assertDatabaseCount('historial_configuracion_taras_romana', 0);
     }
 }
