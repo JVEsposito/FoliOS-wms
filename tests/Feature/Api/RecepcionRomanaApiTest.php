@@ -959,6 +959,7 @@ class RecepcionRomanaApiTest extends TestCase
 
     public function test_anula_una_tanda_y_recalcula_el_avance_antes_del_cierre(): void
     {
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 2.5]);
         $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
         $datos = $this->datosIngreso($this->cliente());
         $datos['tipo_recepcion'] = 'fruta_pesaje_envases';
@@ -1007,7 +1008,7 @@ class RecepcionRomanaApiTest extends TestCase
             ->assertJsonPath('data.pesaje_envases.cantidad_pesada', 0);
     }
 
-    public function test_pesaje_acumulativo_exige_tara_por_tipo_y_solo_envases_con_fruta(): void
+    public function test_pesaje_acumulativo_precarga_taras_fijas_y_solo_envases_con_fruta(): void
     {
         $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
         $datos = $this->datosIngreso($this->cliente());
@@ -1019,12 +1020,11 @@ class RecepcionRomanaApiTest extends TestCase
         $datos['tipo_envase_pesaje'] = 'bins';
         unset($datos['peso_bruto']);
 
-        $errores = $this->actingAs($operador, 'sanctum')
+        $this->actingAs($operador, 'sanctum')
             ->postJson('/api/romana/recepciones', $datos)
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['envases.0.tara_unitaria', 'envases.1.tara_unitaria'])
-            ->json('errors');
-        $this->assertSame(['Configura la tara por envase de Tote.'], $errores['envases.1.tara_unitaria']);
+            ->assertCreated()
+            ->assertJsonPath('data.pesaje_envases.tipos.0.tara_unitaria', 40)
+            ->assertJsonPath('data.pesaje_envases.tipos.1.tara_unitaria', 2);
 
         $datos['envases'] = [['tipo_envase' => 'bins', 'cantidad' => 5]];
         $datos['tipo_envase_pesaje'] = 'totes';
@@ -1045,6 +1045,7 @@ class RecepcionRomanaApiTest extends TestCase
 
     public function test_pesa_varios_tipos_de_envase_con_tandas_mixtas_y_reparte_el_neto_por_tipo(): void
     {
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 1.5]);
         $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
         $datos = $this->datosIngreso($this->cliente());
         $datos['tipo_recepcion'] = 'fruta_pesaje_envases';
@@ -1134,6 +1135,7 @@ class RecepcionRomanaApiTest extends TestCase
 
     public function test_una_tanda_que_mezcla_tipos_reparte_su_neto_por_peso_de_referencia_salvo_bins_con_sus_totes(): void
     {
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 1.25]);
         $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
         $datos = $this->datosIngreso($this->cliente());
         $datos['tipo_recepcion'] = 'fruta_pesaje_envases';
