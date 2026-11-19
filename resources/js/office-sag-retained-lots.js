@@ -39,20 +39,32 @@ async function list(page = 1) {
         button.disabled = target < 1 || target > data.last_page; button.onclick = () => run(() => list(target)); $('slPages').append(button);
     }
 }
+function destinationChoices() {
+    return [
+        ...state.catalog.bloques.map((d) => ({ tipo: 'bloque', id: d.id, label: `Bloque ${d.codigo} · ${d.nombre}` })),
+        ...state.catalog.paises.map((d) => ({ tipo: 'pais', id: d.id, label: `${d.iso_alpha2} · ${d.nombre_es}` })),
+    ];
+}
+// Con pocos destinos marcados se nombran: en una lista de ~250 cuesta comprobar cuáles quedaron.
+function selectedSummary() {
+    const count = state.targets.size;
+    const text = `${count} ${count === 1 ? 'país / bloque seleccionado' : 'países / bloques seleccionados'}`;
+    if (count === 0 || count > 8) return `${text}.`;
+    const names = destinationChoices().filter((d) => state.targets.has(`${d.tipo}|${d.id}`)).map((d) => d.label);
+    return `${text}: ${names.join(', ')}.`;
+}
 function destinations() {
     const all = field('todos_destinos').checked;
     const released = field('estado').value === 'liberado';
     const search = $('slDestinationSearch').value.trim().toLocaleLowerCase('es');
-    const choices = [
-        ...state.catalog.bloques.map((d) => ({ tipo: 'bloque', id: d.id, label: `Bloque ${d.codigo} · ${d.nombre}` })),
-        ...state.catalog.paises.map((d) => ({ tipo: 'pais', id: d.id, label: `${d.iso_alpha2} · ${d.nombre_es}` })),
-    ].filter((d) => !search || d.label.toLocaleLowerCase('es').includes(search));
+    const choices = destinationChoices().filter((d) => !search || d.label.toLocaleLowerCase('es').includes(search));
     $('slDestinations').innerHTML = choices.map((d) => {
         const key = `${d.tipo}|${d.id}`;
         return `<label class="sl-check"><input type="checkbox" data-destination="${esc(key)}"${state.targets.has(key) ? ' checked' : ''}${all || released ? ' disabled' : ''}>${esc(d.label)}</label>`;
     }).join('');
     field('todos_destinos').disabled = released;
-    $('slSelected').textContent = released ? 'La liberación elimina las restricciones de este lote.' : all ? 'Despacho restringido a todos los destinos.' : `${state.targets.size} países / bloques seleccionados.`;
+    $('slClear').disabled = released || (!all && state.targets.size === 0);
+    $('slSelected').textContent = released ? 'La liberación elimina las restricciones de este lote.' : all ? 'Despacho restringido a todos los destinos.' : selectedSummary();
 }
 function editor(detail = null) {
     state.detail = detail; state.pending = null; state.targets = new Map();
@@ -115,6 +127,14 @@ $('slExpand').onclick = () => {
     field('todos_destinos').checked = false;
     state.targets = new Map(state.detail.paises_restringidos.map((id) => [`pais|${id}`, { tipo: 'pais', id }]));
     destinations();
+};
+// Para dejar solo unos pocos destinos: se quitan todos y se buscan y marcan los que siguen restringidos.
+$('slClear').onclick = () => {
+    field('todos_destinos').checked = false;
+    state.targets = new Map();
+    $('slDestinationSearch').value = '';
+    destinations();
+    $('slDestinationSearch').focus();
 };
 form.onsubmit = (e) => {
     e.preventDefault(); if (state.busy) return;
