@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\VariedadValidacion;
 use App\Services\MateriaPrima\ServicioLoteMateriaPrima;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
@@ -29,6 +30,15 @@ class PesajeAcumulativoBinsConTotesTest extends TestCase
 {
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
+
+
+    /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 40]);
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 1.04]);
+    }
 
     public function test_el_neto_de_las_tandas_de_bins_con_totes_es_de_los_totes(): void
     {
