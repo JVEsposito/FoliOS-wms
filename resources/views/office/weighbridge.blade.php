@@ -38,6 +38,7 @@
                 <header class="weighbridge-heading">
                     <div><p class="eyebrow">RECEPCIÓN CONTRACTUAL</p><h1>Control de Romana</h1><p>Ingreso cargado, retorno vacío y cierre documental en una sola trazabilidad.</p></div>
                     <div class="weighbridge-heading__actions">
+                        <button class="secondary-button is-hidden" id="tareSettingsButton" type="button">⚖ Configurar taras</button>
                         <button class="secondary-button" id="downloadBlankWeighingFormButton" type="button">↓ Planilla de pesaje en blanco</button>
                         <button class="secondary-button" id="reloadButton" type="button">↻ Actualizar</button>
                         <button class="primary-button" id="newReceptionButton" type="button">+ Registrar ingreso</button>
@@ -188,6 +189,17 @@
                 <div class="net-preview"><span>PESO NETO DE LA TANDA</span><strong id="containerWeighingNetPreview">—</strong></div>
                 <p class="form-error" id="containerWeighingFormError" role="alert"></p>
                 <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">Cancelar</button><button class="primary-button" value="default" type="submit">Guardar lectura</button></div>
+            </form>
+        </dialog>
+
+        <dialog class="weighbridge-dialog weighbridge-dialog--compact" id="tareSettingsDialog" aria-label="Taras oficiales de Romana">
+            <form id="tareSettingsForm" method="dialog">
+                <div class="weighbridge-dialog__heading"><div><p class="eyebrow">SOLO ADMINISTRACIÓN</p><h2>Taras oficiales de Romana</h2><p>Se aplican a recepciones nuevas. Las ya registradas conservan sus kilos.</p></div></div>
+                <label class="field"><span>Tipo de envase *</span><select name="tipo_envase" required><option value="bins">Bins plásticos</option><option value="totes">Totes</option></select></label>
+                <label class="field weight-field"><span>Tara unitaria oficial (kg) *</span><div><input name="tara_unitaria" type="number" min="0.001" max="1000" step="0.001" required><b>kg</b></div></label>
+                <label class="field"><span>Motivo del cambio *</span><textarea name="motivo" minlength="5" maxlength="500" required></textarea></label>
+                <p class="form-error" id="tareSettingsError" role="alert"></p>
+                <div class="dialog-actions"><button class="secondary-button" id="tareSettingsCancel" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar tara oficial</button></div>
             </form>
         </dialog>
 
