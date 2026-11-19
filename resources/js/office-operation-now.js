@@ -1277,8 +1277,7 @@ function dispatchMeter(done, total, tone, detail) {
 }
 
 function dispatchLoadState(load) {
-    if (load.salida_restringida_sag) return signal('Salida restringida SAG', 'critical') + sagLotAlertsHtml(load.alertas_sag || []);
-    if (load.alertas_sag?.length) return signal('Con seguimiento SAG', 'warning') + sagLotAlertsHtml(load.alertas_sag);
+    if (load.salida_restringida_sag) return signal('Salida restringida SAG', 'critical');
     if (load.incidencias_abiertas) return signal(`${number(load.incidencias_abiertas)} ${load.incidencias_abiertas === 1 ? 'incidencia' : 'incidencias'}`, 'critical');
     if (load.lista_para_cerrar) return signal('Lista para cerrar', 'success');
     if (['cargado_completo', 'separacion_completa'].includes(load.estado)) return signal(DISPATCH_STATES[load.estado], 'success');
@@ -1293,7 +1292,7 @@ function dispatchRow(load, { instruction = false, parent = '', dockRows = 1 } = 
         ? (load.id ? `Instructivo ${load.numero_externo || load.orden}` : 'Sin instructivo asignado')
         : load.codigo;
     const reference = instruction
-        ? [load.booking && `Booking ${load.booking}`, load.recibidor,
+        ? [load.destino, load.booking && `Booking ${load.booking}`, load.recibidor,
             `${number(load.pallets_asignados)} asignados${load.pallets_programados == null ? '' : ` · ${number(load.pallets_programados)} programados`}`].filter(Boolean).join(' · ')
         : [load.numero_orden_externa, load.embarque, (load.clientes || []).join(' · ')].filter(Boolean).join(' · ');
     const separationTone = separation.total && separation.acopiados >= separation.total ? 'success' : (separation.cumple_umbral ? 'info' : 'warning');
@@ -1315,7 +1314,7 @@ function dispatchRow(load, { instruction = false, parent = '', dockRows = 1 } = 
         <td>${dispatchMeter(separation.acopiados, separation.total, separationTone, separationDetail)}</td>
         <td>${dispatchMeter(loading.cargados, loading.total, loading.total && loading.cargados >= loading.total ? 'success' : 'info', loadingDetail)}</td>
         ${instruction ? '' : `<td rowspan="${dockRows}"><strong>${escapeHtml(load.anden || '—')}</strong><span class="operation-now-subtext">${escapeHtml(truck)}</span></td>`}
-        <td>${dispatchLoadState(load)}</td>
+        <td>${dispatchLoadState(load)}${sagLotAlertsHtml(load.alertas_sag || [], { compact: true })}</td>
     </tr>`;
 }
 

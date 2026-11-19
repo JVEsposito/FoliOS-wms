@@ -85,6 +85,17 @@ test('Despacho PT muestra los subestados de cada instructivo sin duplicar el cam
         await second.getByText('1 incidencia', { exact: true }).waitFor();
         assert.match(await first.innerText(), /Cargado completo/);
         assert.equal(await rows.locator('[data-dispatch-load]').count(), 2);
+        const retencion = { id: 'retencion-1', lote: '10056', folio: 'FOLIO-1', estado: 'retenido', destinos: [{ nombre: 'Perú' }] };
+        const compatible = { ...retencion, instructivo_id: 'i1', destino: 'China', bloquea_salida: false };
+        const bloqueada = { ...retencion, folio: 'FOLIO-2', instructivo_id: 'i2', destino: 'Perú', bloquea_salida: true };
+        Object.assign(load.instructivos[0], { destino: 'China', alertas_sag: [compatible], salida_restringida_sag: false });
+        Object.assign(load.instructivos[1], { destino: 'Perú', alertas_sag: [bloqueada], salida_restringida_sag: true });
+        Object.assign(load, { alertas_sag: [compatible, bloqueada], salida_restringida_sag: true });
+        await page.locator('#operationRefresh').click();
+        await second.getByText('Salida restringida SAG', { exact: true }).waitFor();
+        assert.match(await first.innerText(), /Cargado completo\s+Restricciones en otros destinos · China/);
+        assert.match(await second.innerText(), /1 folio bloqueado · Perú/);
+        assert.equal(await rows.locator('.sag-lot-alerts ul').count(), 0);
         await page.setViewportSize({ width: 768, height: 1000 });
         assert.equal(await first.isVisible(), true);
         assert.equal(await second.isVisible(), true);

@@ -10,6 +10,7 @@ use App\Models\InstructivoEmbarque;
 use App\Models\Pais;
 use App\Models\RetencionLoteSag;
 use App\Models\User;
+use App\Services\Cargas\ServicioInstructivosCarga;
 use App\Services\Revisiones\RevisionBandejasOperacionales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\ProyeccionTrazabilidadFolio;
@@ -205,40 +206,70 @@ class ServicioRetencionesLoteSag
         if ($porFolio === []) {
             return [];
         }
-        $carga->loadMissing('embarque.instructivos');
-        $instructivos = $carga->embarque?->instructivos ?? collect();
-        if ($bloquear) {
-            $instructivos = InstructivoEmbarque::whereHas('embarque', fn ($q) => $q->where('carga_id', $carga->id))->lockForUpdate()->get();
-        }
-        $paises = Pais::all();
+        $instructivos = $bloquear
+            ? app(ServicioInstructivosCarga::class)->instructivos($carga)
+            : ($carga->loadMissing('embarque.instructivos')->embarque?->instructivos ?? collect());
+        $instructivos = $instructivos->keyBy('id');
+        $destinos = $this->paisesDeInstructivos($instructivos);
         $alertas = [];
         foreach ($asignaciones as $asignacion) {
-            $instructivo = $instructivos->firstWhere('id', $asignacion->instructivo_embarque_id)
-                ?? ($instructivos->count() === 1 ? $instructivos->first() : null);
-            $paisId = $instructivo?->pais_destino_id;
-            if (! $paisId && $instructivo) {
-                $texto = Str::upper(Str::squish($instructivo->destino_pais ?? ''));
-                $coincidentes = $paises->filter(fn ($p) => in_array($texto, [Str::upper($p->iso_alpha2), Str::upper($p->iso_alpha3), Str::upper($p->nombre_es)], true));
-                $paisId = $coincidentes->count() === 1 ? $coincidentes->first()->id : null;
-            }
+            $instructivoId = $asignacion->instructivo_embarque_id
+                ?? ($instructivos->count() === 1 ? $instructivos->first()->id : null);
+            $instructivo = $instructivos->get($instructivoId);
+            $pais = $destinos->get($instructivoId);
             foreach ($porFolio[$asignacion->folio_id] ?? [] as $caso) {
-                $restringe = $caso['todos_destinos'] || $caso['destinos'] !== [];
-                $bloqueada = $restringe && ($caso['todos_destinos'] || ! $paisId || in_array($paisId, $caso['paises_restringidos'], true));
+                $sinDestino = ! $caso['todos_destinos'] && $caso['destinos'] !== [] && $pais === null;
+                $bloqueada = $caso['todos_destinos'] || $sinDestino || in_array($pais?->id, $caso['paises_restringidos'], true);
                 $alertas[] = [...$caso, 'folio_id' => $asignacion->folio_id, 'folio' => $asignacion->folio?->numero_folio,
-                    'instructivo_id' => $instructivo?->id, 'destino' => $instructivo?->destino_pais,
-                    'bloquea_salida' => $bloqueada, 'destino_sin_definir' => $restringe && ! $paisId];
+                    'instructivo_id' => $instructivo?->id,
+                    'instructivo_numero' => $instructivo ? ($instructivo->numero_externo ?: (string) $instructivo->orden) : null,
+                    'destino' => $pais?->nombre_es,
+                    'bloquea_salida' => $bloqueada, 'destino_sin_definir' => $sinDestino];
             }
         }
 
         return $alertas;
     }
 
+    /** @param  Collection<string, InstructivoEmbarque>  $instructivos */
+    private function paisesDeInstructivos(Collection $instructivos): Collection
+    {
+        $hayDestinoHistorico = $instructivos->contains(fn (InstructivoEmbarque $i): bool => ! $i->pais_destino_id && filled($i->destino_pais));
+        $paises = Pais::query()
+            ->unless($hayDestinoHistorico, fn ($q) => $q->whereIn('id', $instructivos->pluck('pais_destino_id')->filter()))
+            ->get(['id', 'iso_alpha2', 'iso_alpha3', 'nombre_es'])->keyBy('id');
+        $normalizar = fn (?string $texto): string => Str::upper(Str::squish(Str::ascii($texto ?? '')));
+
+        return $instructivos->map(function (InstructivoEmbarque $instructivo) use ($paises, $normalizar): ?Pais {
+            if ($instructivo->pais_destino_id) {
+                return $paises->get($instructivo->pais_destino_id);
+            }
+            $texto = $normalizar($instructivo->destino_pais);
+            if ($texto === '') {
+                return null;
+            }
+            $coincidentes = $paises->filter(fn (Pais $pais): bool => in_array($texto, [
+                $normalizar($pais->iso_alpha2), $normalizar($pais->iso_alpha3), $normalizar($pais->nombre_es),
+            ], true));
+
+            return $coincidentes->count() === 1 ? $coincidentes->first() : null;
+        });
+    }
+
     public function asegurarSalida(Carga $carga, Collection $asignaciones): void
     {
         $bloqueos = collect($this->alertasCarga($carga, $asignaciones, bloquear: true))->where('bloquea_salida', true);
         if ($bloqueos->isNotEmpty()) {
-            throw new DomainException('Salida impedida por SAG: '.$bloqueos->map(fn ($a) => 'folio '.$a['folio'].' · lote '.$a['lote']
-                .($a['destino_sin_definir'] ? ' (define el destino del instructivo)' : ''))->unique()->take(8)->implode('; ').'. Contraparte debe resolver la restricción.');
+            $detalle = $bloqueos->map(function (array $alerta): string {
+                $motivo = match (true) {
+                    $alerta['todos_destinos'] => 'retención para todos los destinos',
+                    $alerta['destino_sin_definir'] => 'define el destino del instructivo',
+                    default => 'retención para '.$alerta['destino'],
+                };
+
+                return "folio {$alerta['folio']} · lote {$alerta['lote']} ({$motivo})";
+            })->unique()->take(8)->implode(' / ');
+            throw new DomainException('Salida impedida por SAG. '.$detalle.'.');
         }
     }
 

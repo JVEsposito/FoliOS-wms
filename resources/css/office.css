@@ -257,3 +257,7 @@ input, select { width: 100%; min-height: 52px; border: 1px solid var(--line); bo
 
 .sag-lot-alerts { border: 1px solid var(--line); border-inline-start: 4px solid var(--accent); padding: 12px; margin-block: 10px; background: var(--panel); overflow-wrap: anywhere; }
 .sag-lot-alerts ul { margin-block: 8px 0; padding-inline-start: 20px; }
+.sag-lot-alerts details { margin-block-start: 8px; }
+.sag-lot-alerts summary { cursor: pointer; }
+.sag-lot-alerts__folios, .sag-lot-alerts__compact { display: block; color: var(--muted); font-size: .875em; overflow-wrap: anywhere; }
+.sag-lot-alerts__compact { margin-block-start: 4px; }

@@ -10,3 +10,26 @@ test('explica observaciones, restricciones y segregación sin insertar HTML del 
     assert.doesNotMatch(sagLotAlertsHtml([alert]), /<img/);
     assert.match(sagLotAlertsHtml([alert]), /&lt;img/);
 });
+
+test('ubica los bloqueos reales primero y agrupa los folios del mismo lote e instructivo', () => {
+    const otrosDestinos = {
+        id: 'regional', lote: '10056', folio: 'FOLIO-1', estado: 'retenido', destinos: [{ nombre: 'Perú' }, { nombre: 'Rusia' }],
+        bloquea_salida: false, instructivo_id: 'i1', instructivo_numero: 'INST-CN', destino: 'China',
+    };
+    const general = { ...otrosDestinos, id: 'general', folio: 'FOLIO-2', lote: '10057', bloquea_salida: true, todos_destinos: true, destinos: [] };
+    const resumen = sagLotAlertsHtml([otrosDestinos, general, { ...general, folio: 'FOLIO-3' }]);
+    assert.match(resumen, /Lote 10057.*INST-CN.*Bloquea la salida a China.*todos los destinos/);
+    assert.match(resumen, /Folios \(2\) · FOLIO-2, FOLIO-3/);
+    assert.equal(resumen.match(/Lote 10057/g).length, 1);
+    assert.match(resumen, /<details><summary>Restricciones en otros destinos \(1\)<\/summary>.*Lote 10056.*Destino China.*Perú, Rusia.*<\/details>/);
+    assert.match(sagLotAlertText({ ...otrosDestinos, bloquea_salida: true, destino: 'Perú' }), /Bloquea la salida a Perú/);
+    const alertaInstructivo = sagLotAlertText({ ...otrosDestinos, bloquea_salida: true, destino: null, destino_sin_definir: true });
+    assert.match(alertaInstructivo, /Define el destino del instructivo.*Perú, Rusia/);
+    assert.match(sagLotAlertsHtml([{ ...otrosDestinos, instruccion_segregacion: 'Llevar a cámara' }]), /Segregación indicada: Llevar a cámara/);
+    assert.doesNotMatch(sagLotAlertsHtml([{ ...otrosDestinos, instruccion_segregacion: 'Llevar a cámara' }]), /<details>/);
+
+    const compacta = sagLotAlertsHtml([otrosDestinos, general, general], { compact: true });
+    assert.match(compacta, /1 folio bloqueado · China/);
+    assert.doesNotMatch(compacta, /<ul|FOLIO-/);
+    assert.match(sagLotAlertsHtml([otrosDestinos], { compact: true }), /Restricciones en otros destinos · China/);
+});
