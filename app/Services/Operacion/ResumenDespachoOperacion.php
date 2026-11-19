@@ -56,6 +56,7 @@ class ResumenDespachoOperacion
         $filas = $cargas->map(function (Carga $carga) use ($exigeCargados): array {
             $asignaciones = $carga->asignacionesActuales;
             $alertasSag = app(ServicioRetencionesLoteSag::class)->alertasCarga($carga, $asignaciones);
+            $salidaRestringidaSag = collect($alertasSag)->contains('bloquea_salida', true);
             $progreso = $this->concentracion->calcular($asignaciones);
             $total = (int) $progreso['total'];
             $presencia = $carga->presenciaAndenActiva;
@@ -69,7 +70,7 @@ class ResumenDespachoOperacion
                 'id' => $carga->id,
                 'codigo' => $carga->codigo,
                 'alertas_sag' => $alertasSag,
-                'salida_restringida_sag' => collect($alertasSag)->contains('bloquea_salida', true),
+                'salida_restringida_sag' => $salidaRestringidaSag,
                 'numero_orden_externa' => $carga->numero_orden_externa,
                 'embarque' => $carga->embarque?->codigo,
                 'clientes' => $clientes,
@@ -97,11 +98,11 @@ class ResumenDespachoOperacion
                     'en_anden_por_cargar' => $porCargarEnAnden,
                 ],
                 'lista_para_cerrar' => $carga->estado === EstadoCarga::Despachada
-                    && ! collect($alertasSag)->contains('bloquea_salida', true)
+                    && ! $salidaRestringidaSag
                     && (int) $carga->incidencias_abiertas === 0
                     && (! $exigeCargados || $porCargarEnAnden === 0),
                 'publicada_at' => $carga->publicada_at?->toAtomString(),
-                'instructivos' => $this->instructivos($carga, $progreso),
+                'instructivos' => $this->instructivos($carga, $progreso, $alertasSag),
             ];
         });
 
@@ -125,7 +126,7 @@ class ResumenDespachoOperacion
     }
 
     /** Subestados informativos: no modifican el estado ni el cierre de la carga. */
-    private function instructivos(Carga $carga, array $progreso): array
+    private function instructivos(Carga $carga, array $progreso, array $alertasSag): array
     {
         $instructivos = $carga->embarque?->instructivos ?? collect();
         if ($instructivos->isEmpty()) {
@@ -134,8 +135,10 @@ class ResumenDespachoOperacion
         $ids = $instructivos->pluck('id');
         $asignaciones = $carga->asignacionesActuales;
         $incidencias = $carga->incidencias;
-        $filas = $instructivos->map(function ($instructivo) use ($asignaciones, $incidencias, $progreso): array {
+        $alertasPorInstructivo = collect($alertasSag)->groupBy('instructivo_id');
+        $filas = $instructivos->map(function ($instructivo) use ($asignaciones, $incidencias, $progreso, $alertasPorInstructivo): array {
             $grupo = $asignaciones->where('instructivo_embarque_id', $instructivo->id)->values();
+            $alertas = $alertasPorInstructivo->get($instructivo->id) ?? collect();
 
             return [
                 'id' => $instructivo->id,
@@ -143,9 +146,11 @@ class ResumenDespachoOperacion
                 'numero_externo' => $instructivo->numero_externo,
                 'booking' => $instructivo->booking,
                 'recibidor' => $instructivo->recibidor,
+                'destino' => $alertas->first()['destino'] ?? $instructivo->destino_pais,
                 ...$this->subestado($grupo, $progreso['segregaciones'][$instructivo->id] ?? null,
                     $instructivo->cantidad_pallets,
-                    $incidencias->filter(fn ($incidencia): bool => $incidencia->asignacion?->instructivo_embarque_id === $instructivo->id)->count()),
+                    $incidencias->filter(fn ($incidencia): bool => $incidencia->asignacion?->instructivo_embarque_id === $instructivo->id)->count(),
+                    $alertas),
             ];
         });
         $sinInstructivo = $asignaciones->reject(fn ($asignacion): bool => $ids->contains($asignacion->instructivo_embarque_id))->values();
@@ -153,14 +158,15 @@ class ResumenDespachoOperacion
         if ($sinInstructivo->isNotEmpty() || $incidenciasSinInstructivo > 0) {
             $filas->push([
                 'id' => null, 'orden' => null, 'numero_externo' => null, 'booking' => null, 'recibidor' => null,
-                ...$this->subestado($sinInstructivo, $progreso['segregaciones'][''] ?? null, null, $incidenciasSinInstructivo),
+                ...$this->subestado($sinInstructivo, $progreso['segregaciones'][''] ?? null, null, $incidenciasSinInstructivo,
+                    $alertasPorInstructivo->get('') ?? collect()),
             ]);
         }
 
         return $filas->values()->all();
     }
 
-    private function subestado(Collection $asignaciones, ?array $progreso, ?int $programados, int $incidencias): array
+    private function subestado(Collection $asignaciones, ?array $progreso, ?int $programados, int $incidencias, Collection $alertasSag): array
     {
         // Reutilizar el cálculo global conserva el tratamiento de bandas mezcladas.
         $progreso ??= $this->concentracion->calcular($asignaciones);
@@ -183,6 +189,8 @@ class ResumenDespachoOperacion
         };
 
         return [
+            'alertas_sag' => $alertasSag->all(),
+            'salida_restringida_sag' => $alertasSag->contains('bloquea_salida', true),
             'pallets_programados' => $programados,
             'pallets_asignados' => $asignados,
             'pallets_pendientes_asignar' => $programados === null ? null : max(0, $programados - $asignados),

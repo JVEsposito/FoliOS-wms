@@ -164,8 +164,9 @@ class RetencionesLoteSagApiTest extends TestCase
             'codigo' => 'EMB-SAG', 'numero_correlativo' => 98765, 'fecha_programada' => now()->toDateString(), 'hora_programada' => '12:00', 'intervalo_minutos' => 60, 'creado_por_user_id' => $this->admin->id, 'actualizado_por_user_id' => $this->admin->id, 'modalidad' => 'maritimo', 'estado' => 'confirmado']);
         $us = Pais::where('iso_alpha2', 'US')->firstOrFail();
         $cl = Pais::where('iso_alpha2', 'CL')->firstOrFail();
-        $i1 = InstructivoEmbarque::create(['embarque_id' => $embarque->id, 'orden' => 1, 'pais_destino_id' => $us->id, 'destino_pais' => 'US']);
-        $i2 = InstructivoEmbarque::create(['embarque_id' => $embarque->id, 'orden' => 2, 'pais_destino_id' => $cl->id, 'destino_pais' => 'CL']);
+        $i1 = InstructivoEmbarque::create(['embarque_id' => $embarque->id, 'orden' => 1, 'numero_externo' => 'INST-US',
+            'pais_destino_id' => $us->id, 'destino_pais' => 'US']);
+        $i2 = InstructivoEmbarque::create(['embarque_id' => $embarque->id, 'orden' => 2, 'destino_pais' => ' chl ']);
         $a = $carga->asignacionesActuales()->orderBy('folio_id')->get();
         $a[0]->update(['instructivo_embarque_id' => $i1->id]);
         $a[1]->update(['instructivo_embarque_id' => $i2->id]);
@@ -175,10 +176,67 @@ class RetencionesLoteSagApiTest extends TestCase
         $alertas = collect($servicio->alertasCarga($carga->fresh()))->keyBy('instructivo_id');
         $this->assertTrue($alertas[$i1->id]['bloquea_salida']);
         $this->assertFalse($alertas[$i2->id]['bloquea_salida']);
+        $this->assertSame($cl->nombre_es, $alertas[$i2->id]['destino']);
+        $this->getJson('/api/operacion-ahora')->assertOk()
+            ->assertJsonPath('data.despacho.cargas.0.salida_restringida_sag', true)
+            ->assertJsonPath('data.despacho.cargas.0.instructivos.0.alertas_sag.0.instructivo_numero', 'INST-US')
+            ->assertJsonPath('data.despacho.cargas.0.instructivos.0.salida_restringida_sag', true)
+            ->assertJsonPath('data.despacho.cargas.0.instructivos.1.destino', $cl->nombre_es)
+            ->assertJsonPath('data.despacho.cargas.0.instructivos.1.salida_restringida_sag', false);
+
         $a[1]->update(['instructivo_embarque_id' => null]);
         $alerta = collect($servicio->alertasCarga($carga->fresh()))->firstWhere('folio_id', $a[1]->folio_id);
         $this->assertTrue($alerta['bloquea_salida']);
         $this->assertTrue($alerta['destino_sin_definir']);
+    }
+
+    public function test_solo_la_retencion_general_impide_el_cierre_de_la_carga_a_china(): void
+    {
+        config(['despacho.cierre_exige_pallets_cargados' => false]);
+        $ctx = $this->crearContextoFrio(2, 'SAGCN');
+        $cliente = $this->cliente('CHINA');
+        $otrosDestinos = $this->trazar($ctx['folios'][0], $cliente, '10056', 10);
+        $general = $this->trazar($ctx['folios'][1], $cliente, '10057', 10);
+        $carga = $this->crearCargaPublicada($ctx['despachador'], $ctx['anden'], [$otrosDestinos, $general]);
+        $paises = Pais::whereIn('iso_alpha2', ['CN', 'PE', 'RU'])->get()->keyBy('iso_alpha2');
+        $embarque = Embarque::create([
+            'temporada_id' => $carga->temporada_id, 'cliente_id' => $cliente->id, 'carga_id' => $carga->id,
+            'codigo' => 'EMB-SAGCN', 'numero_correlativo' => 98765, 'fecha_programada' => now()->toDateString(),
+            'hora_programada' => '12:00', 'intervalo_minutos' => 60, 'modalidad' => 'maritimo', 'estado' => 'confirmado',
+            'creado_por_user_id' => $this->admin->id, 'actualizado_por_user_id' => $this->admin->id,
+        ]);
+        $embarque->instructivos()->create([
+            'orden' => 1, 'numero_externo' => 'INST-CN', 'pais_destino_id' => $paises['CN']->id, 'destino_pais' => 'Perú',
+        ]);
+        $this->postJson('/api/sag/lotes-retenidos', [...$this->datos($cliente), 'todos_destinos' => false,
+            'destinos' => [['tipo' => 'pais', 'id' => $paises['PE']->id], ['tipo' => 'pais', 'id' => $paises['RU']->id]],
+        ])->assertOk();
+        $caso = $this->postJson('/api/sag/lotes-retenidos', [...$this->datos($cliente), 'numero_lote' => '10057'])
+            ->assertOk()->json('registro');
+
+        $this->enviarAlAnden($ctx, $carga, $otrosDestinos);
+        $this->enviarAlAnden($ctx, $carga, $general);
+        $ruta = '/api/cargas/'.$carga->id;
+        $alertas = $this->conToken($ctx['tokenOficina'])->getJson($ruta)->assertOk()
+            ->assertJsonPath('data.salida_restringida_sag', true)->json('data.alertas_sag');
+        $porLote = collect($alertas)->keyBy('lote');
+        $this->assertSame('China', $porLote['10056']['destino']);
+        $this->assertFalse($porLote['10056']['bloquea_salida']);
+        $this->assertTrue($porLote['10057']['bloquea_salida']);
+
+        $payload = ['operacion_id' => (string) Str::uuid(), 'patente' => 'ABCD12', 'conductor' => 'Conductor prueba'];
+        $mensaje = $this->postJson($ruta.'/cerrar-despacho', $payload)->assertUnprocessable()->json('message');
+        $this->assertStringContainsString($general->numero_folio.' · lote 10057 (retención para todos los destinos)', $mensaje);
+        $this->assertStringNotContainsString($otrosDestinos->numero_folio, $mensaje);
+
+        $this->actingAs($this->admin, 'sanctum')->putJson('/api/sag/lotes-retenidos/'.$caso['id'],
+            $this->resolucion($caso, ['estado' => 'liberado']))->assertOk();
+        $this->getJson('/api/operacion-ahora')->assertOk()
+            ->assertJsonPath('data.despacho.cargas.0.lista_para_cerrar', true)
+            ->assertJsonPath('data.despacho.cargas.0.alertas_sag.0.lote', '10056')
+            ->assertJsonPath('data.despacho.cargas.0.alertas_sag.0.bloquea_salida', false);
+        $this->conToken($ctx['tokenOficina'])->postJson($ruta.'/cerrar-despacho', [...$payload, 'operacion_id' => (string) Str::uuid()])
+            ->assertOk()->assertJsonPath('data.estado', 'cerrada');
     }
 
     public function test_reportes_llevan_logo_resoluciones_y_snapshot_de_folios(): void
