@@ -41,6 +41,7 @@ use App\Services\Romana\ServicioFechaRealRecepcionRomana;
 use App\Services\Romana\ServicioGuiasRecepcionRomana;
 use App\Services\Romana\ServicioInspeccionEnvases;
 use App\Services\Romana\ServicioRecepcionRomana;
+use App\Services\Romana\ServicioTarasRomana;
 use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Database\Eloquent\Builder;
@@ -99,6 +100,8 @@ class RecepcionRomanaController extends Controller
                 ConceptoEnvasesRomana::cases(),
             ),
             'tipos_envase' => TipoEnvaseRomana::catalogo(),
+            'taras_romana' => app(ServicioTarasRomana::class)->vigentes(),
+            'puede_configurar_taras_romana' => Gate::allows('configurar-taras-romana'),
         ]);
     }
 
@@ -456,6 +459,7 @@ class RecepcionRomanaController extends Controller
             ],
             'tipo_servicio' => $recepcion->tipo_servicio->value,
             'tipo_recepcion' => $recepcion->tipo_recepcion->value,
+            'taras_romana_snapshot' => $recepcion->taras_romana_snapshot,
             'especie_validacion_id' => $recepcion->especie_validacion_id,
             'concepto_envases' => $recepcion->concepto_envases?->value,
             // Devolución de un productor: CSG al que se abonan los envases y guía de salida devuelta.
