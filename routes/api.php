@@ -95,6 +95,7 @@ use App\Http\Controllers\Api\PuntoRocioPrefrioController;
 use App\Http\Controllers\Api\RebajaEstandarController;
 use App\Http\Controllers\Api\RecepcionFrutaEmbaladaController;
 use App\Http\Controllers\Api\RecepcionMaterialController;
+use App\Http\Controllers\Api\ConfiguracionTarasRomanaController;
 use App\Http\Controllers\Api\RecepcionRomanaController;
 use App\Http\Controllers\Api\ReglaBodegaMaterialController;
 use App\Http\Controllers\Api\ReingresoCamaraController;
@@ -228,6 +229,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/recepciones/{recepcion}', [RecepcionRomanaController::class, 'show']);
         Route::get('/recepciones/{recepcion}/aviso-recibo', [RecepcionRomanaController::class, 'avisoRecibo']);
     });
+    Route::put('/romana/taras/{tipo}', [ConfiguracionTarasRomanaController::class, 'actualizar'])
+        ->middleware('can:configurar-taras-romana');
     Route::middleware('can:operar-romana')->prefix('romana')->group(function () {
         Route::post('/recepciones', [RecepcionRomanaController::class, 'store']);
         Route::put('/recepciones/{recepcion}', [RecepcionRomanaController::class, 'update']);
