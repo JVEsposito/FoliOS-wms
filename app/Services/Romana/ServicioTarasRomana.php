@@ -65,7 +65,7 @@ class ServicioTarasRomana
         $oficial = $this->paraRecepcion($recepcion, $tipo);
         if (! is_numeric($valor) || abs((float) $valor - $oficial) > 0.0005) {
             throw ValidationException::withMessages([
-                $campo => "La tara oficial de {$tipo} es ".number_format($oficial, 3, ',', '.') . ' kg por unidad y solo administración puede configurarla.',
+                $campo => "La tara oficial de {$tipo} es ".number_format($oficial, 3, ',', '.').' kg por unidad y solo administración puede configurarla.',
             ]);
         }
     }

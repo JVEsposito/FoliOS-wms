@@ -21,7 +21,6 @@ class ProductorSalidaDestareTest extends TestCase
 {
     use PreparaInspeccionesEnvases, PreparaRecepcionValidadaCorregible, RefreshDatabase;
 
-
     /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
     protected function setUp(): void
     {

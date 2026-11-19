@@ -8,10 +8,10 @@ use App\Enums\TipoCamionRomana;
 use App\Enums\TipoEnvaseRomana;
 use App\Enums\TipoRecepcionRomana;
 use App\Enums\TipoServicioRomana;
-use App\Rules\RutChileno;
-use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Models\RecepcionRomana;
+use App\Rules\RutChileno;
 use App\Services\Romana\ServicioTarasRomana;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -202,8 +202,9 @@ class CrearRecepcionRomanaRequest extends FormRequest
                     );
                     if ($tara !== null && $tara !== '' && abs((float) $tara - $valorOficial) > 0.0005) {
                         $validator->errors()->add("envases.{$indice}.tara_unitaria",
-                            "La tara oficial de {$tipo->etiqueta()} es ".number_format($valorOficial, 3, ',', '.') . ' kg y no se edita en Romana.');
+                            "La tara oficial de {$tipo->etiqueta()} es ".number_format($valorOficial, 3, ',', '.').' kg y no se edita en Romana.');
                     }
+
                     continue;
                 }
                 if ($tara === null || $tara === '') {

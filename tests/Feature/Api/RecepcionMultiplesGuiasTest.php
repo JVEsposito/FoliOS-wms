@@ -22,7 +22,6 @@ class RecepcionMultiplesGuiasTest extends TestCase
 {
     use PreparaInspeccionesEnvases, RefreshDatabase;
 
-
     /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
     protected function setUp(): void
     {

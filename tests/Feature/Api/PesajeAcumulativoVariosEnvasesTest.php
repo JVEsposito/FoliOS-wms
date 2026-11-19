@@ -22,7 +22,6 @@ class PesajeAcumulativoVariosEnvasesTest extends TestCase
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
 
-
     /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
     protected function setUp(): void
     {

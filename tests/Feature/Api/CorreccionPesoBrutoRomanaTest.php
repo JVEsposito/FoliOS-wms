@@ -70,7 +70,6 @@ class CorreccionPesoBrutoRomanaTest extends TestCase
         ]))->assertOk()->json('data');
     }
 
-
     /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
     protected function setUp(): void
     {
