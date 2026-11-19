@@ -70,6 +70,15 @@ class CorreccionPesoBrutoRomanaTest extends TestCase
         ]))->assertOk()->json('data');
     }
 
+
+    /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 40]);
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 1.5]);
+    }
+
     public function test_solo_administrador_activo_puede_corregir_incluso_por_api_directa(): void
     {
         $recepcion = $this->ingreso();
