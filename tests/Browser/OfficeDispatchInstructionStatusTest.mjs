@@ -34,9 +34,10 @@ test('Despacho PT muestra los subestados de cada instructivo sin duplicar el cam
             separacion: progress(2, 4, 2), carguio: loading(2, 4),
             instructivos: [instruction('i1', 'F001', 'cargado_completo', 2), instruction('i2', secondNumber, 'pendiente', 0)],
         };
-        // La segunda carga conserva la fila simple si sólo tiene un instructivo.
+        // La segunda carga conserva la fila simple si sólo tiene un instructivo, pero muestra sus datos.
         const single = { ...load, id: 'single', codigo: 'CAR-000030', clientes: ['LA AGUADA'], camion_en_anden: null,
-            estado: 'pendiente', separacion: progress(1, 2), carguio: loading(0, 2), instructivos: [instruction('i3', 'F003', 'pendiente', 0)] };
+            estado: 'pendiente', separacion: progress(1, 2), carguio: loading(0, 2),
+            instructivos: [{ ...instruction('i3', 'F003', 'pendiente', 0), destino: 'Estados Unidos' }] };
         const snapshot = {
             generado_at: '2026-11-11T17:00:00Z', temporada: { id: 'temp', codigo: 'TEMP-2627', nombre: 'Prueba' },
             jornada: { zona_horaria: 'America/Santiago', turno: 'dia' }, sincronizacion: { estado: 'sin_actividad', operaciones_hoy: {} },
@@ -67,6 +68,9 @@ test('Despacho PT muestra los subestados de cada instructivo sin duplicar el cam
         const rows = page.locator('#operationDispatchRows');
         assert.equal(await rows.locator('[data-dispatch-load]').count(), 2);
         assert.equal(await rows.locator('[data-instruction-id]').count(), 2);
+        assert.equal(await rows.locator('[data-dispatch-load="single"] [data-single-instruction="i3"]').innerText(),
+            'Instructivo F003 · Estados Unidos · Booking BOOK-i3 · UPAM FRESH LLC · 2 asignados · 2 programados');
+        assert.equal(await rows.locator('[data-dispatch-load="load"] [data-single-instruction]').count(), 0);
         const first = rows.locator('[data-instruction-id="i1"]');
         const second = rows.locator('[data-instruction-id="i2"]');
         assert.match(await first.innerText(), /Instructivo F001/);
