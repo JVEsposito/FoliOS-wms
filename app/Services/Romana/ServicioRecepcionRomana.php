@@ -97,6 +97,7 @@ class ServicioRecepcionRomana
                     : null,
                 'tipo_envase_pesaje' => $payload['tipo_envase_pesaje'],
                 'tara_unitaria_envase' => $payload['tara_unitaria_envase'],
+                'taras_romana_snapshot' => app(ServicioTarasRomana::class)->vigentes(),
                 'cantidad_envases_pesados' => 0,
                 'cantidad_envase_calculo_neto' => $esPesajeEnvases ? 0 : null,
                 'estado' => $esPesajeEnvases
@@ -146,7 +147,7 @@ class ServicioRecepcionRomana
     /** @param array<string, mixed> $datos */
     public function actualizar(RecepcionRomana $recepcion, array $datos, User $usuario): RecepcionRomana
     {
-        $payload = $this->datosRecepcion($datos);
+        $payload = $this->datosRecepcion($datos, $recepcion);
         $hash = $this->hash($payload);
 
         return DB::transaction(function () use ($recepcion, $datos, $usuario, $payload, $hash): RecepcionRomana {
@@ -272,7 +273,7 @@ class ServicioRecepcionRomana
         User $usuario,
     ): RecepcionRomana {
         $payload = [
-            ...$this->datosRecepcion($datos),
+            ...$this->datosRecepcion($datos, $recepcion),
             'version_conocida' => (int) $datos['version_conocida'],
             'motivo_correccion' => $datos['motivo_correccion'],
             'peso_tara' => isset($datos['peso_tara'])
@@ -1362,7 +1363,7 @@ class ServicioRecepcionRomana
      * @param  array<string, mixed>  $datos
      * @return array<string, mixed>
      */
-    private function datosRecepcion(array $datos): array
+    private function datosRecepcion(array $datos, ?RecepcionRomana $recepcion = null): array
     {
         $guias = app(ServicioGuiasRecepcionRomana::class)->preparar($datos);
         $esPesajeEnvases = $datos['tipo_recepcion'] === TipoRecepcionRomana::FrutaPesajeEnvases->value;
@@ -1375,8 +1376,10 @@ class ServicioRecepcionRomana
                 // Omitirla conserva el contrato y hash de las solicitudes anteriores.
                 ...(($datos['tipo_recepcion'] !== TipoRecepcionRomana::SoloEnvases->value || $esDevolucion) && isset($envase['propiedad'])
                     ? ['propiedad' => $envase['propiedad']] : []),
-                ...($esPesajeEnvases && isset($envase['tara_unitaria'])
-                    ? ['tara_unitaria' => round((float) $envase['tara_unitaria'], 3)] : []),
+                ...($esPesajeEnvases && (isset($envase['tara_unitaria']) || app(ServicioTarasRomana::class)->esFija($envase['tipo_envase']))
+                    ? ['tara_unitaria' => app(ServicioTarasRomana::class)->esFija($envase['tipo_envase'])
+                        ? app(ServicioTarasRomana::class)->paraRecepcion($recepcion, $envase['tipo_envase'])
+                        : round((float) $envase['tara_unitaria'], 3)] : []),
             ])
             ->sortBy('tipo_envase')
             ->values()
@@ -1885,6 +1888,7 @@ class ServicioRecepcionRomana
         $diferencia = 0.0;
         foreach ($entradas->keys()->merge(array_keys($salidas))->unique() as $tipo) {
             $taraUnitaria = (float) ($taras->get($tipo)['tara_unitaria'] ?? 0);
+            app(ServicioTarasRomana::class)->asegurarValor($tipo, $taraUnitaria, $recepcion, 'taras_envases');
             if ($taraUnitaria <= 0) {
                 throw new ConflictoOperacion("Configura la tara unitaria de {$tipo} antes de cerrar la recepción.");
             }
