@@ -13,6 +13,7 @@
             ['key' => 'romana', 'module' => 'materia-prima.romana', 'label' => 'Romana', 'href' => '/oficina/romana', 'permissions' => ['puede_consultar_romana']],
             ['key' => 'defectos-recepcion', 'module' => '', 'label' => 'Defectos de recepción', 'href' => '/oficina/materia-prima/defectos-recepcion', 'permissions' => ['puede_auditar_defectos_recepcion_mp']],
             ['key' => 'digitacion', 'module' => 'materia-prima.digitacion', 'label' => 'Digitación de Lotes', 'href' => '/oficina/materia-prima/lotes', 'permissions' => ['puede_consultar_materia_prima']],
+            ['key' => 'recepciones-csg', 'module' => 'materia-prima.digitacion', 'label' => 'Recepción por CSG', 'href' => '/oficina/materia-prima/recepciones-csg', 'permissions' => ['puede_consultar_materia_prima']],
             ['key' => 'hidrocooler', 'module' => 'materia-prima.hidrocooler', 'label' => 'Hidrocooler', 'href' => '/oficina/materia-prima/hidrocooler', 'permissions' => ['puede_consultar_hidrocooler_materia_prima']],
             ['key' => 'ordenes-proceso', 'module' => 'materia-prima.ordenes-proceso', 'label' => 'Órdenes de Proceso', 'href' => '/oficina/materia-prima/ordenes-proceso', 'permissions' => ['puede_consultar_ordenes_proceso']],
             ['key' => 'fruta-proceso', 'module' => 'materia-prima.fruta-proceso', 'label' => 'Fruta a Proceso', 'href' => '/oficina/materia-prima/fruta-a-proceso', 'permissions' => ['puede_consultar_fruta_proceso']],
