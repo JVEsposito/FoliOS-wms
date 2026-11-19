@@ -8,6 +8,7 @@ use App\Models\EspecieValidacion;
 use App\Models\Temporada;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -86,6 +87,48 @@ class ConfiguracionTarasRomanaTest extends TestCase
         $datos['envases'][0]['tara_unitaria'] = 43;
         $this->postJson('/api/romana/recepciones', $datos)
             ->assertUnprocessable()->assertJsonValidationErrors('envases.0.tara_unitaria');
+    }
+
+    public function test_destare_rechaza_tara_alterada_y_acepta_esponjas_pesadas_del_camion(): void
+    {
+        $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = Cliente::create(['codigo' => 'TAR-02', 'nombre' => 'Cliente Destare', 'activo' => true]);
+        $especie = EspecieValidacion::firstOrCreate(['temporada_id' => $temporada->id, 'nombre' => 'Cereza'], ['activo' => true]);
+        $recepcion = $this->actingAs($operador, 'sanctum')->postJson('/api/romana/recepciones', [
+            'operacion_id' => (string) Str::uuid(),
+            'temporada_id' => $temporada->id, 'cliente_id' => $cliente->id,
+            'tipo_recepcion' => 'fruta_con_envases', 'especie_validacion_id' => $especie->id,
+            'tipo_servicio' => 'proceso',
+            'envases' => [['tipo_envase' => 'bins', 'cantidad' => 10], ['tipo_envase' => 'esponjas', 'cantidad' => 2]],
+            'numero_guia_despacho' => 'GD-TAR-DESTARE', 'patente_camion' => 'ABCD12',
+            'tipo_camion' => 'plano', 'rut_conductor' => '12.345.678-5',
+            'nombre_conductor' => 'Conductor', 'peso_bruto' => 10000,
+        ])->assertCreated()->json('data');
+
+        $ruta = "/api/romana/recepciones/{$recepcion['id']}";
+        $this->postJson($ruta.'/confirmar-ingreso', ['operacion_id' => (string) Str::uuid()])->assertOk();
+        DB::table('detalles_envases_recepcion_romana')->where('recepcion_romana_id', $recepcion['id'])
+            ->update(['cantidad_validada' => DB::raw('cantidad_declarada')]);
+        DB::table('recepciones_romana')->where('id', $recepcion['id'])
+            ->update(['estado_validacion_mp' => 'validada']);
+
+        $datos = [
+            'operacion_id' => (string) Str::uuid(), 'peso_tara' => 5000,
+            'modo_salida_envases' => 'vacio',
+            'tipo_envase_calculo_neto' => 'bins',
+            'taras_envases' => [
+                ['tipo_envase' => 'bins', 'tara_unitaria' => 40],
+                ['tipo_envase' => 'esponjas', 'tara_unitaria' => 7.4],
+            ],
+        ];
+        $this->postJson($ruta.'/cerrar', $datos)->assertUnprocessable()
+            ->assertJsonValidationErrors('taras_envases');
+        $datos['operacion_id'] = (string) Str::uuid();
+        $datos['taras_envases'][0]['tara_unitaria'] = 43;
+        $this->postJson($ruta.'/cerrar', $datos)->assertOk()
+            ->assertJsonPath('data.peso_tara_envases', 444.8)
+            ->assertJsonPath('data.peso_neto', 4555.2);
     }
 
     public function test_esponjas_permanecen_variables_en_cada_camion(): void
