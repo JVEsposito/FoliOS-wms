@@ -12,7 +12,7 @@ return new class extends Migration
         Schema::create('configuracion_taras_romana', function (Blueprint $table): void {
             $table->string('tipo_envase', 40)->primary();
             $table->decimal('tara_unitaria', 8, 3);
-            $table->foreignId('actualizado_por_user_id')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignId('actualizado_por_user_id')->nullable()->constrained('users', indexName: 'conf_taras_romana_usuario_fk')->restrictOnDelete();
             $table->timestamps();
         });
 
@@ -22,7 +22,7 @@ return new class extends Migration
             $table->decimal('tara_anterior', 8, 3);
             $table->decimal('tara_nueva', 8, 3);
             $table->string('motivo', 500);
-            $table->foreignId('modificado_por_user_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('modificado_por_user_id')->constrained('users', indexName: 'hist_taras_romana_usuario_fk')->restrictOnDelete();
             $table->timestamp('created_at');
             $table->index(['tipo_envase', 'created_at'], 'idx_historial_taras_romana');
         });
