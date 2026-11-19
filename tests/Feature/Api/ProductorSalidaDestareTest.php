@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\Envases\ServicioCuentaCorrienteEnvases;
 use App\Services\Envases\ServicioDevolucionEnvases;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\Concerns\PreparaRecepcionValidadaCorregible;
@@ -19,6 +20,14 @@ use Tests\TestCase;
 class ProductorSalidaDestareTest extends TestCase
 {
     use PreparaInspeccionesEnvases, PreparaRecepcionValidadaCorregible, RefreshDatabase;
+
+    /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 40]);
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 2]);
+    }
 
     public function test_con_varios_csg_el_destare_exige_el_productor_que_recibe_los_envases(): void
     {

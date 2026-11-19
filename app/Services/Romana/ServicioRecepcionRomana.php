@@ -97,6 +97,7 @@ class ServicioRecepcionRomana
                     : null,
                 'tipo_envase_pesaje' => $payload['tipo_envase_pesaje'],
                 'tara_unitaria_envase' => $payload['tara_unitaria_envase'],
+                'taras_romana_snapshot' => app(ServicioTarasRomana::class)->vigentes(),
                 'cantidad_envases_pesados' => 0,
                 'cantidad_envase_calculo_neto' => $esPesajeEnvases ? 0 : null,
                 'estado' => $esPesajeEnvases
@@ -146,7 +147,7 @@ class ServicioRecepcionRomana
     /** @param array<string, mixed> $datos */
     public function actualizar(RecepcionRomana $recepcion, array $datos, User $usuario): RecepcionRomana
     {
-        $payload = $this->datosRecepcion($datos);
+        $payload = $this->datosRecepcion($datos, $recepcion);
         $hash = $this->hash($payload);
 
         return DB::transaction(function () use ($recepcion, $datos, $usuario, $payload, $hash): RecepcionRomana {
@@ -272,7 +273,7 @@ class ServicioRecepcionRomana
         User $usuario,
     ): RecepcionRomana {
         $payload = [
-            ...$this->datosRecepcion($datos),
+            ...$this->datosRecepcion($datos, $recepcion),
             'version_conocida' => (int) $datos['version_conocida'],
             'motivo_correccion' => $datos['motivo_correccion'],
             'peso_tara' => isset($datos['peso_tara'])
@@ -508,22 +509,15 @@ class ServicioRecepcionRomana
                     if ($neto <= 0) {
                         throw ValidationException::withMessages(['peso_bruto' => 'El bruto corregido debe superar la tara total registrada.']);
                     }
-                    $actualizacion['peso_neto'] = $neto;
-                    if ($recepcion->reparto_neto_envases) {
-                        $congelado = $recepcion->reparto_neto_envases;
-                        $reparto = app(ServicioRepartoEnvases::class)->calcular($neto,
-                            array_column($congelado, 'cantidad', 'tipo_envase'), array_column($congelado, 'tipo_envase'),
-                            array_column($congelado, 'peso_referencia', 'tipo_envase'));
-                        $actualizacion['reparto_neto_envases'] = $reparto;
-                        $actualizacion['peso_neto_por_envase'] = round($reparto[0]['peso_neto_unitario'], 3);
-                    } elseif ($recepcion->cantidad_envase_calculo_neto > 0) {
-                        $actualizacion['peso_neto_por_envase'] = round($neto / $recepcion->cantidad_envase_calculo_neto, 3);
-                    } else {
-                        throw new ConflictoOperacion('La recepción cerrada no tiene cantidades válidas para recalcular el neto por envase.');
-                    }
+                    $actualizacion = [...$actualizacion, 'peso_neto' => $neto, ...$this->netoPorEnvaseCorregido($recepcion, $neto)];
                 }
             }
             $recepcion->update([...$actualizacion, 'version' => $recepcion->version + 1]);
+            if ($recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases && $recepcion->estado === EstadoRecepcionRomana::Cerrado
+                && $recepcion->estado_validacion_mp === EstadoValidacionMp::Validada) {
+                // El resumen de tandas usa lo pesado; validada, el neto por envase sigue al conteo de la PDA.
+                app(ServicioRepartoEnvases::class)->ajustarAConteo($recepcion->load('detallesEnvases'));
+            }
             if ($recepcion->estado === EstadoRecepcionRomana::Cerrado) {
                 app(ServicioLoteMateriaPrima::class)->conciliarDestare($recepcion, $usuario,
                     correccionPeso: ['operacion_romana_id' => (string) $datos['operacion_id'], 'motivo' => $payload['motivo_correccion']]);
@@ -553,6 +547,296 @@ class ServicioRecepcionRomana
             'peso_neto' => $recepcion->peso_neto !== null ? (float) $recepcion->peso_neto : null,
             'peso_neto_por_envase' => $recepcion->peso_neto_por_envase !== null ? (float) $recepcion->peso_neto_por_envase : null,
             'reparto_neto_envases' => $recepcion->reparto_neto_envases];
+    }
+
+    /**
+     * Corrección transversal de tara, solo administración: rehace tara, neto, neto por envase y
+     * kilos de todos los lotes vigentes, aunque la recepción ya tenga Validación MP, lotes
+     * confirmados o entregas a proceso. No cambia cantidades de envases, movimientos ni guías:
+     * las entregas registran envases, así que conservan su significado con el neto corregido.
+     *
+     * @param  array<string, mixed>  $datos
+     */
+    public function corregirTara(RecepcionRomana $recepcion, array $datos, User $usuario): RecepcionRomana
+    {
+        Gate::forUser($usuario)->authorize('corregir-tara-romana');
+        $taras = collect($datos['taras_envases'] ?? [])
+            ->mapWithKeys(fn (array $fila): array => [(string) $fila['tipo_envase'] => round((float) $fila['tara_unitaria'], 3)])
+            ->sortKeys()->all();
+        $payload = ['accion' => 'corregir_tara', 'recepcion_id' => $recepcion->id,
+            'version_conocida' => (int) $datos['version_conocida'],
+            'peso_tara' => isset($datos['peso_tara']) ? round((float) $datos['peso_tara'], 2) : null,
+            'taras_envases' => $taras, 'motivo_correccion' => $datos['motivo_correccion']];
+        $hash = $this->hash($payload);
+
+        return DB::transaction(function () use ($recepcion, $datos, $usuario, $payload, $hash): RecepcionRomana {
+            $recepcion = RecepcionRomana::query()->with(['detallesEnvases', 'salidasEnvases'])->lockForUpdate()->findOrFail($recepcion->id);
+            $evento = EventoRecepcionRomana::query()->where('operacion_id', $datos['operacion_id'])->first();
+            if ($evento) {
+                $this->asegurarEventoIdempotente($evento, $recepcion, $hash, TipoEventoRomana::TaraCorregida);
+
+                return $this->cargar($recepcion);
+            }
+            if ($recepcion->estado === EstadoRecepcionRomana::Anulada || $recepcion->eliminada_at !== null
+                || $recepcion->tipo_recepcion === TipoRecepcionRomana::SoloEnvases) {
+                throw new ConflictoOperacion('Solo puedes corregir la tara de una recepción de fruta vigente.');
+            }
+            $this->temporadaActiva($recepcion->temporada_id);
+            if ($recepcion->version !== $payload['version_conocida']) {
+                throw new ConflictoOperacion('La recepción cambió. Actualiza el expediente antes de corregir la tara.');
+            }
+            $tipos = $recepcion->detallesEnvases->map(fn ($detalle): string => $detalle->tipo_envase->value)
+                ->merge($recepcion->salidasEnvases->map(fn ($salida): string => $salida->tipo_envase->value))->unique();
+            foreach (array_keys($payload['taras_envases']) as $tipo) {
+                if (! $tipos->contains($tipo)) {
+                    throw ValidationException::withMessages(['taras_envases' => TipoEnvaseRomana::from($tipo)->etiqueta().' no forma parte de esta recepción.']);
+                }
+            }
+            $tarasAnteriores = $this->tarasUnitariasRecepcion($recepcion);
+            $anterior = [...$this->snapshotPesos($recepcion), 'taras_envases' => $tarasAnteriores];
+            $lotesAntes = $recepcion->lotesMateriaPrima()->where('estado', '!=', 'anulado')->orderBy('numero_lote')
+                ->get(['id', 'numero_lote', 'estado', 'kilos_netos_confirmados']);
+            $tandas = [];
+            $ajusteConteo = null;
+            if ($recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases) {
+                if ($payload['peso_tara'] !== null) {
+                    throw ValidationException::withMessages(['peso_tara' => 'El pesaje acumulativo no registra tara de camión: corrige la tara de cada envase.']);
+                }
+                if ($payload['taras_envases'] === []) {
+                    throw ValidationException::withMessages(['taras_envases' => 'Indica la tara corregida de al menos un tipo de envase.']);
+                }
+                $vigentes = [...$tarasAnteriores, ...$payload['taras_envases']];
+                // Solo los tipos corregidos rehacen sus líneas; el resto conserva la tara de cada tanda.
+                ['tandas' => $tandas, 'cambio' => $cambioTandas] = $this->corregirTaraTandas($recepcion, $payload['taras_envases']);
+                if (! $cambioTandas) {
+                    $this->asegurarCambioTara($tarasAnteriores, $vigentes, null, null);
+                }
+                $tipoPesaje = $recepcion->tipo_envase_pesaje?->value;
+                $actualizacion = [...$this->resumenPesajesEnvases($recepcion),
+                    ...($tipoPesaje !== null && isset($vigentes[$tipoPesaje]) ? ['tara_unitaria_envase' => $vigentes[$tipoPesaje]] : [])];
+            } else {
+                if ($recepcion->estado !== EstadoRecepcionRomana::Cerrado || $recepcion->peso_tara === null) {
+                    throw new ConflictoOperacion('La tara se corrige después del destare. Antes del cierre se registra al cerrar la recepción.');
+                }
+                if ($payload['peso_tara'] === null && $payload['taras_envases'] === []) {
+                    throw ValidationException::withMessages(['peso_tara' => 'Indica la tara corregida del camión o de los envases.']);
+                }
+                $pesoTara = $payload['peso_tara'] ?? round((float) $recepcion->peso_tara, 2);
+                $vigentes = [...$tarasAnteriores, ...$payload['taras_envases']];
+                $this->asegurarCambioTara($tarasAnteriores, $vigentes, (float) $recepcion->peso_tara, $pesoTara);
+                $actualizacion = $this->destareConTaraCorregida($recepcion, $pesoTara, $vigentes);
+                foreach ($recepcion->salidasEnvases as $salida) {
+                    $salida->update(['tara_unitaria' => $vigentes[$salida->tipo_envase->value]]);
+                }
+            }
+            foreach ($recepcion->detallesEnvases as $detalle) {
+                if (isset($vigentes[$detalle->tipo_envase->value])) {
+                    $detalle->update(['tara_unitaria_salida' => $vigentes[$detalle->tipo_envase->value]]);
+                }
+            }
+            // Las taras oficiales congeladas en la recepción siguen a la corrección de administración.
+            $snapshot = $recepcion->taras_romana_snapshot ?? [];
+            foreach ($vigentes as $tipo => $tara) {
+                if (app(ServicioTarasRomana::class)->esFija($tipo)) {
+                    $snapshot[$tipo] = $tara;
+                }
+            }
+            $recepcion->update([...$actualizacion, 'taras_romana_snapshot' => $snapshot ?: null, 'version' => $recepcion->version + 1]);
+            if ($recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases && $recepcion->estado === EstadoRecepcionRomana::Cerrado
+                && $recepcion->estado_validacion_mp === EstadoValidacionMp::Validada) {
+                // Validada: el neto por envase vuelve a repartirse con el conteo de la PDA, sin vacíos.
+                $ajusteConteo = app(ServicioRepartoEnvases::class)->ajustarAConteo($recepcion->load('detallesEnvases'));
+            }
+            if ($recepcion->estado === EstadoRecepcionRomana::Cerrado) {
+                app(ServicioLoteMateriaPrima::class)->conciliarDestare($recepcion, $usuario,
+                    correccionPeso: ['operacion_romana_id' => (string) $datos['operacion_id'], 'motivo' => $payload['motivo_correccion'],
+                        'origen' => 'tara_corregida'], aunConEntregas: true);
+            }
+            $lotesDespues = $recepcion->lotesMateriaPrima()->whereIn('id', $lotesAntes->pluck('id'))->get(['id', 'kilos_netos_confirmados'])->keyBy('id');
+            $this->registrarEvento($recepcion, (string) $datos['operacion_id'], $hash, TipoEventoRomana::TaraCorregida,
+                $recepcion->estado, $recepcion->estado, $usuario, CarbonImmutable::now(),
+                ['motivo' => $payload['motivo_correccion'], 'version' => $recepcion->version,
+                    'anterior' => $anterior,
+                    'posterior' => [...$this->snapshotPesos($recepcion->refresh()), 'taras_envases' => $this->tarasUnitariasRecepcion($recepcion)],
+                    'tandas' => $tandas, 'neto_por_envase_ajustado' => $ajusteConteo,
+                    'lotes' => $lotesAntes->map(fn ($lote): array => ['id' => $lote->id, 'numero_lote' => $lote->numero_lote,
+                        'estado' => $lote->estado->value,
+                        'kilos_anteriores' => $lote->kilos_netos_confirmados === null ? null : (float) $lote->kilos_netos_confirmados,
+                        'kilos_posteriores' => ($kilos = $lotesDespues->get($lote->id)?->kilos_netos_confirmados) === null ? null : (float) $kilos,
+                    ])->values()->all()]);
+
+            return $this->cargar($recepcion);
+        }, attempts: 3);
+    }
+
+    /** @return array<string, float> tara unitaria registrada por tipo de envase de la recepción */
+    private function tarasUnitariasRecepcion(RecepcionRomana $recepcion): array
+    {
+        $taras = [];
+        foreach ($recepcion->salidasEnvases as $salida) {
+            $taras[$salida->tipo_envase->value] = (float) $salida->tara_unitaria;
+        }
+        $esPesaje = $recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases;
+        foreach ($recepcion->detallesEnvases as $detalle) {
+            $tara = $detalle->tara_unitaria_salida
+                ?? ($esPesaje && $detalle->tipo_envase === $recepcion->tipo_envase_pesaje ? $recepcion->tara_unitaria_envase : null);
+            if ($tara !== null) {
+                $taras[$detalle->tipo_envase->value] = (float) $tara;
+            }
+        }
+        ksort($taras);
+
+        return $taras;
+    }
+
+    /** @param array<string, float> $anteriores @param array<string, float> $nuevas */
+    private function asegurarCambioTara(array $anteriores, array $nuevas, ?float $taraCamion, ?float $taraCamionNueva): void
+    {
+        $iguales = $taraCamion === $taraCamionNueva || ($taraCamion !== null && $taraCamionNueva !== null
+            && (int) round($taraCamion * 100) === (int) round($taraCamionNueva * 100));
+        foreach ($nuevas as $tipo => $tara) {
+            if (! array_key_exists($tipo, $anteriores) || (int) round($anteriores[$tipo] * 1000) !== (int) round($tara * 1000)) {
+                $iguales = false;
+            }
+        }
+        if ($iguales) {
+            throw ValidationException::withMessages(['taras_envases' => 'La tara corregida es igual a la registrada.']);
+        }
+    }
+
+    /**
+     * Destare por camión con la tara corregida: los envases descuentan su tara según lo que
+     * entró validado menos lo que salió, igual que al cerrar.
+     *
+     * @param  array<string, float>  $taras
+     * @return array<string, mixed>
+     */
+    private function destareConTaraCorregida(RecepcionRomana $recepcion, float $pesoTara, array $taras): array
+    {
+        $entradas = $recepcion->detallesEnvases->mapWithKeys(
+            fn ($detalle): array => [$detalle->tipo_envase->value => (int) $detalle->cantidad_validada])->all();
+        $modo = $recepcion->modo_salida_envases ?? ($recepcion->salida_sin_envases ? 'vacio' : 'mismos');
+        $salidas = match (true) {
+            $modo === 'vacio' => [],
+            // Cierres anteriores al registro por tipo: «mismos» salen exactamente los validados.
+            $modo === 'mismos' && $recepcion->salidasEnvases->isEmpty() => $entradas,
+            default => $recepcion->salidasEnvases->mapWithKeys(fn ($salida): array => [$salida->tipo_envase->value => (int) $salida->cantidad])->all(),
+        };
+        $taraEnvasesGramos = 0;
+        foreach (array_unique([...array_keys($entradas), ...array_keys($salidas)]) as $tipo) {
+            $tara = $taras[$tipo] ?? null;
+            if ($tara === null || $tara <= 0) {
+                throw ValidationException::withMessages(['taras_envases' => 'Indica la tara unitaria de '.TipoEnvaseRomana::from($tipo)->etiqueta().'.']);
+            }
+            $taraEnvasesGramos += (($entradas[$tipo] ?? 0) - ($salidas[$tipo] ?? 0)) * (int) round($tara * 1000);
+        }
+        $netoGramos = (int) round((float) $recepcion->peso_bruto * 1000) - (int) round($pesoTara * 1000) - $taraEnvasesGramos;
+        if ($netoGramos <= 0) {
+            throw ValidationException::withMessages(['peso_tara' => 'Con esa tara el neto de fruta queda en cero o negativo.']);
+        }
+        $neto = $netoGramos / 1000;
+
+        return ['peso_tara' => $pesoTara, 'peso_tara_envases' => $taraEnvasesGramos / 1000, 'peso_neto' => $neto,
+            ...$this->netoPorEnvaseCorregido($recepcion, $neto)];
+    }
+
+    /**
+     * Neto por envase de un destare corregido: conserva los envases y pesos de referencia
+     * congelados al cerrar.
+     *
+     * @return array{peso_neto_por_envase: float, reparto_neto_envases?: array<int, array<string, mixed>>}
+     */
+    private function netoPorEnvaseCorregido(RecepcionRomana $recepcion, float $neto): array
+    {
+        if ($recepcion->reparto_neto_envases) {
+            $congelado = $recepcion->reparto_neto_envases;
+            $reparto = app(ServicioRepartoEnvases::class)->calcular($neto,
+                array_column($congelado, 'cantidad', 'tipo_envase'), array_column($congelado, 'tipo_envase'),
+                array_column($congelado, 'peso_referencia', 'tipo_envase'));
+
+            return ['reparto_neto_envases' => $reparto, 'peso_neto_por_envase' => round($reparto[0]['peso_neto_unitario'], 3)];
+        }
+        if ($recepcion->cantidad_envase_calculo_neto > 0) {
+            return ['peso_neto_por_envase' => round($neto / $recepcion->cantidad_envase_calculo_neto, 3)];
+        }
+
+        throw new ConflictoOperacion('La recepción cerrada no tiene cantidades válidas para recalcular el neto por envase.');
+    }
+
+    /**
+     * Pesaje acumulativo: cada tanda vigente recalcula su tara con las taras corregidas y
+     * reparte su nuevo neto con las proporciones medidas, como la corrección de bruto.
+     *
+     * @param  array<string, float>  $taras  solo los tipos corregidos
+     * @return array{tandas: list<array<string, mixed>>, cambio: bool} tandas antes y después
+     */
+    private function corregirTaraTandas(RecepcionRomana $recepcion, array $taras): array
+    {
+        $reparto = app(ServicioRepartoEnvases::class);
+        $cambios = [];
+        $cambio = false;
+        foreach ($recepcion->pesajesEnvases()->whereNull('anulado_at')->orderBy('secuencia')->lockForUpdate()->get() as $pesaje) {
+            $lineas = $reparto->lineasConFruta($recepcion->especie_validacion_id, $pesaje->lineas());
+            $antes = ['secuencia' => $pesaje->secuencia, 'peso_bruto' => (float) $pesaje->peso_bruto,
+                'peso_tara' => (float) $pesaje->peso_tara, 'peso_neto' => (float) $pesaje->peso_neto];
+            $taraGramos = 0;
+            foreach ($lineas as &$linea) {
+                $tara = $taras[$linea['tipo_envase']] ?? $linea['tara_unitaria'];
+                $cambio = $cambio || (int) round($tara * 1000) !== (int) round($linea['tara_unitaria'] * 1000);
+                $linea['tara_unitaria'] = round($tara, 3);
+                $linea['peso_tara'] = ((int) round($tara * 1000) * $linea['cantidad']) / 1000;
+                $taraGramos += (int) round($tara * 1000) * $linea['cantidad'];
+            }
+            unset($linea);
+            $netoGramos = (int) round((float) $pesaje->peso_bruto * 1000) - $taraGramos;
+            if ($netoGramos <= 0) {
+                throw ValidationException::withMessages(['taras_envases' => "Con esa tara la tanda {$pesaje->secuencia} queda sin neto de fruta."]);
+            }
+            $base = array_sum(array_map(fn (array $linea): int => (int) round($linea['peso_neto'] * 1000), $lineas));
+            $netos = $base > 0
+                ? $this->escalarNetos(array_map(fn (array $linea): int => (int) round($linea['peso_neto'] * 1000), $lineas), $base, $netoGramos)
+                : $this->repartirNetoTanda($recepcion, $lineas, $netoGramos);
+            foreach ($lineas as $i => &$linea) {
+                $linea['peso_neto'] = $netos[$i] / 1000;
+            }
+            unset($linea);
+            $cantidad = max(1, (int) $pesaje->cantidad_envases);
+            $pesaje->update(['peso_tara' => $taraGramos / 1000, 'peso_neto' => $netoGramos / 1000,
+                'tara_unitaria_envase' => round($taraGramos / $cantidad / 1000, 3), 'envases' => $lineas]);
+            $cambios[] = ['id' => $pesaje->id, 'anterior' => $antes,
+                'posterior' => [...$antes, 'peso_tara' => $taraGramos / 1000, 'peso_neto' => $netoGramos / 1000]];
+        }
+
+        return ['tandas' => $cambios, 'cambio' => $cambio];
+    }
+
+    /**
+     * Escala netos medidos a un nuevo total al gramo. Las líneas sin neto (bins que solo
+     * contienen totes) siguen en cero y el resto de gramos queda en la última con neto.
+     *
+     * @param  list<int>  $gramos
+     * @return list<int>
+     */
+    private function escalarNetos(array $gramos, int $base, int $total): array
+    {
+        $conNeto = array_keys(array_filter($gramos, fn (int $valor): bool => $valor > 0));
+        $ultimo = end($conNeto);
+        $asignados = 0;
+        $resultado = [];
+        foreach ($gramos as $i => $valor) {
+            if ($valor <= 0) {
+                $resultado[$i] = 0;
+
+                continue;
+            }
+            $resultado[$i] = $i === $ultimo ? $total - $asignados : intdiv($total * $valor, $base);
+            if ($resultado[$i] <= 0) {
+                throw ValidationException::withMessages(['taras_envases' => 'Con esa tara algún envase de la tanda queda sin neto de fruta.']);
+            }
+            $asignados += $resultado[$i];
+        }
+
+        return $resultado;
     }
 
     public function confirmarIngreso(RecepcionRomana $recepcion, string $operacionId, User $usuario): RecepcionRomana
@@ -1362,7 +1646,7 @@ class ServicioRecepcionRomana
      * @param  array<string, mixed>  $datos
      * @return array<string, mixed>
      */
-    private function datosRecepcion(array $datos): array
+    private function datosRecepcion(array $datos, ?RecepcionRomana $recepcion = null): array
     {
         $guias = app(ServicioGuiasRecepcionRomana::class)->preparar($datos);
         $esPesajeEnvases = $datos['tipo_recepcion'] === TipoRecepcionRomana::FrutaPesajeEnvases->value;
@@ -1375,8 +1659,10 @@ class ServicioRecepcionRomana
                 // Omitirla conserva el contrato y hash de las solicitudes anteriores.
                 ...(($datos['tipo_recepcion'] !== TipoRecepcionRomana::SoloEnvases->value || $esDevolucion) && isset($envase['propiedad'])
                     ? ['propiedad' => $envase['propiedad']] : []),
-                ...($esPesajeEnvases && isset($envase['tara_unitaria'])
-                    ? ['tara_unitaria' => round((float) $envase['tara_unitaria'], 3)] : []),
+                ...($esPesajeEnvases && (isset($envase['tara_unitaria']) || app(ServicioTarasRomana::class)->esFija($envase['tipo_envase']))
+                    ? ['tara_unitaria' => app(ServicioTarasRomana::class)->esFija($envase['tipo_envase'])
+                        ? app(ServicioTarasRomana::class)->paraRecepcion($recepcion, $envase['tipo_envase'])
+                        : round((float) $envase['tara_unitaria'], 3)] : []),
             ])
             ->sortBy('tipo_envase')
             ->values()
@@ -1885,6 +2171,7 @@ class ServicioRecepcionRomana
         $diferencia = 0.0;
         foreach ($entradas->keys()->merge(array_keys($salidas))->unique() as $tipo) {
             $taraUnitaria = (float) ($taras->get($tipo)['tara_unitaria'] ?? 0);
+            app(ServicioTarasRomana::class)->asegurarValor($tipo, $taraUnitaria, $recepcion, 'taras_envases');
             if ($taraUnitaria <= 0) {
                 throw new ConflictoOperacion("Configura la tara unitaria de {$tipo} antes de cerrar la recepción.");
             }

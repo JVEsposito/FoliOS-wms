@@ -11,6 +11,7 @@ use App\Models\RecepcionRomana;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Models\VariedadValidacion;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 trait PreparaRecepcionEnvases
@@ -24,6 +25,8 @@ trait PreparaRecepcionEnvases
 
     protected function preparar(array $cantidades, ?array $primero = null, bool $confirmar = true): array
     {
+        // Escenarios históricos: antes se pesaban envases con una tara de 0,1 kg.
+        DB::table('configuracion_taras_romana')->whereIn('tipo_envase', ['bins', 'totes'])->update(['tara_unitaria' => 0.1]);
         $temporada = Temporada::where('activa', true)->firstOrFail();
         $cliente = Cliente::create(['codigo' => 'ENV-'.Str::random(8), 'nombre' => 'Exportadora', 'activo' => true]);
         $especie = EspecieValidacion::firstOrCreate(['temporada_id' => $temporada->id, 'nombre' => 'Cereza'], ['activo' => true]);
@@ -60,10 +63,14 @@ trait PreparaRecepcionEnvases
 
     protected function cerrar(array $c, string $modo, array $extras = [])
     {
+        $taras = $extras['taras_envases'] ?? array_map(fn ($tipo): array => ['tipo_envase' => $tipo, 'tara_unitaria' => 0.1], array_keys($c['cantidades']));
+        // Escenarios históricos: la tara de bins y totes que registra la prueba es la oficial de su recepción.
+        $fijas = collect($taras)->whereIn('tipo_envase', ['bins', 'totes'])->pluck('tara_unitaria', 'tipo_envase')->all();
+        DB::table('recepciones_romana')->where('id', $c['recepcion']->id)->update(['taras_romana_snapshot' => json_encode($fijas ?: null)]);
+
         return $this->actingAs($c['operador'], 'sanctum')->postJson('/api/romana/recepciones/'.$c['recepcion']->id.'/cerrar', $this->payloadConInspeccionRc02('/api/romana/recepciones/'.$c['recepcion']->id.'/cerrar', [
             'operacion_id' => (string) Str::uuid(), 'peso_tara' => 1000, 'modo_salida_envases' => $modo,
-            'numero_guia_salida' => $modo === 'vacio' ? null : 'GS-1',
-            'taras_envases' => array_map(fn ($tipo): array => ['tipo_envase' => $tipo, 'tara_unitaria' => 0.1], array_keys($c['cantidades'])), ...$extras]));
+            'numero_guia_salida' => $modo === 'vacio' ? null : 'GS-1', ...$extras, 'taras_envases' => $taras]));
     }
 
     protected function lotizar(array $c): array

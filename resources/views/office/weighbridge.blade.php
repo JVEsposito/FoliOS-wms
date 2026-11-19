@@ -38,6 +38,7 @@
                 <header class="weighbridge-heading">
                     <div><p class="eyebrow">RECEPCIÓN CONTRACTUAL</p><h1>Control de Romana</h1><p>Ingreso cargado, retorno vacío y cierre documental en una sola trazabilidad.</p></div>
                     <div class="weighbridge-heading__actions">
+                        <button class="secondary-button is-hidden" id="tareSettingsButton" type="button">⚖ Configurar taras</button>
                         <button class="secondary-button" id="downloadBlankWeighingFormButton" type="button">↓ Planilla de pesaje en blanco</button>
                         <button class="secondary-button" id="reloadButton" type="button">↻ Actualizar</button>
                         <button class="primary-button" id="newReceptionButton" type="button">+ Registrar ingreso</button>
@@ -88,6 +89,7 @@
                             <button class="secondary-button is-hidden" id="editReceptionButton" type="button">Editar ingreso</button>
                             <button class="secondary-button is-hidden" id="realDateButton" type="button">Corregir fecha real</button>
                             <button class="secondary-button is-hidden" id="correctGrossWeightButton" type="button">Corregir peso bruto</button>
+                            <button class="secondary-button is-hidden" id="correctTareButton" type="button">Corregir tara</button>
                             <button class="secondary-button is-hidden" id="guideNumberButton" type="button">Corregir N° de guía</button>
                             <button class="secondary-button is-hidden" id="integralCorrectionButton" type="button">Corregir recepción validada</button>
                             <button class="primary-button is-hidden" id="confirmEntryButton" type="button">Confirmar ingreso</button>
@@ -136,6 +138,20 @@
                 <a id="grossWeightLotsLink" class="secondary-button" target="_blank" rel="noopener">Ver lotes de esta recepción</a>
                 <p class="form-error" id="grossWeightError" role="alert"></p>
                 <footer class="dialog-actions"><button class="secondary-button" id="grossWeightCancel" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar peso bruto</button></footer>
+            </form>
+        </dialog>
+        <dialog class="weighbridge-dialog weighbridge-dialog--compact" id="tareCorrectionDialog" aria-labelledby="tareCorrectionTitle">
+            <form class="weighbridge-dialog__shell" id="tareCorrectionForm">
+                <header class="weighbridge-dialog__heading"><div><p class="eyebrow">SOLO ADMINISTRACIÓN</p><h2 id="tareCorrectionTitle">Corregir tara</h2><p id="tareCorrectionDescription"></p></div></header>
+                <p id="tareCorrectionCurrent"></p>
+                <label class="field weight-field" id="tareCorrectionTruckField"><span>Tara del camión vacío *</span><div><input name="peso_tara" type="number" min="1" max="200000" step="0.01" inputmode="decimal"><b>kg</b></div></label>
+                <div class="tare-correction-types" id="tareCorrectionTypes"></div>
+                <p class="tare-correction-preview" id="tareCorrectionPreview" aria-live="polite"></p>
+                <label class="field"><span>Motivo de la corrección *</span><textarea name="motivo_correccion" rows="3" minlength="10" maxlength="1000" required></textarea></label>
+                <p class="tare-correction-note">Se recalculan el neto, el neto por envase y los kilos de todos los lotes de la recepción, aunque ya estén confirmados o tengan entregas a proceso. Las entregas, ubicaciones, guías y la cuenta corriente de envases no cambian.</p>
+                <div class="tare-correction-lots" id="tareCorrectionLots"></div>
+                <p class="form-error" id="tareCorrectionError" role="alert"></p>
+                <footer class="dialog-actions"><button class="secondary-button" id="tareCorrectionCancel" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar tara corregida</button></footer>
             </form>
         </dialog>
         <dialog class="weighbridge-dialog" id="receptionDialog">
@@ -188,6 +204,17 @@
                 <div class="net-preview"><span>PESO NETO DE LA TANDA</span><strong id="containerWeighingNetPreview">—</strong></div>
                 <p class="form-error" id="containerWeighingFormError" role="alert"></p>
                 <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">Cancelar</button><button class="primary-button" value="default" type="submit">Guardar lectura</button></div>
+            </form>
+        </dialog>
+
+        <dialog class="weighbridge-dialog weighbridge-dialog--compact" id="tareSettingsDialog" aria-label="Taras oficiales de Romana">
+            <form class="weighbridge-dialog__shell" id="tareSettingsForm" method="dialog">
+                <div class="weighbridge-dialog__heading"><div><p class="eyebrow">SOLO ADMINISTRACIÓN</p><h2>Taras oficiales de Romana</h2><p>Se aplican a recepciones nuevas. Las ya registradas conservan sus kilos.</p></div></div>
+                <label class="field"><span>Tipo de envase *</span><select name="tipo_envase" required><option value="bins">Bins plásticos</option><option value="totes">Totes</option></select></label>
+                <label class="field weight-field"><span>Tara unitaria oficial (kg) *</span><div><input name="tara_unitaria" type="number" min="0.001" max="1000" step="0.001" required><b>kg</b></div></label>
+                <label class="field"><span>Motivo del cambio *</span><textarea name="motivo" minlength="5" maxlength="500" required></textarea></label>
+                <p class="form-error" id="tareSettingsError" role="alert"></p>
+                <div class="dialog-actions"><button class="secondary-button" id="tareSettingsCancel" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar tara oficial</button></div>
             </form>
         </dialog>
 

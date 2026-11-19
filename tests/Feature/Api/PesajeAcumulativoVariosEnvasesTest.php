@@ -12,6 +12,7 @@ use App\Models\Temporada;
 use App\Models\User;
 use App\Models\VariedadValidacion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
@@ -20,6 +21,14 @@ class PesajeAcumulativoVariosEnvasesTest extends TestCase
 {
     use PreparaInspeccionesEnvases;
     use RefreshDatabase;
+
+    /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 40]);
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 1.5]);
+    }
 
     public function test_los_lotes_reciben_el_neto_pesado_de_cada_tipo_de_envase(): void
     {

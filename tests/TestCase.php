@@ -4,11 +4,34 @@ namespace Tests;
 
 use App\Models\Temporada;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 abstract class TestCase extends BaseTestCase
 {
+    /**
+     * Los escenarios de Romana anteriores a las taras oficiales pesan bins de 40 kg y
+     * totes de 2 kg. Cada prueba con base de datos parte con esas taras; la que valida
+     * la configuración oficial sembrada (43 kg y 0,890 kg) desactiva este ajuste.
+     */
+    protected bool $tarasRomanaHistoricas = true;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $usos = class_uses_recursive(static::class);
+        if ($this->tarasRomanaHistoricas
+            && (isset($usos[RefreshDatabase::class]) || isset($usos[DatabaseMigrations::class]) || isset($usos[DatabaseTransactions::class]))
+            && Schema::hasTable('configuracion_taras_romana')) {
+            DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 40]);
+            DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 2]);
+        }
+    }
+
     /**
      * Las migraciones crean una temporada GENERAL activa. Las pruebas que
      * preparan otra temporada deben cerrar esa vigencia antes del insert.

@@ -125,7 +125,7 @@ body {
 .container-weighing-row--annulled { opacity: .55; }
 .container-weighing-row button { min-height: 34px; border: 1px solid rgba(255, 107, 107, .35); border-radius: 8px; background: rgba(255, 107, 107, .08); color: #ff9d9d; padding: 0 10px; font-weight: 800; }
 
-.weighbridge-dialog { width: min(940px, calc(100vw - 28px)); max-height: calc(100vh - 28px); border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--text); padding: 0; }
+.weighbridge-dialog { width: min(940px, calc(100vw - 28px)); max-height: calc(100vh - 28px); margin: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--text); padding: 0; }
 .weighbridge-dialog--compact { width: min(560px, calc(100vw - 28px)); }
 .weighbridge-dialog::backdrop { background: rgba(1, 8, 12, .8); backdrop-filter: blur(4px); }
 .weighbridge-dialog__shell { padding: 22px; }
@@ -364,3 +364,14 @@ body.has-reception-drawer .office-app .weighbridge-filters { grid-template-colum
 .integral-lots li small { display: block; opacity: .75; }
 /* Fila de vacíos bajo cada segmento de la corrección integral. */
 .integral-empty-row td { padding-top: 0; border-bottom-style: dashed; }
+/* Corrección transversal de tara (administración): una fila por tipo de envase. */
+.tare-correction-types { display: grid; gap: 10px; margin: 12px 0; }
+.tare-correction-type { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 170px); gap: 10px; align-items: end; border: 1px solid var(--line); border-radius: 12px; background: var(--deep); padding: 12px; }
+.tare-correction-type p { margin: 0; }
+.tare-correction-type strong { display: block; color: var(--text); font-size: .8rem; }
+.tare-correction-type small { display: block; margin-top: 4px; color: var(--muted); font-size: .66rem; line-height: 1.4; }
+.tare-correction-preview { border: 1px solid rgba(22, 201, 194, .3); border-radius: 10px; background: rgba(22, 201, 194, .08); padding: 12px 14px; color: var(--cyan-light); font-size: .78rem; font-weight: 800; line-height: 1.5; }
+.tare-correction-preview:empty { display: none; }
+.tare-correction-note { margin: 12px 0 8px; font-size: .74rem; line-height: 1.5; }
+.tare-correction-lots p { margin: 4px 0; font-size: .74rem; }
+@media (max-width: 480px) { .tare-correction-type { grid-template-columns: 1fr; } }

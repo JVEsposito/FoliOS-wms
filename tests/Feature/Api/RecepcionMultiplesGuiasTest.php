@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\VariedadValidacion;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
@@ -20,6 +21,14 @@ use Tests\TestCase;
 class RecepcionMultiplesGuiasTest extends TestCase
 {
     use PreparaInspeccionesEnvases, RefreshDatabase;
+
+    /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 40]);
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 2]);
+    }
 
     public function test_registra_dos_guias_sin_duplicar_camion_pesaje_ni_envases_y_es_idempotente(): void
     {

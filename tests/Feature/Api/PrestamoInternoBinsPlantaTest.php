@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\VariedadValidacion;
 use App\Services\Envases\ServicioCuentaCorrienteEnvases;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Concerns\PreparaInspeccionesEnvases;
 use Tests\TestCase;
@@ -179,6 +180,8 @@ class PrestamoInternoBinsPlantaTest extends TestCase
             'rut_conductor' => '12.345.678-5', 'nombre_conductor' => 'Conductor', 'peso_bruto' => 10000,
         ];
         if ($tipo === 'fruta_pesaje_envases') {
+            // Escenario histórico: la recepción congela bins de 50 kg como tara oficial.
+            DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 50]);
             $datos = [...$datos, 'tipo_envase_pesaje' => 'bins', 'tara_unitaria_envase' => 50];
             unset($datos['peso_bruto']);
         }
@@ -187,6 +190,7 @@ class PrestamoInternoBinsPlantaTest extends TestCase
             unset($datos['peso_bruto']);
         }
         $recepcion = $this->actingAs($operador, 'sanctum')->postJson('/api/romana/recepciones', $datos)->assertCreated()->json('data');
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 40]);
         if ($tipo === 'fruta_con_envases') {
             $this->postJson("/api/romana/recepciones/{$recepcion['id']}/confirmar-ingreso", ['operacion_id' => (string) Str::uuid()])->assertOk();
         }

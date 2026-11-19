@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\ConciliacionSalidaEnvaseController;
 use App\Http\Controllers\Api\ConciliacionValidacionController;
 use App\Http\Controllers\Api\CondicionSagController;
 use App\Http\Controllers\Api\ConfiguracionCamaraController;
+use App\Http\Controllers\Api\ConfiguracionTarasRomanaController;
 use App\Http\Controllers\Api\ConsultaOficinaController;
 use App\Http\Controllers\Api\ConsultaSagController;
 use App\Http\Controllers\Api\ConsumosOrdenMaterialController;
@@ -228,6 +229,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/recepciones/{recepcion}', [RecepcionRomanaController::class, 'show']);
         Route::get('/recepciones/{recepcion}/aviso-recibo', [RecepcionRomanaController::class, 'avisoRecibo']);
     });
+    Route::put('/romana/taras/{tipo}', [ConfiguracionTarasRomanaController::class, 'actualizar'])
+        ->middleware('can:configurar-taras-romana');
     Route::middleware('can:operar-romana')->prefix('romana')->group(function () {
         Route::post('/recepciones', [RecepcionRomanaController::class, 'store']);
         Route::put('/recepciones/{recepcion}', [RecepcionRomanaController::class, 'update']);
@@ -254,6 +257,8 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:corregir-fecha-real-romana');
     Route::put('/romana/recepciones/{recepcion}/peso-bruto', [RecepcionRomanaController::class, 'corregirPesoBruto'])
         ->middleware('can:corregir-peso-bruto-romana');
+    Route::put('/romana/recepciones/{recepcion}/tara', [RecepcionRomanaController::class, 'corregirTara'])
+        ->middleware('can:corregir-tara-romana');
     Route::delete('/romana/recepciones/{recepcion}', [RecepcionRomanaController::class, 'destroy'])
         ->middleware('can:eliminar-recepciones-romana');
     Route::post('/romana/recepciones/{recepcion}/corregir-salida-envases', [RecepcionRomanaController::class, 'corregirSalidaEnvases'])
