@@ -27,6 +27,15 @@ class RegistroPesajeRpr01Test extends TestCase
         'Peso bruto', 'Tara camión / envases', 'PESO NETO',
     ];
 
+
+    /** Mantiene los valores históricos de estas pruebas; la configuración oficial inicial se prueba aparte. */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 40]);
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'totes')->update(['tara_unitaria' => 1]);
+    }
+
     public function test_rpr01_respeta_campos_orden_firmas_y_logo_sin_incluir_datos_de_salida(): void
     {
         $operador = User::factory()->create(['name' => 'Ana Romana', 'rol' => RolUsuario::OperadorRomana]);
