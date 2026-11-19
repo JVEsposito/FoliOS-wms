@@ -82,6 +82,31 @@ No se permite volver a un estado anterior. Después de confirmar el ingreso los 
 
 Si la recepción ya está cerrada, una corrección del bruto o de la cantidad del envase seleccionado recalcula peso neto y neto por envase. No puede retirarse el tipo de envase usado para ese cálculo.
 
+### Taras oficiales de envases (control administrativo)
+
+En Oficina → Romana, **Configurar taras** se muestra únicamente a usuarios con el
+rol **administrador** y acceso al módulo. Los valores iniciales son:
+
+- **Bins plásticos**: 43,000 kg por unidad.
+- **Totes**: 0,890 kg por unidad.
+- **Esponja de bins** y **esponja de tote**: tara variable. Se pesan realmente
+  para cada camión y el operador registra la tara unitaria medida durante el destare.
+
+En ingreso de pesaje acumulativo y en destare tradicional, las taras oficiales de
+bins/totes se precargan y son de solo lectura. **El backend rechaza también solicitudes
+manuales que intenten usar otro valor**. Un administrador modifica la tara oficial
+desde la pantalla de configuración, obligatoriamente indicando un motivo; FoliOS
+registra los valores anterior y nuevo, usuario y fecha.
+
+Al crear una recepción, FoliOS conserva una copia de las taras oficiales vigentes.
+Si administración las modifica luego, **esa recepción y las que ya están cerradas
+conservan sus valores y kilos**. Las recepciones anteriores al cambio que ya tenían
+una tara documentada también la conservan. En recepciones antiguas aún sin destare
+se utiliza la configuración vigente al momento de cerrarlas.
+
+Otros envases (Smartpick, caja 3/4 y pallet cosechero) continúan con su tara
+operacional actual hasta acordar un estándar específico.
+
 ### Corrección de peso bruto por el administrador
 
 En el expediente, **Corregir peso bruto** permite corregir la lectura con motivo,
