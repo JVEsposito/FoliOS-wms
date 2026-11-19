@@ -7,7 +7,6 @@ use App\Services\Romana\ServicioTarasRomana;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 
 class ConfiguracionTarasRomanaController extends Controller
 {
