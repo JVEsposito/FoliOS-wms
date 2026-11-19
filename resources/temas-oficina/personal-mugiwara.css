@@ -179,13 +179,28 @@
     }
 
     :root[data-office-personal-theme="personal-mugiwara"] .operation-now-command {
-        position: relative;
-        isolation: isolate;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas: "title title title" "state date actions";
+        gap: 8px 14px;
         margin-block-end: 10px;
-        padding: 12px 14px;
+        padding: 0 14px 9px;
         border: 1px solid var(--mugiwara-brass);
         border-radius: 8px;
         background: var(--panel);
+    }
+
+    :root[data-office-personal-theme="personal-mugiwara"] .operation-now-command__title {
+        display: grid;
+        align-content: center;
+        min-height: clamp(88px, 10vw, 160px);
+        margin-inline: -14px;
+        padding: 10px 14px;
+        border-radius: 7px 7px 0 0;
+        border-block-end: 1px solid var(--mugiwara-brass);
+        background:
+            linear-gradient(90deg, #081f2b 11%, #081f2bf0 28%, #081f2b55 55%, transparent 69%),
+            var(--mugiwara-art) right 54% / min(82%, 1080px) auto no-repeat,
+            #081f2b;
     }
 
     :root[data-office-personal-theme="personal-mugiwara"] .operation-now-command__title h1 {
@@ -232,41 +247,9 @@
     }
 }
 
-@media screen and (min-width: 1180px) {
+@media screen and (max-width: 599px) {
     :root[data-office-personal-theme="personal-mugiwara"] .operation-now-command {
-        --mugiwara-banner-height: clamp(116px, 10vw, 160px);
-        grid-template-columns: minmax(0, 1fr) auto auto;
-        grid-template-rows: var(--mugiwara-banner-height) auto;
-        grid-template-areas: "title title title" "state date actions";
-        gap: 9px 18px;
-        padding: 0 16px 9px;
-    }
-
-    :root[data-office-personal-theme="personal-mugiwara"] .operation-now-command::before {
-        position: absolute;
-        z-index: -1;
-        inset: 0 0 auto;
-        height: var(--mugiwara-banner-height);
-        border-radius: 7px 7px 0 0;
-        border-block-end: 1px solid var(--mugiwara-brass);
-        background:
-            linear-gradient(90deg, #081f2b 11%, #081f2bf0 28%, #081f2b55 55%, transparent 69%),
-            var(--mugiwara-art) right 54% / min(82%, 1080px) auto no-repeat,
-            #081f2b;
-        content: "";
-        pointer-events: none;
-    }
-}
-
-@media screen and (max-width: 1179px) {
-    :root[data-office-personal-theme="personal-mugiwara"] .operation-now-command__title {
-        min-height: 66px;
-        display: grid;
-        align-content: center;
-        padding: 0 8px;
-        border-radius: 5px;
-        background:
-            linear-gradient(90deg, #0f2937 24%, #0f2937d9 53%, #0f29375c),
-            var(--mugiwara-art) right center / auto 110px no-repeat;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "title title" "state actions";
     }
 }
