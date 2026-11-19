@@ -29,7 +29,7 @@ class ServicioTarasRomana
     /** Tara congelada para la recepción; las recepciones antiguas conservan sus taras documentadas. */
     public function paraRecepcion(?RecepcionRomana $recepcion, string $tipo): ?float
     {
-        if (!$this->esFija($tipo)) {
+        if (! $this->esFija($tipo)) {
             return null;
         }
 
@@ -58,12 +58,12 @@ class ServicioTarasRomana
 
     public function asegurarValor(string $tipo, mixed $valor, ?RecepcionRomana $recepcion = null, string $campo = 'tara_unitaria'): void
     {
-        if (!$this->esFija($tipo)) {
+        if (! $this->esFija($tipo)) {
             return;
         }
 
         $oficial = $this->paraRecepcion($recepcion, $tipo);
-        if (!is_numeric($valor) || abs((float) $valor - $oficial) > 0.0005) {
+        if (! is_numeric($valor) || abs((float) $valor - $oficial) > 0.0005) {
             throw ValidationException::withMessages([
                 $campo => "La tara oficial de {$tipo} es ".number_format($oficial, 3, ',', '.') . ' kg por unidad y solo administración puede configurarla.',
             ]);
@@ -73,7 +73,7 @@ class ServicioTarasRomana
     /** @return array{tipo_envase: string, tara_unitaria: float} */
     public function actualizar(string $tipo, float $valor, string $motivo, User $usuario): array
     {
-        if (!$this->esFija($tipo)) {
+        if (! $this->esFija($tipo)) {
             throw ValidationException::withMessages(['tipo_envase' => 'Este tipo no tiene una tara fija configurable.']);
         }
 
