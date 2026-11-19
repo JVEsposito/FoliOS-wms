@@ -48,7 +48,7 @@
                         <legend>Destinos con despacho restringido</legend>
                         <label class="sl-check"><input type="checkbox" name="todos_destinos"> Todos los destinos</label>
                         <p class="sl-help">Puede restringir destinos desde la primera observación. La resolución permite confirmar, ampliar o liberar restricciones.</p>
-                        <div class="sl-grid"><label>Buscar país o bloque<input id="slDestinationSearch" type="search" placeholder="Ej.: Estados Unidos o Unión Europea"></label><button class="secondary-button" type="button" id="slExpand">Editar países individualmente</button></div>
+                        <div class="sl-grid"><label>Buscar país o bloque<input id="slDestinationSearch" type="search" placeholder="Ej.: Estados Unidos o Unión Europea"></label><div class="sl-destination-actions"><button class="secondary-button" type="button" id="slExpand">Editar países individualmente</button><button class="secondary-button" type="button" id="slClear">Quitar todos</button></div></div>
                         <p id="slSelected" role="status"></p><div class="sl-options" id="slDestinations"></div>
                     </fieldset>
                     <label>Resolución / motivo de la actualización<textarea name="resolucion" rows="3" minlength="5" maxlength="4000"></textarea></label>

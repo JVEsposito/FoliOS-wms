@@ -11,6 +11,8 @@
 .sl-workspace th, .sl-workspace td { padding: 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .sl-workspace td small { display: block; margin-top: 5px; color: var(--muted); }
 .sl-destinations { padding: 16px; margin: 18px 0; border: 1px solid var(--line); border-radius: var(--radius); }
+.sl-destination-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.sl-destination-actions button { flex: 1 1 auto; }
 .sl-options { max-height: 280px; overflow: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
 .sl-options label { margin: 0; padding: 9px; border-bottom: 1px solid var(--line); }
 .sl-history { padding: 14px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }

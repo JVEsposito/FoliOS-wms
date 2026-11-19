@@ -52,7 +52,19 @@ test('registra una retención y libera parcialmente un bloque sin perder el borr
         assert.equal(await page.locator('#slForm [name=cliente_id]').isDisabled(), true);
         assert.match(await page.locator('#slFolios').textContent(), /60001.*1 \/ 120.*89868.*CAM-09.*CAR-1/);
         await page.locator('#slExpand').click();
-        await page.locator('[data-destination="pais|cl"]').uncheck();
+        assert.deepEqual(await page.locator('[data-destination^="pais|"]').evaluateAll((inputs) => inputs.map((input) => input.checked)), [true, true]);
+        // Quitar todos limpia también «Todos los destinos»; luego se busca y marca el que sigue restringido.
+        await page.locator('#slForm [name=todos_destinos]').check();
+        await page.locator('#slClear').click();
+        assert.equal(await page.locator('#slForm [name=todos_destinos]').isChecked(), false);
+        assert.equal(await page.locator('#slDestinations input:checked').count(), 0);
+        assert.equal(await page.locator('#slSelected').textContent(), '0 países / bloques seleccionados.');
+        assert.equal(await page.locator('#slClear').isDisabled(), true);
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'slDestinationSearch');
+        await page.locator('#slDestinationSearch').fill('Estados');
+        await page.locator('[data-destination="pais|us"]').check();
+        assert.equal(await page.locator('#slSelected').textContent(), '1 país / bloque seleccionado: US · Estados Unidos.');
+        assert.equal(await page.locator('#slClear').isDisabled(), false);
         await page.locator('#slForm [name=resolucion]').fill('Liberación parcial; se mantiene restringido Estados Unidos.');
         fail = true; await page.locator('#slSave').click();
         await page.locator('#slError').filter({ hasText: 'El lote cambió' }).waitFor();

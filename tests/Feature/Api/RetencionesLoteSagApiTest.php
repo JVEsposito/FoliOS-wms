@@ -190,13 +190,23 @@ class RetencionesLoteSagApiTest extends TestCase
         $pdf = $this->get('/api/sag/lotes-retenidos/'.$caso['id'].'/archivo/pdf')->assertOk()->assertHeader('Content-Type', 'application/pdf')->getContent();
         $this->assertStringContainsString('/Subtype /Image', $pdf);
         $this->assertStringContainsString('10056', $pdf);
+        // Informe por secciones: identificación, pallets con total, historial por versión y firmas.
+        foreach (['INFORME DE LOTE RETENIDO SAG', '4. PALLETS DEL LOTE AL EMITIR EL INFORME', 'Total: 1 pallet',
+            '5. HISTORIAL DE VERSIONES', 'Registro inicial del seguimiento.', 'Contraparte SAG', 'Responsable de planta'] as $texto) {
+            $this->assertStringContainsString($texto, $pdf);
+        }
+        $this->assertMatchesRegularExpression('/Página 1 de \d/', mb_convert_encoding($pdf, 'UTF-8', 'Windows-1252'));
+        $this->assertStringNotContainsString(' UTC', $pdf);
         $respuesta = $this->get('/api/sag/lotes-retenidos/'.$caso['id'].'/archivo/xlsx')->assertOk();
         $ruta = $respuesta->baseResponse->getFile()->getPathname();
         $zip = new ZipArchive;
         $this->assertTrue($zip->open($ruta));
         $this->assertNotFalse($zip->getFromName('xl/media/logo-planta.jpg'));
         $this->assertStringContainsString('10056', $zip->getFromName('xl/worksheets/sheet2.xml'));
-        $this->assertStringContainsString('Antecedente v1', $zip->getFromName('xl/worksheets/sheet2.xml'));
+        $corte = $zip->getFromName('xl/worksheets/sheet2.xml');
+        $this->assertStringContainsString('Pallets identificados v1', $corte);
+        $this->assertStringContainsString('1 pallet · 25 cajas del lote', $corte);
+        $this->assertStringContainsString('Registro inicial del seguimiento.', $corte);
         $zip->close();
         @unlink($ruta);
     }
