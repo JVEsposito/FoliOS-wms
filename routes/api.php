@@ -66,6 +66,7 @@ use App\Http\Controllers\Api\HidrocoolerMateriaPrimaController;
 use App\Http\Controllers\Api\ImportacionCatalogoMaterialController;
 use App\Http\Controllers\Api\ImportacionProductosRecepcionMaterialController;
 use App\Http\Controllers\Api\ImpresionEtiquetaMaterialController;
+use App\Http\Controllers\Api\InformeRecepcionesCsgController;
 use App\Http\Controllers\Api\IngresoPorteriaController;
 use App\Http\Controllers\Api\InspeccionEnvasesController;
 use App\Http\Controllers\Api\InspeccionSagController;
@@ -506,6 +507,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/materia-prima/defectos-recepcion/{defecto}/evidencias/{evidencia}',
         [DefectoRecepcionMpController::class, 'evidencia']);
     Route::middleware('can:consultar-materia-prima')->prefix('materia-prima')->group(function () {
+        Route::get('/recepciones-csg/opciones', [InformeRecepcionesCsgController::class, 'opciones']);
+        Route::get('/recepciones-csg/{cliente}', [InformeRecepcionesCsgController::class, 'index'])->whereUuid('cliente');
+        Route::get('/recepciones-csg/{cliente}/pdf', [InformeRecepcionesCsgController::class, 'pdf'])->whereUuid('cliente');
         Route::get('/movimientos', [MovimientoCamaraMpController::class, 'index']);
         Route::get('/movimientos/exportar', [MovimientoCamaraMpController::class, 'exportar']);
         Route::get('/lotes/{loteMateriaPrima}/ubicacion', [MovimientoCamaraMpController::class, 'ubicacion']);

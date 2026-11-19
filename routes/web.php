@@ -154,6 +154,7 @@ Route::view('/oficina/consultas/productores', 'office.queries', [
     'queriesSection' => 'productores',
 ]);
 Route::view('/oficina/materia-prima/lotes', 'office.raw-material');
+Route::view('/oficina/materia-prima/recepciones-csg', 'office.raw-material-reception-csg');
 Route::view('/oficina/materia-prima/defectos-recepcion', 'office.raw-material-defects');
 Route::view('/oficina/materia-prima/hidrocooler', 'office.raw-material-hydrocooler');
 Route::view('/oficina/materia-prima/ordenes-proceso', 'office.raw-material-process-orders');

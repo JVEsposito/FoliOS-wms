@@ -127,6 +127,8 @@ export default defineConfig({
                 'resources/css/office-raw-material.css',
                 'resources/css/office-raw-material-defects.css',
                 'resources/js/office-raw-material-defects.js',
+                'resources/css/office-reception-csg.css',
+                'resources/js/office-reception-csg.js',
                 'resources/css/office-queries.css',
                 'resources/js/office-raw-material.js',
                 'resources/css/office-hydrocooler.css',
