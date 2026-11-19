@@ -17,6 +17,9 @@ class ConfiguracionTarasRomanaTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** Valida la configuración oficial sembrada, no las taras históricas de otras pruebas. */
+    protected bool $tarasRomanaHistoricas = false;
+
     public function test_bins_y_totes_tienen_taras_oficiales_y_solo_administracion_puede_modificarlas(): void
     {
         $operador = User::factory()->create(['rol' => RolUsuario::OperadorRomana]);

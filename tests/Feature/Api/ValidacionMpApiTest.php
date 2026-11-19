@@ -573,6 +573,8 @@ class ValidacionMpApiTest extends TestCase
         $datos['tipo_recepcion'] = 'fruta_pesaje_envases';
         $datos['envases'] = [['tipo_envase' => 'bins', 'cantidad' => 2]];
         $datos['tipo_envase_pesaje'] = 'bins';
+        // Escenario histórico: la recepción congela bins de 50 kg como tara oficial.
+        DB::table('configuracion_taras_romana')->where('tipo_envase', 'bins')->update(['tara_unitaria' => 50]);
         $datos['tara_unitaria_envase'] = 50;
         unset($datos['peso_bruto']);
 
