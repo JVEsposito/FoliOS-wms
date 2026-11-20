@@ -26,7 +26,7 @@ class CargaResource extends JsonResource
         $folios = $this->transformarFolios($asignaciones);
         $alertasSag = app(ServicioRetencionesLoteSag::class)->alertasCarga($this->resource, $asignaciones);
         $concentracion = app(CalculadorConcentracionCarga::class)
-            ->calcular($asignaciones);
+            ->calcular($asignaciones, incluirFoliosConcentrados: $request->routeIs('api.cargas.operacion-turno'));
         $dependencias = app(ServicioAcopioCarga::class)->dependencias($asignaciones);
         $concentracion['recepciones_pendientes'] = count($dependencias);
         $concentracion['dependencias'] = $dependencias;

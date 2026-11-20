@@ -85,6 +85,7 @@ function harness({ variant = 'pda', width = 360, failAfterCommit = false, failPe
     }).outputText;
     const mockRequire = (id) => {
       const fieldMock = fieldUiMock(id); if (fieldMock) return fieldMock;
+      if (id.endsWith('.png')) return { uri: id };
       if (id === 'react-native') return native;
       if (id === 'expo-crypto') return { randomUUID: () => 'operation-' + (++sequence) };
       if (id === 'expo-updates') return { channel: variant === 'pda' ? 'pda' : 'production' };

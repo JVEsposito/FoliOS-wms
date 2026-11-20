@@ -1,4 +1,5 @@
 /* Portal de clientes: móvil primero, con los tokens de estiba-ui. */
+@import './folios-fonts.css';
 .client-portal { margin: 0; min-height: 100dvh; background: var(--eui-color-canvas, #f3f6f8); color: var(--eui-color-text, #18323f); font-family: var(--eui-font-family-sans, system-ui, sans-serif); }
 .client-portal [hidden] { display: none !important; }
 .portal-bar { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; justify-content: space-between; padding: 12px 16px; background: #07151e; color: #eaf2f6; }
@@ -19,15 +20,15 @@
 .portal-login, .portal-password { max-width: 460px; width: 100%; margin: 24px auto; box-sizing: border-box; }
 .portal-app { display: grid; gap: 14px; min-width: 0; }
 .portal-tabs { min-width: 0; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
-.portal-tabs button { flex: none; min-height: 44px; padding: 0 14px; border: 1px solid var(--eui-color-border, #8396a54d); border-radius: 999px; background: var(--eui-color-surface, #fff); color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
-.portal-tabs button[aria-selected="true"] { background: var(--eui-color-primary, #0e6e7c); border-color: var(--eui-color-primary, #0e6e7c); color: var(--eui-color-on-primary, #fff); }
+.portal-tabs button { flex: none; min-height: 44px; padding: 0 14px; border: 1px solid var(--eui-color-border); border-radius: var(--folios-control-shape); background: var(--eui-color-surface); color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.portal-tabs button[aria-selected="true"] { background: var(--folios-corner), var(--eui-color-selected); border-block-end: 3px solid var(--eui-color-primary); color: var(--eui-color-text); }
 .portal-panel { display: grid; gap: 14px; min-width: 0; }
-.portal-title { margin: 4px 0 0; font-size: 1.35rem; font-weight: 700; }
+.portal-title { margin: 4px 0 0; padding: 13px 16px; border-inline-start: 4px solid var(--eui-color-primary); border-radius: var(--folios-ticket-shape); background: var(--folios-corner), var(--eui-color-surface); font-size: 1.75rem; font-stretch: var(--eui-font-stretch-masthead); font-weight: 800; }
 .portal-subtitle { margin: 10px 0 0; font-size: 1.1rem; }
 .portal-help { margin: 0; color: var(--eui-color-text-secondary, #4b6371); line-height: 1.5; }
 .portal-empty { margin: 0; padding: 18px; border: 1px dashed var(--eui-color-border, #8396a54d); border-radius: 10px; color: var(--eui-color-text-secondary, #4b6371); }
 .portal-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
-.portal-kpi { display: grid; gap: 4px; padding: 14px; border: 1px solid var(--eui-color-border, #8396a54d); border-radius: 10px; background: var(--eui-color-surface, #fff); min-width: 0; }
+.portal-kpi { display: grid; gap: 4px; padding: 14px; border: 1px solid var(--eui-color-border); border-inline-start: 3px solid var(--eui-area-operacion-line); border-radius: var(--folios-ticket-shape); background: var(--folios-corner), var(--eui-color-surface); min-width: 0; }
 .portal-kpi span { font-size: .82rem; color: var(--eui-color-text-secondary, #4b6371); }
 .portal-kpi strong { font-size: 1.45rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .portal-kpi small { color: var(--eui-color-text-secondary, #4b6371); }
@@ -41,10 +42,10 @@
 .portal-lots { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; font-size: .9rem; }
 .portal-lots li { display: grid; grid-template-columns: minmax(80px, auto) 1fr auto; gap: 10px; padding: 6px 0; border-top: 1px solid var(--eui-color-border-soft, #8396a526); }
 .portal-lots b { font-variant-numeric: tabular-nums; }
-.portal-badge { padding: 2px 10px; border-radius: 999px; font-size: .8rem; background: #8396a526; }
-.portal-badge--confirmado, .portal-badge--aceptada { background: #1e8e5a26; color: #156b43; }
-.portal-badge--solicitada, .portal-badge--tentativo { background: #c08a0026; color: #7a5900; }
-.portal-badge--rechazada, .portal-badge--cancelado { background: #c0392b26; color: #96281b; }
+.portal-badge { padding: 2px 8px; border-radius: var(--eui-radius-seal); font-size: .8rem; background: var(--eui-signal-neutral-surface); color: var(--eui-signal-neutral-text); }
+.portal-badge--confirmado, .portal-badge--aceptada { background: var(--eui-signal-success-surface); color: var(--eui-signal-success-text); }
+.portal-badge--solicitada, .portal-badge--tentativo { background: var(--eui-signal-warning-surface); color: var(--eui-signal-warning-text); }
+.portal-badge--rechazada, .portal-badge--cancelado { background: var(--eui-signal-critical-surface); color: var(--eui-signal-critical-text); }
 .portal-reason { padding: 8px 10px; border-radius: 8px; background: #8396a51a; }
 .portal-progress { font-weight: 600; }
 .portal-days { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }

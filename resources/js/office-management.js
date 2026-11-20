@@ -1,4 +1,5 @@
 import { BarController, BarElement, CategoryScale, Chart, Legend, LinearScale, Tooltip } from 'chart.js';
+import { officeCode, palletCells } from './shared/folios-display.js';
 import { createOperationalPoller } from './shared/operational-poller';
 import { bulkWidths, productStateRows } from './shared/management-product-states';
 import { readManagementChartPaletteSafely } from './shared/management-chart-theme';
@@ -67,6 +68,7 @@ const elements = {
     productAgingRows: byId('productAgingRows'),
     productAgingThreshold: byId('productAgingThreshold'),
     productUndated: byId('productUndated'),
+    precoolingChart: byId('precoolingChartRows'),
     precoolingSummary: byId('precoolingChartSummary'),
     cameraRows: byId('cameraDetailRows'),
     verificationSummary: byId('managementVerificationSummary'),
@@ -100,7 +102,6 @@ const elements = {
     precoolingApproved: byId('precoolingApprovedMetric'),
     precoolingReprocess: byId('precoolingReprocessMetric'),
     precoolingAverage: byId('precoolingAverageMetric'),
-    precoolingList: byId('managementPrecoolingList'),
     weighbridgeEntry: byId('weighbridgeEntryMetric'),
     weighbridgeContainers: byId('weighbridgeContainersMetric'),
     weighbridgeTare: byId('weighbridgeTareMetric'),
@@ -184,6 +185,7 @@ class ApiError extends Error {
 
 // Misma familia que el resto de Oficina (FoliOS v2): Archivo autoalojada, no Inter.
 Chart.defaults.font.family = '"Archivo Variable", "Archivo", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+Chart.defaults.font.size = 13;
 
 function applyChartTheme() {
     palette = readManagementChartPaletteSafely(palette, fallbackPalette);
@@ -442,8 +444,7 @@ function renderDashboard(data) {
     const replenishment = materials.reposicion;
     byId('materialReplenishmentSummary').textContent = replenishment ? `${replenishment.quiebre} en quiebre · ${replenishment.bajo_minimo} bajo mínimo · ${replenishment.sobre_maximo} sobre máximo · Cobertura media: ${replenishment.cobertura_media === null ? 'sin consumo' : replenishment.cobertura_media + ' días'} · ${replenishment.dias_periodo} días de consumo` : 'Sin datos de reposición';
     byId('materialReplenishmentRows').innerHTML = (replenishment?.menor_cobertura || []).map((r) => `<tr><td>${escapeHtml(r.cliente)}</td><td>${escapeHtml(r.codigo)} · ${escapeHtml(r.item)}</td><td>${r.disponible} ${escapeHtml(r.unidad)}</td><td>${r.dias_cobertura} días</td><td>${escapeHtml(r.estado.replaceAll('_', ' '))}</td></tr>`).join('') || '<tr><td colspan="5">Sin ítems con consumo.</td></tr>';
-    renderPrecoolingChart(precooling);
-    renderPrecoolingOperation(precooling);
+    renderPrecooling(precooling);
     renderWeighbridgeChart(weighbridge);
     renderWeighbridgeOperation(weighbridge);
     renderRawMaterial(rawMaterial, containers);
@@ -478,12 +479,12 @@ function replaceChart(name, canvasId, configuration) {
     state.charts.set(name, new Chart(canvas, configuration));
 }
 
-function stackedBarOptions(horizontal = true) {
+function stackedBarOptions() {
     return {
         responsive: true,
         maintainAspectRatio: false,
-        indexAxis: horizontal ? 'y' : 'x',
-        interaction: { mode: 'index', intersect: false },
+        indexAxis: 'y',
+        interaction: { mode: 'index', axis: 'y', intersect: false },
         plugins: {
             legend: { display: false },
             tooltip: {
@@ -665,25 +666,34 @@ function renderMaterialChart() {
     const units = state.dashboard?.materiales?.unidades_medida || [];
     const selected = units.find((unit) => unit.unidad_medida === elements.materialUnitSelect.value) || units[0];
     const items = (selected?.items || []).slice(0, 8);
+    const series = [
+        { label: 'Disponible', field: 'cantidad_disponible', color: palette.purple },
+        { label: 'Reservado', field: 'cantidad_reservada', color: palette.amber },
+        { label: 'Bloqueado', field: 'cantidad_bloqueada', color: palette.red },
+        { label: 'Pendiente de ubicación', field: 'cantidad_pendiente_ubicacion', color: palette.quiet },
+        { label: 'No disponible', field: 'cantidad_no_disponible', color: palette.muted },
+    ];
+    const options = stackedBarOptions();
 
     replaceChart('materials', 'materialStockChart', {
         type: 'bar',
         data: {
             labels: items.map((item) => `${item.cliente.codigo} · ${item.codigo}`),
-            datasets: [
-                { label: 'Disponible', data: items.map((item) => item.cantidad_disponible), backgroundColor: palette.purple, borderRadius: 5, borderSkipped: false },
-                { label: 'Reservado', data: items.map((item) => item.cantidad_reservada), backgroundColor: palette.amber, borderRadius: 5, borderSkipped: false },
-                { label: 'Bloqueado', data: items.map((item) => item.cantidad_bloqueada), backgroundColor: palette.red, borderRadius: 5, borderSkipped: false },
-                { label: 'Pendiente de ubicación', data: items.map((item) => item.cantidad_pendiente_ubicacion), backgroundColor: palette.quiet, borderRadius: 5, borderSkipped: false },
-                { label: 'No disponible', data: items.map((item) => item.cantidad_no_disponible), backgroundColor: palette.muted, borderRadius: 5, borderSkipped: false },
-            ],
+            datasets: series.map(({ label, field, color }) => ({
+                label,
+                data: items.map((item) => item[field]),
+                backgroundColor: color,
+                maxBarThickness: 24,
+                borderRadius: 2,
+                borderSkipped: false,
+            })),
         },
         options: {
-            ...stackedBarOptions(true),
+            ...options,
             plugins: {
-                ...stackedBarOptions(true).plugins,
+                ...options.plugins,
                 tooltip: {
-                    ...stackedBarOptions(true).plugins.tooltip,
+                    ...options.plugins.tooltip,
                     callbacks: {
                         title: (contexts) => {
                             const item = items[contexts[0]?.dataIndex];
@@ -694,68 +704,102 @@ function renderMaterialChart() {
                 },
             },
             scales: {
-                ...stackedBarOptions(true).scales,
-                x: { ...stackedBarOptions(true).scales.x, ticks: { callback: (value) => formatQuantity(value) } },
+                ...options.scales,
+                x: { ...options.scales.x, ticks: { callback: (value) => formatQuantity(value) } },
             },
         },
     });
 
     elements.materialSummary.innerHTML = selected ? `
         <span><b>${formatQuantity(selected.cantidad_actual)} ${escapeHtml(selected.unidad_medida)}</b>stock actual</span>
-        <span><b>${formatQuantity(selected.cantidad_disponible)} ${escapeHtml(selected.unidad_medida)}</b>disponible</span>
-        <span><b>${formatQuantity(selected.cantidad_reservada)} ${escapeHtml(selected.unidad_medida)}</b>reservado</span>
-        <span><b>${formatQuantity(selected.cantidad_bloqueada)} ${escapeHtml(selected.unidad_medida)}</b>bloqueado</span>
-        <span><b>${formatQuantity(selected.cantidad_pendiente_ubicacion)} ${escapeHtml(selected.unidad_medida)}</b>pendiente de ubicación</span>
-        <span><b>${formatQuantity(selected.cantidad_no_disponible)} ${escapeHtml(selected.unidad_medida)}</b>no disponible</span>
+        ${series.map(({ label, field, color }) => `<span>${chartKey(color)}<b>${formatQuantity(selected[field])} ${escapeHtml(selected.unidad_medida)}</b>${label.toLowerCase()}</span>`).join('')}
     ` : '<span>Sin materiales con stock</span>';
 }
 
-function renderPrecoolingChart(precooling) {
-    const tunnels = precooling.tuneles;
-    replaceChart('precooling', 'precoolingChart', {
-        type: 'bar',
-        data: {
-            labels: tunnels.map((tunnel) => tunnel.nombre || tunnel.codigo),
-            datasets: [
-                { label: 'Ocupadas', data: tunnels.map((tunnel) => tunnel.ocupadas), backgroundColor: palette.blue, borderRadius: 5, borderSkipped: false },
-                { label: 'Disponibles', data: tunnels.map((tunnel) => tunnel.disponibles), backgroundColor: palette.quiet, borderRadius: 5, borderSkipped: false },
-            ],
-        },
-        options: stackedBarOptions(true),
-    });
-
-    elements.precoolingSummary.innerHTML = `
-        <span><b>${formatInteger(precooling.procesos_activos)}</b>procesos activos</span>
-        <span><b>${formatInteger(precooling.folios_pendientes)}</b>folios pendientes</span>
-    `;
+function chartKey(color) {
+    return `<i class="management-chart-key" aria-hidden="true" style="background-color:${color}"></i>`;
 }
 
-function renderPrecoolingOperation(precooling) {
+function precoolingTimeline(process, scale) {
+    if (!process) return '<span class="management-tunnel__detail">Sin proceso en curso</span>';
+    if (process.transcurridos_minutos == null) return '<span class="management-tunnel__detail">Tiempo sin lectura</span>';
+
+    const elapsed = Number(process.transcurridos_minutos);
+    const target = Number(process.duracion_objetivo_minutos);
+    const elapsedWidth = clampPercentage(elapsed / scale * 100);
+    const targetWidth = clampPercentage(target / scale * 100);
+    const withinTarget = process.atrasado && target > 0 ? targetWidth : elapsedWidth;
+    const overdueWidth = elapsedWidth - withinTarget;
+
+    return `<div class="management-tunnel__timeline">
+        <span><strong class="folios-code">${escapeHtml(formatDuration(elapsed))}</strong>
+            <small>${target > 0 ? `Objetivo ${escapeHtml(formatDuration(target))}` : 'Sin objetivo'}</small></span>
+        <span class="management-tunnel__track" aria-hidden="true">
+            <i style="inline-size:${withinTarget}%"></i>
+            ${overdueWidth > 0 ? `<i class="management-tunnel__overdue" style="inline-size:${overdueWidth}%"></i>` : ''}
+            ${target > 0 ? `<b style="inset-inline-start:${targetWidth}%"></b>` : ''}
+        </span>
+        <span class="management-tunnel__scale" aria-hidden="true"><small>0 h</small><small>${scale / 60} h</small></span>
+    </div>`;
+}
+
+function precoolingSetpoint(value) {
+    if (value == null || !Number.isFinite(Number(value))) return '—';
+    const temperature = Number(value);
+    const band = temperature > 8 ? 0 : 4 - [0, 2, 4].filter((limit) => temperature >= limit).length;
+
+    return `<div class="management-tunnel__setpoint">
+        <span class="management-tunnel__cold-scale" aria-hidden="true">${Array.from({ length: 5 }, (_, index) =>
+            `<i${band === index ? ' data-band-active' : ''}></i>`).join('')}</span>
+        <strong class="folios-code">${escapeHtml(formatQuantity(temperature))} °C</strong>
+    </div>`;
+}
+
+function renderPrecooling(precooling) {
     elements.precoolingActive.textContent = formatInteger(precooling.procesos_activos);
     elements.precoolingOverdue.textContent = formatInteger(precooling.procesos_atrasados);
     elements.precoolingApproved.textContent = formatInteger(precooling.aprobados_hoy);
     elements.precoolingReprocess.textContent = formatInteger(precooling.reprocesos_hoy);
-    elements.precoolingAverage.textContent = formatDuration(precooling.duracion_promedio_minutos_7d);
+    elements.precoolingAverage.textContent = precooling.duracion_promedio_minutos_7d == null
+        ? '—'
+        : formatDuration(precooling.duracion_promedio_minutos_7d);
 
-    const active = (precooling.tuneles || []).filter((tunnel) => tunnel.proceso_activo);
-    elements.precoolingList.innerHTML = active.length
-        ? active.map((tunnel) => {
-            const process = tunnel.proceso_activo;
-            return `
-                <a class="management-operation-row${process.atrasado ? ' is-critical' : ''}" href="/oficina/prefrio">
-                    <div>
-                        <strong>${escapeHtml(tunnel.nombre || tunnel.codigo)} · ${escapeHtml(process.codigo)}</strong>
-                        <span>${escapeHtml(humanize(process.estado))} · ${formatInteger(tunnel.ocupadas)}/${formatInteger(tunnel.capacidad)} posiciones</span>
-                    </div>
-                    <div class="management-operation-row__metrics">
-                        <span>${process.setpoint === null ? 'Sin setpoint' : `${formatQuantity(process.setpoint)} °C`}</span>
-                        <span>${formatDuration(process.transcurridos_minutos)} / ${formatDuration(process.duracion_objetivo_minutos)}</span>
-                        <span>${process.atrasado ? 'Atrasado' : 'Dentro de objetivo'}</span>
-                    </div>
-                </a>
-            `;
-        }).join('')
-        : '<div class="management-empty">No hay procesos activos en túneles.</div>';
+    const tunnels = precooling.tuneles || [];
+    const minutes = tunnels.flatMap(({ proceso_activo: process }) => [
+        Number(process?.transcurridos_minutos) || 0,
+        Number(process?.duracion_objetivo_minutos) || 0,
+    ]);
+    const scale = Math.ceil(Math.max(600, ...minutes) / 60) * 60;
+    elements.precoolingChart.innerHTML = tunnels.map((tunnel) => {
+        const process = tunnel.proceso_activo;
+        const occupied = Number(tunnel.ocupadas || 0);
+        const available = Number(tunnel.disponibles || 0);
+        const capacity = occupied + available;
+        const state = tunnel.operativo === false ? 'No operativo'
+            : process?.atrasado ? 'Atrasado' : process ? humanize(process.estado) : 'Disponible';
+        const tone = tunnel.operativo === false ? 'critical' : process?.atrasado ? 'warning' : process ? 'info' : 'neutral';
+        const late = process?.atrasado && Number(process.duracion_objetivo_minutos) > 0
+            ? formatDuration(Number(process.transcurridos_minutos) - Number(process.duracion_objetivo_minutos))
+            : null;
+
+        return `<tr>
+            <th scope="row"><strong>${escapeHtml(tunnel.nombre || tunnel.codigo)}</strong>
+                ${process?.codigo ? `<small class="management-tunnel__detail folios-code">${officeCode(process.codigo, escapeHtml, 3)}</small>` : ''}
+            </th>
+            <td>
+                ${palletCells(capacity, occupied, 0, 'free')}
+                <small class="management-tunnel__detail"><b>${formatInteger(occupied)}/${formatInteger(capacity)}</b> posiciones · ${plural(available, 'libre')}</small>
+            </td>
+            <td>${precoolingTimeline(process, scale)}</td>
+            <td>${precoolingSetpoint(process?.setpoint)}</td>
+            <td><span class="management-tunnel__state" data-tone="${tone}"><i aria-hidden="true"></i>${escapeHtml(state)}</span>
+                ${late ? `<small class="management-tunnel__detail">${escapeHtml(late)} sobre objetivo</small>` : ''}
+            </td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="5">Sin túneles registrados.</td></tr>';
+
+    elements.precoolingSummary.innerHTML = `<h3>Cola de prefrío</h3>
+        <p><b>${plural(precooling.folios_pendientes, 'folio')}</b> en espera · ${plural(precooling.disponibles, 'posición libre', 'posiciones libres')} en túneles</p>`;
 }
 
 function seriesColors() {
@@ -780,7 +824,7 @@ function renderWeighbridgeChart(weighbridge) {
             label: serie.nombre,
             data: days.map((day) => Number(day.por_cliente?.[serie.clave] || 0)),
             backgroundColor: colorFor(serie),
-            borderRadius: 3,
+            borderRadius: 2,
             borderSkipped: false,
             maxBarThickness: 46,
         }))
@@ -819,7 +863,7 @@ function renderWeighbridgeChart(weighbridge) {
         .filter((serie) => serie.clave !== 'otros')
         .reduce((sum, serie) => sum + Number(weekly.get(serie.clave) || 0), 0));
     elements.weighbridgeSummary.innerHTML = series.length
-        ? series.map((serie) => `<span><i style="background:${colorFor(serie)}"></i>${escapeHtml(serie.nombre)} <b>${formatKilos(serie.clave === 'otros' ? otherKilos : weekly.get(serie.clave))}</b></span>`).join('')
+        ? series.map((serie) => `<span>${chartKey(colorFor(serie))}${escapeHtml(serie.nombre)} <b>${formatKilos(serie.clave === 'otros' ? otherKilos : weekly.get(serie.clave))}</b></span>`).join('')
         : '<span>Sin kilos recepcionados en los últimos 7 días.</span>';
 }
 
@@ -910,7 +954,7 @@ function renderContainerType() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom' },
+                legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'triangle', pointStyleWidth: 10 } },
                 tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatInteger(context.raw)} ${type}` } },
             },
             scales: {
@@ -1077,7 +1121,6 @@ new MutationObserver(() => {
 
     applyChartTheme();
     renderMaterialChart();
-    renderPrecoolingChart(state.dashboard.prefrio);
     renderWeighbridgeChart(state.dashboard.romana);
     renderWeighbridgeOperation(state.dashboard.romana);
     renderContainerType();

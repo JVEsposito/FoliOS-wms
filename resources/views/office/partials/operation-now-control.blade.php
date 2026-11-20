@@ -1,22 +1,45 @@
 <section class="operation-now-tabpanel" role="tabpanel" id="operationPanel-resumen" aria-labelledby="operationTab-resumen" data-operation-panel="resumen" tabindex="0">
-    <div class="operation-now-overview" aria-label="Indicadores de planta">
-        <a class="operation-now-overview__card" href="#recepcion-mp" data-operation-jump="recepcion-mp">
-            <span>Recepción MP</span><strong id="operationOverviewMp">—</strong><small id="operationOverviewMpDetail">Camiones con fruta en curso</small>
-        </a>
-        <a class="operation-now-overview__card" href="#validacion-pt" data-operation-jump="validacion-pt">
-            <span>Validación PT</span><strong id="operationOverviewPt">—</strong><small>Validaciones registradas en la jornada</small>
-        </a>
-        <a class="operation-now-overview__card" href="#camaras" data-operation-jump="camaras">
-            <span>Frigorífico</span><strong id="operationOverviewCold">—</strong><small id="operationOverviewColdDetail">Ocupación de cámaras PT</small>
-        </a>
-        <a class="operation-now-overview__card" href="#despacho" data-operation-jump="despacho">
-            <span>Despacho PT</span><strong id="operationOverviewDispatch">—</strong><small id="operationOverviewDispatchDetail">Cargas activas</small>
-        </a>
+    <div class="operation-now-overview">
+        <section class="folios-ticket operation-now-focus" aria-labelledby="operationFocusTitle">
+            <div class="operation-now-focus__graphic">
+                <button type="button" class="operation-now-focus__all" data-focus-open="all" aria-label="Ver todas las condiciones" disabled>
+                    <x-folios.gajo area="operacion" :size="160" :attention="true" />
+                </button>
+                <small id="operationFocusTotal">Consultando condiciones…</small>
+            </div>
+            <div class="operation-now-focus__detail">
+                <h2 id="operationFocusTitle">Dónde mirar ahora</h2>
+                @foreach ($attentionAreas as $area => $label)
+                    <button type="button" class="operation-now-focus__area" data-focus-open="{{ $area }}" disabled>
+                        <x-folios.gajo :area="$area" :size="20" />
+                        <span><b>{{ $label }}</b><small data-focus-detail>Sin lectura</small></span>
+                        <strong data-focus-count>—</strong>
+                    </button>
+                @endforeach
+            </div>
+        </section>
+        <div class="operation-now-overview__metrics" aria-label="Indicadores de planta">
+            @foreach ([
+                ['recepcion-mp', 'materia-prima', 'MP', 'Recepción MP', 'operationOverviewMp', 'operationOverviewMpDetail', 'Camiones con fruta en curso'],
+                ['validacion-pt', 'frigorifico', 'FR', 'Validación PT', 'operationOverviewPt', null, 'Validaciones registradas en la jornada'],
+                ['camaras', 'frigorifico', 'FR', 'Cámaras PT', 'operationOverviewCold', 'operationOverviewColdDetail', 'Ocupación de cámaras PT'],
+                ['despacho', 'frigorifico', 'FR', 'Despacho PT', 'operationOverviewDispatch', 'operationOverviewDispatchDetail', 'Cargas activas'],
+            ] as [$tab, $area, $initials, $label, $valueId, $detailId, $detail])
+                <a class="folios-ticket operation-now-overview__ticket" data-ticket-area="{{ $area }}" href="#{{ $tab }}" data-operation-jump="{{ $tab }}">
+                    <span class="folios-ticket__stub" aria-hidden="true"><x-folios.gajo :area="$area" :size="22" />{{ $initials }}</span>
+                    <span class="operation-now-overview__metric">
+                        <span>{{ $label }}</span>
+                        <strong id="{{ $valueId }}">—</strong>
+                        <small @if ($detailId) id="{{ $detailId }}" @endif>{{ $detail }}</small>
+                    </span>
+                </a>
+            @endforeach
+        </div>
     </div>
     <section class="operation-now-panel" aria-labelledby="operationOverviewReceptionTitle">
         <header class="operation-now-panel__heading">
-            <div class="operation-now-panel__title"><div><h2 id="operationOverviewReceptionTitle">Camiones con fruta en planta</h2><span>Recepciones abiertas por antigüedad de ingreso</span></div></div>
-            <a class="operation-now-action" href="#recepcion-mp" data-operation-jump="recepcion-mp">Ver recepción MP <span aria-hidden="true">→</span></a>
+            <div class="operation-now-panel__title"><x-folios.gajo area="materia-prima" :size="30" /><div><h2 id="operationOverviewReceptionTitle">Camiones con fruta en planta</h2><span>Recepciones abiertas por antigüedad de ingreso</span></div></div>
+            <a class="operation-now-action folios-action" href="#recepcion-mp" data-operation-jump="recepcion-mp">Ver recepción MP <span aria-hidden="true">→</span></a>
         </header>
         @include('office.partials.operation-now-reception-table', ['tabla' => 'operationOverviewReceptionRows'])
     </section>

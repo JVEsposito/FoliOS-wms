@@ -2,8 +2,8 @@
  * FoliOS v2 · capa transversal de Oficina.
  * Especificación: docs/diseno/folios-v2/README.md (PR 1 de la serie).
  *
- * Se carga AL FINAL, después de office-corporate.css y office-shell.css, desde
- * <x-office.navigation>. Por eso gana la cascada con la misma especificidad que las
+ * Se carga desde el arranque de Oficina después de office-corporate.css y
+ * office-shell.css. Por eso gana la cascada con la misma especificidad que las
  * capas anteriores ("Lenguaje operacional", "Temas operacionales", "Manifiesto") sin
  * editarlas. Solo consume variables de tema: los valores viven en los bloques
  * :root[data-office-theme] de office-corporate.css.
@@ -225,7 +225,7 @@ body,
 .office-app [class$="__panel"],
 .office-app [class*="__panel "] {
     border: 1px solid var(--corporate-border) !important;
-    border-radius: var(--radius-card) !important;
+    border-radius: var(--folios-ticket-shape) !important;
     background: var(--corporate-card) !important;
     box-shadow: none !important;
 }
@@ -235,7 +235,7 @@ body,
 .office-app [class$="__card"],
 .office-app [class*="__card "],
 .office-app :is(.camera-item, .material-row, .dispatch-row, .validation-row, .tunnel-card, .result-card, .producer-card) {
-    border-radius: var(--radius-card) !important;
+    border-radius: var(--folios-ticket-shape) !important;
     box-shadow: none !important;
 }
 
@@ -262,9 +262,9 @@ body,
 ) {
     min-height: 0;
     padding: 16px 18px 12px !important;
-    border-bottom: 1px solid var(--line-soft) !important;
-    border-radius: var(--radius-card) var(--radius-card) 0 0;
-    background: transparent !important;
+    border-bottom: 1px dashed var(--line) !important;
+    border-radius: 8px 3px 0 0;
+    background: var(--folios-corner), linear-gradient(90deg, var(--area-tint), transparent 190px) !important;
     color: var(--text-strong) !important;
 }
 
@@ -388,6 +388,7 @@ body,
 /* 4. Encabezado de página ---------------------------------------------------------- */
 
 .office-app :is(
+    header:has(h1):not(.operation-now-command),
     .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
     .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
     .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
@@ -396,17 +397,19 @@ body,
     .discrepancies-heading, .domain-lobby-heading
 ):not([class*="panel__heading"]) {
     min-height: 0 !important;
-    padding-top: 22px !important;
-    padding-bottom: 18px !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
+    padding: 17px 20px 15px !important;
+    border: 1px solid var(--line) !important;
+    border-inline-start: 4px solid var(--area-ink) !important;
+    border-radius: var(--folios-ticket-shape) !important;
+    background: var(--folios-corner), linear-gradient(100deg, var(--area-tint), transparent min(55%, 350px)), var(--corporate-card) !important;
     box-shadow: none !important;
     align-items: flex-end;
+    flex-wrap: wrap;
     gap: 16px 32px;
 }
 
 .office-app :is(
+    header:has(h1):not(.operation-now-command),
     .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
     .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
     .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
@@ -419,20 +422,20 @@ body,
     gap: 7px;
     width: max-content;
     max-width: 100%;
-    height: 28px;
+    min-height: 24px;
     margin: 0 0 10px !important;
-    padding: 0 10px;
-    border: 1.5px solid var(--area-line);
-    border-radius: var(--radius-seal);
-    background: var(--area-tint);
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: var(--area-text) !important;
     font: 700 .8125rem/1 var(--font-sans) !important;
     letter-spacing: .02em !important;
     text-transform: none;
-    white-space: nowrap;
+    white-space: normal;
 }
 
 .office-app :is(
+    header:has(h1):not(.operation-now-command),
     .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
     .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
     .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
@@ -462,6 +465,7 @@ body,
 }
 
 .office-app :is(
+    header:has(h1):not(.operation-now-command),
     .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
     .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
     .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
@@ -488,28 +492,14 @@ body,
     font-size: clamp(2.5rem, 3.4vw, 4rem) !important;
 }
 
-/* Dentro de un área de trabajo con margen propio, el título se alinea con las tarjetas. */
-.office-app :is(
-    .loads-workspace, .prefrio-workspace, .materials-workspace, .validation-workspace,
-    .admin-workspace, .accounts-workspace, .dispatch-workspace, .annulment-workspace,
-    .catalog-workspace, .hydrocooler-workspace, .inventory-workspace, .process-workspace,
-    .repa-workspace, .sag-workspace, .shipment-workspace, .raw-material-workspace,
-    .return-workspace, .weighbridge-workspace, .integrity-shell, .custody-shell,
-    .discrepancies-shell, .office-workspace, .domain-lobby-workspace
-) > :is(
-    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
-    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
-    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
-    .return-heading, .repa-heading, .annulment-heading, .process-heading,
-    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
-    .discrepancies-heading, .domain-lobby-heading
-):not([class*="panel__heading"]) {
-    padding-inline: 0 !important;
-}
+/* Estas vistas tienen los módulos directamente bajo el encabezado. */
+.office-app > .management-heading { margin-inline: 28px; }
+.office-app > .queries-heading { margin-inline: 34px; }
 
-/* Panel gerencial y Consultas no tienen área de trabajo: el margen lo dan sus módulos. */
-.office-app .management-heading { padding-inline: 28px !important; }
-.office-app .queries-heading { padding-inline: 34px !important; }
+@media (max-width: 760px) {
+    .office-app > :is(.management-heading, .queries-heading) { margin-inline: 12px; }
+    .office-app .query-kpis { margin-inline: 12px !important; }
+}
 
 /* Eyebrows fuera del encabezado de página (paneles, diálogos, secciones): rótulo sobrio. */
 .office-app .eyebrow,
@@ -531,11 +521,7 @@ dialog .eyebrow {
     [class*="-kpis "],
     [class*="kpi-grid"]
 ) {
-    gap: 0 !important;
-    overflow: hidden;
-    border: 1px solid var(--corporate-border);
-    border-radius: var(--radius-card);
-    background: var(--kpi-surface);
+    gap: 10px !important;
 }
 
 .office-app :is(
@@ -550,13 +536,12 @@ dialog .eyebrow {
     flex-direction: column;
     gap: 6px;
     min-width: 0;
-    margin: -1px 0 0 -1px !important;
+    margin: 0 !important;
     padding: 14px 18px !important;
-    border: 0 !important;
-    border-top: 1px solid var(--line-soft) !important;
-    border-left: 1px solid var(--line-soft) !important;
-    border-radius: 0 !important;
-    background: var(--kpi-surface) !important;
+    border: 1px solid var(--line) !important;
+    border-inline-start: 3px solid var(--area-line) !important;
+    border-radius: var(--folios-ticket-shape) !important;
+    background: var(--folios-corner), var(--kpi-surface) !important;
     box-shadow: none !important;
 }
 
@@ -578,7 +563,6 @@ dialog .eyebrow {
     [class*="kpi-grid"]
 ) > article > strong,
 .office-app .management-kpi > strong {
-    order: -1;
     margin: 0 !important;
     color: var(--text-strong) !important;
     font-family: var(--font-sans) !important;
@@ -639,12 +623,12 @@ dialog .eyebrow {
 
 .office-app table th {
     padding: 10px 12px !important;
-    border-bottom: 2px solid var(--text-strong) !important;
-    background: var(--table-head) !important;
+    border-bottom: 2px solid var(--area-line) !important;
+    background: color-mix(in srgb, var(--area-tint) 60%, var(--table-head)) !important;
     color: var(--text-subtle) !important;
     font-family: var(--font-sans) !important;
-    font-size: .75rem !important;
-    font-weight: 600 !important;
+    font-size: .8rem !important;
+    font-weight: 700 !important;
     letter-spacing: 0 !important;
     text-transform: none !important;
 }
@@ -653,6 +637,17 @@ dialog .eyebrow {
     padding: 11px 12px !important;
     border-bottom: 1px solid var(--line-soft) !important;
     font-size: .90625rem;
+}
+
+.office-app [role="tablist"] [role="tab"] {
+    border-radius: var(--folios-control-shape);
+    border-block-end: 2px solid transparent;
+}
+
+.office-app [role="tablist"] [role="tab"][aria-selected="true"] {
+    border-block-end-color: var(--area-ink);
+    background: var(--area-tint);
+    color: var(--area-text);
 }
 
 /* Campos ---------------------------------------------------------------------------- */
@@ -677,7 +672,7 @@ dialog[class*="dialog"] :is(input:not([type="checkbox"]):not([type="radio"]), se
 /* :is(button, a) iguala la especificidad de las reglas heredadas "button.primary-button". */
 .office-app :is(button, a):is(.primary-button, .secondary-button, .danger-button, .refresh-button) {
     min-height: 44px !important;
-    border-radius: var(--radius-control) !important;
+    border-radius: var(--folios-control-shape) !important;
     font-family: var(--font-sans) !important;
     font-weight: 700 !important;
     letter-spacing: 0 !important;
@@ -686,18 +681,18 @@ dialog[class*="dialog"] :is(input:not([type="checkbox"]):not([type="radio"]), se
 
 .office-app :is(button, a).primary-button {
     border: 2px solid var(--primary) !important;
-    background: var(--primary) !important;
+    background: linear-gradient(225deg, var(--primary-hover) 50%, transparent 51%) right top / 8px 8px no-repeat, var(--primary) !important;
     color: var(--on-primary) !important;
 }
 
 .office-app :is(button, a).primary-button:hover:not(:disabled) {
     border-color: var(--primary-hover) !important;
-    background: var(--primary-hover) !important;
+    background: linear-gradient(225deg, var(--primary) 50%, transparent 51%) right top / 8px 8px no-repeat, var(--primary-hover) !important;
 }
 
 .office-app :is(button, a, select):is(.secondary-button, .refresh-button, .icon-button, .office-action-select) {
     border: 2px solid var(--input-border) !important;
-    border-radius: var(--radius-control) !important;
+    border-radius: var(--folios-control-shape) !important;
     background: var(--button-secondary) !important;
     color: var(--text-strong) !important;
 }

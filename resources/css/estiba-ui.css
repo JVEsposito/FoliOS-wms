@@ -1,4 +1,5 @@
 @import './estiba-tokens.css';
+@import './folios-components.css';
 
 /* FoliOS v2 (2026-10-13, docs/diseno/folios-v2): lenguaje de etiqueta. Frost es la marca
    y la acción principal; Archivo angosta (eje de ancho) para títulos y cifras, sin
@@ -55,8 +56,8 @@
     line-height: var(--eui-line-height-masthead); letter-spacing: -.01em; text-transform: none; overflow-wrap: anywhere;
 }
 .estiba-ui .eui-heading__description { margin: 10px 0 0; color: var(--eui-color-text-secondary); max-width: 68ch; text-transform: none; letter-spacing: normal; font-family: inherit; }
-.estiba-ui .eui-panel { min-width: 0; border: var(--eui-rule-hairline) solid var(--eui-color-border); border-radius: var(--eui-radius-panel); background: var(--eui-color-surface); }
-.estiba-ui .eui-panel__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--eui-space-3); padding: 16px 18px 12px; border-bottom: var(--eui-rule-hairline) solid var(--eui-color-border-soft); }
+.estiba-ui .eui-panel { min-width: 0; border: var(--eui-rule-hairline) solid var(--eui-color-border); border-radius: var(--folios-ticket-shape); background: var(--folios-corner), var(--eui-color-surface); }
+.estiba-ui .eui-panel__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--eui-space-3); padding: 16px 18px 12px; border-bottom: var(--eui-rule-hairline) dashed var(--eui-color-border); }
 .estiba-ui .eui-panel__title {
     margin: 0; font-family: var(--eui-font-family-sans); font-size: 1.625rem; font-stretch: var(--eui-font-stretch-condensed);
     font-weight: var(--eui-font-weight-black); line-height: 1; letter-spacing: 0; text-transform: none;
@@ -68,8 +69,9 @@
 .estiba-ui .eui-button {
     display: inline-flex; align-items: center; justify-content: center; gap: var(--eui-space-2);
     min-height: var(--eui-control-height); max-width: 100%; padding: var(--eui-space-1) 18px;
-    border: 2px solid var(--eui-color-primary); border-radius: var(--eui-radius-control);
-    background: var(--eui-color-primary); color: var(--eui-color-on-primary);
+    border: 2px solid var(--eui-color-primary); border-radius: var(--folios-control-shape);
+    background: linear-gradient(225deg, var(--eui-color-primary-hover) 50%, transparent 51%) right top / 8px 8px no-repeat, var(--eui-color-primary);
+    color: var(--eui-color-on-primary);
     font-weight: var(--eui-font-weight-bold); font-size: .9375rem; line-height: 1.2;
     cursor: pointer; text-align: center; text-decoration: none; overflow-wrap: anywhere;
 }

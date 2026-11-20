@@ -1,4 +1,5 @@
 import { buildOperationalAlerts } from './operation-now-alerts.js';
+import { sagLotAlertText } from './sag-lot-alerts.js';
 
 // Pestaña «Atención»: una sola lista de condiciones abiertas que reúne las alertas
 // operacionales, los riesgos físicos del planificador y las incidencias. Cada fila
@@ -14,6 +15,7 @@ export const ATTENTION_SOURCES = Object.freeze([
     'Reingresos',
     'Planificador',
     'Incidencias',
+    'SAG',
     'Sincronización',
 ]);
 
@@ -239,7 +241,23 @@ export function buildAttention(snapshot = {}, { describeIncident } = {}) {
         ...alertRows(snapshot),
         ...plannerRows(snapshot.planificador),
         ...incidentRows(snapshot.incidencias?.abiertas || [], describeIncident),
-    ].sort((left, right) => (
+        ...(snapshot.retenciones_sag || []).map((lot) => ({
+            key: `sag:${lot.id ?? lot.lote}`,
+            severity: lot.estado === 'retenido' ? 'critical' : 'warning',
+            source: 'SAG',
+            condition: lot.estado === 'retenido' ? 'Retención de lote' : 'Observación de lote',
+            detail: sagLotAlertText(lot),
+            items: [],
+            ageMinutes: null,
+            overdueMinutes: null,
+            href: '/oficina/frigorifico/lotes-retenidos-sag',
+            action: 'Ver lotes retenidos SAG',
+            tab: null,
+        })),
+    ].map((row) => ({
+        ...row,
+        domain: row.source === 'Sincronización' ? 'administracion' : 'frigorifico',
+    })).sort((left, right) => (
         (SEVERITY_ORDER[left.severity] ?? 9) - (SEVERITY_ORDER[right.severity] ?? 9)
         || (right.ageMinutes ?? right.overdueMinutes ?? -1) - (left.ageMinutes ?? left.overdueMinutes ?? -1)
         || ATTENTION_SOURCES.indexOf(left.source) - ATTENTION_SOURCES.indexOf(right.source)

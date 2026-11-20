@@ -159,6 +159,10 @@
         <div class="estiba-office-context">
             <span>Temporada<strong data-office-season>Sin consultar</strong></span>
             <span>Planta<strong data-office-plant>Sin consultar</strong></span>
+            @if ($office === 'operacion-ahora')
+                <span>Jornada<strong data-office-workday>Sin consultar</strong></span>
+            @endif
+            <x-office.global-search />
         </div>
         <button class="estiba-office-status" type="button" data-office-context-refresh aria-label="Actualizar temporada y planta">
             <i aria-hidden="true"></i>
@@ -182,16 +186,6 @@
     <div class="estiba-office-notices" data-office-notices role="status" aria-live="polite" hidden></div>
 
     <aside class="estiba-office-sidebar" id="officeSidebar" aria-label="Navegación de Oficina">
-        {{-- Búsqueda global: folio, lote, recepción, CSG o guía desde cualquier oficina. --}}
-        <form class="estiba-office-search" action="/oficina/consultas/busqueda" method="get" role="search"
-            data-navigation-permissions="puede_consultar_oficina_consultas"
-            data-navigation-module="consultas.busqueda">
-            <label class="estiba-office-nav-label" for="officeGlobalSearch">Buscar folio, lote o guía</label>
-            <div>
-                <input id="officeGlobalSearch" name="q" type="search" minlength="2" maxlength="100" placeholder="Folio, lote, REC, CSG…" autocomplete="off" required>
-                <button type="submit" aria-label="Buscar"><x-estiba.icon name="search" /></button>
-            </div>
-        </form>
         @php($operationNowDefinition = collect($offices['gerencia'])->firstWhere('key', 'operacion-ahora'))
         <nav class="estiba-office-primary" aria-label="Operación en tiempo real">
             <a @class(['estiba-office-area', 'is-active' => $office === 'operacion-ahora'])
@@ -211,7 +205,11 @@
                     data-navigation-targets="{{ json_encode($definition['targets'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}"
                     href="{{ $definition['href'] }}"
                     @if ($isActiveDomain) aria-current="true" @endif
-                ><x-folios.gajo :area="$domainKey" /><strong>{{ $definition['label'] }}</strong></a>
+                ><x-folios.gajo :area="$domainKey" /><strong>{{ $definition['label'] }}</strong>
+                    @if ($office === 'operacion-ahora')
+                        <small class="estiba-office-attention-count" data-office-attention-count="{{ $domainKey }}" title="Condiciones abiertas" hidden></small>
+                    @endif
+                </a>
                 @if ($isActiveDomain)
                     <nav class="estiba-office-offices" aria-label="Oficinas de {{ $activeDomain['label'] }}">
                         @php($currentSection = null)

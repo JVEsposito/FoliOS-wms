@@ -1,7 +1,11 @@
+@import './folios-fonts.css';
+@import './folios-components.css';
+
 .demo-body {
     min-width: 320px;
     min-height: 100vh;
-    background: radial-gradient(circle at 75% -20%, rgba(47, 143, 199, .18), transparent 40rem), var(--bg);
+    background: var(--corporate-canvas);
+    font-family: var(--font-sans);
 }
 
 .demo-access-brand {
@@ -199,10 +203,14 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: 24px;
-    padding: 8px 0 4px;
+    padding: 14px 18px;
+    border: 1px solid var(--line);
+    border-inline-start: 4px solid var(--primary);
+    border-radius: var(--folios-ticket-shape);
+    background: var(--folios-corner), var(--corporate-card);
 }
 
-.demo-section-heading h1 { margin: 0; font-size: clamp(1.75rem, 3vw, 2.7rem); }
+.demo-section-heading h1 { margin: 0; font-size: clamp(1.75rem, 3vw, 2.7rem); font-stretch: 72%; }
 .demo-section-heading p:not(.eyebrow) { margin: 7px 0 0; color: var(--muted); font-size: .83rem; }
 .demo-section-heading .primary-button { min-height: 42px; flex: 0 0 auto; }
 
@@ -220,17 +228,17 @@
     align-content: center;
     gap: 6px;
     border: 1px solid var(--line);
-    border-top-color: var(--cyan);
-    border-radius: 10px;
-    background: var(--kpi-surface);
+    border-inline-start: 3px solid var(--area-line);
+    border-radius: var(--folios-ticket-shape);
+    background: var(--folios-corner), var(--kpi-surface);
     padding: 18px;
 }
 
 .demo-kpi > span { color: var(--muted); font-size: .64rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .demo-kpi > strong { color: var(--text-strong); font-size: clamp(1.4rem, 2.3vw, 2rem); }
 .demo-kpi > small { color: var(--muted); font-size: .68rem; }
-.demo-kpi--warning { border-top-color: var(--amber); }
-.demo-kpi--success { border-top-color: var(--green); }
+.demo-kpi--warning { border-inline-start-color: var(--warning-text); }
+.demo-kpi--success { border-inline-start-color: var(--success-text); }
 
 .demo-dashboard-grid, .demo-two-columns {
     display: grid;
@@ -243,8 +251,8 @@
 .demo-card, .demo-table-card, .demo-trace-card {
     min-width: 0;
     border: 1px solid var(--line);
-    border-radius: 11px;
-    background: var(--panel);
+    border-radius: var(--folios-ticket-shape);
+    background: var(--folios-corner), var(--corporate-card);
     padding: 18px;
 }
 

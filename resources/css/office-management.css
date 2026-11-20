@@ -306,6 +306,130 @@ body {
     font-size: 1.05rem;
 }
 
+.management-panel__identity {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-inline-size: 0;
+}
+
+.management-panel__identity .folios-gajo {
+    --gajo-rest: var(--line);
+    --gajo-area: var(--gajo-ink);
+    --gajo-hub: var(--corporate-card);
+}
+
+.management-app:has(#management-tab-precooling[aria-selected="true"]) > .management-kpis { display: none !important; }
+
+.management-precooling-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+    gap: 10px;
+    margin-block-end: 12px;
+}
+.management-precooling-kpi {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    min-block-size: 100px;
+}
+.management-precooling-kpi > div {
+    display: grid;
+    align-content: center;
+    gap: 5px;
+    min-inline-size: 0;
+    padding: 10px 12px;
+}
+.management-precooling-kpi small { color: var(--text-secondary); font-size: .78rem; }
+.management-precooling-kpi strong {
+    color: var(--text-strong);
+    font: 800 clamp(1.35rem, 2.4vw, 2.35rem)/1.1 var(--font-sans, sans-serif);
+    font-stretch: var(--font-condensed-stretch);
+    font-variant-numeric: tabular-nums;
+}
+
+.management-app .management-capacity-chart {
+    inline-size: 100%;
+    min-inline-size: 690px;
+    table-layout: fixed;
+}
+.management-app .management-capacity-chart thead th { text-align: start; }
+.management-app .management-capacity-chart thead th:first-child,
+.management-app .management-capacity-chart thead th:nth-child(4) { width: 15%; }
+.management-app .management-capacity-chart thead th:nth-child(2) { width: 22%; }
+.management-app .management-capacity-chart thead th:last-child { width: 18%; }
+.management-app .management-capacity-chart tbody th[scope="row"] {
+    border-block-end: 1px solid var(--line-soft) !important;
+    background: var(--row-bg) !important;
+    color: var(--text-strong) !important;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+.management-app .management-capacity-chart tbody tr:nth-child(even) th[scope="row"] { background: var(--row-alt) !important; }
+.management-app .management-capacity-chart tbody tr:hover th[scope="row"] { background: var(--row-hover) !important; }
+.management-capacity-chart .folios-pallet-cells { max-inline-size: 137px; }
+.management-tunnel__detail { display: block; margin-block-start: 4px; color: var(--text-secondary); font-size: .76rem; }
+
+.management-tunnel__timeline { display: grid; gap: 4px; }
+.management-tunnel__timeline > span:not(.management-tunnel__track) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2px 7px;
+}
+.management-tunnel__timeline small { color: var(--text-secondary); font-size: .73rem; }
+
+.management-tunnel__track {
+    position: relative;
+    display: flex;
+    block-size: 9px;
+    background: repeating-linear-gradient(-55deg, var(--surface-muted) 0 3px, var(--line) 3px 4px);
+}
+.management-tunnel__track i { block-size: 100%; background: var(--area-frigorifico-ink); }
+.management-tunnel__track .management-tunnel__overdue { background: var(--warning-text); }
+.management-tunnel__track b {
+    position: absolute;
+    inset-block: -3px;
+    inline-size: 2px;
+    transform: translateX(-50%);
+    background: var(--text-strong);
+}
+
+.management-tunnel__setpoint { display: grid; gap: 6px; }
+.management-tunnel__cold-scale { display: inline-flex; gap: 4px; }
+.management-tunnel__cold-scale i {
+    inline-size: 9px;
+    block-size: 11px;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--area-frigorifico-ink) var(--cold-tone, 24%), var(--corporate-card));
+}
+.management-tunnel__cold-scale i:nth-child(2) { --cold-tone: 40%; }
+.management-tunnel__cold-scale i:nth-child(3) { --cold-tone: 56%; }
+.management-tunnel__cold-scale i:nth-child(4) { --cold-tone: 72%; }
+.management-tunnel__cold-scale i:nth-child(5) { --cold-tone: 88%; }
+.management-tunnel__cold-scale i[data-band-active] { outline: 1.5px solid var(--text-strong); outline-offset: 1px; }
+
+.management-tunnel__state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: .82rem;
+    font-weight: 700;
+}
+.management-tunnel__state i { inline-size: 8px; block-size: 8px; border: 1px solid currentColor; border-radius: 50%; flex: none; }
+.management-tunnel__state[data-tone="info"] { color: var(--info-text); }
+.management-tunnel__state[data-tone="warning"] { color: var(--warning-text); }
+.management-tunnel__state[data-tone="critical"] { color: var(--danger-text); }
+.management-tunnel__state[data-tone="info"] i { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+.management-tunnel__state[data-tone="warning"] i { border-radius: 0; background: currentColor; transform: rotate(45deg) scale(.85); }
+.management-tunnel__state[data-tone="critical"] i { border-radius: 0; background: currentColor; }
+
+.management-precooling-queue { margin-block-start: 12px; padding: 10px 12px; border: 1px dashed var(--line); }
+.management-precooling-queue :is(h3, p) { margin: 0; }
+.management-precooling-queue h3 { color: var(--text-strong); font-size: .96rem; }
+.management-precooling-queue p { color: var(--text-secondary); font-size: .84rem; }
+
 .chart-container {
     position: relative;
     min-height: 265px;
@@ -351,6 +475,16 @@ body {
 .chart-summary b {
     margin-right: 3px;
     color: var(--text);
+}
+
+.management-chart-key {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    flex: 0 0 11px;
+    margin-inline-end: 4px;
+    vertical-align: -.075em;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 
 .management-table-panel .table-scroll {
@@ -526,6 +660,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: flex-end;
+    flex-wrap: wrap;
+    min-width: 0;
     gap: 12px;
 }
 
@@ -541,19 +677,12 @@ body {
     font-size: .67rem;
     font-weight: 900;
     text-decoration: none;
-    white-space: nowrap;
+    text-align: center;
 }
 
 .management-panel-link:hover {
     border-color: color-mix(in srgb, var(--cyan) 52%, transparent);
     background: color-mix(in srgb, var(--cyan) 13%, var(--surface-muted));
-}
-
-.management-chart-with-metrics {
-    display: grid;
-    grid-template-columns: minmax(0, 1.45fr) minmax(300px, .75fr);
-    gap: 16px;
-    align-items: stretch;
 }
 
 .management-operational-metrics {
@@ -767,10 +896,6 @@ body {
 }
 
 @media (max-width: 1260px) {
-    .management-chart-with-metrics {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
     .management-operational-metrics--five {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -1503,7 +1628,6 @@ body {
 }
 
 .management-series-legend span { display: inline-flex; align-items: center; gap: 7px; }
-.management-series-legend i { width: 10px; height: 10px; border-radius: 3px; }
 .management-series-legend b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
 
 .management-client-kilos {

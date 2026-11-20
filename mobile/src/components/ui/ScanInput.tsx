@@ -4,6 +4,7 @@ import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextStyle, View } fr
 
 import { isPdaBuild } from '../../config/appVariant';
 import { colors } from '../../theme/colors';
+import { operatorTheme as o } from '../../theme/operatorTheme';
 
 type Props = {
   value: string;
@@ -130,9 +131,10 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minWidth: 0,
-    minHeight: 56,
+    minHeight: o.touch.minimum,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: o.radius.control,
+    borderTopRightRadius: 2,
     borderWidth: 2,
     borderColor: colors.cyan,
     color: colors.text,
@@ -141,13 +143,13 @@ const styles = StyleSheet.create({
     fontFamily: font.monoBold,
     letterSpacing: 1,
   },
-  inputPda: { minHeight: 52, paddingHorizontal: 10, fontSize: 18, letterSpacing: 0.4 },
-  keyboard: { width: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
+  inputPda: { paddingHorizontal: 10, fontSize: 18, letterSpacing: 0.4 },
+  keyboard: { width: 44, alignItems: 'center', justifyContent: 'center', borderRadius: o.radius.control, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
   keyboardActive: { borderColor: colors.cyan, backgroundColor: colors.selected },
   keyboardText: { fontFamily: font.regular, color: colors.muted, fontSize: 20 },
   keyboardTextActive: { color: colors.cyan },
-  submit: { minWidth: 118, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, backgroundColor: colors.cyan },
-  submitPda: { minWidth: 0, paddingHorizontal: 12, borderRadius: 10 },
+  submit: { minWidth: 118, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderRadius: o.radius.control, borderTopRightRadius: 2, backgroundColor: colors.cyan },
+  submitPda: { minWidth: 0, paddingHorizontal: 12 },
   submitText: { color: colors.accentText, fontSize: 13, fontFamily: font.heavy },
   disabled: { opacity: 0.45 },
 });

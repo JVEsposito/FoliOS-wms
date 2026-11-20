@@ -9,8 +9,7 @@ const inbox = await read('mobile/src/components/OperationalTaskInbox.tsx');
 const toast = await read('mobile/src/components/operator/OperatorToast.tsx');
 
 test('la portada muestra una maniobra con folio, Desde → Hacia y una sola acción', () => {
-    assert.match(home, /<FolioCode compact=\{compact\} value=\{task\.folio\.numero_folio\} \/>/);
-    assert.match(home, /value\.length - 4/, 'los últimos cuatro dígitos del folio se destacan');
+    assert.match(home, /<FolioIdentifier label="Folio" value=\{task\.folio\.numero_folio\}/);
     assert.match(home, /<RouteBlock label="DESDE" value=\{operationalTaskOriginLabel\(task\)\} \/>/);
     assert.match(home, /label="HACIA"/);
     assert.match(home, /pending=\{destinationPending\}/);

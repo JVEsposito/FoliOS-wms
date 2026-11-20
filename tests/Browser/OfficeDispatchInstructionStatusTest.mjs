@@ -36,7 +36,7 @@ test('Despacho PT muestra los subestados de cada instructivo sin duplicar el cam
         };
         // La segunda carga conserva la fila simple si sólo tiene un instructivo, pero muestra sus datos.
         const single = { ...load, id: 'single', codigo: 'CAR-000030', clientes: ['LA AGUADA'], camion_en_anden: null,
-            estado: 'pendiente', separacion: progress(1, 2), carguio: loading(0, 2),
+            estado: 'pendiente', separacion: progress(1, 2, 1), carguio: loading(0, 2, 1),
             instructivos: [{ ...instruction('i3', 'F003', 'pendiente', 0), destino: 'Estados Unidos' }] };
         const snapshot = {
             generado_at: '2026-11-11T17:00:00Z', temporada: { id: 'temp', codigo: 'TEMP-2627', nombre: 'Prueba' },
@@ -81,8 +81,11 @@ test('Despacho PT muestra los subestados de cada instructivo sin duplicar el cam
         assert.equal(await second.locator('img').count(), 0);
         assert.equal(await page.evaluate(() => window.__dispatchXss), undefined);
         assert.match(await page.locator('#dispatchPanelSummary').innerText(), /^2 activas/);
-        assert.equal(await rows.locator('[data-dispatch-load="load"] [rowspan]').getAttribute('rowspan'), '3');
-        assert.equal(await first.locator('td').count(), 4);
+        assert.equal(await rows.locator('[data-dispatch-load="load"] .operation-now-dispatch__dock').count(), 1);
+        assert.equal(await first.locator('.operation-now-dispatch__progress').count(), 2);
+        const cells = rows.locator('[data-dispatch-load="single"] .operation-now-dispatch__progress').last();
+        assert.equal(await cells.locator('[data-cell="dock"]').count(), 1);
+        assert.equal(await cells.locator('[data-cell="pending"]').count(), 1);
 
         load.instructivos[1].incidencias_abiertas = 1;
         await page.locator('#operationRefresh').click();

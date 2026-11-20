@@ -462,7 +462,7 @@ function renderOperationalCameraList() {
             <button class="camera-ops__camera${selected ? ' is-selected' : ''}" data-operational-camera="${escapeHtml(camera.id)}" type="button" aria-pressed="${selected}">
                 <span class="camera-ops__camera-line"><strong>${escapeHtml(cameraDisplayName(camera))}</strong><i class="camera-ops__signal" data-tone="${operationalTone(percentage)}">${escapeHtml(formatPercent(percentage))}</i></span>
                 <span class="camera-ops__camera-capacity">${formatNumber(occupied)} ocupadas · ${formatNumber(total)} efectivas</span>
-                <span class="camera-ops__meter" data-tone="${operationalTone(percentage)}"><b style="width:${Math.min(100, percentage)}%"></b></span>
+                <span class="camera-ops__meter folios-capacity-track" data-tone="${operationalTone(percentage)}" aria-hidden="true"><b style="width:${Math.max(0, Math.min(100, percentage))}%"></b></span>
                 <span class="camera-ops__camera-access camera-ops__signal" data-tone="${access.tone}">${escapeHtml(access.text)}</span>
             </button>
         `;

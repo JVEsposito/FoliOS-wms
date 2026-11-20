@@ -1,4 +1,6 @@
 /* Entrada única de FoliOS web (/FoliOS). Reutiliza el acceso de Oficina. */
+@import './folios-fonts.css';
+@import './folios-components.css';
 
 .folios-inicio [hidden] {
     display: none !important;
@@ -8,6 +10,48 @@
     width: min(300px, 70%);
     height: auto;
     margin-bottom: 36px;
+}
+
+.folios-inicio .office-access__brand {
+    position: relative;
+    background: #0b1a22 !important;
+    color: #e8f3f6;
+}
+
+.folios-inicio .office-access__brand::before { display: none; }
+
+.folios-inicio .office-access__brand::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto auto;
+    width: min(100px, 18vw);
+    height: auto;
+    aspect-ratio: 1;
+    background: #5fd3e6;
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+    pointer-events: none;
+}
+
+.folios-inicio .office-access__brand .eyebrow { color: #9fbcc6; }
+.folios-inicio .office-access__brand h1 { font-stretch: 70%; }
+
+.folios-inicio__areas {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 14px;
+    max-width: 420px;
+    padding: 12px 0 0;
+    margin: 16px 0 0;
+    list-style: none;
+    border-top: 1px dashed #648d9d;
+}
+
+.folios-inicio__areas li {
+    display: flex;
+    min-height: 42px;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
 }
 
 .folios-inicio .office-access__form {
@@ -25,11 +69,15 @@
 .folios-inicio .office-access__form > button {
     align-self: flex-start;
     min-width: 200px;
+    border-radius: var(--folios-control-shape);
 }
 
 @media (max-width: 850px) {
+    .folios-inicio .office-access__brand { display: block !important; padding: 24px; min-height: 0; }
+    .folios-inicio__logo { width: 148px; margin-bottom: 0; }
+    .folios-inicio .office-access__brand :is(p, h1, ul) { display: none; }
     .folios-inicio .office-access__form {
-        min-height: 100vh;
+        min-height: 0;
         padding: 40px 24px;
     }
 }

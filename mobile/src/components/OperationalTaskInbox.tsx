@@ -1074,6 +1074,7 @@ export function OperationalTaskInbox({ api, auth, onBusyChange }: Props) {
           next={home.next}
           plannerFresh={plannerFresh}
           lastMovement={lastMovement}
+          loadSource={auth.usuario.capacidades?.puede_consultar_cargas ? { api: taskApi, token: auth.token } : undefined}
           onOpen={openHomeTask}
           onOpenLoads={auth.usuario.capacidades?.puede_consultar_cargas ? () => setShowLoads(true) : undefined}
           onRefresh={() => void loadTasks()}

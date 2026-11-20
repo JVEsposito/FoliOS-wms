@@ -56,6 +56,7 @@ import {
   saveValidationWorkContext,
 } from '../services/validationOfflineStore';
 import { areas } from '../theme/areas';
+import { FolioIdentifier } from '../components/FolioIdentifier';
 import { operatorTheme as o } from '../theme/operatorTheme';
 import { isPdaBuild } from '../config/appVariant';
 import { ScanInput, ScanInputHandle } from '../components/ui/ScanInput';
@@ -1167,7 +1168,9 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
   const label = (
     <View style={styles.label}>
       <View style={styles.folioStrip}>
-        <Text style={styles.cellLabel}>Folio</Text>
+        <View style={styles.folioCorner} aria-hidden />
+        <Text style={styles.cellLabel}>{folioReview ? 'Folio escaneado' : 'Folio'}</Text>
+        {folioReview ? <FolioIdentifier label="Folio" value={folioReview.numero_folio} style={styles.reviewFolio} /> : null}
         <ScanInput
           ref={folioInput}
           autoFocus={isPdaBuild}
@@ -1186,7 +1189,7 @@ export function ValidationScreen({ auth, baseUrl, onLogout }: ValidationScreenPr
             <Text style={styles.secondaryButtonText}>Continuar manualmente</Text>
           </Pressable>
         </View> : null}
-        {prefill && folioReview?.status === 'nuevo' ? <PrefillCard changes={prefillDiff} prefill={prefill} /> : null}
+        {prefill && folioReview?.status === 'nuevo' ? <PrefillCard boxes={boxes} changes={prefillDiff} prefill={prefill} /> : null}
         {editingOutbox ? (
           <View style={styles.correction}>
             <View style={styles.correctionCopy}>
@@ -1618,25 +1621,43 @@ function FolioReviewCard({ review }: { review: FolioReview }) {
 }
 
 /** Lo que trajo la planta y lo que el validador corrigió: confirma el pallet físico. */
-function PrefillCard({ prefill, changes }: { prefill: AvailableValidationPrefill; changes: string[] }) {
-  // La composición ya queda cargada abajo, línea por línea: aquí basta el resumen.
+function PrefillCard({ prefill, changes, boxes }: { prefill: AvailableValidationPrefill; changes: string[]; boxes: string }) {
   const csgs = [...new Set(prefill.composicion.map((line) => line.csg ?? 'sin CSG'))];
+  const processes = [...new Set(prefill.composicion.map((line) => line.proceso_packing).filter(Boolean))];
+  const product = prefill.producto ?? prefill.origen;
+  const boxesChanged = changes.includes('cantidad_cajas');
+  const productName = [product.especie, product.variedad].filter(Boolean).join(' · ');
+
   return (
-    <View style={styles.review}>
-      <StatusChip label="Datos de planta" tone={prefill.desactualizada ? 'warning' : 'neutral'} />
+    <View style={styles.prefillTicket}>
+      <Text accessibilityRole="header" style={styles.prefillHeading}>Datos de planta</Text>
       <Text style={styles.reviewMeta}>
-        {prefill.cantidad_cajas} cajas · {packageLabel(prefill.tipo_bulto)}{prefill.leido_at ? ` · leído ${formatDateTime(prefill.leido_at)}` : ''}
+        {packageLabel(prefill.tipo_bulto)}{prefill.leido_at ? ` · leído ${formatDateTime(prefill.leido_at)}` : ''}
       </Text>
       {prefill.desactualizada ? <Text style={styles.reviewText}>La lectura de planta está desactualizada: revisa con más cuidado.</Text> : null}
-      <Text style={styles.reviewText}>
-        {prefill.composicion.length} {prefill.composicion.length === 1 ? 'línea' : 'líneas'} · CSG {csgs.join(', ')}
-      </Text>
+      <PrefillField label="Origen comercial" value={prefill.origen.cliente || 'Sin cliente informado'} review={!prefill.origen.cliente} />
+      <PrefillField label="Especie · variedad" value={productName || 'Sin producto informado'} review={changes.includes('articulo') || !productName} />
+      <PrefillField label="Cajas" value={boxesChanged ? `Planta ${prefill.cantidad_cajas} · Captura ${boxes || '—'}` : String(prefill.cantidad_cajas)} review={boxesChanged} />
+      {processes.length ? <PrefillField label="Proceso de packing" value={processes.join(' · ')} review={false} /> : null}
+      <Text style={styles.reviewMeta}>{prefill.composicion.length} {prefill.composicion.length === 1 ? 'línea' : 'líneas'} · CSG {csgs.join(', ')}</Text>
       {prefill.pendientes.map((item) => <Text key={item} style={styles.reviewText}>Completar: {item}</Text>)}
       <Text style={styles.reviewDetail}>
         {changes.length
           ? `Corregido respecto de planta: ${changes.map((field) => PREFILL_FIELD_LABELS[field as keyof typeof PREFILL_FIELD_LABELS] ?? field).join(', ')}.`
           : 'Confirma que el pallet coincide o corrige lo que no.'}
       </Text>
+    </View>
+  );
+}
+
+function PrefillField({ label, value, review }: { label: string; value: string; review: boolean }) {
+  return (
+    <View style={styles.prefillField}>
+      <View style={styles.prefillValue}>
+        <Text style={styles.cellLabel}>{label}</Text>
+        <Text style={styles.prefillFieldText}>{value}</Text>
+      </View>
+      {review ? <StatusChip label="Revisar" tone="warning" small /> : null}
     </View>
   );
 }
@@ -1839,7 +1860,9 @@ const styles = StyleSheet.create({
   segmentTextActive: { color: o.color.text, fontFamily: font.heavy },
 
   label: { overflow: 'hidden', borderRadius: 12, borderWidth: 1, borderColor: o.color.border, backgroundColor: o.color.surface },
-  folioStrip: { gap: 8, padding: 14, borderBottomWidth: 2, borderBottomColor: o.color.border },
+  folioStrip: { gap: 8, padding: 14, borderBottomWidth: 1, borderBottomColor: o.color.borderStrong, borderStyle: 'dashed' },
+  folioCorner: { position: 'absolute', top: 0, right: 0, borderTopWidth: 16, borderLeftWidth: 16, borderTopColor: areas.frigorifico.bright, borderLeftColor: 'transparent' },
+  reviewFolio: { fontSize: 38, letterSpacing: -1.2 },
   folioInput: { minHeight: 64, borderWidth: 2, borderColor: o.color.primary, backgroundColor: o.color.canvas, fontFamily: font.monoBold, fontSize: 26,  letterSpacing: -0.5 },
   folioInputCompact: { minHeight: 54, fontSize: 17, letterSpacing: -0.3 },
   cellLabel: { color: o.color.muted, fontSize: 13, fontFamily: font.semibold },
@@ -1874,6 +1897,11 @@ const styles = StyleSheet.create({
   originError: { paddingHorizontal: 8, paddingBottom: 6, color: o.color.critical, fontSize: 14, fontFamily: font.bold },
 
   review: { gap: 6, paddingTop: 4 },
+  prefillTicket: { gap: 7, padding: 12, borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.control, backgroundColor: o.color.canvas },
+  prefillHeading: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.body },
+  prefillField: { flexDirection: 'row', alignItems: 'center', gap: 8, borderBottomWidth: 1, borderBottomColor: o.color.border, paddingVertical: 7 },
+  prefillValue: { flex: 1, minWidth: 0, gap: 3 },
+  prefillFieldText: { fontFamily: font.bold, color: o.color.text, fontSize: o.type.body },
   reviewMeta: { color: o.color.muted, fontSize: 14, fontFamily: font.semibold },
   reviewText: { fontFamily: font.regular, color: o.color.text, fontSize: 14 },
   reviewDetail: { fontFamily: font.regular, color: o.color.textSecondary, fontSize: 14 },

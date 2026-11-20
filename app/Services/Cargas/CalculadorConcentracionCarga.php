@@ -21,9 +21,20 @@ class CalculadorConcentracionCarga
      * @param  Collection<int, CargaFolio>  $asignaciones
      * @return array<string, mixed>
      */
-    public function calcular(Collection $asignaciones): array
+    public function calcular(Collection $asignaciones, bool $incluirFoliosConcentrados = false): array
     {
         $analisis = $this->analizar($asignaciones);
+
+        if ($incluirFoliosConcentrados) {
+            $fueraDeCamara = $asignaciones->filter(fn (CargaFolio $asignacion): bool => $asignacion->estado->fueraDeCamara()
+                || $asignacion->estado === EstadoCargaFolio::Despachado);
+            $analisis['folios_concentrados'] = collect($analisis['segregaciones'] ?? [$analisis])
+                ->flatMap(fn (array $grupo): array => $grupo['grupo_principal_folio_ids'])
+                ->merge($fueraDeCamara->pluck('folio_id'))
+                ->unique()
+                ->values()
+                ->all();
+        }
 
         unset(
             $analisis['grupo_principal_folio_ids'],

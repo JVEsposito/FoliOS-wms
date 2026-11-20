@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { Image, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { areas, type AreaKey } from '../../theme/areas';
 import { operatorTheme as o } from '../../theme/operatorTheme';
 import { font } from '../../theme/typography';
+import { FieldCorner, FieldMark } from '../field/FieldMark';
 
 type Props = {
   area?: AreaKey;
@@ -32,8 +33,9 @@ export function OperatorHeader({ area = 'frigorifico', connected, deviceName, mo
 
   return (
     <View style={[styles.header, { borderBottomColor: definition.bright }, compact && styles.headerCompact]}>
+      <FieldCorner area={area} />
       <View style={styles.brandBlock}>
-        <Image accessibilityLabel={`FoliOS, ${definition.label}`} accessible resizeMode="contain" source={definition.gajo} style={styles.gajo} />
+        <FieldMark area={area} />
         <View style={styles.titleBlock}>
           <Text numberOfLines={1} style={styles.title}>{title ?? definition.label}</Text>
           <Text numberOfLines={1} style={styles.subtitle}>{humanRole(role)} · {userName}</Text>
@@ -85,7 +87,6 @@ const styles = StyleSheet.create({
     gap: o.space[3],
     flexShrink: 1,
   },
-  gajo: { width: 38, height: 38 },
   titleBlock: { minWidth: 0, flexShrink: 1 },
   title: {
     fontFamily: font.heavy,
@@ -104,7 +105,7 @@ const styles = StyleSheet.create({
   pill: {
     minHeight: 36,
     paddingHorizontal: o.space[3],
-    borderRadius: o.radius.pill,
+    borderRadius: o.radius.control,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',

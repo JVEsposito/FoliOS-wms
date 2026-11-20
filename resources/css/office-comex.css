@@ -2,6 +2,7 @@
    Sin «warning», «danger» ni «error» en los nombres: office-corporate.css los colorea por subcadena. */
 .cx-workspace {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
     padding: 16px;
 }
@@ -885,6 +886,9 @@ button.cx-kpi:focus-visible,
         flex-direction: column;
     }
 
+    .office-app .cx-heading { align-items: stretch !important; flex-wrap: nowrap !important; }
+    .cx-heading > * { min-width: 0; max-width: 100%; }
+
     .cx-range {
         flex-wrap: wrap;
         width: 100%;
@@ -892,10 +896,12 @@ button.cx-kpi:focus-visible,
 
     .cx-range label {
         flex: 1 1 130px;
+        min-width: 0;
     }
 
     .cx-range input {
         width: 100%;
+        min-width: 0;
     }
 
     .cx-kpis {

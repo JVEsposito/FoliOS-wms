@@ -481,7 +481,8 @@ class DespachoFrigorificoApiTest extends TestCase
             ->assertJsonPath('data.progreso.grupo_principal.bandas', [1, 4]);
         $this->conToken($contexto['token'])->getJson('/api/cargas/operacion-turno')->assertOk()
             ->assertJsonPath('data.0.progreso.porcentaje', 100)
-            ->assertJsonPath('data.0.progreso.grupo_principal.bandas', [1, 4]);
+            ->assertJsonPath('data.0.progreso.grupo_principal.bandas', [1, 4])
+            ->assertJsonPathCanonicalizing('data.0.progreso.folios_concentrados', collect($contexto['folios'])->pluck('id')->all());
     }
 
     public function test_el_acceso_de_oficina_expone_capacidades_del_despacho_frigorifico(): void

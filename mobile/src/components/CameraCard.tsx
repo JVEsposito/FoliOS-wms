@@ -4,6 +4,9 @@ import { cameraDisplayName } from '../domain/cameras';
 import { CameraSummary } from '../domain/estiba';
 import { colors } from '../theme/colors';
 import { font } from '../theme/typography';
+import { areas } from '../theme/areas';
+import { operatorTheme as o } from '../theme/operatorTheme';
+import { FieldCorner } from './field/FieldMark';
 
 type CameraCardProps = {
   camera: CameraSummary;
@@ -23,11 +26,14 @@ export function CameraCard({ camera, selected, onPress }: CameraCardProps) {
       ? 'MATERIA PRIMA'
       : 'PRODUCTOS';
   const displayName = cameraDisplayName(camera);
+  const area = camera.contenido === 'materiales' ? 'materiales' : readOnly ? 'materia-prima' : 'frigorifico';
+  const progress = Math.max(0, Math.min(100, Number(camera.ocupacion.porcentaje) || 0));
 
   return (
     <Pressable
       accessibilityLabel={`Abrir ${displayName}, ${status}`}
       accessibilityRole="button"
+      accessibilityState={{ selected }}
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
@@ -35,6 +41,7 @@ export function CameraCard({ camera, selected, onPress }: CameraCardProps) {
         pressed && styles.pressed,
       ]}
     >
+      <FieldCorner area={area} />
       {/* El nombre va solo en su línea: junto al estado se cortaba en «Camara d…». */}
       <Text numberOfLines={2} style={styles.title}>{displayName}</Text>
       <View style={styles.state}>
@@ -46,13 +53,15 @@ export function CameraCard({ camera, selected, onPress }: CameraCardProps) {
         <Text style={styles.occupancyLabel}>Ocupación</Text>
         <Text style={styles.occupancyValue}>{camera.ocupacion.porcentaje}%</Text>
       </View>
-      <View style={styles.progress}>
-        <View
-          style={[
-            styles.progressValue,
-            { width: `${Math.min(100, camera.ocupacion.porcentaje)}%` },
-          ]}
-        />
+      <View style={styles.progress} aria-hidden>
+        {Array.from({ length: 10 }, (_, index) => (
+          <View key={index} style={styles.progressSlot}>
+            <View style={[styles.progressValue, {
+              width: `${Math.max(0, Math.min(100, (progress - index * 10) * 10))}%`,
+              backgroundColor: areas[area].bright,
+            }]} />
+          </View>
+        ))}
       </View>
       <Text style={styles.detail}>
         {camera.ocupacion.ocupadas} de {camera.ocupacion.total} posiciones
@@ -65,7 +74,8 @@ const styles = StyleSheet.create({
   card: {
     width: 238,
     padding: 15,
-    borderRadius: 15,
+    borderRadius: o.radius.panel,
+    borderTopRightRadius: 2,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.panel,
@@ -93,12 +103,12 @@ const styles = StyleSheet.create({
   occupancyLabel: { fontFamily: font.bold, color: colors.muted, fontSize: 14 },
   occupancyValue: { fontFamily: font.heavy, color: colors.text, fontSize: 14 },
   progress: {
-    height: 6,
+    flexDirection: 'row',
+    gap: 3,
+    height: 8,
     marginTop: 7,
-    borderRadius: 3,
-    overflow: 'hidden',
-    backgroundColor: colors.borderSoft,
   },
-  progressValue: { height: '100%', borderRadius: 3, backgroundColor: colors.cyan },
+  progressSlot: { flex: 1, borderRadius: 2, overflow: 'hidden', backgroundColor: colors.borderSoft },
+  progressValue: { height: '100%' },
   detail: { fontFamily: font.regular, marginTop: 7, color: colors.muted, fontSize: 13 },
 });

@@ -56,9 +56,9 @@ function dashboard() {
         materiales: { reposicion: null, vencimientos: {}, verificaciones: { habilitada: false, periodos: {} }, items_con_stock: 12, folios_con_stock: 30, despachos_abiertos: 2, despachos_parciales: 1, recepciones_confirmadas_hoy: 1, recepciones_borrador: 0,
             unidades_medida: [{ unidad_medida: 'unidad', items_con_stock: 12, folios_con_stock: 30, cantidad_actual: 181467, cantidad_reservada: 0, cantidad_disponible: 0, cantidad_bloqueada: 0, cantidad_pendiente_ubicacion: 180900, cantidad_no_disponible: 567,
                 items: [{ item_id: 'i1', cliente: { id: 'c1', codigo: 'AGU', nombre: 'La Aguada' }, temporada: { activa: true }, codigo: 'CJ-5', nombre: 'Caja 5 kg', categoria: 'Envase', unidad_medida: 'unidad', folios: 30, cantidad_actual: 181467, cantidad_reservada: 0, cantidad_disponible: 0, cantidad_bloqueada: 0, cantidad_pendiente_ubicacion: 180900, cantidad_no_disponible: 567 }] }] },
-        prefrio: { tuneles_operativos: 2, tuneles_totales: 2, procesos_activos: 1, procesos_atrasados: 0, aprobados_hoy: 3, reprocesos_hoy: 0, duracion_promedio_minutos_7d: 210, folios_pendientes: 43, capacidad: 48, ocupadas: 24, disponibles: 24, ocupacion_porcentaje: 50,
+        prefrio: { tuneles_operativos: 2, tuneles_totales: 2, procesos_activos: 1, procesos_atrasados: 0, aprobados_hoy: 3, reprocesos_hoy: 0, duracion_promedio_minutos_7d: 210, folios_pendientes: 43, capacidad: 36, ocupadas: 24, disponibles: 12, ocupacion_porcentaje: 66.7,
             tuneles: [{ id: 'tu1', codigo: 'TUN-01', nombre: 'Túnel 1', operativo: true, capacidad: 24, ocupadas: 24, disponibles: 0, ocupacion_porcentaje: 100, proceso_activo: { codigo: 'PF-0101', estado: 'en_proceso', setpoint: 0.5, transcurridos_minutos: 120, duracion_objetivo_minutos: 240, atrasado: false } },
-                { id: 'tu2', codigo: 'TUN-02', nombre: 'Túnel 2', operativo: true, capacidad: 24, ocupadas: 0, disponibles: 24, ocupacion_porcentaje: 0, proceso_activo: null }] },
+                { id: 'tu2', codigo: 'TUN-02', nombre: 'Túnel 2', operativo: true, capacidad: 12, ocupadas: 0, disponibles: 12, ocupacion_porcentaje: 0, proceso_activo: null }] },
         romana: {
             en_bascula_ingreso: 1, en_pesaje_envases: 0, pendientes_destare: 2, cerradas_hoy: 0, peso_neto_hoy: 0, envases_hoy: 0, clientes_hoy: 0,
             kilos_temporada: 412530.4, recepciones_temporada: 38, kilos_7_dias: 127500, recepciones_7_dias: 12, clientes_temporada: 3,
@@ -153,6 +153,13 @@ for (const width of [1366, 390]) test(`Panel gerencial: kilos por cliente, folio
         assert.equal(await page.locator('.management-occupancy__row[data-tone="alert"]').count(), 1);
         assert.match(await page.locator('#cameraDetailRows tr').nth(3).innerText(), /^Cámara 9 · Cerezas/);
         await capture(page, `gerencia-camaras-${width}`);
+
+        await page.locator('#management-tab-precooling').click();
+        const rows = page.getByRole('table', { name: 'Ocupación por túnel' }).locator('tbody tr');
+        assert.equal(await rows.nth(0).locator('[data-cell="done"]').count(), 24);
+        assert.equal(await rows.nth(1).locator('[data-cell="free"]').count(), 12);
+        assert.match(await rows.nth(0).locator('.management-tunnel__timeline').innerText(), /Objetivo 4 h/);
+        assert.match(await rows.nth(0).locator('.management-tunnel__setpoint').innerText(), /0,5 °C/);
 
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `desborde a ${width}px`);
         assert.deepEqual(errors, []);
