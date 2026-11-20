@@ -363,7 +363,6 @@ class EmbarqueApiTest extends TestCase
         $this->assertSame(0, Carga::query()->count());
     }
 
-
     public function test_calendario_es_solo_lectura_para_cargas_en_operacion_o_finalizadas_incluso_para_admin(): void
     {
         $despachador = $this->usuario(RolUsuario::Despachador);
