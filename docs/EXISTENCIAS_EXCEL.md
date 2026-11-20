@@ -87,6 +87,12 @@ La oficina **Frigorífico → Existencias PT** agrupa dos archivos:
   con fecha de salida, carga, orden de embarque, patente, conductor, cliente, producto,
   CSG, fecha de embalaje, lotes de materia prima y procesos de packing.
 
+En el archivo de despachos, **Orden de embarque** corresponde al número externo del
+cliente registrado en el instructivo asignado a ese pallet. Si no hay número de
+instructivo, se conserva la orden externa de la carga usada por los registros anteriores.
+Las referencias se exportan como texto, incluidos sus ceros iniciales. Cuando no existe
+ninguna de esas referencias, la celda queda vacía; no se usa el instructivo de otro pallet.
+
 La barra de filtros permite elegir un **cliente** (aplica a ambos archivos) y un
 **período de salida** (solo despachos). Así se genera un archivo por cliente para enviarlo
 sin exponer información de otros clientes:

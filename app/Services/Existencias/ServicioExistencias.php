@@ -275,7 +275,7 @@ class ServicioExistencias
     private function despachosProductoTerminado(?string $desde, ?string $hasta, ?string $cliente): LazyCollection
     {
         $consulta = CargaFolio::query()
-            ->with(['carga.temporada', 'folio'])
+            ->with(['carga.temporada', 'folio', 'instructivo'])
             // El cierre deja los pallets como «despachado»; «en_anden» cubre cierres anteriores a esa regla.
             ->whereIn('estado', [EstadoCargaFolio::Despachado->value, EstadoCargaFolio::EnAnden->value])
             ->whereNotNull('finalizado_at')
@@ -301,7 +301,9 @@ class ServicioExistencias
                     'fecha_salida' => $asignacion->finalizado_at?->toAtomString(),
                     ...app(CalendarioOperativo::class)->datos($asignacion->finalizado_at),
                     'carga' => $carga?->codigo,
-                    'orden_embarque' => $carga?->numero_orden_externa,
+                    'orden_embarque' => filled($asignacion->instructivo?->numero_externo)
+                        ? $asignacion->instructivo->numero_externo
+                        : $carga?->numero_orden_externa,
                     'patente' => $carga?->patente,
                     'conductor' => $carga?->conductor,
                     'cliente' => $folio?->exportadora,
