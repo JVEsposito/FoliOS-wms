@@ -163,6 +163,7 @@ test('el perfil de consulta no ofrece acciones para modificar la cuenta', async 
         const { context, page, writes, errors } = await setup(browser, false);
         assert.equal(await page.locator('#accountAdjustmentNew').isVisible(), false);
         assert.equal(await page.locator('#duplicateReconciliationOpen').isVisible(), false);
+        assert.equal(await page.locator('[data-producer-movements]').count(), 0);
         await page.locator('.accounts-heading [data-reconciliation-guide]').click();
         assert.equal(await page.locator('#reconciliationGuideDialog').isVisible(), true);
         assert.match(await page.locator('#reconciliationGuideDialog').textContent(), /1.002 totes.*1.009/s);

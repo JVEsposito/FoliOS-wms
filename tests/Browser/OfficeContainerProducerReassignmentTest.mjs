@@ -20,6 +20,7 @@ async function setup(browser, width) {
     }, identity);
     const calls = [];
     const errors = [];
+    const movementQueries = [];
     let saved = false;
     const document = (numero, productores, historial = []) => ({
         clave: `recepcion:rec-1:recibidos:guia:${numero}`, lado: 'recibidos', numero, titulo: `Guía de ingreso N° ${numero}`, movimiento: 'Ingreso con fruta',
@@ -28,7 +29,7 @@ async function setup(browser, width) {
             { tipo_envase: 'bins', nombre: 'Bins plástico', cantidad: bins }, { tipo_envase: 'totes', nombre: 'Tote', cantidad: totes }] })),
         disponible: true, motivo_no_disponible: null, historial,
     });
-    const movement = { id: 'ingreso', cliente: client, numero_documento: '1512', movimiento: 'Recepción con fruta', tipo_movimiento: 'recepcion_fruta',
+    const movement = { id: 'ingreso', cliente: client, numero_documento: '1511 / 1512', movimiento: 'Recepción con fruta', tipo_movimiento: 'recepcion_fruta',
         tipo_envase: 'bins', cantidad: 4, impacto_cuenta: 4, impacto_existencia: 4, propiedad: 'cliente', ocurrido_at: '2026-11-13T12:30:00Z',
         estado_revision: 'pendiente', puede_reasignar: true, puede_reasignar_productor: true, reasignaciones_productor: [] };
     await context.route('http://localhost/**', async (route) => {
@@ -60,10 +61,13 @@ async function setup(browser, width) {
             movement.reasignaciones_productor = [{ id: 'r1', origen: { codigo: 'CSG-B' }, destino: { codigo: 'CSG-C' }, cantidad: 1 }];
             return route.fulfill({ status: 201, json: { data: { id: 'r1' } } });
         }
-        if (path.endsWith('/cuenta-corriente/movimientos')) return route.fulfill({ json: {
-            data: [movement], pendientes: [], reservas: [], balances: [{ cliente: client, tipo_envase: 'bins', saldo: 4 }],
-            existencia: { tipos: [], propios_entregados: [] }, resumen: { movimientos_confirmados: 1, envases_reservados: 0, lineas_pendientes_validacion: 0, observados: 0, sincronizado_at: '2026-11-17T15:00:00Z' },
-        } });
+        if (path.endsWith('/cuenta-corriente/movimientos')) {
+            movementQueries.push(new URL(request.url()).searchParams);
+            return route.fulfill({ json: {
+                data: [movement], pendientes: [], reservas: [], balances: [{ cliente: client, tipo_envase: 'bins', saldo: 4 }],
+                existencia: { tipos: [], propios_entregados: [] }, resumen: { movimientos_confirmados: 1, envases_reservados: 0, lineas_pendientes_validacion: 0, observados: 0, sincronizado_at: '2026-11-17T15:00:00Z' },
+            } });
+        }
         return route.fulfill({ json: {} });
     });
     const page = await context.newPage();
@@ -71,15 +75,22 @@ async function setup(browser, width) {
     await page.goto('http://localhost/oficina/envases/cuenta-corriente');
     await page.waitForFunction(() => document.getElementById('balanceList')?.textContent.includes('Cliente de arriendo'));
 
-    return { context, page, calls, errors };
+    return { context, page, calls, errors, movementQueries };
 }
 
 test('reasigna parte de un movimiento a otro CSG de la cuenta, con razón social automática, en móvil y escritorio', async () => {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     try {
         for (const width of [390, 1280]) {
-            const { context, page, calls, errors } = await setup(browser, width);
-            await page.locator('#container-accounts-tab-movements').click();
+            const { context, page, calls, errors, movementQueries } = await setup(browser, width);
+            await page.locator('#balanceList .office-action-select').selectOption({ label: 'Reasignar productor de una guía' });
+            assert.equal(await page.locator('#container-accounts-tab-movements').getAttribute('aria-selected'), 'true');
+            assert.equal(await page.locator('#filtersForm [name="cliente_id"]').inputValue(), client.id);
+            await page.locator('#filtersForm [name="buscar"]').fill('1512');
+            await page.locator('#filtersForm [type="submit"]').click();
+            await page.locator('#officeLoading').waitFor({ state: 'hidden' });
+            assert.equal(movementQueries.at(-1).get('cliente_id'), client.id);
+            assert.equal(movementQueries.at(-1).get('buscar'), '1512');
             // Es una opción más del menú de la fila; las correcciones existentes siguen ahí.
             const options = await page.locator('#movementsBody .office-action-select option').allTextContents();
             assert.ok(options.includes('Reasignar guía'));
@@ -95,6 +106,7 @@ test('reasigna parte de un movimiento a otro CSG de la cuenta, con razón social
             assert.equal(await page.locator('#producerReassignSubmit').isDisabled(), true);
             // El productor actual no se ofrece como destino; la razón social se completa con el CSG.
             assert.equal(await dialog.locator('[name="productor_csg_id"] option[value="prod-b"]').evaluate((option) => option.disabled), true);
+            assert.equal(await dialog.locator('[name="productor_csg_id"] option[value="prod-c"]').textContent(), 'CSG CSG-C · Agrícola Tres');
             await dialog.locator('[name="productor_csg_id"]').selectOption('prod-c');
             assert.equal(await dialog.locator('[name="razon_social"]').inputValue(), 'Agrícola Tres');
             // Parcial: no más de lo que tiene el productor actual.

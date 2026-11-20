@@ -10,7 +10,7 @@ function producerKey(producer) {
 }
 
 function producerText(producer) {
-    return producer.codigo ? `CSG ${producer.codigo}${producer.nombre ? ` · ${producer.nombre}` : ''}` : 'Sin productor declarado';
+    return producer.codigo ? `CSG ${producer.codigo}${producer.nombre ? ` · ${producer.nombre}` : ''}` : 'Sin productor asociado';
 }
 
 function quantitiesText(lines) {
@@ -28,7 +28,7 @@ export function createContainerProducerReassignment({ api, operationId, toast, a
     const dialog = el('producerReassignDialog');
     const form = el('producerReassignForm');
     const fields = form.elements;
-    const state = { documents: [], selected: null, producers: [], attempt: null, busy: false, movement: null };
+    const state = { documents: [], selected: null, producers: [], attempt: null, busy: false, request: null };
 
     const documentSelected = () => state.documents.find((item) => item.clave === state.selected) || state.documents[0] || null;
     const origin = () => documentSelected()?.productores.find((producer) => producerKey(producer) === fields.productor_origen.value) || null;
@@ -85,7 +85,7 @@ export function createContainerProducerReassignment({ api, operationId, toast, a
         const current = origin();
         fields.productor_csg_id.innerHTML = '<option value="">Seleccionar CSG</option>' + state.producers.map((producer) => {
             const same = current?.codigo && String(current.codigo) === String(producer.codigo);
-            return `<option value="${escapeHtml(producer.id)}"${same ? ' disabled' : ''}>CSG ${escapeHtml(producer.codigo)}${same ? ' (productor actual)' : ''}</option>`;
+            return `<option value="${escapeHtml(producer.id)}"${same ? ' disabled' : ''}>${escapeHtml(producerText(producer))}${same ? ' (productor actual)' : ''}</option>`;
         }).join('');
         fields.productor_csg_id.value = state.producers.some((producer) => producer.id === previous && !(current?.codigo && String(current.codigo) === String(producer.codigo))) ? previous : '';
         updateControls();
@@ -106,7 +106,6 @@ export function createContainerProducerReassignment({ api, operationId, toast, a
         }));
         const reasonOk = fields.motivo.value.trim().length >= 10;
         [fields.productor_origen, fields.productor_csg_id, ...form.querySelectorAll('[name="modalidad"], [data-quantity]')].forEach((control) => { control.disabled = state.busy || blocked; });
-        renderDestinationsDisabled(current);
         el('producerReassignSubmit').disabled = state.busy || blocked || !target || !current || !quantitiesOk || !reasonOk;
         // Lo que no se reasigna sigue con el productor actual.
         const remains = partial() && current?.envases.some((line) => (moving.find((item) => item.tipo_envase === line.tipo_envase)?.cantidad ?? 0) < line.cantidad);
@@ -114,25 +113,6 @@ export function createContainerProducerReassignment({ api, operationId, toast, a
             ? `${item.titulo}: ${quantitiesText(moving)} pasan de ${producerText(current)} a CSG ${target.codigo} · ${target.nombre}.`
                 + (remains ? ` El resto sigue en ${producerText(current)}.` : '') + ' El saldo de la cuenta no cambia.'
             : (partial() && !quantitiesOk ? 'Indica cuántos envases pasan al otro productor, sin superar lo que tiene el productor actual.' : 'Elige el CSG del productor correcto.');
-    }
-
-    function renderDestinationsDisabled(current) {
-        [...fields.productor_csg_id.options].forEach((option) => {
-            const producer = state.producers.find((candidate) => candidate.id === option.value);
-            if (producer) option.disabled = Boolean(current?.codigo && String(current.codigo) === String(producer.codigo));
-        });
-    }
-
-    async function loadProducers(clientId) {
-        state.producers = [];
-        fields.productor_csg_id.innerHTML = '<option value="">Cargando productores…</option>';
-        try {
-            state.producers = (await api(`/api/envases/devoluciones/productores/${encodeURIComponent(clientId)}`)).data;
-            if (!state.producers.length) el('producerReassignError').textContent = 'La cuenta no tiene productores CSG declarados. Asócialos antes de reasignar.';
-        } catch (error) {
-            el('producerReassignError').textContent = error.message;
-        }
-        renderDestinations();
     }
 
     form.addEventListener('change', (event) => {
@@ -150,6 +130,7 @@ export function createContainerProducerReassignment({ api, operationId, toast, a
     });
     el('producerReassignCancel').addEventListener('click', () => { if (!state.busy) dialog.close(); });
     dialog.addEventListener('cancel', (event) => { if (state.busy) event.preventDefault(); });
+    dialog.addEventListener('close', () => { if (!dialog.open) state.request?.abort(); });
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const item = documentSelected();
@@ -183,12 +164,15 @@ export function createContainerProducerReassignment({ api, operationId, toast, a
     });
 
     return {
-        async open(movement) {
+        async open(movement, searchedGuide = null) {
+            state.request?.abort();
+            const request = new AbortController();
+            state.request = request;
             form.reset();
             state.documents = [];
+            state.producers = [];
             state.selected = null;
             state.attempt = null;
-            state.movement = movement;
             el('producerReassignError').textContent = '';
             el('producerReassignSummary').innerHTML = `<strong>${escapeHtml(movement.numero_documento)}</strong><span>Cargando el movimiento…</span>`;
             el('producerReassignLines').innerHTML = '';
@@ -197,24 +181,35 @@ export function createContainerProducerReassignment({ api, operationId, toast, a
             el('producerReassignBlocked').hidden = true;
             el('producerReassignHistory').hidden = true;
             fields.productor_origen.innerHTML = '';
-            fields.productor_csg_id.innerHTML = '<option value="">Seleccionar CSG</option>';
+            fields.productor_csg_id.innerHTML = '<option value="">Cargando productores…</option>';
             el('producerReassignSubmit').disabled = true;
             el('producerReassignPreview').textContent = '';
             dialog.showModal();
             try {
-                [state.documents] = await Promise.all([
-                    api(`/api/envases/cuenta-corriente/movimientos/${encodeURIComponent(movement.id)}/reasignacion-productor`).then((response) => response.data),
-                    loadProducers(movement.cliente.id),
+                const [documents, producers] = await Promise.all([
+                    api(`/api/envases/cuenta-corriente/movimientos/${encodeURIComponent(movement.id)}/reasignacion-productor`, { signal: request.signal }),
+                    api(`/api/envases/devoluciones/productores/${encodeURIComponent(movement.cliente.id)}`, { signal: request.signal }),
                 ]);
+                if (request.signal.aborted || !dialog.open) return;
+                state.documents = documents.data;
+                state.producers = producers.data;
+                // El número del estado de cuenta identifica una guía incluso cuando el movimiento agrupa varias.
+                const searched = state.documents.find((item) => searchedGuide && item.numero === searchedGuide.trim());
+                const fromMovement = state.documents.find((item) => item.numero === movement.numero_documento);
+                state.selected = (searched ?? fromMovement ?? state.documents[0]).clave;
+                renderChoices();
+                renderDocument();
+                if (!state.producers.length) {
+                    el('producerReassignError').textContent = 'Esta cuenta no tiene productores CSG activos. Asócialos en Consultas → Productores Verificados.';
+                }
             } catch (error) {
+                if (request.signal.aborted || !dialog.open) return;
                 el('producerReassignSummary').innerHTML = `<strong>${escapeHtml(movement.numero_documento)}</strong>`;
+                fields.productor_csg_id.innerHTML = '<option value="">Seleccionar CSG</option>';
                 el('producerReassignError').textContent = error.message;
-                return;
+            } finally {
+                if (state.request === request) state.request = null;
             }
-            // En un camión con varias guías, parte en la del movimiento si se reconoce por su número.
-            state.selected = (state.documents.find((item) => item.numero === movement.numero_documento) || state.documents[0]).clave;
-            renderChoices();
-            renderDocument();
         },
     };
 }
