@@ -67,6 +67,7 @@ const elements = {
     productAgingRows: byId('productAgingRows'),
     productAgingThreshold: byId('productAgingThreshold'),
     productUndated: byId('productUndated'),
+    precoolingChart: byId('precoolingChartRows'),
     precoolingSummary: byId('precoolingChartSummary'),
     cameraRows: byId('cameraDetailRows'),
     verificationSummary: byId('managementVerificationSummary'),
@@ -184,6 +185,7 @@ class ApiError extends Error {
 
 // Misma familia que el resto de Oficina (FoliOS v2): Archivo autoalojada, no Inter.
 Chart.defaults.font.family = '"Archivo Variable", "Archivo", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+Chart.defaults.font.size = 13;
 
 function applyChartTheme() {
     palette = readManagementChartPaletteSafely(palette, fallbackPalette);
@@ -478,12 +480,12 @@ function replaceChart(name, canvasId, configuration) {
     state.charts.set(name, new Chart(canvas, configuration));
 }
 
-function stackedBarOptions(horizontal = true) {
+function stackedBarOptions() {
     return {
         responsive: true,
         maintainAspectRatio: false,
-        indexAxis: horizontal ? 'y' : 'x',
-        interaction: { mode: 'index', intersect: false },
+        indexAxis: 'y',
+        interaction: { mode: 'index', axis: 'y', intersect: false },
         plugins: {
             legend: { display: false },
             tooltip: {
@@ -665,25 +667,34 @@ function renderMaterialChart() {
     const units = state.dashboard?.materiales?.unidades_medida || [];
     const selected = units.find((unit) => unit.unidad_medida === elements.materialUnitSelect.value) || units[0];
     const items = (selected?.items || []).slice(0, 8);
+    const series = [
+        { label: 'Disponible', field: 'cantidad_disponible', color: palette.purple },
+        { label: 'Reservado', field: 'cantidad_reservada', color: palette.amber },
+        { label: 'Bloqueado', field: 'cantidad_bloqueada', color: palette.red },
+        { label: 'Pendiente de ubicación', field: 'cantidad_pendiente_ubicacion', color: palette.quiet },
+        { label: 'No disponible', field: 'cantidad_no_disponible', color: palette.muted },
+    ];
+    const options = stackedBarOptions();
 
     replaceChart('materials', 'materialStockChart', {
         type: 'bar',
         data: {
             labels: items.map((item) => `${item.cliente.codigo} · ${item.codigo}`),
-            datasets: [
-                { label: 'Disponible', data: items.map((item) => item.cantidad_disponible), backgroundColor: palette.purple, borderRadius: 5, borderSkipped: false },
-                { label: 'Reservado', data: items.map((item) => item.cantidad_reservada), backgroundColor: palette.amber, borderRadius: 5, borderSkipped: false },
-                { label: 'Bloqueado', data: items.map((item) => item.cantidad_bloqueada), backgroundColor: palette.red, borderRadius: 5, borderSkipped: false },
-                { label: 'Pendiente de ubicación', data: items.map((item) => item.cantidad_pendiente_ubicacion), backgroundColor: palette.quiet, borderRadius: 5, borderSkipped: false },
-                { label: 'No disponible', data: items.map((item) => item.cantidad_no_disponible), backgroundColor: palette.muted, borderRadius: 5, borderSkipped: false },
-            ],
+            datasets: series.map(({ label, field, color }) => ({
+                label,
+                data: items.map((item) => item[field]),
+                backgroundColor: color,
+                maxBarThickness: 24,
+                borderRadius: 2,
+                borderSkipped: false,
+            })),
         },
         options: {
-            ...stackedBarOptions(true),
+            ...options,
             plugins: {
-                ...stackedBarOptions(true).plugins,
+                ...options.plugins,
                 tooltip: {
-                    ...stackedBarOptions(true).plugins.tooltip,
+                    ...options.plugins.tooltip,
                     callbacks: {
                         title: (contexts) => {
                             const item = items[contexts[0]?.dataIndex];
@@ -694,35 +705,40 @@ function renderMaterialChart() {
                 },
             },
             scales: {
-                ...stackedBarOptions(true).scales,
-                x: { ...stackedBarOptions(true).scales.x, ticks: { callback: (value) => formatQuantity(value) } },
+                ...options.scales,
+                x: { ...options.scales.x, ticks: { callback: (value) => formatQuantity(value) } },
             },
         },
     });
 
     elements.materialSummary.innerHTML = selected ? `
         <span><b>${formatQuantity(selected.cantidad_actual)} ${escapeHtml(selected.unidad_medida)}</b>stock actual</span>
-        <span><b>${formatQuantity(selected.cantidad_disponible)} ${escapeHtml(selected.unidad_medida)}</b>disponible</span>
-        <span><b>${formatQuantity(selected.cantidad_reservada)} ${escapeHtml(selected.unidad_medida)}</b>reservado</span>
-        <span><b>${formatQuantity(selected.cantidad_bloqueada)} ${escapeHtml(selected.unidad_medida)}</b>bloqueado</span>
-        <span><b>${formatQuantity(selected.cantidad_pendiente_ubicacion)} ${escapeHtml(selected.unidad_medida)}</b>pendiente de ubicación</span>
-        <span><b>${formatQuantity(selected.cantidad_no_disponible)} ${escapeHtml(selected.unidad_medida)}</b>no disponible</span>
+        ${series.map(({ label, field, color }) => `<span>${chartKey(color)}<b>${formatQuantity(selected[field])} ${escapeHtml(selected.unidad_medida)}</b>${label.toLowerCase()}</span>`).join('')}
     ` : '<span>Sin materiales con stock</span>';
 }
 
+function chartKey(color) {
+    return `<i class="management-chart-key" aria-hidden="true" style="background-color:${color}"></i>`;
+}
+
 function renderPrecoolingChart(precooling) {
-    const tunnels = precooling.tuneles;
-    replaceChart('precooling', 'precoolingChart', {
-        type: 'bar',
-        data: {
-            labels: tunnels.map((tunnel) => tunnel.nombre || tunnel.codigo),
-            datasets: [
-                { label: 'Ocupadas', data: tunnels.map((tunnel) => tunnel.ocupadas), backgroundColor: palette.blue, borderRadius: 5, borderSkipped: false },
-                { label: 'Disponibles', data: tunnels.map((tunnel) => tunnel.disponibles), backgroundColor: palette.quiet, borderRadius: 5, borderSkipped: false },
-            ],
-        },
-        options: stackedBarOptions(true),
-    });
+    const tunnels = (precooling.tuneles || []).map((tunnel) => ({
+        name: tunnel.nombre || tunnel.codigo,
+        occupied: Number(tunnel.ocupadas || 0),
+        available: Number(tunnel.disponibles || 0),
+    }));
+    const capacity = Math.max(1, ...tunnels.map(({ occupied, available }) => occupied + available));
+    elements.precoolingChart.innerHTML = tunnels.map(({ name, occupied, available }) => {
+        const positions = occupied + available;
+        const span = positions / capacity * 100;
+        const fill = positions ? occupied / positions * 100 : 0;
+        return `<tr>
+            <th scope="row">${escapeHtml(name)}</th>
+            <td><span class="folios-meter" aria-hidden="true" style="--folios-meter-capacity:${span}%;--folios-meter-value:${fill}%"><i></i></span><span class="office-visually-hidden">${formatInteger(positions)}</span></td>
+            <td>${formatInteger(occupied)}</td>
+            <td>${formatInteger(available)}</td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="4">Sin túneles registrados.</td></tr>';
 
     elements.precoolingSummary.innerHTML = `
         <span><b>${formatInteger(precooling.procesos_activos)}</b>procesos activos</span>
@@ -780,7 +796,7 @@ function renderWeighbridgeChart(weighbridge) {
             label: serie.nombre,
             data: days.map((day) => Number(day.por_cliente?.[serie.clave] || 0)),
             backgroundColor: colorFor(serie),
-            borderRadius: 3,
+            borderRadius: 2,
             borderSkipped: false,
             maxBarThickness: 46,
         }))
@@ -819,7 +835,7 @@ function renderWeighbridgeChart(weighbridge) {
         .filter((serie) => serie.clave !== 'otros')
         .reduce((sum, serie) => sum + Number(weekly.get(serie.clave) || 0), 0));
     elements.weighbridgeSummary.innerHTML = series.length
-        ? series.map((serie) => `<span><i style="background:${colorFor(serie)}"></i>${escapeHtml(serie.nombre)} <b>${formatKilos(serie.clave === 'otros' ? otherKilos : weekly.get(serie.clave))}</b></span>`).join('')
+        ? series.map((serie) => `<span>${chartKey(colorFor(serie))}${escapeHtml(serie.nombre)} <b>${formatKilos(serie.clave === 'otros' ? otherKilos : weekly.get(serie.clave))}</b></span>`).join('')
         : '<span>Sin kilos recepcionados en los últimos 7 días.</span>';
 }
 
@@ -910,7 +926,7 @@ function renderContainerType() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom' },
+                legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'triangle', pointStyleWidth: 10 } },
                 tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatInteger(context.raw)} ${type}` } },
             },
             scales: {
@@ -1077,7 +1093,6 @@ new MutationObserver(() => {
 
     applyChartTheme();
     renderMaterialChart();
-    renderPrecoolingChart(state.dashboard.prefrio);
     renderWeighbridgeChart(state.dashboard.romana);
     renderWeighbridgeOperation(state.dashboard.romana);
     renderContainerType();

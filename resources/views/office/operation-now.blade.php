@@ -22,8 +22,9 @@
 
             <div class="operation-now estiba-ui" id="officeContent" data-density="compact">
                 <header class="operation-now-command">
+                    <x-folios.gajo area="operacion" :size="210" class="operation-now-command__gajo" />
                     <div class="operation-now-command__title">
-                        <p class="operation-now-eyebrow">CENTRO DE CONTROL · INFORMACIÓN EN VIVO</p>
+                        <p class="operation-now-eyebrow"><x-folios.gajo area="operacion" :size="20" />CENTRO DE CONTROL · INFORMACIÓN EN VIVO</p>
                         <h1>Operación ahora</h1>
                     </div>
                     <div class="operation-now-command__state" aria-label="Estado de los datos">
@@ -38,7 +39,7 @@
                         <small id="operationTimezone">Hora operacional</small>
                     </div>
                     <div class="operation-now-command__actions">
-                        <x-estiba.button class="operation-now-refresh" id="operationRefresh" variant="secondary" icon="refresh">Actualizar</x-estiba.button>
+                        <x-estiba.button class="operation-now-refresh folios-action" id="operationRefresh" variant="secondary" icon="refresh">Actualizar</x-estiba.button>
                     </div>
                 </header>
 
@@ -62,7 +63,7 @@
                     </div>
                 </nav>
 
-                <section id="operationSagLotAlerts" class="panel" role="status" hidden></section>
+                <section id="operationSagLotAlerts" role="status" hidden></section>
                 <div class="operation-now-workspace" aria-busy="true" id="operationWorkspace">
                     @include('office.partials.operation-now-control')
                     <section class="operation-now-tabpanel operation-now-tabpanel--atencion" role="tabpanel" id="operationPanel-atencion" aria-labelledby="operationTab-atencion" data-operation-panel="atencion" tabindex="0" hidden>
@@ -231,10 +232,10 @@
                         <section class="operation-now-panel operation-now-panel--dispatch" aria-labelledby="operationDispatchTitle">
                             <header class="operation-now-panel__heading">
                                 <div class="operation-now-panel__title">
-                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h11v9H2zM13 9h4l4 4v2h-8zM6 18a2 2 0 1 0 0-.01M17 18a2 2 0 1 0 0-.01"/></svg>
+                                    <x-folios.gajo area="frigorifico" :size="30" />
                                     <div><h2 id="operationDispatchTitle">Despacho PT</h2><span>Separación y carguío por carga e instructivo</span></div>
                                 </div>
-                                <div class="operation-now-panel__tools"><strong class="operation-now-panel__summary" id="dispatchPanelSummary">—</strong><a href="/oficina/frigorifico/despacho/estatus">Ver estatus <span aria-hidden="true">→</span></a></div>
+                                <div class="operation-now-panel__tools"><strong class="operation-now-panel__summary" id="dispatchPanelSummary">—</strong><a class="folios-action" href="/oficina/frigorifico/despacho/estatus">Ver estatus <span aria-hidden="true">→</span></a></div>
                             </header>
                             <div class="operation-now-panel__body operation-now-table-scroll">
                                 <table class="operation-now-table operation-now-table--dispatch">

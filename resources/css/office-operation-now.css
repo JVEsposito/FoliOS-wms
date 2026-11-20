@@ -46,7 +46,7 @@
 .operation-now *::before,
 .operation-now *::after { box-sizing: border-box; }
 
-.operation-now svg {
+.operation-now svg:not(.folios-gajo) {
     width: 22px;
     height: 22px;
     fill: none;
@@ -57,10 +57,12 @@
 }
 
 .operation-now-eyebrow {
-    /* Identidad "Manifiesto" (2026-09-21): color de identidad (frost) separado del color
-       de acción (--corporate-blue), igual que .eyebrow en office-corporate.css. */
-    margin: 0 0 3px;
-    color: var(--eui-color-frost);
+    /* El gajo identifica el área. El color de los estados viene de la señal. */
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 5px;
+    color: var(--area-operacion-ink);
     font-family: var(--eui-font-family-condensed);
     font-size: .7rem;
     font-weight: 800;
@@ -71,12 +73,38 @@
 /* Cabecera compacta: identidad, estado de los datos, reloj y una sola acción. El resto
    de la información vive en su pestaña para no competir con lo que se está mirando. */
 .operation-now-command {
+    position: relative;
+    isolation: isolate;
     display: grid;
-    grid-template-columns: minmax(240px, 1fr) auto auto auto;
+    grid-template-columns: minmax(240px, 1fr) minmax(0, 1.1fr) auto auto;
     grid-template-areas: "title state date actions";
     align-items: center;
     gap: 12px 28px;
-    padding: 4px 2px 14px;
+    margin-block-end: 10px;
+    padding: 14px 18px;
+    overflow: clip;
+    border: 1px solid var(--line);
+    border-radius: var(--eui-radius-panel);
+    background: var(--corporate-card);
+}
+
+.operation-now-command__gajo {
+    position: absolute;
+    z-index: -1;
+    inset-block-start: 50%;
+    inset-inline-start: 29%;
+    transform: translateY(-47%);
+    --gajo-rest: color-mix(in srgb, var(--area-operacion-ink) 11%, transparent);
+    --gajo-area: color-mix(in srgb, var(--area-operacion-ink) 16%, transparent);
+    --gajo-hub: var(--corporate-card);
+}
+
+:root[data-office-personal-theme] .operation-now-command__gajo { display: none; }
+
+.operation-now-eyebrow .folios-gajo {
+    --gajo-rest: var(--area-operacion-line);
+    --gajo-area: var(--area-operacion-ink);
+    --gajo-hub: var(--corporate-card);
 }
 
 .operation-now-command__title { grid-area: title; min-width: 0; }
@@ -102,6 +130,7 @@
 .operation-now-command__state small {
     color: var(--text-subtle);
     font-size: .8rem;
+    overflow-wrap: anywhere;
 }
 
 .operation-now-command__date {
@@ -301,7 +330,8 @@
 
 .operation-now-tab:hover { color: var(--text-strong); background: var(--surface-hover); }
 .operation-now-tab[aria-selected="true"] {
-    border-bottom-color: var(--eui-color-frost);
+    border-bottom-color: var(--area-operacion-ink);
+    background: var(--surface-selected);
     color: var(--text-strong);
     font-weight: 800;
 }
@@ -376,17 +406,35 @@
 }
 
 .operation-now-overview__card {
+    --overview-ink: var(--area-frigorifico-ink);
+    position: relative;
+    isolation: isolate;
     display: grid;
     align-content: start;
     gap: 4px;
     min-width: 0;
-    padding: 13px 16px;
+    min-height: 110px;
+    padding: 14px 16px;
+    overflow: clip;
     border: 1px solid var(--corporate-border);
-    border-block-start: 2px solid var(--corporate-blue);
+    border-block-start: 3px solid var(--overview-ink);
     border-radius: var(--eui-radius-panel);
     background: var(--corporate-card);
     color: var(--text);
     text-decoration: none;
+}
+
+.operation-now-overview__card[data-operation-jump="recepcion-mp"] { --overview-ink: var(--area-materia-prima-ink); }
+
+.operation-now-overview__gajo {
+    position: absolute;
+    z-index: -1;
+    inset-block-start: 50%;
+    inset-inline-end: -15px;
+    transform: translateY(-50%);
+    --gajo-rest: color-mix(in srgb, var(--overview-ink) 12%, transparent);
+    --gajo-area: color-mix(in srgb, var(--overview-ink) 27%, transparent);
+    --gajo-hub: var(--corporate-card);
 }
 
 .operation-now-overview__card:hover { background: var(--surface-hover); }
@@ -395,9 +443,9 @@
 
 .operation-now-overview__card > strong {
     color: var(--text-strong);
-    font-size: 1.8rem;
+    font: 750 clamp(1.55rem, 2.45vw, 2.25rem)/1.15 var(--eui-font-family-mono);
     font-variant-numeric: tabular-nums;
-    line-height: 1.15;
+    letter-spacing: -.045em;
 }
 
 .operation-now-overview__card > small,
@@ -463,7 +511,12 @@
     gap: 10px;
 }
 
-.operation-now-panel__title svg { flex: 0 0 22px; color: var(--text-subtle); }
+.operation-now-panel__title svg:not(.folios-gajo) { flex: 0 0 22px; color: var(--text-subtle); }
+.operation-now-panel__title .folios-gajo {
+    --gajo-rest: var(--line);
+    --gajo-area: var(--gajo-ink);
+    --gajo-hub: var(--corporate-card);
+}
 
 .operation-now-panel__heading h2 {
     margin: 0;
@@ -792,9 +845,29 @@
     background: var(--warning-bg);
 }
 
-:root:is([data-office-theme="dark-princess"], [data-office-theme="light-garden"]) .operation-now-dispatch-progress .operation-now-meter {
-    border-radius: 99px;
+.operation-now-dispatch-progress .folios-meter {
+    --folios-meter-ink: var(--area-frigorifico-ink);
 }
+.operation-now-dispatch-progress .folios-meter[data-tone="success"] { --folios-meter-ink: var(--success-text); }
+.operation-now-dispatch-progress .folios-meter[data-tone="warning"] { --folios-meter-ink: var(--warning-text); }
+
+#operationSagLotAlerts .sag-lot-alerts {
+    margin-block: 0 12px;
+    padding: 12px 16px;
+    border-color: var(--line);
+    border-inline-start-color: var(--warning-text);
+    border-radius: var(--eui-radius-panel);
+    background: var(--warning-bg);
+    color: var(--text-strong);
+}
+
+#operationSagLotAlerts .sag-lot-alerts ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+    gap: 4px 24px;
+    color: var(--text-secondary);
+}
+
 .operation-now-table--reentry { min-width: 720px; table-layout: fixed; }
 .operation-now-table--reentry :where(th, td):nth-child(1) { width: 20%; }
 .operation-now-table--reentry :where(th, td):nth-child(2) { width: 30%; }
@@ -940,7 +1013,7 @@
     font-variant-numeric: tabular-nums;
 }
 
-.operation-now-tunnel-progress .operation-now-meter {
+.operation-now-tunnel-progress :is(.operation-now-meter, .folios-meter) {
     grid-column: 1;
     grid-row: 1;
     margin-top: 0;
@@ -3012,8 +3085,9 @@
     .operation-now { padding: 10px 8px 16px; }
     .operation-now-command {
         grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-areas: "title actions" "state state";
+        grid-template-areas: "title title" "state actions";
     }
+    .operation-now-command__gajo { inset-inline-start: 55%; inline-size: 145px; block-size: 145px; }
     .operation-now-command__date { display: none; }
     .operation-now-command__title h1 { font-size: 1.8rem; }
     .operation-now-operator { grid-template-columns: 1fr; }

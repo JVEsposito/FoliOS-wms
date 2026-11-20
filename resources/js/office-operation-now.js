@@ -1271,7 +1271,7 @@ function dispatchMeter(done, total, tone, detail) {
     const value = total ? (Number(done) / Number(total)) * 100 : 0;
     return `<div class="operation-now-tunnel-progress operation-now-dispatch-progress">
         <strong>${escapeHtml(`${number(done)}/${number(total)}`)}</strong>
-        <span class="operation-now-meter" data-tone="${tone}" style="--operation-progress:${clampedPercent(value)}%"><i></i></span>
+        <span class="folios-meter" aria-hidden="true" data-tone="${tone}" style="--folios-meter-value:${clampedPercent(value)}%"><i></i></span>
         <small>${escapeHtml(detail)}</small>
     </div>`;
 }

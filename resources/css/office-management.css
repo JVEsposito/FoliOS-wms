@@ -306,6 +306,55 @@ body {
     font-size: 1.05rem;
 }
 
+.management-panel__identity {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-inline-size: 0;
+}
+
+.management-panel__identity .folios-gajo {
+    --gajo-rest: var(--line);
+    --gajo-area: var(--gajo-ink);
+    --gajo-hub: var(--corporate-card);
+}
+
+.management-app .management-capacity-chart {
+    inline-size: 100%;
+    table-layout: fixed;
+}
+
+.management-app .management-capacity-chart .folios-meter {
+    --folios-meter-ink: var(--area-frigorifico-ink);
+    inline-size: var(--folios-meter-capacity, 100%);
+    block-size: 14px;
+}
+
+.management-app .management-capacity-chart :is(th, td):nth-child(n+3) {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+}
+
+.management-app .management-capacity-chart tbody th[scope="row"] {
+    border-block-end: 1px solid var(--line-soft) !important;
+    background: var(--row-bg) !important;
+    color: var(--text-strong) !important;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.management-app .management-capacity-chart tbody tr:nth-child(even) th[scope="row"] { background: var(--row-alt) !important; }
+.management-app .management-capacity-chart tbody tr:hover th[scope="row"] { background: var(--row-hover) !important; }
+.management-app .management-capacity-chart thead th { text-align: start; white-space: normal; }
+.management-app .management-capacity-chart thead th:first-child { width: 6rem; }
+.management-app .management-capacity-chart thead th:nth-child(n+3) { width: 6.5rem; }
+
+@media (max-width: 599px) {
+    .management-app .management-capacity-chart :is(th, td) { padding-inline: 6px !important; }
+    .management-app .management-capacity-chart thead th:first-child { width: 4rem; }
+    .management-app .management-capacity-chart thead th:nth-child(n+3) { width: 4.6rem; }
+}
+
 .chart-container {
     position: relative;
     min-height: 265px;
@@ -351,6 +400,16 @@ body {
 .chart-summary b {
     margin-right: 3px;
     color: var(--text);
+}
+
+.management-chart-key {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    flex: 0 0 11px;
+    margin-inline-end: 4px;
+    vertical-align: -.075em;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 
 .management-table-panel .table-scroll {
@@ -1503,7 +1562,6 @@ body {
 }
 
 .management-series-legend span { display: inline-flex; align-items: center; gap: 7px; }
-.management-series-legend i { width: 10px; height: 10px; border-radius: 3px; }
 .management-series-legend b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
 
 .management-client-kilos {

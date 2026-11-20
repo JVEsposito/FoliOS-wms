@@ -50,3 +50,45 @@
 .folios-area-tag[data-area="consultas"] { --tag-text: var(--area-consultas-text, var(--eui-area-consultas-text)); --tag-tint: var(--area-consultas-tint, var(--eui-area-consultas-tint)); --tag-line: var(--area-consultas-line, var(--eui-area-consultas-line)); }
 .folios-area-tag[data-area="gerencia"] { --tag-text: var(--area-gerencia-text, var(--eui-area-gerencia-text)); --tag-tint: var(--area-gerencia-tint, var(--eui-area-gerencia-tint)); --tag-line: var(--area-gerencia-line, var(--eui-area-gerencia-line)); }
 .folios-area-tag[data-area="administracion"] { --tag-text: var(--area-administracion-text, var(--eui-area-administracion-text)); --tag-tint: var(--area-administracion-tint, var(--eui-area-administracion-tint)); --tag-line: var(--area-administracion-line, var(--eui-area-administracion-line)); }
+
+/* Corte de gajo en la esquina de acciones destacadas y pestañas activas. */
+.office-app :where(.eui-button--primary, .eui-button--confirm, .folios-action, .operation-now-tab, .office-panel-tab) {
+    position: relative;
+}
+
+.office-app :is(.eui-button--primary, .eui-button--confirm, .folios-action):not(:disabled)::after,
+.office-app :is(.operation-now-tab, .office-panel-tab)[aria-selected="true"]::after {
+    position: absolute;
+    inset-block-start: 2px;
+    inset-inline-end: 2px;
+    inline-size: 9px;
+    block-size: 9px;
+    background: currentColor;
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+    opacity: .52;
+    content: "";
+    pointer-events: none;
+}
+
+/* La pista tramada y el corte del relleno comparten geometría en avances y gráficos. */
+.folios-meter {
+    --folios-meter-cut: polygon(0 0, 100% 0, calc(100% - min(6px, 36%)) 100%, 0 100%);
+    display: block;
+    min-inline-size: 0;
+    block-size: 10px;
+    overflow: hidden;
+    background: repeating-linear-gradient(
+        -55deg,
+        var(--surface-muted) 0 3px,
+        color-mix(in srgb, var(--text-secondary) 36%, var(--surface-muted)) 3px 4px
+    );
+    clip-path: var(--folios-meter-cut);
+}
+
+.folios-meter > i {
+    display: block;
+    inline-size: var(--folios-meter-value, 0%);
+    block-size: 100%;
+    background: var(--folios-meter-ink, var(--primary));
+    clip-path: var(--folios-meter-cut);
+}

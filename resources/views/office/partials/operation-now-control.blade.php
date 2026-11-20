@@ -1,22 +1,26 @@
 <section class="operation-now-tabpanel" role="tabpanel" id="operationPanel-resumen" aria-labelledby="operationTab-resumen" data-operation-panel="resumen" tabindex="0">
     <div class="operation-now-overview" aria-label="Indicadores de planta">
         <a class="operation-now-overview__card" href="#recepcion-mp" data-operation-jump="recepcion-mp">
+            <x-folios.gajo area="materia-prima" :size="112" class="operation-now-overview__gajo" />
             <span>Recepción MP</span><strong id="operationOverviewMp">—</strong><small id="operationOverviewMpDetail">Camiones con fruta en curso</small>
         </a>
         <a class="operation-now-overview__card" href="#validacion-pt" data-operation-jump="validacion-pt">
+            <x-folios.gajo area="frigorifico" :size="112" class="operation-now-overview__gajo" />
             <span>Validación PT</span><strong id="operationOverviewPt">—</strong><small>Validaciones registradas en la jornada</small>
         </a>
         <a class="operation-now-overview__card" href="#camaras" data-operation-jump="camaras">
+            <x-folios.gajo area="frigorifico" :size="112" class="operation-now-overview__gajo" />
             <span>Frigorífico</span><strong id="operationOverviewCold">—</strong><small id="operationOverviewColdDetail">Ocupación de cámaras PT</small>
         </a>
         <a class="operation-now-overview__card" href="#despacho" data-operation-jump="despacho">
+            <x-folios.gajo area="frigorifico" :size="112" class="operation-now-overview__gajo" />
             <span>Despacho PT</span><strong id="operationOverviewDispatch">—</strong><small id="operationOverviewDispatchDetail">Cargas activas</small>
         </a>
     </div>
     <section class="operation-now-panel" aria-labelledby="operationOverviewReceptionTitle">
         <header class="operation-now-panel__heading">
-            <div class="operation-now-panel__title"><div><h2 id="operationOverviewReceptionTitle">Camiones con fruta en planta</h2><span>Recepciones abiertas por antigüedad de ingreso</span></div></div>
-            <a class="operation-now-action" href="#recepcion-mp" data-operation-jump="recepcion-mp">Ver recepción MP <span aria-hidden="true">→</span></a>
+            <div class="operation-now-panel__title"><x-folios.gajo area="materia-prima" :size="30" /><div><h2 id="operationOverviewReceptionTitle">Camiones con fruta en planta</h2><span>Recepciones abiertas por antigüedad de ingreso</span></div></div>
+            <a class="operation-now-action folios-action" href="#recepcion-mp" data-operation-jump="recepcion-mp">Ver recepción MP <span aria-hidden="true">→</span></a>
         </header>
         @include('office.partials.operation-now-reception-table', ['tabla' => 'operationOverviewReceptionRows'])
     </section>

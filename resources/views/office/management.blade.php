@@ -68,7 +68,7 @@
                         <strong id="lastUpdatedAt">Sin actualizar</strong>
                         <small id="refreshStatus">Se actualiza cada 30 s</small>
                     </div>
-                    <button class="refresh-button" id="refreshDashboardButton" type="button"><span aria-hidden="true">↻</span> Actualizar ahora</button>
+                    <button class="refresh-button folios-action" id="refreshDashboardButton" type="button"><span aria-hidden="true">↻</span> Actualizar ahora</button>
                 </div>
             </section>
 
@@ -296,12 +296,20 @@
                 >
                     <article class="management-panel">
                         <header>
-                            <div><p class="eyebrow">CAPACIDAD TÉRMICA</p><h2>Ocupación, cola y cumplimiento de tiempo</h2></div>
+                            <div class="management-panel__identity">
+                                <x-folios.gajo area="frigorifico" :size="34" />
+                                <div><p class="eyebrow">CAPACIDAD TÉRMICA</p><h2>Ocupación, cola y cumplimiento de tiempo</h2></div>
+                            </div>
                             <a class="management-panel-link" href="/oficina/prefrio">Abrir Prefrío →</a>
                         </header>
                         <div class="management-chart-with-metrics">
                             <div>
-                                <div class="chart-container chart-container--bar"><canvas id="precoolingChart" aria-label="Gráfico de ocupación de túneles" role="img"></canvas></div>
+                                <table class="management-capacity-chart" aria-label="Ocupación por túnel">
+                                    <thead>
+                                        <tr><th scope="col">Túnel</th><th scope="col">Posiciones</th><th scope="col">Ocupadas</th><th scope="col">Disponibles</th></tr>
+                                    </thead>
+                                    <tbody id="precoolingChartRows"></tbody>
+                                </table>
                                 <div class="chart-summary" id="precoolingChartSummary"></div>
                             </div>
                             <div>
@@ -328,7 +336,10 @@
                 >
                     <article class="management-panel">
                         <header>
-                            <div><p class="eyebrow">BODEGA DE MATERIALES</p><h2>Stock utilizable y operación pendiente</h2></div>
+                            <div class="management-panel__identity">
+                                <x-folios.gajo area="materiales" :size="34" />
+                                <div><p class="eyebrow">BODEGA DE MATERIALES</p><h2>Stock utilizable y operación pendiente</h2></div>
+                            </div>
                             <div class="management-panel-actions">
                                 <label class="chart-filter"><span>Unidad</span><select id="materialUnitSelect" aria-label="Unidad de medida para el gráfico"></select></label>
                                 <a class="management-panel-link" href="/oficina/materiales/exportaciones">Exportar materiales →</a>
@@ -360,7 +371,10 @@
                 >
                     <article class="management-panel">
                         <header>
-                            <div><p class="eyebrow">RECEPCIÓN DE MATERIA PRIMA</p><h2>Kilos recepcionados</h2></div>
+                            <div class="management-panel__identity">
+                                <x-folios.gajo area="materia-prima" :size="34" />
+                                <div><p class="eyebrow">RECEPCIÓN DE MATERIA PRIMA</p><h2>Kilos recepcionados</h2></div>
+                            </div>
                             <a class="management-panel-link" href="/oficina/romana">Abrir Romana →</a>
                         </header>
                         <p class="management-panel-intro">Kilos netos de recepciones cerradas, sin las que solo traen envases. Los días se cuentan en hora de planta.</p>
