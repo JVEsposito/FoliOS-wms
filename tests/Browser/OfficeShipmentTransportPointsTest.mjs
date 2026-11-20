@@ -15,7 +15,7 @@ const puertos = [['arbue', 'ar', 'ARBUE', 'Buenos Aires', 'maritimo'], ['cre', '
     ['scl', 'cl', 'AIR-SCL', 'Arturo Merino Benítez (Santiago)', 'aereo'], ['lli', 'cl', 'PAS-LLI', 'Los Libertadores (Los Andes – Mendoza)', 'terrestre'],
     ['sai', 'cl', 'CLSAI', 'San Antonio', 'maritimo'], ['pvg', 'cn', 'AIR-PVG', 'Pudong (Shanghái)', 'aereo'], ['sha', 'cn', 'CNSHA', 'Shanghái', 'maritimo']]
     .map(([id, pais_id, codigo, nombre, tipo]) => ({ id, pais_id, codigo, nombre, tipo }));
-const shipment = { id: 'e1', codigo: 'EMC0000007', estado: 'tentativo', version: 2, modalidad: 'aereo', fecha_programada: day, hora_programada: '11:00', intervalo_minutos: 60,
+const shipment = { id: 'e1', codigo: 'EMC0000007', estado: 'tentativo', editable_calendario: true, version: 2, modalidad: 'aereo', fecha_programada: day, hora_programada: '11:00', intervalo_minutos: 60,
     cliente: { id: 'c1', codigo: 'MC', nombre: 'Cliente' }, puerto_embarque_id: 'scl', totales: { instructivos: 1 },
     instructivos: [{ id: 'i1', numero_externo: 'INS-9', pais_destino_id: 'cn', puerto_destino_id: 'pvg', cantidad_pallets: 4 }] };
 

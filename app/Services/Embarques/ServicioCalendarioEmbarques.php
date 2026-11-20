@@ -109,8 +109,13 @@ class ServicioCalendarioEmbarques
             }
             $this->asegurarVersion($embarque, $versionEsperada);
 
-            if ($embarque->estado === EstadoEmbarque::Cancelado) {
-                throw new DomainException('Un embarque cancelado no puede modificarse.');
+            // Evaluar el estado de CAR bajo su bloqueo de escritura, no un snapshot de la UI.
+            $embarque->setRelation('carga', $carga);
+            if (! $embarque->editableEnCalendario()) {
+                throw new DomainException(
+                    'El embarque está cancelado o su orden CAR ya inició la operación. '
+                    .'El calendario es solo lectura; utiliza los flujos de Cargas para regularizar.',
+                );
             }
 
             if ($embarque->cliente_id !== $datos['cliente_id']) {

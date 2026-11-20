@@ -44,6 +44,11 @@
 .shipment-card strong { display: block; color: var(--text-strong, var(--text)); font-size: .72rem; }
 .shipment-card small { display: block; margin-top: 2px; color: var(--text-secondary, var(--muted)); font-size: .59rem; line-height: 1.35; }
 .shipment-card select { min-height: 29px; margin-top: 6px; border-radius: 6px; padding: 0 25px 0 7px; font-size: .58rem; }
+.shipment-card--readonly { border-color: var(--line); background: var(--surface-muted, rgba(113, 128, 138, .1)); }
+.shipment-card .shipment-card__readonly { color: var(--text-secondary, var(--muted)); font-weight: 800; }
+.shipment-card__actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.shipment-card__actions button { min-height: 29px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; background: var(--panel); color: var(--text); font-size: .58rem; cursor: pointer; }
+.shipment-card__actions button:hover { border-color: var(--cyan); }
 
 .shipment-dialog { width: min(1180px, calc(100vw - 26px)); max-height: calc(100vh - 26px); border: 1px solid var(--line); border-radius: 15px; background: var(--panel); color: var(--text); padding: 0; }
 .shipment-dialog::backdrop { background: rgba(0, 8, 12, .78); backdrop-filter: blur(4px); }

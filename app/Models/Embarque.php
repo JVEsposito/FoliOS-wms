@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\EstadoCarga;
 use App\Enums\EstadoEmbarque;
 use App\Enums\ModalidadEmbarque;
 use App\Models\Concerns\ImpideEliminacionFisica;
@@ -27,6 +28,25 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Embarque extends Model implements PerteneceATemporada
 {
     use HasUuids, ImpideEliminacionFisica, TemporadaPorColumna;
+
+    /** Solo puede editarse la programación antes de comenzar la operación física. */
+    public function editableEnCalendario(): bool
+    {
+        if ($this->estado === EstadoEmbarque::Cancelado) {
+            return false;
+        }
+
+        if ($this->carga_id === null) {
+            return $this->estado === EstadoEmbarque::Tentativo;
+        }
+
+        $carga = $this->carga;
+
+        return $carga !== null && in_array($carga->estado, [
+            EstadoCarga::Borrador,
+            EstadoCarga::Pendiente,
+        ], true);
+    }
 
     public function temporada(): BelongsTo
     {

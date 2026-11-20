@@ -38,7 +38,7 @@ test('el calendario sugiere recibidores por cliente y recupera los nuevos despuÃ
                 const payload = route.request().postDataJSON();
                 savedPayloads.push(payload);
                 if (rejectSave) return route.fulfill({ status: 422, json: { message: 'Revisa la solicitud antes de guardar.' } });
-                shipment = { ...payload, id: 'saved', codigo: 'ERC0000001', version: 1, estado: 'tentativo', intervalo_minutos: 60,
+                shipment = { ...payload, id: 'saved', codigo: 'ERC0000001', version: 1, estado: 'tentativo', editable_calendario: true, intervalo_minutos: 60,
                     cliente: clients.find((client) => client.id === payload.cliente_id),
                     instructivos: payload.instructivos.map((row, index) => ({ ...row, id: `i${index}` })), totales: { instructivos: payload.instructivos.length } };
                 for (const row of shipment.instructivos) receivers.push({ cliente_id: shipment.cliente_id, nombre: row.recibidor });

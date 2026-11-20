@@ -204,19 +204,29 @@ function renderShipmentCard(shipment) {
     const total = shipment.totales?.instructivos ?? shipment.instructivos?.length ?? 0;
     const cargo = shipment.carga?.codigo || shipment.carga_codigo;
     const overbook = shipment.sobrecupo || shipment.sobrecupo === true;
-    return `<article class="shipment-card shipment-card--${escapeHtml(shipment.estado)}${overbook ? ' shipment-card--overbook' : ''}">
+    const editable = state.permissions.gestionar && shipment.editable_calendario === true;
+    const soloLectura = shipment.editable_calendario === false;
+    const estadoCarga = shipment.carga?.estado ? statusText(shipment.carga.estado) : null;
+    const acciones = editable
+        ? `<select data-shipment-action="${shipment.id}" aria-label="Acciones de ${escapeHtml(shipment.codigo)}">
+            <option value="">Seleccionar acción</option>
+            <option value="view">Ver o editar</option>
+            ${shipment.estado === 'tentativo' ? '<option value="confirm">Completar y crear orden CAR</option><option value="cancel">Cancelar embarque</option>' : ''}
+            ${cargo ? '<option value="load">Abrir orden CAR</option>' : ''}
+        </select>`
+        : `<div class="shipment-card__actions">
+            <button type="button" data-shipment-view="${escapeHtml(shipment.id)}">Ver detalle</button>
+            ${cargo ? `<button type="button" data-shipment-load="${escapeHtml(shipment.id)}">Consultar CAR</button>` : ''}
+        </div>`;
+    return `<article class="shipment-card shipment-card--${escapeHtml(shipment.estado)}${overbook ? ' shipment-card--overbook' : ''}${soloLectura ? ' shipment-card--readonly' : ''}">
         <strong>${escapeHtml(shipment.codigo)}</strong>
         <small>${escapeHtml(shipment.cliente?.nombre || shipment.cliente || 'Cliente')} · ${escapeHtml(modeText(shipment.modalidad))}</small>
         <small>${Number(total)} instructivo(s)${cargo ? ` · ${escapeHtml(cargo)}` : ''}${overbook ? ' · Sobrecupo' : ''}</small>
-        <select data-shipment-action="${shipment.id}" aria-label="Acciones de ${escapeHtml(shipment.codigo)}">
-            <option value="">Seleccionar acción</option>
-            <option value="view">${state.permissions.gestionar ? 'Ver o editar' : 'Ver detalle'}</option>
-            ${shipment.estado === 'tentativo' && state.permissions.gestionar ? '<option value="confirm">Completar y crear orden CAR</option><option value="cancel">Cancelar embarque</option>' : ''}
-            ${cargo ? '<option value="load">Abrir orden de carga</option>' : ''}
-        </select>
+        ${estadoCarga ? `<small>Estado CAR: ${escapeHtml(estadoCarga)}</small>` : ''}
+        ${soloLectura ? '<small class="shipment-card__readonly">Operación cerrada o iniciada · Solo lectura</small>' : ''}
+        ${acciones}
     </article>`;
 }
-
 function scrollToCurrentHour() {
     const hour = `${String(new Date().getHours()).padStart(2, '0')}:`;
     const target = [...elements.grid.querySelectorAll('[data-calendar-time]')].find((node) => node.dataset.calendarTime.startsWith(hour));
@@ -333,6 +343,7 @@ function resetDialog() {
     elements.cancel.classList.add('is-hidden'); elements.confirm.classList.add('is-hidden'); elements.loadConfirmation.classList.add('is-hidden');
     elements.save.classList.remove('is-hidden'); elements.overbook.classList.add('is-hidden'); elements.overbookReason.classList.add('is-hidden');
     [...elements.form.elements].forEach((field) => { field.disabled = false; });
+    elements.addInstruction.disabled = false;
     addInstruction(); populateCatalogs();
 }
 
@@ -353,7 +364,7 @@ async function openExisting(id, focusConfirmation = false) {
         byId('shipmentSagLink').classList.toggle('is-hidden', !(state.identity?.puede_consultar_contraparte_sag || state.identity?.capacidades?.puede_consultar_contraparte_sag));
         byId('shipmentSagLink').href = `/oficina/frigorifico/contraparte-sag?embarque=${encodeURIComponent(shipment.id)}`;
         elements.dialogTitle.textContent = shipment.codigo; elements.dialogEyebrow.textContent = statusText(shipment.estado);
-        elements.dialogHelp.textContent = `${shipment.cliente.codigo} · ${shipment.intervalo_minutos} minutos reservados`;
+        elements.dialogHelp.textContent = `${shipment.cliente.codigo} · ${shipment.intervalo_minutos} minutos reservados${shipment.carga?.estado ? ` · CAR ${statusText(shipment.carga.estado)}` : ''}${shipment.editable_calendario === false ? ' · Solo lectura' : ''}`;
         const form = elements.form.elements;
         form.id.value = shipment.id; form.version_esperada.value = shipment.version; form.cliente_id.value = shipment.cliente.id;
         populateReceiverOptions();
@@ -361,7 +372,9 @@ async function openExisting(id, focusConfirmation = false) {
         populateDeparturePoints(shipment.puerto_embarque_id ?? '');
         populateTimeOptions(shipment.hora_programada); form.hora_programada.value = shipment.hora_programada;
         elements.instructionList.innerHTML = ''; (shipment.instructivos || []).forEach(addInstruction); if (!shipment.instructivos?.length) addInstruction();
-        const editable = state.permissions.gestionar && shipment.estado !== 'cancelado';
+        const editable = state.permissions.gestionar && shipment.editable_calendario === true;
+        elements.addInstruction.disabled = !editable;
+        elements.instructionList.querySelectorAll('[data-remove-instruction]').forEach((button) => { button.disabled = !editable; });
         elements.save.classList.toggle('is-hidden', !editable); elements.cancel.classList.toggle('is-hidden', !editable);
         const tentative = editable && shipment.estado === 'tentativo';
         elements.confirm.classList.toggle('is-hidden', !tentative); elements.loadConfirmation.classList.toggle('is-hidden', !tentative);
@@ -447,6 +460,14 @@ elements.requestList.addEventListener('click', (event) => {
     if (reject) resolveRequest(reject.dataset.requestReject, false);
 });
 elements.grid.addEventListener('click', (event) => {
+    const detail = event.target.closest('[data-shipment-view]');
+    if (detail) { openExisting(detail.dataset.shipmentView); return; }
+    const load = event.target.closest('[data-shipment-load]');
+    if (load) {
+        const shipment = state.shipments.find((item) => item.id === load.dataset.shipmentLoad);
+        if (shipment?.carga?.id) window.location.href = `/oficina/frigorifico/despacho/cargas?carga=${encodeURIComponent(shipment.carga.id)}`;
+        return;
+    }
     const button = event.target.closest('[data-open-window]');
     if (button) openNew(button.dataset.date, button.dataset.time, button.dataset.overbook === '1');
 });
