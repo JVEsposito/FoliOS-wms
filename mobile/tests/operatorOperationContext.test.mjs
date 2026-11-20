@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 
 import { operatorTaskPurpose } from '../src/domain/operatorTaskPurpose.ts';
-import { isFinishedLoad, operatorLoadCounts, operatorLoadDate } from '../src/domain/operatorLoads.ts';
+import { isFinishedLoad, operatorLoadCounts, operatorLoadDate, operatorLoadPalletProgress } from '../src/domain/operatorLoads.ts';
 
 test('el retiro de un bloqueador explica el despacho principal y los otros objetivos', () => {
   const context = operatorTaskPurpose({
@@ -58,6 +58,20 @@ test('la tarea de reingreso explica que el pallet vuelve desde el andén', () =>
 test('un pallet cargado en el camión sigue contando en andén y deja de estar pendiente', () => {
   const load = { estado: 'despachada', total_folios: 3, folios: [{ estado_carga: 'cargado' }, { estado_carga: 'en_anden' }, { estado_carga: 'pendiente' }] };
   assert.deepEqual(operatorLoadCounts(load), { total: 3, dock: 2, shipped: 0, pending: 1 });
+});
+
+test('el tablero de carga separa pallets cargados y en andén y enmarca el folio exacto', () => {
+  const load = { total_folios: 5, progreso: { total: 5, concentrados: 5 }, folios: [
+    { id: 'pendiente', estado_carga: 'pendiente' }, { id: 'p1', estado_carga: 'en_anden' },
+    { id: 'arriba', estado_carga: 'cargado' }, { id: 'p2', estado_carga: 'en_anden' },
+    { id: 'salió', estado_carga: 'despachado' },
+  ] };
+  assert.deepEqual(operatorLoadPalletProgress(load, 'carguio', 'p2'), { total: 5, done: 2, dock: 2, selected: 3 });
+  assert.equal(operatorLoadPalletProgress(load, 'carguio', 'otra-carga').selected, -1);
+  // Las versiones anteriores de Oficina solo entregan la cifra global.
+  assert.deepEqual(operatorLoadPalletProgress(load, 'separacion', 'p2'), { total: 5, done: 5, dock: 0, selected: -1 });
+  load.progreso = { total: 5, concentrados: 4, folios_concentrados: ['p1', 'p2', 'arriba', 'salió'] };
+  assert.deepEqual(operatorLoadPalletProgress(load, 'separacion', 'pendiente'), { total: 5, done: 4, dock: 0, selected: 4 });
 });
 
 test('la consulta de cargas usa GET condicional y separa la caché entre usuarios', async () => {

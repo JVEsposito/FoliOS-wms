@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { operatorTheme as o } from '../../theme/operatorTheme';
+import { FolioIdentifier } from '../FolioIdentifier';
 
 /**
  * Piezas de la Validación PT con el lenguaje de etiqueta de FoliOS v2: el formulario se
@@ -163,7 +164,7 @@ export function TalonRow({ time, folio, detail, message, aside, onPress, disable
     <>
       <View style={styles.talonStub}><Text style={styles.talonTime}>{time}</Text></View>
       <View style={styles.talonBody}>
-        <Text numberOfLines={1} style={styles.talonFolio}>{folio}</Text>
+        <FolioIdentifier value={folio} style={styles.talonFolio} />
         <Text numberOfLines={2} style={styles.talonDetail}>{detail}</Text>
         {message ? <Text style={styles.talonMessage}>{message}</Text> : null}
       </View>
@@ -203,7 +204,7 @@ export function ResultTalon({ tone, title, time, folio, rows, footer, footerTone
         ) : null}
       </View>
       <View style={styles.resultBody}>
-        <Text numberOfLines={1} style={styles.resultFolio}>{folio}</Text>
+        <FolioIdentifier value={folio} style={styles.resultFolio} />
         <View style={styles.resultGrid}>
           {rows.map((row) => (
             <View key={row.label} style={styles.resultItem}>

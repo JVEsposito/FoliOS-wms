@@ -17,12 +17,12 @@
         @include('office.partials.arranque')
     </head>
     <body>
+        @php($attentionAreas = ['materia-prima' => 'Materia Prima', 'frigorifico' => 'Frigorífico', 'materiales' => 'Materiales', 'consultas' => 'Consultas', 'gerencia' => 'Gerencia', 'administracion' => 'Administración'])
         <main class="office-app operation-now-app is-hidden" id="operationNowApp">
             <x-office.navigation domain="gerencia" office="operacion-ahora" context="CENTRO DE CONTROL" icon="OA" />
 
             <div class="operation-now estiba-ui" id="officeContent" data-density="compact">
-                <header class="operation-now-command">
-                    <x-folios.gajo area="operacion" :size="210" class="operation-now-command__gajo" />
+                <header class="operation-now-command folios-ticket">
                     <div class="operation-now-command__title">
                         <p class="operation-now-eyebrow"><x-folios.gajo area="operacion" :size="20" />CENTRO DE CONTROL · INFORMACIÓN EN VIVO</p>
                         <h1>Operación ahora</h1>
@@ -73,10 +73,18 @@
                                     <div class="operation-now-panel__title">
                                         <div><h2 id="operationAlertsTitle"><span id="operationAlertCount">—</span> <span id="operationAlertNoun">condiciones abiertas</span></h2><span id="operationAlertBreakdown">Evaluando la lectura vigente…</span></div>
                                     </div>
-                                    <div class="operation-now-filter" role="group" aria-label="Filtrar condiciones por severidad">
-                                        <button type="button" data-attention-filter="all" aria-pressed="true">Todas</button>
-                                        <button type="button" data-attention-filter="critical" aria-pressed="false">Altas</button>
-                                        <button type="button" data-attention-filter="warning" aria-pressed="false">Medias</button>
+                                    <div class="operation-now-attention__filters">
+                                        <div class="operation-now-filter" role="group" aria-label="Filtrar condiciones por severidad">
+                                            <button type="button" data-attention-filter="all" aria-pressed="true">Todas</button>
+                                            <button type="button" data-attention-filter="critical" aria-pressed="false">Altas</button>
+                                            <button type="button" data-attention-filter="warning" aria-pressed="false">Medias</button>
+                                        </div>
+                                        <select id="operationAttentionArea" aria-label="Filtrar condiciones por área">
+                                            <option value="all">Todas las áreas</option>
+                                            @foreach ($attentionAreas as $area => $label)
+                                                <option value="{{ $area }}">{{ $label }}</option>
+                                            @endforeach
+                                        </select>
                                     </div>
                                 </header>
                                 <div class="operation-now-panel__body operation-now-alert-list" id="operationAlertRows"><div class="operation-now-empty">Evaluando condiciones…</div></div>
@@ -229,7 +237,7 @@
                         <p class="operation-now-tabpanel__note">Los avances de prefrío representan tiempo transcurrido, no progreso térmico.</p>
                     </section>
                     <section class="operation-now-tabpanel operation-now-tabpanel--despacho" role="tabpanel" id="operationPanel-despacho" aria-labelledby="operationTab-despacho" data-operation-panel="despacho" tabindex="0" hidden>
-                        <section class="operation-now-panel operation-now-panel--dispatch" aria-labelledby="operationDispatchTitle">
+                        <section class="operation-now-panel operation-now-panel--dispatch folios-ticket" data-ticket-area="frigorifico" aria-labelledby="operationDispatchTitle">
                             <header class="operation-now-panel__heading">
                                 <div class="operation-now-panel__title">
                                     <x-folios.gajo area="frigorifico" :size="30" />
@@ -237,14 +245,15 @@
                                 </div>
                                 <div class="operation-now-panel__tools"><strong class="operation-now-panel__summary" id="dispatchPanelSummary">—</strong><a class="folios-action" href="/oficina/frigorifico/despacho/estatus">Ver estatus <span aria-hidden="true">→</span></a></div>
                             </header>
-                            <div class="operation-now-panel__body operation-now-table-scroll">
-                                <table class="operation-now-table operation-now-table--dispatch">
-                                    <caption class="office-visually-hidden">Avance de separación y carguío de cada carga publicada y sus instructivos</caption>
-                                    <thead><tr><th scope="col">Carga</th><th scope="col">Separación</th><th scope="col">Cargados</th><th scope="col">Andén</th><th scope="col">Estado</th></tr></thead>
-                                    <tbody id="operationDispatchRows"><tr><td colspan="5"><div class="operation-now-empty">Consultando cargas…</div></td></tr></tbody>
-                                </table>
-                            </div>
+                            <ul class="operation-now-dispatch__legend folios-pallet-key" aria-label="Estados de las celdas de pallets">
+                                <li><i data-cell="done" aria-hidden="true"></i>Hecho</li>
+                                <li><i data-cell="dock" aria-hidden="true"></i>En andén, por subir</li>
+                                <li><i data-cell="pending" aria-hidden="true"></i>Por hacer</li>
+                            </ul>
                         </section>
+                        <div class="operation-now-dispatch__loads" id="operationDispatchRows">
+                            <div class="operation-now-empty">Consultando cargas…</div>
+                        </div>
                         <section class="operation-now-panel operation-now-panel--reentry" aria-labelledby="operationReentryTitle">
                             <header class="operation-now-panel__heading">
                                 <div class="operation-now-panel__title">

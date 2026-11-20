@@ -857,7 +857,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::middleware('can:consultar-cargas-operacion')->group(function () {
-        Route::get('/cargas/operacion-turno', [CargaController::class, 'operacionTurno']);
+        Route::get('/cargas/operacion-turno', [CargaController::class, 'operacionTurno'])->name('api.cargas.operacion-turno');
         Route::get('/cargas/pendientes', [CargaController::class, 'pendientes']);
         Route::get('/cargas/reingresos', [ReingresoCamaraController::class, 'index']);
         Route::get('/cargas/{carga}/tareas', [DespachoFrigorificoController::class, 'tareas']);

@@ -49,7 +49,7 @@
         <main class="office-app management-app is-hidden" id="officeApp">
             <x-office.navigation domain="gerencia" office="panel" context="ADMINISTRACIÓN & GERENCIA" icon="◆" />
 
-            <section class="management-heading">
+            <section class="management-heading folios-ticket">
                 <div>
                     <p class="eyebrow">RESUMEN DE LA OPERACIÓN</p>
                     <h1>Panel gerencial</h1>
@@ -294,35 +294,37 @@
                     role="tabpanel"
                     aria-labelledby="management-tab-precooling"
                 >
-                    <article class="management-panel">
+                    <div class="management-precooling-kpis" aria-label="Indicadores de Prefrío">
+                        @foreach ([
+                            ['Activos', 'precoolingActiveMetric', 'procesos abiertos'],
+                            ['Atrasados', 'precoolingOverdueMetric', 'sobre el objetivo'],
+                            ['Aprobados hoy', 'precoolingApprovedMetric', 'procesos cerrados'],
+                            ['Reprocesos hoy', 'precoolingReprocessMetric', 'requieren nuevo ciclo'],
+                            ['Promedio 7 días', 'precoolingAverageMetric', 'por proceso'],
+                        ] as [$caption, $metric, $detail])
+                            <article class="management-precooling-kpi folios-ticket" data-ticket-area="frigorifico">
+                                <span class="folios-ticket__stub" aria-hidden="true"><x-folios.gajo area="frigorifico" :size="21" />FR</span>
+                                <div><small>{{ $caption }}</small><strong id="{{ $metric }}">—</strong><small>{{ $detail }}</small></div>
+                            </article>
+                        @endforeach
+                    </div>
+                    <article class="management-panel folios-ticket" data-ticket-area="frigorifico">
                         <header>
                             <div class="management-panel__identity">
                                 <x-folios.gajo area="frigorifico" :size="34" />
-                                <div><p class="eyebrow">CAPACIDAD TÉRMICA</p><h2>Ocupación, cola y cumplimiento de tiempo</h2></div>
+                                <div><p class="eyebrow">Capacidad térmica</p><h2>Túneles de prefrío</h2></div>
                             </div>
-                            <a class="management-panel-link" href="/oficina/prefrio">Abrir Prefrío →</a>
+                            <a class="management-panel-link folios-action" href="/oficina/prefrio">Abrir Prefrío</a>
                         </header>
-                        <div class="management-chart-with-metrics">
-                            <div>
-                                <table class="management-capacity-chart" aria-label="Ocupación por túnel">
-                                    <thead>
-                                        <tr><th scope="col">Túnel</th><th scope="col">Posiciones</th><th scope="col">Ocupadas</th><th scope="col">Disponibles</th></tr>
-                                    </thead>
-                                    <tbody id="precoolingChartRows"></tbody>
-                                </table>
-                                <div class="chart-summary" id="precoolingChartSummary"></div>
-                            </div>
-                            <div>
-                                <div class="management-operational-metrics">
-                                    <article><span>ACTIVOS</span><strong id="precoolingActiveMetric">0</strong><small>procesos abiertos</small></article>
-                                    <article class="is-critical"><span>ATRASADOS</span><strong id="precoolingOverdueMetric">0</strong><small>sobre objetivo</small></article>
-                                    <article class="is-positive"><span>APROBADOS HOY</span><strong id="precoolingApprovedMetric">0</strong><small>procesos cerrados</small></article>
-                                    <article class="is-warning"><span>REPROCESOS HOY</span><strong id="precoolingReprocessMetric">0</strong><small>requieren nuevo ciclo</small></article>
-                                </div>
-                                <div class="management-average"><span>PROMEDIO ÚLTIMOS 7 DÍAS</span><strong id="precoolingAverageMetric">—</strong></div>
-                            </div>
+                        <div class="table-scroll" role="region" aria-label="Lectura de túneles de prefrío" tabindex="0">
+                            <table class="management-capacity-chart" aria-label="Ocupación por túnel">
+                                <thead>
+                                    <tr><th scope="col">Túnel</th><th scope="col">Posiciones</th><th scope="col">Tiempo de proceso</th><th scope="col">Setpoint</th><th scope="col">Estado</th></tr>
+                                </thead>
+                                <tbody id="precoolingChartRows"></tbody>
+                            </table>
                         </div>
-                        <div class="management-operation-list" id="managementPrecoolingList"></div>
+                        <div class="management-precooling-queue" id="precoolingChartSummary"></div>
                     </article>
                 </div>
 

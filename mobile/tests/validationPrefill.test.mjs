@@ -245,7 +245,9 @@ test('al ingresar el folio la PDA replica los datos de planta y el validador sol
     assert.deepEqual(h.boxes().map((node) => node.props.value), ['120', '70', '50']);
     assert.deepEqual(h.traceValues(), ['L-1', 'P-1', 'L-2', 'P-2']);
     assert.match(h.message(), /Datos de planta cargados para 2610160001/);
-    assert.match(h.message(), /120 cajas · saldo/);
+    assert.match(h.message(), /Datos de planta\nsaldo · leído/);
+    assert.match(h.message(), /Cajas\n120/);
+    assert.match(h.message(), /Proceso de packing\nP-1 · P-2/);
     assert.match(h.message(), /2 líneas · CSG 11111, 22222/);
     assert.match(h.message(), /Confirma que el pallet coincide o corrige lo que no/);
     await h.press('Aprobar');
@@ -266,6 +268,7 @@ test('lo que el validador corrige queda informado en pantalla y en el registro',
     await h.mount(); await h.scan('2610160001');
     const [total] = h.boxes();
     await h.type(total, '118'); await h.type(h.boxes()[1], '68');
+    assert.match(h.message(), /Cajas\nPlanta 120 · Captura 118\nRevisar/);
     assert.match(h.message(), /Corregido respecto de planta: cajas, composición\./);
     await h.press('Aprobar');
     assert.deepEqual(h.registered[0].precarga_origen.modificados, ['cantidad_cajas', 'composicion']);

@@ -34,6 +34,7 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
             planificador: { despliegue: { mode_global: 'off' }, salud: { riesgos: {} }, arbitraje: { vigencia: {} } },
             planta: { catalogo: [], elementos: [], conexiones: [], configurado: false },
             despacho: { resumen: { activas: 2, cargando: 1 }, cargas: [], reingresos: [] },
+            retenciones_sag: [{ id: 'lote-prueba', lote: '31012', estado: 'retenido', destinos: [{ nombre: 'Perú' }] }],
             recepcion_mp: { en_curso: 1, en_ingreso: 0, en_pesaje: 0, pendientes_destare: 1, cerradas_jornada: 4, kilos_netos_jornada: 12350,
                 recepciones: [{ numero: 'REC-2611-0011', cliente: 'Cliente prueba', guias: ['1511', '1512'], patente: 'ABCD12', ingreso_at: now,
                     estado: 'en_bascula_salida', validacion_mp: 'validada' }] },
@@ -64,6 +65,14 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         const summary = page.getByRole('tabpanel', { name: 'Resumen' });
         await summary.getByText('REC-2611-0011').waitFor();
         assert.equal(await summary.locator('#operationOverviewPt').innerText(), '25');
+        assert.equal(await summary.locator('[data-gajo-total]').textContent(), '1');
+        const focusArea = summary.locator('[data-focus-open="frigorifico"]');
+        assert.equal(await focusArea.locator('[data-focus-count]').innerText(), '1');
+        await focusArea.click();
+        const attention = page.getByRole('tabpanel', { name: /Atención/ });
+        assert.equal(await attention.getByRole('combobox', { name: 'Filtrar condiciones por área' }).inputValue(), 'frigorifico');
+        await attention.getByText('Retención de lote', { exact: true }).waitFor();
+        await page.getByRole('tab', { name: 'Resumen' }).click();
         await summary.getByRole('link', { name: 'Ver recepción MP' }).click();
         assert.equal(new URL(page.url()).hash, '#recepcion-mp');
         await page.locator('#operationReceptionRows').getByText('1511 · 1512').waitFor();

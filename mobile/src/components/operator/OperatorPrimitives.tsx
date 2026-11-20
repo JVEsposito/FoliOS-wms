@@ -16,7 +16,15 @@ export function OperatorStatusBadge({ label, tone = 'neutral' }: { label: string
   const palette = tonePalette[tone];
   return (
     <View style={[styles.badge, { backgroundColor: palette.background, borderColor: palette.border }]}>
-      <View style={[styles.marker, { backgroundColor: palette.text }]} />
+      <View aria-hidden style={[
+        styles.marker,
+        { borderColor: palette.text },
+        tone === 'warning' && styles.markerWarning,
+        tone === 'critical' && styles.markerCritical,
+        ['success', 'warning', 'critical'].includes(tone) && { backgroundColor: palette.text },
+      ]}>
+        {tone === 'info' ? <View style={[styles.markerHalf, { backgroundColor: palette.text }]} /> : null}
+      </View>
       <Text style={[styles.badgeText, { color: palette.text }]}>{label}</Text>
     </View>
   );
@@ -62,7 +70,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: o.space[2],
   },
-  marker: { width: 8, height: 8, borderRadius: 4 },
+  marker: { width: 8, height: 8, borderRadius: 4, borderWidth: 1, overflow: 'hidden' },
+  markerWarning: { borderRadius: 0, transform: [{ rotate: '45deg' }, { scale: 0.8 }] },
+  markerCritical: { borderRadius: 0 },
+  markerHalf: { width: '50%', height: '100%' },
   badgeText: { fontFamily: font.heavy, fontSize: o.type.caption, letterSpacing: 0.3 },
   code: {
     fontFamily: font.monoBold,

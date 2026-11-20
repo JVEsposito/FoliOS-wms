@@ -70,25 +70,108 @@
     pointer-events: none;
 }
 
-/* La pista tramada y el corte del relleno comparten geometría en avances y gráficos. */
-.folios-meter {
-    --folios-meter-cut: polygon(0 0, 100% 0, calc(100% - min(6px, 36%)) 100%, 0 100%);
-    display: block;
+/* La tarja conecta paneles de Oficina con la unidad que se lee en terreno. */
+.folios-ticket {
+    --ticket-ink: var(--area-ink, var(--primary));
+    --ticket-tint: var(--area-tint, var(--surface-muted));
+    position: relative;
     min-inline-size: 0;
-    block-size: 10px;
-    overflow: hidden;
-    background: repeating-linear-gradient(
-        -55deg,
-        var(--surface-muted) 0 3px,
-        color-mix(in srgb, var(--text-secondary) 36%, var(--surface-muted)) 3px 4px
-    );
-    clip-path: var(--folios-meter-cut);
+    border: 1px solid var(--corporate-border);
+    border-radius: var(--radius-card, 8px);
+    background: var(--corporate-card);
 }
 
-.folios-meter > i {
-    display: block;
-    inline-size: var(--folios-meter-value, 0%);
-    block-size: 100%;
-    background: var(--folios-meter-ink, var(--primary));
-    clip-path: var(--folios-meter-cut);
+.folios-ticket::after {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    inline-size: 14px;
+    block-size: 14px;
+    border-start-end-radius: inherit;
+    background: var(--ticket-ink);
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+    content: "";
+    pointer-events: none;
+}
+
+.folios-ticket[data-ticket-area="materia-prima"] {
+    --ticket-ink: var(--area-materia-prima-ink);
+    --ticket-tint: var(--area-materia-prima-tint);
+}
+
+.folios-ticket[data-ticket-area="frigorifico"] {
+    --ticket-ink: var(--area-frigorifico-ink);
+    --ticket-tint: var(--area-frigorifico-tint);
+}
+
+.folios-ticket__stub {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 7px;
+    border-inline-end: 1px dashed var(--line);
+    border-start-start-radius: inherit;
+    border-end-start-radius: inherit;
+    background: var(--ticket-tint);
+    color: var(--ticket-ink);
+    font: 700 .72rem/1 var(--font-mono, monospace);
+}
+
+.folios-ticket__stub::before,
+.folios-ticket__stub::after {
+    position: absolute;
+    inset-inline-end: -7px;
+    inline-size: 13px;
+    block-size: 7px;
+    border: 1px solid var(--corporate-border);
+    background: var(--corporate-canvas);
+    content: "";
+    pointer-events: none;
+}
+
+.folios-ticket__stub::before { inset-block-start: -1px; border-block-start: 0; border-radius: 0 0 8px 8px; }
+.folios-ticket__stub::after { inset-block-end: -1px; border-block-end: 0; border-radius: 8px 8px 0 0; }
+
+.folios-ticket__stub .folios-gajo {
+    --gajo-rest: var(--line);
+    --gajo-area: var(--gajo-ink);
+    --gajo-hub: var(--ticket-tint);
+}
+
+.folios-code {
+    color: var(--text-strong);
+    font-family: var(--font-mono, monospace);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.folios-code__prefix { color: var(--text-secondary); font-weight: 500; }
+.folios-code > strong { color: var(--text-strong); font-weight: 800; }
+
+.folios-pallet-cells {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: start;
+    gap: 3px;
+    min-inline-size: 0;
+}
+
+:is(.folios-pallet-cells, .folios-pallet-key) i {
+    display: inline-block;
+    inline-size: var(--pallet-cell-size, 11px);
+    block-size: var(--pallet-cell-size, 11px);
+    flex: 0 0 auto;
+    border: 1px solid transparent;
+    border-radius: 2px;
+}
+
+:is(.folios-pallet-cells, .folios-pallet-key) [data-cell="done"] { background: var(--text-strong); }
+:is(.folios-pallet-cells, .folios-pallet-key) [data-cell="dock"] { border-color: var(--area-frigorifico-ink); }
+:is(.folios-pallet-cells, .folios-pallet-key) [data-cell="free"] { border: 1px dashed var(--input-border); }
+:is(.folios-pallet-cells, .folios-pallet-key) [data-cell="pending"] {
+    border-color: var(--line);
+    background: repeating-linear-gradient(-55deg, transparent 0 2px, var(--input-border) 2px 3px);
 }

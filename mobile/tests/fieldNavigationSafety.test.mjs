@@ -24,7 +24,11 @@ function loader(mocks, extraNative = {}) {
       require: id => {
         if (id in mocks) return mocks[id];
         if (id === 'react-native') return native;
-        if (id.startsWith('.')) { const base = resolve(dirname(path), id); for (const ext of ['.ts', '.tsx']) if (existsSync(base + ext)) return load(base + ext); }
+        if (id.startsWith('.')) {
+          const base = resolve(dirname(path), id);
+          if (id.endsWith('.png') && existsSync(base)) return base;
+          for (const ext of ['.ts', '.tsx']) if (existsSync(base + ext)) return load(base + ext);
+        }
         return require(id);
       },
     }); return module.exports;

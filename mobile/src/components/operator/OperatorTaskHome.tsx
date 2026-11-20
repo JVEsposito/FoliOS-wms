@@ -11,6 +11,9 @@ import {
 } from '../../domain/operationalTasks';
 import type { OperatorQueueItem, OperatorQueueSource } from '../../domain/operatorTaskQueue';
 import { operatorTaskPurpose } from '../../domain/operatorTaskPurpose';
+import { isFinishedLoad, type OperatorLoad } from '../../domain/operatorLoads';
+import { useOperatorLoadFeed } from '../../hooks/useOperatorLoadFeed';
+import type { OperationalTasksApi } from '../../services/operationalTasksApi';
 import { OperatorShiftDuties } from './OperatorShiftDuties';
 import { operatorTheme as o } from '../../theme/operatorTheme';
 import {
@@ -20,6 +23,9 @@ import {
   OperatorStatusBadge,
 } from './OperatorPrimitives';
 import { font } from '../../theme/typography';
+import { areas } from '../../theme/areas';
+import { FolioIdentifier } from '../FolioIdentifier';
+import { OperatorPalletProgress } from './OperatorPalletProgress';
 
 export type OperatorLastMovement = { at: string; destination: string; folio: string };
 
@@ -28,6 +34,7 @@ type Props = {
   availableCount: number;
   busy: boolean;
   lastMovement?: OperatorLastMovement | null;
+  loadSource?: { api: OperationalTasksApi; token: string };
   mineCount: number;
   next: OperatorQueueItem | null;
   plannerFresh: boolean | null;
@@ -55,6 +62,7 @@ export function OperatorTaskHome({
   availableCount,
   busy,
   lastMovement,
+  loadSource,
   mineCount,
   next,
   plannerFresh,
@@ -71,18 +79,25 @@ export function OperatorTaskHome({
   const { width, height } = useWindowDimensions();
   const compact = width < 1000;
   const dockAction = Boolean(next) && (compact || height < 740);
+  const { feed, error: loadError, refresh: refreshLoads } = useOperatorLoadFeed(loadSource?.api, loadSource?.token, 60_000);
+  const loads = (feed?.data ?? []).filter((load) => !isFinishedLoad(load));
+  const staging = next?.task.contexto?.acopio_carga;
+  const stagingLoad = staging && typeof staging === 'object' && 'carga_id' in staging ? staging.carga_id : null;
+  const nextLoad = next ? loads.find((load) => load.id === stagingLoad
+    || (next.task.destino_logico?.tipo === 'anden' && load.folios.some((folio) => folio.id === next.task.folio.id))) : undefined;
+  const refresh = () => { onRefresh(); void refreshLoads(); };
 
   return (
     <View style={styles.screen}>
     <ScrollView
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl colors={[o.color.primary]} onRefresh={onRefresh} refreshing={false} tintColor={o.color.primary} />}
+      refreshControl={<RefreshControl colors={[o.color.primary]} onRefresh={refresh} refreshing={false} tintColor={o.color.primary} />}
       style={styles.screen}
     >
       <View style={[styles.columns, compact && styles.columnsCompact]}>
         <View style={styles.main}>
           {next ? (
-            <NextTaskCard busy={busy} compact={compact} item={next} onOpen={() => onOpen(next)} showAction={!dockAction} suggestion={suggestedDestinations[next.task.id]} />
+            <NextTaskCard busy={busy} compact={compact} item={next} load={nextLoad} loadStale={Boolean(loadError)} onOpen={() => onOpen(next)} showAction={!dockAction} suggestion={suggestedDestinations[next.task.id]} />
           ) : (
             <View style={styles.emptyHero}>
               {plannerFresh === false ? <OperatorStatusBadge label="PLANIFICADOR SIN ACTUALIZAR" tone="warning" /> : null}
@@ -102,7 +117,7 @@ export function OperatorTaskHome({
         <View style={[styles.aside, compact && styles.asideCompact]}>
           <View style={styles.syncRow}>
             <Text accessibilityLiveRegion="polite" numberOfLines={1} style={styles.syncText}>{syncLabel ?? ''}</Text>
-            <Pressable accessibilityLabel="Actualizar mis labores" accessibilityRole="button" disabled={busy} onPress={onRefresh} style={[styles.refreshButton, busy && styles.disabled]}>
+            <Pressable accessibilityLabel="Actualizar mis labores" accessibilityRole="button" disabled={busy} onPress={refresh} style={[styles.refreshButton, busy && styles.disabled]}>
               <Text style={styles.refreshText}>↻</Text>
             </Pressable>
           </View>
@@ -127,7 +142,7 @@ export function OperatorTaskHome({
                 <View style={styles.lastMark}><Text style={styles.lastMarkText}>✓</Text></View>
                 <View style={styles.lastText}>
                   <Text style={styles.panelMeta}>Último movimiento · {timeLabel(lastMovement.at)}</Text>
-                  <OperatorEntityCode value={lastMovement.folio} />
+                  <FolioIdentifier value={lastMovement.folio} style={styles.loadCode} />
                   <Text numberOfLines={2} style={styles.lastDestination}>{lastMovement.destination}</Text>
                 </View>
               </View>
@@ -135,10 +150,19 @@ export function OperatorTaskHome({
           ) : null}
 
           {onOpenLoads ? (
-            <Pressable accessibilityRole="button" disabled={busy} onPress={onOpenLoads} style={[styles.loadsLink, busy && styles.disabled]}>
-              <Text style={styles.loadsLinkText}>Cargas del turno</Text>
-              <Text style={styles.loadsLinkArrow}>→</Text>
-            </Pressable>
+            <View style={styles.panel}>
+              <Pressable accessibilityRole="button" disabled={busy} onPress={onOpenLoads} style={[styles.loadsLink, busy && styles.disabled]}>
+                <Text style={styles.loadsLinkText}>Cargas del turno</Text>
+                <Text style={styles.loadsLinkArrow}>→</Text>
+              </Pressable>
+              {loadError ? <Text style={styles.heroHint}>{feed ? 'Última lectura disponible' : loadError}</Text> : null}
+              {loads.slice(0, 3).map((load) => (
+                <View key={load.id} style={styles.loadRow}>
+                  <FolioIdentifier value={load.codigo} digits={3} style={styles.loadCode} />
+                  <OperatorPalletProgress load={load} phase={load.camion_en_anden ? 'carguio' : 'separacion'} />
+                </View>
+              ))}
+            </View>
           ) : null}
         </View>
       </View>
@@ -151,10 +175,12 @@ export function OperatorTaskHome({
   );
 }
 
-function NextTaskCard({ busy, compact, item, onOpen, showAction, suggestion }: {
+function NextTaskCard({ busy, compact, item, load, loadStale, onOpen, showAction, suggestion }: {
   busy: boolean;
   compact: boolean;
   item: OperatorQueueItem;
+  load?: OperatorLoad;
+  loadStale: boolean;
   onOpen: () => void;
   showAction: boolean;
   suggestion?: string;
@@ -183,6 +209,7 @@ function NextTaskCard({ busy, compact, item, onOpen, showAction, suggestion }: {
 
   return (
     <View style={[styles.hero, compact && styles.heroCompact]}>
+      <View style={styles.ticketCorner} aria-hidden />
       <View style={styles.heroTop}>
         <Text style={styles.eyebrow}>{paused ? 'MANIOBRA BAJO CONTROL' : 'SIGUIENTE MANIOBRA'}</Text>
         <View style={styles.heroBadges}>
@@ -199,9 +226,15 @@ function NextTaskCard({ busy, compact, item, onOpen, showAction, suggestion }: {
         <Text accessibilityRole="header" style={styles.heroTitle}>{purpose.label}</Text>
         {purpose.goal ? <Text numberOfLines={2} style={styles.heroGoal}>{purpose.goal}</Text> : null}
         <Text style={styles.folioLabel}>Folio</Text>
-        <FolioCode compact={compact} value={task.folio.numero_folio} />
+        <FolioIdentifier label="Folio" value={task.folio.numero_folio} style={[styles.folio, compact && styles.folioCompact]} />
         <Text style={styles.heroMeta}>Envase: {task.folio.envase || 'sin informar'}</Text>
       </View>
+
+      {load ? <View style={styles.loadRow}>
+        <FolioIdentifier value={load.codigo} digits={3} style={styles.loadCode} />
+        <OperatorPalletProgress load={load} phase={task.contexto?.acopio_carga ? 'separacion' : 'carguio'} folioId={task.folio.id} />
+        {loadStale ? <Text style={styles.heroDetail}>Avance de la última lectura disponible.</Text> : null}
+      </View> : null}
 
       <View style={[styles.route, compact && styles.routeCompact]}>
         <RouteBlock label="DESDE" value={operationalTaskOriginLabel(task)} />
@@ -230,17 +263,6 @@ function NextTaskAction({ busy, item, onOpen, compact = false }: { busy: boolean
   </Pressable>;
 }
 
-function FolioCode({ compact, value }: { compact: boolean; value: string }) {
-  // Los últimos cuatro dígitos son los que el camarero coteja con la etiqueta.
-  const split = value.length > 6 ? value.length - 4 : 0;
-  return (
-    <Text accessibilityLabel={`Folio ${value}`} selectable numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={[styles.folio, compact && styles.folioCompact]}>
-      {split ? <Text style={styles.folioHead}>{value.slice(0, split)}</Text> : null}
-      {value.slice(split)}
-    </Text>
-  );
-}
-
 function RouteBlock({ label, pending = false, proposed = false, value }: {
   label: string;
   pending?: boolean;
@@ -254,7 +276,7 @@ function RouteBlock({ label, pending = false, proposed = false, value }: {
     <View
       accessible
       accessibilityLabel={`${label === 'DESDE' ? 'Origen' : 'Destino'}: ${value}${proposed ? ', propuesto' : ''}`}
-      style={[styles.routeBlock, pending && styles.routeBlockPending]}
+      style={[styles.routeBlock, (pending || proposed) && styles.routeBlockPending, proposed && styles.routeBlockProposed]}
     >
       <View style={styles.routeLabelRow}>
         <Text style={styles.routeLabel}>{label}</Text>
@@ -411,7 +433,9 @@ const styles = StyleSheet.create({
     borderColor: o.color.border,
     borderRadius: o.radius.panel,
     backgroundColor: o.color.surface,
+    overflow: 'hidden',
   },
+  ticketCorner: { position: 'absolute', top: 0, right: 0, borderTopWidth: 18, borderLeftWidth: 18, borderTopColor: areas.frigorifico.bright, borderLeftColor: 'transparent' },
   heroCompact: { minHeight: 0, padding: o.space[4], gap: o.space[4] },
   heroTop: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: o.space[3] },
   heroBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: o.space[2] },
@@ -421,7 +445,6 @@ const styles = StyleSheet.create({
   folioLabel: { fontFamily: font.semibold, color: o.color.muted, fontSize: o.type.small, marginTop: o.space[3] },
   folio: { fontFamily: font.monoBold, color: o.color.text, fontSize: 72, lineHeight: 80 },
   folioCompact: { fontSize: 44, lineHeight: 52 },
-  folioHead: { color: o.color.muted },
   heroMeta: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.small },
 
   route: { flexDirection: 'row', alignItems: 'stretch', gap: o.space[3] },
@@ -430,6 +453,7 @@ const styles = StyleSheet.create({
   routeArrowCompact: { transform: [{ rotate: '90deg' }] },
   routeBlock: { flex: 1, minWidth: 0, gap: o.space[1], padding: o.space[6], borderRadius: o.radius.panel, borderWidth: 2, borderColor: 'transparent', backgroundColor: o.color.surfaceMuted },
   routeBlockPending: { borderStyle: 'dashed', borderColor: o.color.borderStrong, backgroundColor: 'transparent' },
+  routeBlockProposed: { borderColor: areas.frigorifico.line },
   routeLabelRow: { flexDirection: 'row', alignItems: 'center', gap: o.space[2] },
   routeLabel: { fontFamily: font.heavy, color: o.color.muted, fontSize: o.type.caption, letterSpacing: 1.2 },
   routeProposed: { fontFamily: font.heavy, color: o.color.primaryPressed, fontSize: o.type.caption, letterSpacing: 1 },
@@ -477,6 +501,8 @@ const styles = StyleSheet.create({
   loadsLink: { minHeight: o.touch.prominent, paddingHorizontal: o.space[4], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: o.radius.panel, borderWidth: 1, borderColor: o.color.border },
   loadsLinkText: { fontFamily: font.semibold, color: o.color.text, fontSize: o.type.body },
   loadsLinkArrow: { fontFamily: font.regular, color: o.color.muted, fontSize: o.type.heading },
+  loadRow: { gap: 5, minWidth: 0 },
+  loadCode: { fontSize: o.type.body },
 
   emptyHero: { flexGrow: 1, minHeight: 400, padding: o.space[8], alignItems: 'center', justifyContent: 'center', gap: o.space[3], borderWidth: 1, borderColor: o.color.border, borderRadius: o.radius.panel, backgroundColor: o.color.surface },
   emptyHeroTitle: { fontFamily: font.heavy, color: o.color.text, fontSize: o.type.title, textAlign: 'center' },

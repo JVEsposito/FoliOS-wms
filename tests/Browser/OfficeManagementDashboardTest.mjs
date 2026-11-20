@@ -156,9 +156,10 @@ for (const width of [1366, 390]) test(`Panel gerencial: kilos por cliente, folio
 
         await page.locator('#management-tab-precooling').click();
         const rows = page.getByRole('table', { name: 'Ocupación por túnel' }).locator('tbody tr');
-        assert.deepEqual(await rows.nth(1).locator('td').allTextContents(), ['12', '0', '12']);
-        const widths = await rows.locator('.folios-meter').evaluateAll(meters => meters.map(meter => meter.getBoundingClientRect().width));
-        assert.ok(Math.abs(widths[0] / 2 - widths[1]) <= 1, 'ambos túneles usan la misma escala de posiciones');
+        assert.equal(await rows.nth(0).locator('[data-cell="done"]').count(), 24);
+        assert.equal(await rows.nth(1).locator('[data-cell="free"]').count(), 12);
+        assert.match(await rows.nth(0).locator('.management-tunnel__timeline').innerText(), /Objetivo 4 h/);
+        assert.match(await rows.nth(0).locator('.management-tunnel__setpoint').innerText(), /0,5 °C/);
 
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `desborde a ${width}px`);
         assert.deepEqual(errors, []);

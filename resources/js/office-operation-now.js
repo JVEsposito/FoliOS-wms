@@ -1,4 +1,5 @@
 import { sagLotAlertsHtml } from './shared/sag-lot-alerts.js';
+import { officeCode, palletCells } from './shared/folios-display.js';
 import { mountPalletAdministration } from './shared/admin-pallet-control.js';
 import { createAvailabilityTracker, operatorPresenceLabel } from './shared/operator-availability';
 import { createUuid } from './shared/uuid.js';
@@ -121,6 +122,7 @@ const elements = {
     alertNoun: byId('operationAlertNoun'),
     alertBreakdown: byId('operationAlertBreakdown'),
     attentionFilter: document.querySelector('.operation-now-filter'),
+    attentionArea: byId('operationAttentionArea'),
     sourceRows: byId('operationSourceRows'),
     sourcesTime: byId('operationSourcesTime'),
     plantSheetBody: byId('operationPlantSheetBody'),
@@ -157,6 +159,7 @@ const state = {
     replayLoading: false,
     attention: null,
     attentionFilter: 'all',
+    attentionArea: 'all',
     attentionExpanded: new Set(),
     plantSelectedId: null,
 };
@@ -466,6 +469,12 @@ function renderHeader(data) {
     elements.updatedAt.textContent = `Última lectura: ${dateTime(data.generado_at)}`;
     // La jornada operativa puede no venir (respuestas antiguas o sin calendario): el turno se muestra igual.
     const jornada = data.jornada?.fecha ? ` · Jornada ${String(data.jornada.fecha).split('-').reverse().join('-')}` : '';
+    const workday = document.querySelector('[data-office-workday]');
+    if (workday) {
+        const day = data.jornada?.fecha ? String(data.jornada.fecha).split('-').reverse().join('-') : '';
+        const shift = data.jornada?.turno ? `Turno ${humanize(data.jornada.turno)}` : '';
+        workday.textContent = [day, shift].filter(Boolean).join(' · ') || 'Sin configurar';
+    }
     elements.shift.textContent = data.jornada?.turno
         ? `Turno ${humanize(data.jornada.turno)}${jornada}`
         : 'Turno sin configurar';
@@ -535,11 +544,16 @@ const ptValidationResults = {
 function renderReceptionRows(id, receptions, available) {
     const target = byId(id);
     if (!target) return;
-    target.innerHTML = receptions.length ? receptions.map((row) => `<tr>
-        <td><strong>${escapeHtml(row.numero)}</strong><span class="operation-now-subtext">${escapeHtml(row.guias?.join(' · ') || 'Sin guía')}</span></td>
+    const waits = receptions.map((row) => minutesBefore(row.ingreso_at, state.snapshot?.generado_at));
+    const maxWait = Math.max(1, ...waits);
+    target.innerHTML = receptions.length ? receptions.map((row, index) => `<tr>
+        <td><span class="folios-code">${officeCode(row.numero, escapeHtml)}</span><span class="operation-now-subtext">${escapeHtml(row.guias?.join(' · ') || 'Sin guía')}</span></td>
         <td>${escapeHtml(row.cliente || '—')}</td>
         <td>${escapeHtml(row.patente || '—')}</td>
-        <td>${escapeHtml(dateTime(row.ingreso_at))}</td>
+        <td>${escapeHtml(dateTime(row.ingreso_at))}${waits[index] === null ? '' : `
+            <span class="operation-now-subtext">${escapeHtml(duration(waits[index]))} en planta</span>
+            <span class="operation-now-reception-wait" aria-hidden="true"><i style="inline-size:${waits[index] / maxWait * 100}%"></i></span>
+        `}</td>
         <td>${signal(...(receptionStages[row.estado] || ['—']))}</td>
         <td>${signal(...(mpValidationStages[row.validacion_mp] || ['—']))}</td>
     </tr>`).join('') : `<tr><td colspan="6">${available
@@ -1108,9 +1122,10 @@ function attentionRowMarkup(row) {
         ? `<li class="operation-now-alert__more"><button type="button" data-attention-expand="${escapeHtml(row.key)}" aria-expanded="${expanded}">${expanded ? 'Ver menos' : `Ver ${number(hidden)} más`}</button></li>`
         : '';
     const items = visible.length ? `<ul class="operation-now-alert__items">${visible.map(attentionItemMarkup).join('')}${toggle}</ul>` : '';
-    const action = row.href
+    const canOpen = row.href && (row.source !== 'SAG' || can('puede_gestionar_lotes_retenidos_sag'));
+    const action = canOpen
         ? `<a class="operation-now-action" href="${escapeHtml(row.href)}">${escapeHtml(row.action)} <span aria-hidden="true">→</span></a>`
-        : `<span class="operation-now-alert__guidance">${escapeHtml(row.action)}</span>`;
+        : `<span class="operation-now-alert__guidance">${escapeHtml(row.source === 'SAG' ? 'Revisar con contraparte SAG' : row.action)}</span>`;
 
     return `<article class="operation-now-alert" data-severity="${row.severity}">
         <span class="operation-now-alert__level operation-now-signal" data-tone="${row.severity}">${ATTENTION_LEVELS[row.severity]}</span>
@@ -1130,19 +1145,50 @@ function renderAttentionRows() {
     document.querySelectorAll('[data-attention-filter]').forEach((button) => {
         button.setAttribute('aria-pressed', String(button.dataset.attentionFilter === state.attentionFilter));
     });
+    elements.attentionArea.value = state.attentionArea;
 
     if (!attention.total) {
-        elements.alertRows.innerHTML = '<p class="operation-now-alert-list__calm">Emergencias, ambiente, ocupación, prefrío, planificador, incidencias y sincronización no presentan observaciones.</p>';
+        elements.alertRows.innerHTML = '<p class="operation-now-alert-list__calm">Las fuentes de la última lectura no presentan condiciones abiertas.</p>';
         return;
     }
 
-    const rows = attention.rows.filter((row) => state.attentionFilter === 'all' || row.severity === state.attentionFilter);
+    const rows = attention.rows.filter((row) => (
+        (state.attentionFilter === 'all' || row.severity === state.attentionFilter)
+        && (state.attentionArea === 'all' || row.domain === state.attentionArea)
+    ));
     elements.alertRows.innerHTML = rows.length
         ? rows.map(attentionRowMarkup).join('')
         : empty(
-            state.attentionFilter === 'critical' ? 'Sin condiciones de severidad alta' : 'Sin condiciones de severidad media',
-            'Las demás condiciones siguen en «Todas».',
+            'Sin condiciones para esta selección',
+            'Cambia el área o la severidad para ver las demás condiciones.',
         );
+}
+
+function renderFocus(attention) {
+    const graphic = document.querySelector('[data-focus-open="all"]');
+    graphic.disabled = attention.total === 0;
+    graphic.querySelector('[data-gajo-total]').textContent = number(attention.total);
+    byId('operationFocusTotal').textContent = attention.total === 1
+        ? '1 condición abierta'
+        : `${number(attention.total)} condiciones abiertas`;
+
+    document.querySelectorAll('.operation-now-focus__area').forEach((button) => {
+        const domain = button.dataset.focusOpen;
+        const rows = attention.rows.filter((row) => row.domain === domain);
+        const count = rows.length;
+        const alerts = [...new Set(rows.map((row) => row.condition))];
+        const detail = alerts.slice(0, 2).join(' · ');
+        button.disabled = count === 0;
+        button.querySelector('[data-focus-count]').textContent = count ? number(count) : '—';
+        button.querySelector('[data-focus-detail]').textContent = count ? detail : 'Sin condiciones registradas';
+        graphic.querySelector(`[data-gajo-leaf="${domain}"]`).dataset.active = String(Boolean(count));
+        graphic.querySelector(`[data-gajo-count="${domain}"]`).textContent = count ? number(count) : '';
+        const sidebarCount = document.querySelector(`[data-office-attention-count="${domain}"]`);
+        if (sidebarCount) {
+            sidebarCount.hidden = count === 0;
+            sidebarCount.textContent = number(count);
+        }
+    });
 }
 
 function renderAttention(data) {
@@ -1154,7 +1200,7 @@ function renderAttention(data) {
     });
 
     elements.alertsPanel.dataset.tone = attention.critical ? 'critical' : (attention.total ? 'warning' : 'neutral');
-    elements.attentionFilter.hidden = attention.total === 0;
+    elements.attentionFilter.parentElement.hidden = attention.total === 0;
     elements.alertCount.hidden = attention.total === 0;
     elements.alertCount.textContent = number(attention.total);
     elements.alertNoun.textContent = attention.total === 0
@@ -1169,6 +1215,7 @@ function renderAttention(data) {
     </li>`).join('');
 
     renderAttentionRows();
+    renderFocus(attention);
     renderTabBadges(buildOperationTabBadges(data, attention));
 }
 
@@ -1267,12 +1314,14 @@ const DISPATCH_STATES = {
     cargado_completo: 'Cargado completo', cargando: 'Cargando', en_anden: 'En andén',
 };
 
-function dispatchMeter(done, total, tone, detail) {
-    const value = total ? (Number(done) / Number(total)) * 100 : 0;
-    return `<div class="operation-now-tunnel-progress operation-now-dispatch-progress">
-        <strong>${escapeHtml(`${number(done)}/${number(total)}`)}</strong>
-        <span class="folios-meter" aria-hidden="true" data-tone="${tone}" style="--folios-meter-value:${clampedPercent(value)}%"><i></i></span>
-        <small>${escapeHtml(detail)}</small>
+function dispatchProgress(label, done, total, detail, waiting = 0) {
+    return `<div class="operation-now-dispatch__progress">
+        <dt>${label}</dt>
+        <dd>
+            <strong class="folios-code">${escapeHtml(`${number(done)}/${number(total)}`)}</strong>
+            ${palletCells(total, done, waiting)}
+            <small>${escapeHtml(detail)}</small>
+        </dd>
     </div>`;
 }
 
@@ -1281,8 +1330,9 @@ function dispatchLoadState(load) {
     if (load.incidencias_abiertas) return signal(`${number(load.incidencias_abiertas)} ${load.incidencias_abiertas === 1 ? 'incidencia' : 'incidencias'}`, 'critical');
     if (load.lista_para_cerrar) return signal('Lista para cerrar', 'success');
     if (['cargado_completo', 'separacion_completa'].includes(load.estado)) return signal(DISPATCH_STATES[load.estado], 'success');
-    if (load.estado === 'sin_asignar') return signal(DISPATCH_STATES[load.estado], 'warning');
-    return signal(DISPATCH_STATES[load.estado] || humanize(load.estado), load.prioridad === 'urgente' ? 'warning' : 'neutral');
+    if (load.estado === 'sin_asignar' || load.prioridad === 'urgente') return signal(DISPATCH_STATES[load.estado] || humanize(load.estado), 'warning');
+    const inProgress = ['en_preparacion', 'despacho_parcial', 'en_separacion', 'cargando', 'en_anden'].includes(load.estado);
+    return signal(DISPATCH_STATES[load.estado] || humanize(load.estado), inProgress ? 'info' : 'neutral');
 }
 
 function instructionTitle(instruction) {
@@ -1293,38 +1343,71 @@ function instructionReference(instruction) {
         `${number(instruction.pallets_asignados)} asignados${instruction.pallets_programados == null ? '' : ` · ${number(instruction.pallets_programados)} programados`}`].filter(Boolean).join(' · ');
 }
 
-function dispatchRow(load, { instruction = false, parent = '', dockRows = 1, single = null } = {}) {
+function dispatchMeasures(load) {
     const separation = load.separacion || {};
     const loading = load.carguio || {};
-    const title = instruction ? instructionTitle(load) : load.codigo;
-    const reference = instruction
-        ? instructionReference(load)
-        : [load.numero_orden_externa, load.embarque, (load.clientes || []).join(' · ')].filter(Boolean).join(' · ');
-    // Con un solo instructivo la carga sigue en una fila: sus datos van bajo el código, sin repetir avances.
-    const singleInstruction = single
-        ? `<span class="operation-now-subtext operation-now-dispatch-single" data-single-instruction="${escapeHtml(single.id || 'sin-instructivo')}">${escapeHtml([instructionTitle(single), instructionReference(single)].join(' · '))}</span>`
-        : '';
-    const separationTone = separation.total && separation.acopiados >= separation.total ? 'success' : (separation.cumple_umbral ? 'info' : 'warning');
-    const separationDetail = [separation.en_anden
-        ? `${number(separation.en_anden)} en andén · ${percent(separation.porcentaje)}`
-        : `${percent(separation.porcentaje)} · umbral ${percent(separation.umbral_porcentaje)}`,
-    load.pallets_pendientes_asignar > 0 ? `${number(load.pallets_pendientes_asignar)} por asignar` : '',
-    load.pendientes_ubicacion > 0 ? `${number(load.pendientes_ubicacion)} por ubicar` : ''].filter(Boolean).join(' · ');
+    const separationDetail = [
+        `${percent(separation.porcentaje)} · umbral ${percent(separation.umbral_porcentaje)}`,
+        load.pallets_pendientes_asignar > 0 ? `${number(load.pallets_pendientes_asignar)} por asignar` : '',
+        load.pendientes_ubicacion > 0 ? `${number(load.pendientes_ubicacion)} por ubicar` : '',
+    ].filter(Boolean).join(' · ');
     const loadingDetail = loading.en_anden_por_cargar
         ? `${number(loading.en_anden_por_cargar)} en andén por subir`
         : (loading.total && loading.cargados >= loading.total ? 'Carga completa' : 'Sin pallets esperando en andén');
+
+    return `<dl class="operation-now-dispatch__measures">
+        ${dispatchProgress('Separación', separation.acopiados, separation.total, separationDetail)}
+        ${dispatchProgress('Carguío', loading.cargados, loading.total, loadingDetail, loading.en_anden_por_cargar)}
+    </dl>`;
+}
+
+function dispatchState(load) {
+    return `<div class="operation-now-dispatch__state">
+        ${dispatchLoadState(load)}${sagLotAlertsHtml(load.alertas_sag || [], { compact: true })}
+    </div>`;
+}
+
+function dispatchInstruction(instruction, load) {
+    return `<li class="operation-now-dispatch__instruction" data-parent-load="${escapeHtml(load.codigo)}" data-instruction-id="${escapeHtml(instruction.id || 'sin-instructivo')}">
+        <div>
+            <strong>${escapeHtml(instructionTitle(instruction))}</strong>
+            <small class="operation-now-subtext">${escapeHtml(instructionReference(instruction))}</small>
+        </div>
+        ${dispatchMeasures(instruction)}
+        ${dispatchState(instruction)}
+    </li>`;
+}
+
+function dispatchTicket(load) {
+    const instructions = load.instructivos || [];
+    const reference = [load.numero_orden_externa, load.embarque, (load.clientes || []).join(' · ')].filter(Boolean).join(' · ');
     const truck = load.camion_en_anden
         ? `Camión ${load.camion_en_anden.patente || 'sin patente'} · desde ${dateTime(load.camion_en_anden.ingresada_at, { timeOnly: true })}`
         : 'Sin camión';
-    return `<tr class="${instruction ? 'operation-now-dispatch-instruction' : 'operation-now-dispatch-load'}"${instruction
-        ? ` data-parent-load="${escapeHtml(parent)}" data-instruction-id="${escapeHtml(load.id || 'sin-instructivo')}"`
-        : ` data-dispatch-load="${escapeHtml(load.id)}"`}>
-        <td><span class="operation-now-code">${escapeHtml(title)}${instruction ? `<span class="office-visually-hidden"> de la carga ${escapeHtml(parent)}</span>` : ''}</span><span class="operation-now-subtext">${escapeHtml(reference || 'Sin orden externa')}</span>${singleInstruction}</td>
-        <td>${dispatchMeter(separation.acopiados, separation.total, separationTone, separationDetail)}</td>
-        <td>${dispatchMeter(loading.cargados, loading.total, loading.total && loading.cargados >= loading.total ? 'success' : 'info', loadingDetail)}</td>
-        ${instruction ? '' : `<td rowspan="${dockRows}"><strong>${escapeHtml(load.anden || '—')}</strong><span class="operation-now-subtext">${escapeHtml(truck)}</span></td>`}
-        <td>${dispatchLoadState(load)}${sagLotAlertsHtml(load.alertas_sag || [], { compact: true })}</td>
-    </tr>`;
+    const single = instructions.length === 1 ? instructions[0] : null;
+
+    return `<article class="folios-ticket operation-now-dispatch__load" data-ticket-area="frigorifico" data-dispatch-load="${escapeHtml(load.id)}">
+        <header class="operation-now-dispatch__heading">
+            <div>
+                <h3 class="folios-code">${officeCode(load.codigo, escapeHtml, 3)}</h3>
+                <small class="operation-now-subtext">${escapeHtml(reference || 'Sin orden externa')}</small>
+                ${single ? `<small class="operation-now-subtext" data-single-instruction="${escapeHtml(single.id || 'sin-instructivo')}">${escapeHtml([instructionTitle(single), instructionReference(single)].join(' · '))}</small>` : ''}
+            </div>
+            ${dispatchState(load)}
+        </header>
+        <div class="operation-now-dispatch__body">
+            ${dispatchMeasures(load)}
+            <div class="operation-now-dispatch__dock">
+                <small>Andén</small>
+                <strong class="folios-code">${escapeHtml(load.anden || '—')}</strong>
+                <small>${escapeHtml(truck)}</small>
+            </div>
+        </div>
+        ${instructions.length > 1 ? `<div class="operation-now-dispatch__instructions">
+            <h4>${number(instructions.length)} instructivos en esta carga</h4>
+            <ul>${instructions.map((instruction) => dispatchInstruction(instruction, load)).join('')}</ul>
+        </div>` : ''}
+    </article>`;
 }
 
 function renderDispatch(dispatch = {}) {
@@ -1333,15 +1416,9 @@ function renderDispatch(dispatch = {}) {
     elements.dispatchSummary.textContent = loads.length
         ? `${number(summary.activas)} ${summary.activas === 1 ? 'activa' : 'activas'} · ${number(summary.cargando)} cargando · ${number(summary.listas_para_cerrar)} ${summary.listas_para_cerrar === 1 ? 'lista' : 'listas'} para cerrar`
         : 'Sin cargas publicadas';
-    if (!loads.length) {
-        elements.dispatchRows.innerHTML = `<tr><td colspan="5">${empty('Sin cargas en despacho', 'Las cargas aparecen al publicarse y salen al cerrar el despacho.')}</td></tr>`;
-        return;
-    }
-    elements.dispatchRows.innerHTML = loads.map((load) => {
-        const instructions = load.instructivos?.length > 1 ? load.instructivos : [];
-        return dispatchRow(load, { dockRows: instructions.length + 1, single: load.instructivos?.length === 1 ? load.instructivos[0] : null })
-            + instructions.map((instruction) => dispatchRow(instruction, { instruction: true, parent: load.codigo })).join('');
-    }).join('');
+    elements.dispatchRows.innerHTML = loads.length
+        ? loads.map(dispatchTicket).join('')
+        : empty('Sin cargas en despacho', 'Las cargas aparecen al publicarse y salen al cerrar el despacho.');
 }
 
 const REENTRY_TASK_STATES = { pendiente: 'Esperando camarero', asumida: 'Asumida', en_proceso: 'En curso', completada: 'Completada', cancelada: 'Cancelada' };
@@ -1987,7 +2064,7 @@ elements.comparisonDialog.addEventListener('click', (event) => {
 
 // Pestañas: solo la persona cambia de vista. Al cambiar, el contenido parte bajo la barra.
 let tabsReady = false;
-createOperationTabs({
+const operationTabs = createOperationTabs({
     root: elements.content,
     onChange: () => {
         if (!tabsReady) return;
@@ -1998,6 +2075,19 @@ createOperationTabs({
     },
 });
 tabsReady = true;
+
+document.querySelectorAll('[data-focus-open]').forEach((button) => {
+    button.addEventListener('click', () => {
+        state.attentionArea = button.dataset.focusOpen;
+        state.attentionFilter = 'all';
+        renderAttentionRows();
+        operationTabs.activate('atencion', { focus: true });
+    });
+});
+elements.attentionArea.addEventListener('change', () => {
+    state.attentionArea = elements.attentionArea.value;
+    renderAttentionRows();
+});
 
 document.querySelectorAll('[data-attention-filter]').forEach((button) => {
     button.addEventListener('click', () => {
