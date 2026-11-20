@@ -1,0 +1,432 @@
+/* NERV · FoliOS Oficina. La marca y el fondo se instalan en la planta. */
+@media screen {
+    :root[data-office-personal-theme="personal-nerv"] {
+        color-scheme: dark;
+        accent-color: var(--primary);
+        --bg: #0c090a;
+        --deep: #080607;
+        --panel: #171214;
+        --raised: #21181a;
+        --soft: #302327;
+        --line: #62444b;
+        --line-soft: #392b2f;
+        --border: var(--line);
+        --input-border: #89666e;
+        --text: #f5eef0;
+        --text-strong: #fff7f8;
+        --text-secondary: #dbc9cd;
+        --text-subtle: #bda8ad;
+        --muted: var(--text-subtle);
+        --header-bg: var(--deep);
+        --subnav-bg: #130e10;
+        --surface-muted: #21191b;
+        --surface-hover: #342328;
+        --surface-selected: #492029;
+        --input-bg: #110d0e;
+        --table-head: #23191c;
+        --row-bg: var(--panel);
+        --row-alt: #1d1618;
+        --row-hover: var(--surface-hover);
+        --button-secondary: var(--raised);
+        --button-secondary-hover: var(--surface-hover);
+        --icon-surface: #302028;
+        --primary: #f47583;
+        --primary-hover: #ff9aa5;
+        --on-primary: #17090d;
+        --accent: var(--primary);
+        --focus-ring: #ff8b99;
+        --selection-bg: #723541;
+        --corporate-navy: var(--deep);
+        --corporate-canvas: var(--bg);
+        --corporate-card: var(--panel);
+        --corporate-border: var(--line-soft);
+        --corporate-text: var(--text);
+        --corporate-text-muted: var(--muted);
+        --corporate-blue: var(--primary);
+        --corporate-blue-dark: #9c2c3e;
+        --corporate-orange: #dc5769;
+        --corporate-gold: #f5b4bd;
+        --corporate-shadow: 0 7px 24px #03010259;
+        --corporate-shadow-raised: 0 20px 54px #030102b3;
+        --cyan: var(--primary);
+        --cyan-light: var(--primary-hover);
+        --frost: var(--primary);
+        --frost-strong: var(--primary-hover);
+        --success-bg: #272123;
+        --success-text: #e8dce0;
+        --warning-bg: #3b2128;
+        --warning-text: #f6aeb9;
+        --danger-bg: #4e1621;
+        --danger-text: #ff8998;
+        --info-bg: #2d1c21;
+        --info-text: #f4c4cd;
+        --green: var(--success-text);
+        --amber: var(--warning-text);
+        --red: var(--danger-text);
+        --danger: var(--danger-text);
+        --seal: var(--warning-text);
+        --seal-bg: var(--warning-bg);
+        --critical-fill: #a92c42;
+        --on-critical-fill: #fff6f8;
+        --hydro-blue: var(--primary);
+        --hydro-ice: var(--info-text);
+        --hydro-green: var(--success-text);
+        --hydro-gold: var(--warning-text);
+        --overlay: #060304cc;
+        --brand-gradient: linear-gradient(130deg, #080607 22%, #241016 74%, #3d151e);
+        --kpi-surface: linear-gradient(150deg, #22171b, var(--panel));
+        --logo-border: var(--line);
+        --logo-bg: var(--deep);
+        --series-product: #ee6475;
+        --series-material: #c4a6af;
+        --chart-grid: var(--line-soft);
+        --chart-text: var(--text-secondary);
+        --chart-tooltip-bg: var(--raised);
+        --chart-tooltip-border: var(--line);
+        --area-operacion-ink: var(--primary);
+        --area-operacion-bright: var(--primary-hover);
+        --area-operacion-text: var(--text-strong);
+        --area-operacion-line: var(--line);
+        --area-operacion-tint: var(--surface-selected);
+        --area-materia-prima-ink: var(--area-operacion-ink);
+        --area-materia-prima-bright: var(--area-operacion-bright);
+        --area-materia-prima-text: var(--area-operacion-text);
+        --area-materia-prima-line: var(--area-operacion-line);
+        --area-materia-prima-tint: var(--area-operacion-tint);
+        --area-frigorifico-ink: var(--area-operacion-ink);
+        --area-frigorifico-bright: var(--area-operacion-bright);
+        --area-frigorifico-text: var(--area-operacion-text);
+        --area-frigorifico-line: var(--area-operacion-line);
+        --area-frigorifico-tint: var(--area-operacion-tint);
+        --area-materiales-ink: var(--area-operacion-ink);
+        --area-materiales-bright: var(--area-operacion-bright);
+        --area-materiales-text: var(--area-operacion-text);
+        --area-materiales-line: var(--area-operacion-line);
+        --area-materiales-tint: var(--area-operacion-tint);
+        --area-consultas-ink: var(--area-operacion-ink);
+        --area-consultas-bright: var(--area-operacion-bright);
+        --area-consultas-text: var(--area-operacion-text);
+        --area-consultas-line: var(--area-operacion-line);
+        --area-consultas-tint: var(--area-operacion-tint);
+        --area-gerencia-ink: var(--area-operacion-ink);
+        --area-gerencia-bright: var(--area-operacion-bright);
+        --area-gerencia-text: var(--area-operacion-text);
+        --area-gerencia-line: var(--area-operacion-line);
+        --area-gerencia-tint: var(--area-operacion-tint);
+        --area-administracion-ink: var(--area-operacion-ink);
+        --area-administracion-bright: var(--area-operacion-bright);
+        --area-administracion-text: var(--area-operacion-text);
+        --area-administracion-line: var(--area-operacion-line);
+        --area-administracion-tint: var(--area-operacion-tint);
+        --nerv-linea: #ab3244;
+        --nerv-emblema: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
+        --nerv-fondo: __FOLIOS_TEMA_FONDO__;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .estiba-ui {
+        --eui-color-navy: var(--deep);
+        --eui-color-navy-hover: var(--surface-hover);
+        --eui-color-navy-gajo: var(--line);
+        --eui-color-on-navy: var(--text-strong);
+        --eui-color-on-navy-muted: var(--text-secondary);
+        --eui-color-canvas: var(--bg);
+        --eui-color-surface: var(--panel);
+        --eui-color-subtle: var(--surface-muted);
+        --eui-color-border: var(--corporate-border);
+        --eui-color-border-soft: var(--line-soft);
+        --eui-color-input-border: var(--input-border);
+        --eui-color-text: var(--text);
+        --eui-color-text-secondary: var(--text-secondary);
+        --eui-color-muted: var(--text-subtle);
+        --eui-color-primary: var(--primary);
+        --eui-color-primary-hover: var(--primary-hover);
+        --eui-color-on-primary: var(--on-primary);
+        --eui-color-confirm-hover: #fff1f4;
+        --eui-color-critical-fill: var(--critical-fill);
+        --eui-color-on-critical-fill: var(--on-critical-fill);
+        --eui-color-selected: var(--surface-selected);
+        --eui-color-focus: var(--focus-ring);
+        --eui-color-disabled-surface: var(--soft);
+        --eui-color-disabled-text: var(--text-subtle);
+        --eui-color-frost: var(--frost);
+        --eui-color-frost-bright: var(--frost);
+        --eui-color-frost-strong: var(--frost-strong);
+        --eui-color-seal: var(--seal);
+        --eui-color-seal-surface: var(--success-bg);
+        --eui-area-operacion-line: var(--area-operacion-line);
+        --eui-area-operacion-text: var(--area-operacion-text);
+        --eui-area-operacion-tint: var(--area-operacion-tint);
+        --eui-signal-neutral-text: var(--text-subtle);
+        --eui-signal-neutral-surface: var(--surface-muted);
+        --eui-signal-neutral-border: var(--line);
+        --eui-signal-info-text: var(--info-text);
+        --eui-signal-info-surface: var(--info-bg);
+        --eui-signal-info-border: var(--line);
+        --eui-signal-success-text: var(--success-text);
+        --eui-signal-success-surface: var(--success-bg);
+        --eui-signal-success-border: var(--line);
+        --eui-signal-warning-text: var(--warning-text);
+        --eui-signal-warning-surface: var(--warning-bg);
+        --eui-signal-warning-border: #a75e6e;
+        --eui-signal-critical-text: var(--danger-text);
+        --eui-signal-critical-surface: var(--danger-bg);
+        --eui-signal-critical-border: var(--nerv-linea);
+        --eui-signal-reserved-text: var(--info-text);
+        --eui-signal-reserved-surface: var(--info-bg);
+        --eui-signal-reserved-border: var(--line);
+        --eui-signal-temporary-text: var(--warning-text);
+        --eui-signal-temporary-surface: var(--warning-bg);
+        --eui-signal-temporary-border: var(--line);
+        --eui-signal-blocked-text: var(--danger-text);
+        --eui-signal-blocked-surface: var(--danger-bg);
+        --eui-signal-blocked-border: var(--nerv-linea);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .estiba-office-shell {
+        --shell-navy: var(--deep);
+        --shell-navy-hover: var(--surface-hover);
+        --shell-strong: var(--text-strong);
+        --shell-ink: var(--text);
+        --shell-muted: var(--text-secondary);
+        --shell-faint: var(--text-subtle);
+        --shell-warning: var(--warning-text);
+        --shell-line: var(--line);
+        --shell-gajo: var(--line);
+        --shell-active-bg: var(--surface-selected);
+        --shell-active-ink: var(--text-strong);
+        --shell-active-gajo: var(--line);
+        --shell-focus: var(--focus-ring);
+        --eui-shell-frost: var(--corporate-blue-dark);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .estiba-office-header {
+        background: var(--deep);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .estiba-office-header::after {
+        left: 0;
+        height: 2px;
+        background: var(--nerv-linea);
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .estiba-office-brand .folios-logo--office {
+        filter: grayscale(1);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .folios-gajo {
+        --gajo-area: var(--text-subtle);
+        --gajo-bright: var(--primary);
+        --gajo-ink: var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .estiba-office-sidebar :is(.estiba-office-area.is-active, .estiba-office-offices a.is-active) {
+        background: linear-gradient(90deg, var(--surface-selected), #27151b);
+        box-shadow: inset 3px 0 var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .estiba-office-search input {
+        border-color: var(--input-border);
+        background: var(--input-bg);
+        color: var(--text);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .estiba-office-search input::placeholder {
+        color: var(--text-subtle);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .estiba-office-shell .estiba-office-theme-select {
+        border-color: var(--nerv-linea);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .office-app .primary-button {
+        border-color: var(--primary) !important;
+        background: var(--primary) !important;
+        color: var(--on-primary) !important;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .office-app .primary-button:hover {
+        border-color: var(--primary-hover) !important;
+        background: var(--primary-hover) !important;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .office-app table th {
+        background: var(--table-head) !important;
+        color: var(--text-strong) !important;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .office-app :is(.office-panel-tab, .operation-now-tab)[aria-selected="true"] {
+        border-block-end-color: var(--primary);
+        background: var(--surface-selected);
+        color: var(--text-strong);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-command {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas: "title title title" "state date actions";
+        gap: 8px 16px;
+        margin-block-end: 10px;
+        padding: 0 16px 9px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-command__title {
+        --nerv-tamano-emblema: clamp(108px, 12vw, 188px);
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) var(--nerv-tamano-emblema) minmax(0, .9fr);
+        grid-template-rows: auto auto;
+        grid-template-areas: "eyebrow emblem ." "heading emblem .";
+        align-content: center;
+        align-items: center;
+        gap: 5px 16px;
+        min-block-size: clamp(138px, 14vw, 216px);
+        margin-inline: -16px;
+        padding: 10px 20px;
+        border-block-end: 1px solid var(--nerv-linea);
+        background:
+            linear-gradient(113deg, transparent 40%, #8e2536 40.15%, transparent 40.28%),
+            var(--nerv-fondo) right center / auto 100% no-repeat,
+            #000000;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-command__title::after {
+        grid-area: emblem;
+        inline-size: var(--nerv-tamano-emblema);
+        block-size: var(--nerv-tamano-emblema);
+        background: var(--nerv-emblema) center / contain no-repeat;
+        content: "";
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-command__title .operation-now-eyebrow {
+        grid-area: eyebrow;
+        align-self: end;
+        margin: 0;
+        color: var(--primary-hover);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-command__title h1 {
+        grid-area: heading;
+        align-self: start;
+        color: var(--text-strong);
+        font-size: clamp(1.7rem, 3vw, 3.15rem);
+        font-stretch: 82%;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-command__date strong {
+        color: var(--primary-hover);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .office-app .operation-now-overview__card {
+        border-block-start: 2px solid var(--nerv-linea) !important;
+        background: var(--kpi-surface) !important;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .office-app .operation-now-overview__card:hover {
+        background: var(--surface-hover) !important;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-panel__heading {
+        background: var(--table-head);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-panel__title :is(svg, .eui-icon) {
+        color: var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-table tbody {
+        background: var(--row-bg);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] :is(.plant-view, .operation-map-dialog) {
+        --plant-canvas: var(--deep);
+        --plant-grid: color-mix(in srgb, var(--line) 24%, transparent);
+        --plant-grid-major: color-mix(in srgb, var(--line) 45%, transparent);
+        --plant-wall: var(--line);
+        --plant-node: var(--panel);
+        --plant-node-border: var(--line);
+        --plant-ink: var(--text);
+        --plant-muted: var(--text-subtle);
+        --plant-success: var(--success-text);
+        --plant-warning: var(--warning-text);
+        --plant-critical: var(--danger-text);
+        --plant-info: var(--info-text);
+        --plant-neutral: var(--text-subtle);
+        --plant-success-soft: var(--success-bg);
+        --plant-warning-soft: var(--warning-bg);
+        --plant-critical-soft: var(--danger-bg);
+        --plant-info-soft: var(--info-bg);
+        --plant-zone: var(--raised);
+        --plant-zone-border: var(--line);
+        --plant-repa: var(--primary);
+        --plant-repa-soft: var(--surface-selected);
+        --plant-raw: var(--info-text);
+        --plant-materials: var(--text-subtle);
+        --plant-dock: var(--deep);
+        --plant-legend: var(--deep);
+        --plant-legend-ink: var(--text-secondary);
+        --plant-corridor: var(--raised);
+        --plant-corridor-border: var(--line);
+        --plant-corridor-line: var(--input-border);
+        --plant-blocked: var(--deep);
+        --plant-blocked-alt: var(--soft);
+        --plant-blocked-border: var(--line);
+        --plant-door: var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .office-app .plant-legend > strong {
+        color: var(--text-subtle) !important;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend [data-legend="anden"]::before { border-color: var(--input-border); background: var(--plant-dock); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend [data-legend="camara"]::before { border-color: var(--input-border); background: var(--plant-node); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend [data-legend="tunel"]::before { border-color: var(--input-border); background: repeating-linear-gradient(90deg, var(--plant-node) 0 2px, var(--line) 2px 4px); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend [data-legend="recepcion_mp"]::before { border-color: var(--plant-raw); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend [data-legend="materiales"]::before { border-color: var(--plant-materials); background: repeating-linear-gradient(0deg, transparent 0 2px, var(--plant-materials) 2px 3px); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend [data-legend="pasillo"]::before { border-color: var(--plant-corridor-line); background: var(--plant-corridor); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend [data-legend="no_operativo"]::before { border-color: var(--input-border); background: repeating-linear-gradient(135deg, var(--plant-blocked) 0 2px, var(--plant-blocked-alt) 2px 4px); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend :is([data-legend="repa"], [data-legend="acceso"])::before { border-color: var(--plant-repa); background: var(--plant-repa); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend :is([data-legend="warning"], [data-legend="equipo"])::before { border-color: var(--plant-warning); background: var(--plant-warning); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend :is([data-legend="success"], [data-legend="personal"])::before { border-color: var(--plant-success); background: var(--plant-success); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend [data-legend="critical"]::before { border-color: var(--plant-critical); background: var(--plant-critical); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-legend [data-legend="mantencion"]::before { border-color: var(--plant-critical); background: repeating-linear-gradient(45deg, transparent 0 2px, var(--plant-critical) 2px 4px); }
+    :root[data-office-personal-theme="personal-nerv"] .plant-node[data-type="anden"][data-tone="success"] .plant-node__value { color: var(--success-text) !important; }
+    :root[data-office-personal-theme="personal-nerv"] .operation-map-node.is-selected { outline-color: var(--focus-ring); }
+
+    :root[data-office-personal-theme="personal-nerv"] :is(.operation-map-dialog__header, .operation-supervision__header, .operation-cycle-comparison__header) {
+        border-block-end-color: var(--nerv-linea);
+        background: var(--raised);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .office-app :is(.operation-map-dialog__header, .operation-supervision__header, .operation-cycle-comparison__header) :is(p, span) {
+        color: var(--text-secondary) !important;
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] :is(.operation-map-dialog__actions, .operation-supervision__header, .operation-cycle-comparison__header) button {
+        border-color: var(--input-border);
+        background: var(--button-secondary);
+        color: var(--text-strong);
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] :is(.operation-map-dialog__actions, .operation-supervision__header, .operation-cycle-comparison__header) button:is(:hover, :focus-visible) {
+        border-color: var(--primary);
+        background: var(--button-secondary-hover);
+    }
+}
+
+@media screen and (max-width: 599px) {
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-command {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "title title" "state actions";
+    }
+
+    :root[data-office-personal-theme="personal-nerv"] .operation-now-command__title {
+        --nerv-tamano-emblema: 88px;
+        grid-template-columns: minmax(0, 1fr) var(--nerv-tamano-emblema);
+        grid-template-areas: "eyebrow emblem" "heading emblem";
+        gap: 5px 10px;
+        min-block-size: 110px;
+        padding-inline: 14px;
+        background: #000000;
+    }
+}

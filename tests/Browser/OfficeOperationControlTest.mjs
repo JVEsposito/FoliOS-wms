@@ -8,6 +8,7 @@ import { PNG } from 'pngjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const webpMagenta = 'UklGRhwAAABXRUJQVlA4TBAAAAAvB4AAAAcQxS9y/wMR0f8A';
+const pngMagenta = 'iVBORw0KGgoAAAANSUhEUgAAAAYAAAAGCAIAAABvrngfAAAAFUlEQVQI12P8z3qNARUwMWAAagoBANKnAeZyRjDUAAAAAElFTkSuQmCC';
 
 test('el centro de control conserva la pestaña y pinta las cabeceras de los temas habilitados', async () => {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
@@ -16,6 +17,7 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         const temas = {
             'personal-omegamon-x': { nombre: 'Omegamon X', color: '#0d111b', claro: false },
             'personal-mugiwara': { nombre: 'Mugiwara', color: '#071c28', claro: false },
+            'personal-nerv': { nombre: 'NERV', color: '#0c090a', claro: false },
         };
         const preferencias = { temas_oficina: Object.keys(temas), temas_oficina_personales: temas };
         const identity = { nombre: 'Supervisión', rol: 'consulta', puede_consultar_panel_gerencial: true, modulos_acceso: ['gerencia.panel'], ...preferencias };
@@ -48,7 +50,9 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
             const tema = pathname.slice('/api/oficina/tema-personal/'.length);
             if (pathname.startsWith('/api/oficina/tema-personal/') && Object.hasOwn(temas, tema)) {
                 const css = readFileSync(resolve(root, 'resources', 'temas-oficina', `${tema}.css`), 'utf8');
-                return route.fulfill({ contentType: 'text/css', body: css.replace('__FOLIOS_TEMA_WEBP__', webpMagenta) });
+                const ilustracion = tema === 'personal-nerv' ? `data:image/png;base64,${pngMagenta}` : `data:image/webp;base64,${webpMagenta}`;
+                const body = css.replace('data:image/webp;base64,__FOLIOS_TEMA_WEBP__', ilustracion).replace('__FOLIOS_TEMA_FONDO__', 'none');
+                return route.fulfill({ contentType: 'text/css', body });
             }
             return route.fulfill({ json: { data: { planta: 'Pruebas', temporada: snapshot.temporada, ...preferencias } } });
         });
@@ -91,12 +95,15 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
                 const titulo = await cabecera.getByRole('heading', { name: 'Operación ahora' }).boundingBox();
                 assert.ok(titulo?.height > 20, `${tema} mantiene el título visible a ${width}px`);
                 const imagen = PNG.sync.read(await cabecera.screenshot());
-                const posicion = (Math.floor(imagen.height / 2) * imagen.width + imagen.width - 12) * 4;
+                const x = tema === 'personal-nerv' ? (width <= 599 ? imagen.width - 52 : Math.floor(imagen.width * 0.53)) : imagen.width - 12;
+                const posicion = (Math.floor(imagen.height / 2) * imagen.width + x) * 4;
                 const [rojo, verde, azul] = imagen.data.subarray(posicion, posicion + 3);
-                assert.ok(rojo > 220 && verde < 45 && azul > 160, `${tema} pinta su WebP en la cabecera a ${width}px`);
+                assert.ok(rojo > 220 && verde < 45 && azul > 160, `${tema} pinta su ilustración en la cabecera a ${width}px`);
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
             }
         }
+        assert.equal(await page.locator('.estiba-office-search input').evaluate(input => getComputedStyle(input).backgroundColor), 'rgb(17, 13, 14)');
+        assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()), '#f47583');
         assert.deepEqual(errors, []);
         await context.close();
     } finally {
