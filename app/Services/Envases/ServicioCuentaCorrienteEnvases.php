@@ -231,7 +231,17 @@ class ServicioCuentaCorrienteEnvases
             $buscar = '%'.str_replace(['%', '_'], ['\\%', '\\_'], trim($filtros['buscar'])).'%';
             $consulta->where(function (Builder $q) use ($buscar): void {
                 $q->where('numero_documento', 'like', $buscar)
-                    ->orWhereHas('cliente', fn (Builder $cliente) => $cliente->where('nombre', 'like', $buscar));
+                    ->orWhereHas('cliente', fn (Builder $cliente) => $cliente->where(
+                        fn (Builder $identidad) => $identidad->where('nombre', 'like', $buscar)->orWhere('codigo', 'like', $buscar),
+                    ))
+                    ->orWhereHas('recepcion', fn (Builder $recepcion) => $recepcion->where(function (Builder $documento) use ($buscar): void {
+                        $documento->where('numero_recepcion', 'like', $buscar)
+                            ->orWhere('numero_guia_despacho', 'like', $buscar)
+                            ->orWhere('numero_guia_salida', 'like', $buscar)
+                            ->orWhereHas('guiasRecepcion', fn (Builder $guia) => $guia->where('numero_guia_despacho', 'like', $buscar));
+                    }))
+                    ->orWhere(fn (Builder $despacho) => $despacho->where('documento_tipo', self::DOCUMENTO_GUIA)
+                        ->whereIn('documento_id', GuiaDespachoEnvase::query()->select('id')->where('numero_guia_despacho', 'like', $buscar)));
             });
         }
     }

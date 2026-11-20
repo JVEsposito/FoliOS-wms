@@ -38,8 +38,16 @@ class ReasignacionProductorEnvasesTest extends TestCase
         $asientos = MovimientoEnvase::count();
         $this->comoAdministrador();
 
+        // Se puede encontrar el movimiento por la segunda guía o por el número de recepción.
+        $ingreso = $this->ingreso($recepcion);
+        foreach (['1512', $recepcion->numero_recepcion] as $buscar) {
+            $movimientos = $this->getJson('/api/envases/cuenta-corriente/movimientos?'.http_build_query([
+                'cliente_id' => $cliente->id, 'buscar' => $buscar,
+            ]))->assertOk()->json('data');
+            $this->assertContains($ingreso->id, array_column($movimientos, 'id'));
+        }
         // El movimiento muestra cada guía del camión con su productor, su razón social y sus cantidades.
-        $opciones = $this->getJson($this->opciones($this->ingreso($recepcion)))->assertOk()->json('data');
+        $opciones = $this->getJson($this->opciones($ingreso))->assertOk()->json('data');
         $this->assertSame(['Guía de ingreso N° 1511', 'Guía de ingreso N° 1512'], array_column($opciones, 'titulo'));
         $guia = $opciones[1];
         $this->assertSame([['codigo' => 'CSG-CORR-B', 'nombre' => 'Agrícola Dos']], array_map(fn ($p) => ['codigo' => $p['codigo'], 'nombre' => $p['nombre']], $guia['productores']));

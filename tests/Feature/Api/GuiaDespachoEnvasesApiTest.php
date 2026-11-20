@@ -9,6 +9,7 @@ use App\Models\MovimientoEnvase;
 use App\Models\ProductorCsg;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Services\Envases\ServicioCuentaCorrienteEnvases;
 use App\Services\Envases\ServicioGuiaDespachoEnvases;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Carbon\CarbonImmutable;
@@ -206,6 +207,52 @@ class GuiaDespachoEnvasesApiTest extends TestCase
         $this->assertDatabaseCount('movimientos_envases', 2);
         $this->actingAs($operador, 'sanctum')->getJson($ruta)->assertOk()->assertJsonPath('data.puede_editar_productor', false);
         $this->putJson($ruta.'/productor', [...$correccion, 'productor_csg_id' => $otroProductor->id, 'version' => $guia['version'] + 1])->assertForbidden();
+    }
+
+    public function test_busca_por_guia_emitida_y_reasigna_el_despacho_desde_cuenta_envases(): void
+    {
+        $temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        $cliente = Cliente::create(['codigo' => 'DS-001', 'nombre' => 'Disfruta', 'activo' => true]);
+        $admin = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $productor = $this->productorCsg($cliente, $admin, '122104');
+        $productorCorrecto = $this->productorCsg($cliente, $admin, '122107');
+        $this->movimientoIngreso($temporada, $cliente, $admin, 'propia', 50);
+        $this->actingAs($admin, 'sanctum');
+        $guias = '/api/envases/guias-despacho';
+        $guia = $this->postJson($guias, $this->payloadGuia($cliente, (string) Str::uuid(), [
+            ['tipo_envase' => 'bins', 'cantidad' => 36, 'propiedad' => 'propia'],
+        ]))->assertCreated()->json('data');
+        $this->postJson($guias.'/'.$guia['id'].'/confirmar', ['numero_guia_despacho' => '2227'])
+            ->assertOk()->assertJsonPath('data.productor', null);
+
+        $cuenta = '/api/envases/cuenta-corriente';
+        $movimiento = $this->getJson($cuenta.'/movimientos?'.http_build_query(['cliente_id' => $cliente->id, 'buscar' => '2227']))
+            ->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.numero_documento', $guia['numero'])
+            ->assertJsonPath('data.0.guia_emitida.numero', '2227')
+            ->assertJsonPath('data.0.puede_reasignar_productor', true)->json('data.0.id');
+        $opciones = $cuenta.'/movimientos/'.$movimiento.'/reasignacion-productor';
+        $documento = $this->getJson($opciones)->assertOk()->assertJsonPath('data.0.numero', '2227')
+            ->assertJsonPath('data.0.productores.0.codigo', null)->json('data.0.clave');
+
+        foreach ([[$productor, null], [$productorCorrecto, $productor->codigo]] as [$destino, $origen]) {
+            $this->postJson($cuenta.'/reasignaciones-productor', [
+                'operacion_id' => (string) Str::uuid(), 'documento_clave' => $documento,
+                'productor_origen_codigo' => $origen, 'productor_csg_id' => $destino->id, 'razon_social' => $destino->razon_social,
+                'modalidad' => 'completa', 'motivo' => 'Se verificó el CSG de la guía emitida.',
+            ])->assertCreated()->assertJsonPath('data.destino.codigo', $destino->codigo);
+        }
+
+        $this->getJson($opciones)->assertOk()->assertJsonCount(1, 'data.0.productores')
+            ->assertJsonPath('data.0.productores.0.codigo', '122107')
+            ->assertJsonPath('data.0.productores.0.envases.0.cantidad', 36)
+            ->assertJsonCount(2, 'data.0.historial');
+        $estado = app(ServicioCuentaCorrienteEnvases::class)->estadoCuenta($cliente, $temporada, null, null);
+        $this->assertSame(['122107'], array_column($estado['resumen_csg'], 'codigo'));
+        $this->assertSame(36, $estado['resumen_csg'][0]['tipos'][0]['salidas']);
+        $this->assertSame(-36, $this->saldoCuenta($cliente));
+        $this->assertSame(14, $this->existencia('propia'));
+        $this->assertDatabaseCount('movimientos_envases', 2);
     }
 
     public function test_identifica_el_formato_de_la_patente_y_permite_corregir_el_borrador_sin_crear_reservas_por_el_error(): void

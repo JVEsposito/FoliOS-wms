@@ -299,7 +299,14 @@ function renderBalances(balances) {
         clients.set(balance.cliente.id, client);
     });
     return [...clients.values()].map(({ cliente, lines }) => `<article class="balance-client">
-        <header class="balance-client__header"><div><b>${escapeHtml(cliente.nombre)}</b><small>${escapeHtml(cliente.codigo)}</small></div><div class="balance-actions" data-office-action-menu><button type="button" data-statement="${escapeHtml(cliente.id)}" data-format="pdf" data-action-label="Estado de cuenta en PDF">↓ Estado de cuenta PDF</button><button type="button" data-statement="${escapeHtml(cliente.id)}" data-format="xlsx" data-action-label="Estado de cuenta en Excel">↓ Estado de cuenta Excel</button></div></header>
+        <header class="balance-client__header">
+            <div><b>${escapeHtml(cliente.nombre)}</b><small>${escapeHtml(cliente.codigo)}</small></div>
+            <div class="balance-actions" data-office-action-menu>
+                <button type="button" data-statement="${escapeHtml(cliente.id)}" data-format="pdf" data-action-label="Estado de cuenta en PDF">↓ Estado de cuenta PDF</button>
+                <button type="button" data-statement="${escapeHtml(cliente.id)}" data-format="xlsx" data-action-label="Estado de cuenta en Excel">↓ Estado de cuenta Excel</button>
+                ${state.identity?.puede_ajustar_cuenta_envases ? `<button type="button" data-producer-movements="${escapeHtml(cliente.id)}">Reasignar productor de una guía</button>` : ''}
+            </div>
+        </header>
         ${lines.map((line) => `<div class="balance-line"><div><b>${escapeHtml(typeName(line.tipo_envase))}</b><small>${line.saldo < 0 ? 'El cliente debe envases a la planta' : line.saldo > 0 ? 'La planta debe envases al cliente' : 'Cuenta saldada'}</small>${line.propios_entregados ? `<small>${line.propios_entregados} envases propios de la planta entregados en la temporada</small>` : ''}</div><strong class="${line.saldo < 0 ? 'negative' : 'positive'}">${signed(line.saldo)}</strong></div>`).join('')}
     </article>`).join('');
 }
@@ -334,8 +341,8 @@ function render(data) {
     elements.balances.innerHTML = renderBalances(data.balances);
     renderStock(data.existencia);
     elements.movementsNote.textContent = data.data.length >= MOVEMENTS_LIMIT
-        ? `Se muestran los ${MOVEMENTS_LIMIT} más recientes; el Excel trae todos los del filtro.`
-        : 'Ingreso y salida conservan fecha y hora exactas.';
+        ? `Se muestran los ${MOVEMENTS_LIMIT} más recientes. Usa el número de guía para encontrar otro movimiento.`
+        : 'Busca por el número de guía del estado de cuenta.';
     elements.pendingList.innerHTML = data.pendientes.length
         ? data.pendientes.map((pending) => `<article class="pending-item"><div><b>${escapeHtml(pending.numero_recepcion)} · ${escapeHtml(pending.cliente.nombre)}</b><small>${escapeHtml(pending.numero_guia)} · ${formatDate(pending.ingreso_at)}</small></div><strong>${pending.cantidad_declarada} ${escapeHtml(label(pending.tipo_envase))}</strong></article>`).join('')
         : '<p>No hay recepciones en verde.</p>';
@@ -447,7 +454,22 @@ elements.body.addEventListener('click', (event) => {
     const button = event.target.closest('[data-reassign-producer]');
     if (!button || !state.identity?.puede_ajustar_cuenta_envases) return;
     const movement = state.movements.find((item) => item.id === button.dataset.reassignProducer);
-    if (movement) void producerReassignment.open(movement);
+    if (movement) void producerReassignment.open(movement, state.parameters.get('buscar'));
+});
+elements.balances.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-producer-movements]');
+    if (!button || !state.identity?.puede_ajustar_cuenta_envases) return;
+    const client = state.balances.find((line) => line.cliente.id === button.dataset.producerMovements)?.cliente;
+    if (!client) return;
+
+    const { cliente_id: clientFilter, buscar: guideFilter } = elements.filters.elements;
+    if (![...clientFilter.options].some((option) => option.value === client.id)) {
+        clientFilter.add(new Option(`${client.codigo} · ${client.nombre}`, client.id));
+    }
+    clientFilter.value = client.id;
+    byId('container-accounts-tab-movements').click();
+    await load();
+    guideFilter.focus();
 });
 elements.historicalForm.addEventListener('input', updateHistoricalPreview);
 elements.historicalForm.addEventListener('submit', async (event) => {
