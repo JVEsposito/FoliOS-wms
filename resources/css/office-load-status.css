@@ -83,10 +83,7 @@
 .load-status-progress header span { margin-top: 2px; color: var(--text-subtle); font-size: .7rem; }
 .load-status-progress header b { color: var(--text-strong); font-size: 1.35rem; }
 .load-status-progress footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; color: var(--text-secondary); font-size: .72rem; font-weight: 700; }
-.load-status-meter { height: 9px; margin-top: 12px; overflow: hidden; background: var(--surface-muted); }
-.load-status-meter i { display: block; width: 0; height: 100%; background: var(--corporate-blue); transition: width .2s ease; }
-.load-status-progress article:nth-child(2) .load-status-meter i { background: var(--success-text); }
-.load-status-progress article:nth-child(3) .load-status-meter i { background: var(--corporate-blue); }
+.load-status-cells { margin-block: 12px 6px; }
 .load-status-progress__dispatch > div#dispatchMessage { min-height: 32px; margin-top: 10px; color: var(--text-secondary); font-size: .78rem; line-height: 1.35; }
 .load-status-progress__dispatch b[data-tone="success"] { color: var(--success-text); }
 
@@ -146,5 +143,3 @@
     .load-status-facts article { border-right: 0; border-bottom: 1px solid var(--corporate-border); }
     .load-status-progress__dispatch { grid-column: auto; }
 }
-
-@media (prefers-reduced-motion: reduce) { .load-status-meter i { transition: none; } }

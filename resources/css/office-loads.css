@@ -574,37 +574,7 @@ button:disabled {
     color: var(--text);
 }
 
-.concentration-progress {
-    position: relative;
-    height: 14px;
-    overflow: hidden;
-    border: 1px solid #274550;
-    border-radius: 999px;
-    background: #06131a;
-}
-
-.concentration-progress span {
-    display: block;
-    width: 0;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #188f9b, var(--amber));
-    transition: width .25s ease;
-}
-
-.concentration-progress span.is-ready {
-    background: linear-gradient(90deg, var(--cyan), var(--green));
-}
-
-.concentration-progress i {
-    position: absolute;
-    top: -2px;
-    bottom: -2px;
-    left: 80%;
-    width: 2px;
-    background: #f8f4df;
-    box-shadow: 0 0 7px rgba(255, 255, 255, .8);
-}
+.concentration-cells { min-height: 14px; }
 
 .load-metrics article {
     display: grid;
@@ -1607,8 +1577,7 @@ button:disabled {
 
 @media (max-width: 1280px) {
     .loads-workspace {
-        grid-template-columns: 300px minmax(720px, 1fr);
-        overflow-x: auto;
+        grid-template-columns: minmax(248px, 30%) minmax(0, 1fr);
     }
 
     .load-filters {
@@ -1634,7 +1603,8 @@ button:disabled {
 
 @media (max-width: 980px) {
     .loads-workspace {
-        min-width: 1050px;
+        grid-template-columns: minmax(0, 1fr);
+        min-width: 0;
     }
 
     .folio-add {
@@ -1666,6 +1636,12 @@ button:disabled {
     .incident-card > button {
         grid-column: 1 / -1;
     }
+}
+
+@media (max-width: 620px) {
+    .loads-workspace { padding: 12px; }
+    .load-form-grid, .load-metrics, .available-folios__tools { grid-template-columns: minmax(0, 1fr); }
+    .load-editor__heading, .load-editor__summary { flex-wrap: wrap; }
 }
 
 @media (max-width: 900px) {

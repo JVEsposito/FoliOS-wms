@@ -323,7 +323,7 @@
 
 .camera-ops__meter {
     display: block;
-    height: 5px;
+    height: 8px;
     overflow: hidden;
     background: var(--surface-muted);
 }

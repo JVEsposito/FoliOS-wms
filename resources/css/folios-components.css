@@ -71,13 +71,21 @@
 }
 
 /* La tarja conecta paneles de Oficina con la unidad que se lee en terreno. */
+:root,
+.estiba-ui {
+    --folios-ticket-shape: 8px 3px 8px 8px;
+    --folios-control-shape: 6px 2px 6px 6px;
+    --folios-corner-ink: var(--area-ink, var(--eui-area-operacion-ink, #0f5c6e));
+    --folios-corner: linear-gradient(225deg, var(--folios-corner-ink) 50%, transparent 51%) right top / 12px 12px no-repeat;
+}
+
 .folios-ticket {
     --ticket-ink: var(--area-ink, var(--primary));
     --ticket-tint: var(--area-tint, var(--surface-muted));
     position: relative;
     min-inline-size: 0;
     border: 1px solid var(--corporate-border);
-    border-radius: var(--radius-card, 8px);
+    border-radius: var(--folios-ticket-shape);
     background: var(--corporate-card);
 }
 
@@ -171,6 +179,11 @@
 :is(.folios-pallet-cells, .folios-pallet-key) [data-cell="done"] { background: var(--text-strong); }
 :is(.folios-pallet-cells, .folios-pallet-key) [data-cell="dock"] { border-color: var(--area-frigorifico-ink); }
 :is(.folios-pallet-cells, .folios-pallet-key) [data-cell="free"] { border: 1px dashed var(--input-border); }
+
+/* Ocupación proporcional de una cámara, que puede tener cientos de posiciones. */
+.folios-capacity-track {
+    mask-image: repeating-linear-gradient(to right, #000 0 calc(10% - 2px), transparent calc(10% - 2px) 10%);
+}
 :is(.folios-pallet-cells, .folios-pallet-key) [data-cell="pending"] {
     border-color: var(--line);
     background: repeating-linear-gradient(-55deg, transparent 0 2px, var(--input-border) 2px 3px);

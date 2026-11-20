@@ -1,3 +1,5 @@
+import { officeCode, palletCells } from './shared/folios-display.js';
+
 const byId = (id) => document.getElementById(id);
 const elements = {
     access: byId('officeAccess'), app: byId('officeApp'), login: byId('officeLoginForm'), loginError: byId('officeLoginError'),
@@ -146,9 +148,12 @@ function renderTunnels() {
     elements.tunnelList.innerHTML = state.tunnels.map((item) => {
         const active = item.proceso_activo;
         const inactive = item.estado_administrativo !== 'activo' || item.estado_tecnico !== 'operativo';
-        return `<article class="tunnel-card${state.selectedTunnelId === item.id ? ' is-selected' : ''}${inactive ? ' is-inactive' : ''}" data-tunnel-id="${item.id}">
-            <div class="tunnel-card__top"><strong>${escapeHtml(item.codigo)}</strong><span class="status-pill status-pill--${escapeHtml(active?.estado || item.estado_tecnico)}">${escapeHtml(active ? statusText(active.estado) : statusText(item.estado_tecnico))}</span></div>
-            <div><h3>${escapeHtml(item.nombre)}</h3><p>${item.capacidad_posiciones} posiciones · setpoint ${item.setpoint_habitual ?? '—'} °C</p></div>
+        const capacity = Number(item.capacidad_posiciones ?? 0);
+        const filled = Number(active?.folios_cargados ?? 0);
+        return `<article class="tunnel-card folios-ticket${state.selectedTunnelId === item.id ? ' is-selected' : ''}${inactive ? ' is-inactive' : ''}" data-ticket-area="frigorifico" data-tunnel-id="${item.id}">
+            <div class="tunnel-card__top"><strong class="folios-code">${officeCode(item.codigo, escapeHtml, 3)}</strong><span class="status-pill status-pill--${escapeHtml(active?.estado || item.estado_tecnico)}">${escapeHtml(active ? statusText(active.estado) : statusText(item.estado_tecnico))}</span></div>
+            <div><h3>${escapeHtml(item.nombre)}</h3><p>${inactive ? `${capacity} posiciones` : `${filled}/${capacity} posiciones ocupadas`} · setpoint habitual ${escapeHtml(item.setpoint_habitual ?? '—')} °C</p></div>
+            ${inactive ? '' : palletCells(capacity, filled, 0, 'free')}
             <div class="tunnel-card__meta"><span>${escapeHtml(statusText(item.estado_administrativo))}</span><span>versión ${item.version_configuracion}</span></div>
             <div class="tunnel-card__footer"><span>${active ? `${escapeHtml(active.codigo)} · ${active.folios_cargados} folios` : 'Sin proceso activo'}</span>${state.identity?.puede_administrar_tuneles_prefrio === true ? `<button data-edit-tunnel="${item.id}" type="button">Configurar</button>` : ''}</div>
         </article>`;

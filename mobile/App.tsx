@@ -3,7 +3,7 @@ import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthSession, LoginPayload, TabletModule } from './src/domain/estiba';
@@ -27,8 +27,11 @@ import { ValidationMpScreen } from './src/screens/ValidationMpScreen';
 import { loadApiBaseUrl, saveApiBaseUrl } from './src/services/apiConfiguration';
 import { applyAvailableUpdate } from './src/services/appUpdates';
 import { createEstibaApi } from './src/services/estibaApi';
+import { areas, type AreaKey } from './src/theme/areas';
 import { colors } from './src/theme/colors';
+import { operatorTheme as o } from './src/theme/operatorTheme';
 import { fontAssets } from './src/theme/fontAssets';
+import { FieldCorner, FieldMark } from './src/components/field/FieldMark';
 import { FieldNavigationProvider } from './src/components/field/FieldNavigation';
 
 type MobileModule = TabletModule;
@@ -230,145 +233,65 @@ function defaultModule(auth: AuthSession): MobileModule | null {
   return modules.length === 1 ? modules[0] : null;
 }
 
-function moduleLabel(module: MobileModule) {
-  return module === 'contraparte_sag' ? 'Contraparte SAG' : module === 'consolidacion' ? 'Consolidación' : module === 'porteria'
-    ? 'Portería'
-    : module === 'demo_administracion'
-    ? 'Administración Demo'
-    : module === 'validacion'
-    ? 'Validación'
-    : module === 'validacion_mp'
-      ? 'Validación MP'
-      : module === 'repaletizaje'
-        ? 'Repaletizaje'
-      : module === 'recepcion_fruta_embalada'
-        ? 'Recepción de fruta embalada'
-      : module === 'fruta_proceso'
-        ? 'Fruta a proceso'
-      : module === 'hidrocooler_mp'
-        ? 'Hidrocooler MP'
-      : module === 'prefrio'
-        ? 'Prefrío'
-        : module === 'operacion_materiales'
-          ? 'Cámara y operación de materiales'
-          : module === 'recepcion_materiales'
-            ? 'Recepción de materiales'
-            : 'Operación frigorífico';
-}
+const moduleCards: ReadonlyArray<{ id: MobileModule; area: AreaKey; title: string; description: string }> = [
+  { id: 'contraparte_sag', area: 'frigorifico', title: 'Contraparte SAG', description: 'Captura y seguimiento de inspecciones y documentos.' },
+  { id: 'consolidacion', area: 'frigorifico', title: 'Consolidación', description: 'Registra posición, inspección y fotos de cada pallet que sube al camión.' },
+  { id: 'porteria', area: 'materia-prima', title: 'Portería', description: 'Registra la llegada del camión y sus guías.' },
+  { id: 'demo_administracion', area: 'administracion', title: 'Administración Demo', description: 'Gestiona los maestros y escenarios locales.' },
+  { id: 'validacion', area: 'frigorifico', title: 'Validación PT', description: 'Escanea pallets, registra la decisión y sincroniza las capturas.' },
+  { id: 'validacion_mp', area: 'materia-prima', title: 'Validación MP', description: 'Recibe correlativos de Romana y prepara las segregaciones.' },
+  { id: 'repaletizaje', area: 'frigorifico', title: 'Repaletizaje', description: 'Consolida saldos y registra el RRPL-01.' },
+  { id: 'recepcion_fruta_embalada', area: 'frigorifico', title: 'Recepción de fruta embalada', description: 'Registra camiones y pallets externos en borrador.' },
+  { id: 'fruta_proceso', area: 'materia-prima', title: 'Fruta a proceso', description: 'Entrega bins por viaje desde cámara hacia Packing.' },
+  { id: 'hidrocooler_mp', area: 'materia-prima', title: 'Hidrocooler MP', description: 'Opera los ciclos de enfriamiento inicial.' },
+  { id: 'prefrio', area: 'frigorifico', title: 'Prefrío', description: 'Carga folios a túneles y opera cada ciclo térmico.' },
+  { id: 'operacion_materiales', area: 'materiales', title: 'Cámara de materiales', description: 'Opera posiciones y movimientos de materiales.' },
+  { id: 'recepcion_materiales', area: 'materiales', title: 'Recepción de materiales', description: 'Registra guías, separa bultos y confirma folios.' },
+  { id: 'operacion', area: 'frigorifico', title: 'Operación frigorífico', description: 'Consulta cámaras y realiza las labores y cargas del turno.' },
+];
 
 function ModuleSelection({ modules, onSelect, userName }: { modules: MobileModule[]; onSelect: (module: MobileModule) => void; userName: string }) {
+  const { width } = useWindowDimensions();
+  const compact = isPdaBuild || width < 720;
+  const cards = moduleCards.filter((card) => modules.includes(card.id));
   return (
-    <View style={[styles.selector, isPdaBuild && styles.selectorPda]}>
-      <Text style={styles.selectorEyebrow}>FoliOS · TURNO</Text>
-      <Text style={[styles.selectorTitle, isPdaBuild && styles.selectorTitlePda]}>Selecciona el área de trabajo</Text>
-      <Text style={styles.selectorCopy}>{userName}, tu perfil posee acceso a más de un módulo.</Text>
-      <View style={[styles.selectorCards, isPdaBuild && styles.selectorCardsPda]}>
-        {modules.includes('contraparte_sag') ? (
-          <Pressable onPress={() => onSelect('contraparte_sag')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorCardTitle}>Contraparte SAG</Text>
-            <Text style={styles.selectorCardCopy}>Captura, seguimiento y documentos SAG.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('consolidacion') ? (
-          <Pressable onPress={() => onSelect('consolidacion')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>▤</Text>
-            <Text style={styles.selectorCardTitle}>Consolidación</Text>
-            <Text style={styles.selectorCardCopy}>Planilla R-24 en el andén: pallets que suben con su posición, inspección y fotos.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('porteria') ? (
-          <Pressable onPress={() => onSelect('porteria')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>↘</Text>
-            <Text style={styles.selectorCardTitle}>Portería</Text>
-            <Text style={styles.selectorCardCopy}>Registrar llegadas de camiones, sus guías y consultar la bitácora.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('demo_administracion') ? (
-          <Pressable onPress={() => onSelect('demo_administracion')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>◎</Text>
-            <Text style={styles.selectorCardTitle}>Administración Demo</Text>
-            <Text style={styles.selectorCardCopy}>Gestionar maestros, clientes, folios y cargas CAR locales; preparar y restaurar escenarios.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('validacion') ? (
-          <Pressable onPress={() => onSelect('validacion')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>✓</Text>
-            <Text style={styles.selectorCardTitle}>Validación</Text>
-            <Text style={styles.selectorCardCopy}>Escanear pallets, aprobar, observar y sincronizar capturas.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('validacion_mp') ? (
-          <Pressable onPress={() => onSelect('validacion_mp')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>⌁</Text>
-            <Text style={styles.selectorCardTitle}>Validación MP</Text>
-            <Text style={styles.selectorCardCopy}>Recibir correlativos de Romana, contar envases y preparar segregaciones.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('repaletizaje') ? (
-          <Pressable onPress={() => onSelect('repaletizaje')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>⇄</Text>
-            <Text style={styles.selectorCardTitle}>Repaletizaje</Text>
-            <Text style={styles.selectorCardCopy}>Consolidar saldos en cámara; cada repa llena el registro RRPL-01.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('recepcion_fruta_embalada') ? (
-          <Pressable onPress={() => onSelect('recepcion_fruta_embalada')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>↘</Text>
-            <Text style={styles.selectorCardTitle}>Recepción de fruta embalada</Text>
-            <Text style={styles.selectorCardCopy}>Capturar camiones y pallets externos en borrador.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('fruta_proceso') ? (
-          <Pressable onPress={() => onSelect('fruta_proceso')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>→</Text>
-            <Text style={styles.selectorCardTitle}>Fruta a proceso</Text>
-            <Text style={styles.selectorCardCopy}>Entregar bins por viaje físico desde cámara hacia Packing.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('hidrocooler_mp') ? (
-          <Pressable onPress={() => onSelect('hidrocooler_mp')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>≈</Text>
-            <Text style={styles.selectorCardTitle}>Hidrocooler MP</Text>
-            <Text style={styles.selectorCardCopy}>Iniciar, finalizar y revisar ciclos de enfriamiento de materia prima.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('prefrio') ? (
-          <Pressable onPress={() => onSelect('prefrio')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>◫</Text>
-            <Text style={styles.selectorCardTitle}>Prefrío</Text>
-            <Text style={styles.selectorCardCopy}>Consultar folios pendientes, cargarlos a túneles y operar procesos térmicos.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('operacion_materiales') ? (
-          <Pressable onPress={() => onSelect('operacion_materiales')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>▦</Text>
-            <Text style={styles.selectorCardTitle}>Cámara de materiales</Text>
-            <Text style={styles.selectorCardCopy}>Consultar y operar cámaras, posiciones y movimientos de materiales.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('recepcion_materiales') ? (
-          <Pressable onPress={() => onSelect('recepcion_materiales')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>▦</Text>
-            <Text style={styles.selectorCardTitle}>Recepción materiales</Text>
-            <Text style={styles.selectorCardCopy}>Registrar guías, separar bultos, confirmar folios y revisar pendientes.</Text>
-          </Pressable>
-        ) : null}
-        {modules.includes('operacion') ? (
-          <Pressable onPress={() => onSelect('operacion')} style={[styles.selectorCard, isPdaBuild && styles.selectorCardPda]}>
-            <Text style={styles.selectorIcon}>❄</Text>
-            <Text style={styles.selectorCardTitle}>Operación frigorífico</Text>
-            <Text style={styles.selectorCardCopy}>Cámaras de producto terminado, cargas y despachos.</Text>
-          </Pressable>
-        ) : null}
+    <ScrollView contentContainerStyle={[styles.selector, compact && styles.selectorCompact]}>
+      <View style={styles.selectorHeader}>
+        <FieldMark area="operacion" />
+        <View style={styles.selectorHeading}>
+          <Text accessibilityRole="header" style={styles.selectorTitle}>Área de trabajo</Text>
+          <Text style={styles.selectorCopy}>{userName}</Text>
+        </View>
       </View>
-      {!modules.length ? (
+      <View style={[styles.selectorCards, compact && styles.selectorCardsCompact]}>
+        {cards.map(({ id, area, title, description }) => (
+          <Pressable
+            key={id}
+            accessibilityRole="button"
+            accessibilityLabel={title}
+            accessibilityHint={description}
+            onPress={() => onSelect(id)}
+            style={({ pressed }) => [styles.selectorCard, compact && styles.selectorCardCompact,
+              { borderLeftColor: areas[area].bright }, pressed && styles.selectorCardPressed]}
+          >
+            <FieldCorner area={area} />
+            <FieldMark area={area} decorative />
+            <View style={styles.selectorCardLabel}>
+              <Text style={styles.selectorCardTitle}>{title}</Text>
+              <Text style={styles.selectorCardCopy}>{description}</Text>
+            </View>
+            <Text aria-hidden style={styles.selectorArrow}>→</Text>
+          </Pressable>
+        ))}
+      </View>
+      {!cards.length ? (
         <Text style={styles.noModule}>
           {isPdaBuild
             ? 'Tu perfil no tiene un módulo habilitado para esta PDA. Solicita revisar los accesos del equipo.'
             : 'El perfil no posee un módulo móvil habilitado.'}
         </Text>
       ) : null}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -377,18 +300,27 @@ const styles = StyleSheet.create({
   workspace: { flex: 1 },
   boot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   bootText: { color: colors.muted, fontSize: 12, fontFamily: font.heavy },
-  selector: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: colors.background },
-  selectorEyebrow: { color: colors.cyan, fontSize: 12, fontFamily: font.heavy, letterSpacing: 1.4 },
-  selectorTitle: { color: colors.text, fontSize: 28, fontFamily: font.heavy, marginTop: 7, textAlign: 'center' },
-  selectorCopy: { color: colors.muted, marginTop: 8, textAlign: 'center' },
-  selectorCards: { width: '100%', maxWidth: 1300, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 16, marginTop: 28 },
-  selectorCard: { flexGrow: 1, flexBasis: 220, maxWidth: 300, minHeight: 210, justifyContent: 'center', padding: 24, borderRadius: 18, borderWidth: 1, borderColor: colors.cyanDark, backgroundColor: colors.panel },
-  selectorIcon: { color: colors.cyan, fontSize: 34, fontFamily: font.heavy },
-  selectorCardTitle: { color: colors.text, fontSize: 21, fontFamily: font.heavy, marginTop: 14 },
-  selectorCardCopy: { color: colors.muted, lineHeight: 20, marginTop: 7 },
+  selector: { flexGrow: 1, alignItems: 'center', padding: 28, backgroundColor: colors.background },
+  selectorCompact: { padding: 14 },
+  selectorHeader: {
+    width: '100%', maxWidth: 1150, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16,
+    borderBottomColor: colors.border, borderBottomWidth: 1,
+  },
+  selectorHeading: { flex: 1, minWidth: 0 },
+  selectorTitle: { color: colors.text, fontSize: o.type.title, fontFamily: font.heavy },
+  selectorCopy: { color: colors.muted, marginTop: 4 },
+  selectorCards: { width: '100%', maxWidth: 1150, flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 16 },
+  selectorCardsCompact: { flexDirection: 'column', gap: 8 },
+  selectorCard: {
+    flexGrow: 1, flexBasis: 250, minWidth: 0, minHeight: 100, flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 14, borderWidth: 1, borderLeftWidth: 3, borderColor: colors.border,
+    borderRadius: o.radius.panel, borderTopRightRadius: 2, backgroundColor: colors.panel,
+  },
+  selectorCardCompact: { flexBasis: 'auto', flexGrow: 0, minHeight: o.touch.minimum, padding: 10 },
+  selectorCardPressed: { backgroundColor: colors.panelStrong },
+  selectorCardLabel: { flex: 1, minWidth: 0, gap: 3 },
+  selectorCardTitle: { color: colors.text, fontSize: o.type.body, fontFamily: font.heavy },
+  selectorCardCopy: { color: colors.textSecondary, fontSize: o.type.caption, lineHeight: 18 },
+  selectorArrow: { color: colors.cyan, fontSize: o.type.heading, fontFamily: font.bold },
   noModule: { color: colors.red, marginTop: 24, fontFamily: font.heavy, textAlign: 'center' },
-  selectorPda: { justifyContent: 'flex-start', padding: 14, paddingTop: 24 },
-  selectorTitlePda: { fontSize: 21 },
-  selectorCardsPda: { flexDirection: 'column', gap: 10, marginTop: 18 },
-  selectorCardPda: { flexBasis: 'auto', flexGrow: 0, maxWidth: '100%', minHeight: 0, padding: 16, borderRadius: 14 },
 });

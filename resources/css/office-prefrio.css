@@ -8,6 +8,7 @@
 
 .prefrio-workspace {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
     padding: 10px 12px 16px;
     background: var(--corporate-canvas);
@@ -23,7 +24,7 @@
 
 .prefrio-command {
     display: grid;
-    grid-template-columns: minmax(340px, 1fr) minmax(235px, auto) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(235px, auto) minmax(0, 34%);
     align-items: center;
     gap: 16px;
     min-height: 82px;
@@ -97,6 +98,8 @@
     padding: 7px 12px;
     white-space: nowrap;
 }
+
+.prefrio-heading__actions { flex-wrap: wrap; }
 
 .prefrio-metrics {
     display: grid;

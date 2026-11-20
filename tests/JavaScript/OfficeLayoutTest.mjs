@@ -25,9 +25,8 @@ test('las cabeceras compartidas no asumen un relleno negativo en los paneles', (
 test('el logo conserva su columna cuando se oculta el menú lateral', () => {
     assert.match(shell, /--office-brand-width:\s*248px/);
     assert.match(shell, /\[data-menu-collapsed\]\)\s*\{\s*--office-sidebar-width:\s*0px/);
-    const desktopGrids = rules(shell, '.estiba-office-header').filter((body) => /grid-template-columns:.*minmax\(.*minmax\(/.test(body));
-    assert.ok(desktopGrids.length >= 2);
-    desktopGrids.forEach((body) => assert.match(body, /grid-template-columns:\s*var\(--office-brand-width\)/));
+    const grids = rules(shell, '.estiba-office-header').filter((body) => /grid-template-columns:/.test(body));
+    assert.match(grids[0], /grid-template-columns:\s*var\(--office-brand-width\)\s+minmax\(0,\s*1fr\)/);
     assert.doesNotMatch(shell, /grid-template-columns:\s*142px/);
 });
 

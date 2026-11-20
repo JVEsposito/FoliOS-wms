@@ -369,7 +369,7 @@ body {
 
 @media (max-width: 760px) {
     .repa-workspace { padding: 14px; }
-    .repa-heading { align-items: stretch; flex-direction: column; }
+    .office-app .repa-heading { align-items: stretch !important; flex-direction: column; flex-wrap: nowrap !important; }
     .repa-grid,
     .result-preview,
     .spec-preview { grid-template-columns: 1fr 1fr; }

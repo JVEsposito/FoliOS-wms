@@ -80,7 +80,7 @@
 
 :root:is([data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"]) :is(.office-app, dialog) :is(.eyebrow, [class*="eyebrow"], th, thead, legend),
 :root:is([data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"]) .office-app [class*="kpis"] span,
-:root:is([data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"]) .estiba-office-shell :is(.estiba-office-nav-label, .estiba-office-signature strong, .estiba-office-status__caption) {
+:root:is([data-office-theme="dark-bit"], [data-office-theme="dark-bit-neon"]) .estiba-office-shell :is(.estiba-office-signature strong, .estiba-office-status__caption) {
     font-family: var(--bit-font-label) !important;
     font-weight: 400 !important;
     letter-spacing: .04em !important;

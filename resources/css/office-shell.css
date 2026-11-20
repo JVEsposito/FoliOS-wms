@@ -3,8 +3,8 @@
 /*
  * Shell de Oficina FoliOS v2 (PR 2 de la serie, docs/diseno/folios-v2/pr-02-shell.md).
  *
- * Columna navy a la izquierda con el logo, la búsqueda y el gajo de áreas; barra de
- * contexto clara arriba con la regla de 3 px del área activa. Conserva todos los
+ * Columna navy a la izquierda con el logo y el gajo de áreas; barra de contexto
+ * con la búsqueda y la regla de 3 px del área activa. Conserva todos los
  * contratos de navegación, permisos y sesión de office-navigation.js y office-shell.js:
  * ids, data-office-*, data-navigation-* y data-domain-key no cambian.
  */
@@ -103,7 +103,7 @@
 .estiba-office-header {
     position: relative;
     display: grid;
-    grid-template-columns: var(--office-brand-width) minmax(0, max-content) minmax(220px, max-content) minmax(0, 1fr);
+    grid-template-columns: var(--office-brand-width) minmax(0, 1fr) auto auto;
     align-items: center;
     min-height: 72px;
     background: var(--corporate-card, #ffffff);
@@ -180,9 +180,10 @@
 .estiba-office-context {
     display: flex;
     align-items: center;
-    gap: 10px 28px;
+    flex-wrap: wrap;
+    gap: 8px 16px;
     min-width: 0;
-    padding: 12px 0 14px 28px;
+    padding: 8px 0 10px 20px;
 }
 
 .estiba-office-context > span,
@@ -198,7 +199,7 @@
     display: block;
     margin-top: 3px;
     color: var(--text-strong);
-    font-size: 15px;
+    font-size: .86rem;
     font-weight: 700;
     white-space: nowrap;
 }
@@ -314,14 +315,6 @@
 
 .estiba-office-search { padding: 0 8px; }
 
-.estiba-office-nav-label {
-    display: block;
-    margin: 0 0 6px;
-    color: var(--shell-muted);
-    font-size: 13px;
-    font-weight: 600;
-}
-
 .estiba-office-search > div { display: flex; gap: 6px; }
 
 .estiba-office-search input {
@@ -356,28 +349,17 @@
 
 .estiba-office-search button .eui-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; }
 
-.estiba-office-header[data-gajos-context] {
-    grid-template-columns: var(--office-brand-width) minmax(0, 1fr) auto auto;
-}
-
-[data-gajos-context] .estiba-office-context {
-    flex-wrap: wrap;
-    gap: 8px 16px;
-    padding: 8px 0 10px 18px;
-}
-
-[data-gajos-context] .estiba-office-context strong { font-size: .86rem; }
-[data-gajos-context] .estiba-office-search {
+.estiba-office-header .estiba-office-search {
     flex: 1 1 11rem;
     min-inline-size: 0;
     padding: 0;
 }
-[data-gajos-context] .estiba-office-search input {
+.estiba-office-header .estiba-office-search input {
     border-color: var(--input-border);
     background: var(--input-bg);
     color: var(--text-strong);
 }
-[data-gajos-context] .estiba-office-search input::placeholder { color: var(--text-subtle); }
+.estiba-office-header .estiba-office-search input::placeholder { color: var(--text-subtle); }
 
 .estiba-office-attention-count {
     margin-inline-start: auto;
@@ -393,7 +375,7 @@
     gap: 2px;
 }
 
-.estiba-office-areas { margin-top: -14px; }
+.estiba-office-areas { padding-block-start: 10px; border-block-start: 1px dashed var(--shell-line); }
 
 .estiba-office-sidebar .estiba-office-area {
     display: flex;
@@ -409,13 +391,21 @@
     text-decoration: none;
 }
 
-.estiba-office-sidebar .estiba-office-area strong { font-weight: inherit; }
+.estiba-office-sidebar .estiba-office-area strong { min-width: 0; font-weight: inherit; }
 .estiba-office-sidebar .estiba-office-area:hover { background: var(--shell-navy-hover); color: var(--shell-strong); }
 
 .estiba-office-sidebar .estiba-office-area.is-active {
     background: var(--shell-active-bg);
     color: var(--shell-active-ink);
     font-weight: 700;
+    border-radius: var(--folios-control-shape);
+    box-shadow: inset 3px 0 var(--area-bright);
+}
+
+.estiba-office-sidebar .estiba-office-area.is-active .folios-gajo {
+    box-sizing: content-box;
+    padding-inline-end: 8px;
+    border-inline-end: 1px dashed var(--shell-line);
 }
 
 .estiba-office-sidebar .estiba-office-area.is-active .folios-gajo {
@@ -650,9 +640,6 @@
     .office-app:has(> .estiba-office-shell:not([data-menu-collapsed])) { --office-sidebar-width: 224px; }
     .office-app:has(> [data-office-shell]) { --office-brand-width: 224px; }
     .estiba-office-brand .folios-logo--office { width: 124px; }
-    .estiba-office-header {
-        grid-template-columns: var(--office-brand-width) minmax(0, max-content) minmax(190px, max-content) minmax(0, 1fr);
-    }
     .estiba-office-context { gap: 10px 18px; padding-left: 20px; }
     .estiba-office-shell .estiba-office-status { margin-left: 16px; }
     .estiba-office-tools { padding-right: 20px; }
@@ -661,9 +648,9 @@
 @media (max-width: 1199px) {
     .office-app:has(> [data-office-shell]) { --office-sidebar-width: 0px; --office-brand-width: 210px; --office-header-height: auto; }
     .estiba-office-header { grid-template-columns: var(--office-brand-width) minmax(0, 1fr) auto; }
-    .estiba-office-context,
+    .estiba-office-brand { grid-row: 1; padding-block: 4px; }
     .estiba-office-server { display: none !important; }
-    .estiba-office-shell .estiba-office-status { margin-left: 16px; }
+    .estiba-office-shell .estiba-office-status { margin: 0 0 0 12px; padding-block: 3px; }
     .estiba-office-brand .folios-logo--office { width: 112px; }
     .estiba-office-sidebar {
         z-index: 45;
@@ -671,26 +658,27 @@
         box-shadow: 8px 10px 24px rgba(3, 18, 28, .32);
     }
     .estiba-office-shell[data-menu-ready]:not([data-menu-open]) .estiba-office-sidebar { display: none; }
-    .estiba-office-header[data-gajos-context] { grid-template-columns: var(--office-brand-width) minmax(0, 1fr) auto; }
-    [data-gajos-context] .estiba-office-context {
-        display: flex !important;
+    .estiba-office-context {
         grid-column: 1 / -1;
         grid-row: 2;
-        padding: 8px 12px 12px;
+        gap: 6px 14px;
+        padding: 0 12px 3px;
     }
+    .estiba-office-replenishment { padding-block: 3px 4px; }
 }
 
 @media (max-width: 599px) {
     .office-app:has(> [data-office-shell]) { --office-brand-width: 100%; }
-    .estiba-office-header { grid-template-columns: 1fr; }
+    .estiba-office-header { grid-template-columns: minmax(0, 1fr) auto; }
     .estiba-office-header::after { left: 0; }
-    .estiba-office-brand { grid-row: auto; }
-    .estiba-office-shell .estiba-office-status { margin: 4px 12px; }
-    .estiba-office-tools { justify-content: flex-start; padding: 0 12px 10px; }
+    .estiba-office-brand { grid-column: 1 / -1; grid-row: 1; }
+    .estiba-office-shell .estiba-office-status { grid-row: 3; margin: 0 6px 6px; padding-inline: 6px; }
+    .estiba-office-status__caption { display: none; }
+    .estiba-office-tools { grid-row: 3; justify-content: flex-end; padding: 0 8px 6px; }
+    .estiba-office-communications-label { display: none; }
     .estiba-office-replenishment { grid-column: 1 / -1; }
-    .estiba-office-header[data-gajos-context] { grid-template-columns: 1fr; }
-    [data-gajos-context] .estiba-office-context { grid-row: auto; }
-    [data-gajos-context] .estiba-office-search { flex-basis: 100%; }
+    .estiba-office-context { grid-row: 2; }
+    .estiba-office-header .estiba-office-search { flex-basis: 100%; }
 }
 
 @media (pointer: coarse) {

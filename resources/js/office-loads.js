@@ -4,6 +4,7 @@ import { createUuid as operationId } from './shared/uuid.js';
 import { showOfficeToast } from './office-toast.js';
 import { loadReceptionDependencies } from './shared/load-reception-dependencies.js';
 import { availableInstructionSlots, groupedLoadFolios, instructionLabel, selectedInstruction } from './shared/load-instructions.js';
+import { palletCells } from './shared/folios-display.js';
 
 const byId = (id) => document.getElementById(id);
 
@@ -63,6 +64,7 @@ const elements = {
     truckDockDetail: byId('truckDockDetail'),
     concentrationMessage: byId('loadConcentrationMessage'),
     concentrationBar: byId('loadConcentrationBar'),
+    concentrationTarget: byId('loadConcentrationTarget'),
     concentratedFolios: byId('loadConcentratedFolios'),
     mainCluster: byId('loadMainCluster'),
     distribution: byId('loadDistribution'),
@@ -772,12 +774,13 @@ function renderConcentration(load) {
     const concentrated = Number(progress.concentrados || 0);
     const missing = Number(progress.faltantes || 0);
     const atDock = Number(progress.en_anden || 0);
+    const threshold = progress.umbral_porcentaje ?? 80;
 
     elements.concentration.textContent = `${percentage}%`;
     elements.atDock.textContent = `${atDock} / ${total}`;
     elements.incidentCount.textContent = String(load.incidencias_abiertas || 0);
-    elements.concentrationBar.style.width = `${percentage}%`;
-    elements.concentrationBar.classList.toggle('is-ready', progress.cumple_umbral === true);
+    elements.concentrationBar.innerHTML = palletCells(total, concentrated);
+    elements.concentrationTarget.textContent = total ? `Umbral ${threshold}%` : '';
     elements.concentratedFolios.textContent = `${concentrated} de ${total} concentrados`;
 
     if (total === 0) {
@@ -786,7 +789,7 @@ function renderConcentration(load) {
         elements.concentrationMessage.textContent = 'Todos los folios se encuentran en andén. La salida documental ya puede confirmarse.';
     } else if (progress.cumple_umbral) {
         elements.concentrationMessage.textContent = missing
-            ? `Cumple el umbral del 80%; todavía faltan ${missing} ${missing === 1 ? 'pallet' : 'pallets'} por incorporar al grupo principal.`
+            ? `Cumple el umbral del ${threshold}%. Faltan ${missing} ${missing === 1 ? 'pallet' : 'pallets'} por incorporar al grupo principal.`
             : 'La carga está completamente concentrada.';
     } else {
         elements.concentrationMessage.textContent = `Faltan ${missing} ${missing === 1 ? 'pallet' : 'pallets'} para alcanzar una concentración operacional suficiente.`;

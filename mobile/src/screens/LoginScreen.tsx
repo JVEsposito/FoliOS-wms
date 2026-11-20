@@ -18,6 +18,7 @@ import {
 import { ApiMode, LoginPayload } from '../domain/estiba';
 import { colors } from '../theme/colors';
 import { appChannel, appVariant, deviceNoun, isPdaBuild } from '../config/appVariant';
+import { FieldCorner } from '../components/field/FieldMark';
 
 type LoginScreenProps = {
   baseUrl: string | null;
@@ -86,6 +87,7 @@ export function LoginScreen({
     >
       <ScrollView contentContainerStyle={[styles.page, narrow && styles.pageNarrow]} keyboardShouldPersistTaps="handled">
         <View style={[styles.brandPanel, narrow && styles.brandPanelNarrow]}>
+          <FieldCorner area={isPdaBuild ? 'frigorifico' : 'operacion'} />
           <Image
             accessibilityLabel="FoliOS"
             accessible
@@ -316,7 +318,9 @@ const styles = StyleSheet.create({
     minHeight: 520,
     padding: 52,
     justifyContent: 'center',
-    backgroundColor: colors.panel,
+    backgroundColor: colors.backgroundDeep,
+    borderBottomWidth: 3,
+    borderBottomColor: colors.cyan,
   },
   brandLogo: { width: 300, height: 72, marginBottom: 24 },
   eyebrow: { color: colors.cyan, fontSize: 14, fontFamily: font.heavy, letterSpacing: 1.8 },
@@ -331,7 +335,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 64,
     paddingVertical: 38,
     justifyContent: 'center',
-    backgroundColor: colors.backgroundDeep,
+    backgroundColor: colors.panel,
   },
   serverRow: {
     marginBottom: 17,

@@ -29,13 +29,15 @@ test('las superficies principales consumen la marca FoliOS', () => {
     const cameraOperation = read('resources/views/welcome.blade.php');
     const mobileLogin = read('mobile/src/screens/LoginScreen.tsx');
     const operatorHeader = read('mobile/src/components/operator/OperatorHeader.tsx');
+    const fieldMark = read('mobile/src/components/field/FieldMark.tsx');
     const operationalScreen = read('mobile/src/screens/OperationalScreen.tsx');
 
     assert.match(officeNavigation, /<x-folios-logo surface="dark"/);
     assert.equal((cameraOperation.match(/<x-folios-logo/g) ?? []).length, 2);
     assert.match(mobileLogin, /folios-lockup-horizontal-on-dark\.png/);
     // FoliOS v2: en terreno el encabezado lleva el gajo del área (símbolo del logo).
-    assert.match(operatorHeader, /source=\{definition\.gajo\}/);
+    assert.match(operatorHeader, /<FieldMark area=\{area\}/);
+    assert.match(fieldMark, /source=\{definition\.gajo\}/);
     assert.doesNotMatch(operationalScreen, /folios-lockup-horizontal-on-dark\.png/);
 });
 

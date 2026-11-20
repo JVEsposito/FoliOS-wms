@@ -42,8 +42,8 @@ export const operatorTheme = {
   },
   space: t.space,
   radius: {
-    control: 10,
-    panel: 14,
+    control: t.radius.control,
+    panel: t.radius.panel,
     pill: 999,
   },
   type: {

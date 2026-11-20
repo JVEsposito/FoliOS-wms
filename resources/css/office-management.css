@@ -660,6 +660,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: flex-end;
+    flex-wrap: wrap;
+    min-width: 0;
     gap: 12px;
 }
 
@@ -675,7 +677,7 @@ body {
     font-size: .67rem;
     font-weight: 900;
     text-decoration: none;
-    white-space: nowrap;
+    text-align: center;
 }
 
 .management-panel-link:hover {

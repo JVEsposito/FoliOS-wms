@@ -201,8 +201,9 @@
                                     <p id="loadConcentrationMessage">La concentración se calcula con posiciones correlativas y bandas consecutivas.</p>
                                 </div>
                                 <div class="concentration-panel__progress">
-                                    <div class="concentration-progress" aria-hidden="true"><span id="loadConcentrationBar"></span><i></i></div>
-                                    <div><strong id="loadConcentratedFolios">0 de 0 concentrados</strong><span id="loadMainCluster">Sin grupo principal</span></div>
+                                    <div class="concentration-cells" id="loadConcentrationBar"></div>
+                                    <div><strong id="loadConcentratedFolios">0 de 0 concentrados</strong><span id="loadConcentrationTarget"></span></div>
+                                    <span id="loadMainCluster">Sin grupo principal</span>
                                 </div>
                             </section>
 

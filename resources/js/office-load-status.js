@@ -2,6 +2,7 @@ import { sagLotAlertsHtml } from './shared/sag-lot-alerts.js';
 import { loadClusterLocation } from './shared/load-cluster-location.js';
 import { createOperationalPoller } from './shared/operational-poller';
 import { loadReceptionDependencies } from './shared/load-reception-dependencies.js';
+import { officeCode, palletCells } from './shared/folios-display.js';
 
 const byId = (id) => document.getElementById(id);
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
@@ -123,9 +124,10 @@ function renderList() {
         const progress = load.progreso || {};
         const selected = load.id === state.selectedId;
         const reference = load.embarque?.codigo || load.numero_orden_externa || 'Sin referencia externa';
-        return `<button class="load-status-card${selected ? ' is-selected' : ''}" type="button" data-load-id="${escapeHtml(load.id)}">
-            <span><strong>${escapeHtml(load.codigo)}</strong><i data-priority="${escapeHtml(load.prioridad)}">${escapeHtml(priorityLabels[load.prioridad] || load.prioridad)}</i></span>
-            <small>${escapeHtml(reference)}</small><b>${Number(progress.porcentaje || 0)}% concentrada · ${Number(progress.en_anden || 0)} en andén</b>
+        const waiting = Math.max(0, Number(progress.en_anden || 0) - Number(progress.cargados || 0));
+        return `<button class="load-status-card folios-ticket${selected ? ' is-selected' : ''}" type="button" aria-pressed="${selected}" data-load-id="${escapeHtml(load.id)}">
+            <span><strong class="folios-code">${officeCode(load.codigo, escapeHtml, 3)}</strong><i data-priority="${escapeHtml(load.prioridad)}">${escapeHtml(priorityLabels[load.prioridad] || load.prioridad)}</i></span>
+            <small>${escapeHtml(reference)}</small><b>${Number(progress.porcentaje || 0)}% concentrada · ${waiting} en andén por subir</b>
         </button>`;
     }).join('') : '<div class="load-status-list__empty">No hay cargas que coincidan con la búsqueda.</div>';
 }
@@ -183,18 +185,18 @@ function renderDetail() {
     elements.dock.textContent = load.camion_en_anden ? `${load.camion_en_anden.anden?.nombre || 'Andén'} · desde ${dateTime(load.camion_en_anden.ingresada_at)}` : (load.anden_previsto?.nombre ? `Previsto: ${load.anden_previsto.nombre}` : 'Sin presencia registrada');
     elements.incidents.textContent = `${load.incidencias_abiertas || 0} abiertas`;
     elements.concentrationValue.textContent = `${concentration}%`;
-    elements.concentrationBar.style.width = `${concentration}%`;
+    elements.concentrationBar.innerHTML = palletCells(total, progress.concentrados);
     elements.concentrationComplete.textContent = `${progress.concentrados || 0} concentrados`;
     elements.concentrationPending.textContent = `${progress.faltantes || 0} pendientes`;
     elements.separationValue.textContent = `${separation}%`;
-    elements.separationBar.style.width = `${separation}%`;
-    elements.separationComplete.textContent = `${atDock} en andén`;
+    elements.separationBar.innerHTML = palletCells(total, atDock);
+    elements.separationComplete.textContent = `${atDock} fuera de cámara`;
     elements.separationPending.textContent = `${Math.max(0, total - atDock)} pendientes`;
     const loaded = Number(progress.cargados || 0);
     const waitingOnDock = Math.max(0, atDock - loaded);
     elements.dispatchState.textContent = `${loaded}/${total}`;
     elements.dispatchState.dataset.tone = total && loaded >= total ? 'success' : (load.camion_en_anden ? 'info' : 'neutral');
-    elements.loadingBar.style.width = `${total ? Math.max(0, Math.min(100, Math.round((loaded / total) * 100))) : 0}%`;
+    elements.loadingBar.innerHTML = palletCells(total, loaded, waitingOnDock);
     elements.dispatchMessage.textContent = load.camion_en_anden
         ? `${load.camion_en_anden.patente} está en ${load.camion_en_anden.anden?.nombre || 'andén'}; ${waitingOnDock ? `${waitingOnDock} pallets esperan subir.` : 'el WMS prioriza el retiro directo.'}`
         : 'Registra la presencia del camión desde Cargas para activar la prioridad a andén.';

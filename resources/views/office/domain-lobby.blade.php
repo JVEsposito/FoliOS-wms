@@ -180,7 +180,7 @@
                     <div class="domain-lobby-grid" id="domainLobbyGrid">
                         @foreach ($lobby['cards'] as $card)
                             <a
-                                class="domain-lobby-card"
+                                class="domain-lobby-card folios-ticket"
                                 data-navigation-module="{{ $card['module'] }}"
                                 data-navigation-permissions="{{ implode(',', $card['permissions']) }}"
                                 href="{{ $card['href'] }}"

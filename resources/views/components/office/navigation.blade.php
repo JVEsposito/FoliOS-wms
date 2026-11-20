@@ -137,12 +137,11 @@
     $area = $office === 'operacion-ahora' ? 'operacion' : (array_key_exists($domain, $domains) ? $domain : 'materia-prima');
     $officeLabel = collect($activeOffices)->firstWhere('key', $office)['label'] ?? 'Oficina';
     $serverLabel = config('app.server_label');
-    $gajosContext = in_array($office, ['operacion-ahora', 'panel'], true);
 @endphp
 
 <div class="estiba-ui estiba-office-shell" data-office-shell data-folios-area="{{ $area }}">
     <a class="estiba-office-skip" href="#officeContent" data-office-skip>Saltar al contenido</a>
-    <header class="estiba-office-header" data-office-shell-header data-active-domain="{{ $domain }}" data-active-office="{{ $office }}" @if ($gajosContext) data-gajos-context @endif>
+    <header class="estiba-office-header" data-office-shell-header data-active-domain="{{ $domain }}" data-active-office="{{ $office }}">
         <div class="estiba-office-brand">
             <a class="estiba-office-home" href="/oficina" data-office-home title="Ir a mi inicio">
                 <x-folios-logo surface="dark" class="folios-logo--office folios-logo--office-dark" />
@@ -163,9 +162,7 @@
             @if ($office === 'operacion-ahora')
                 <span>Jornada<strong data-office-workday>Sin consultar</strong></span>
             @endif
-            @if ($gajosContext)
-                <x-office.global-search :in-context="true" />
-            @endif
+            <x-office.global-search />
         </div>
         <button class="estiba-office-status" type="button" data-office-context-refresh aria-label="Actualizar temporada y planta">
             <i aria-hidden="true"></i>
@@ -189,9 +186,6 @@
     <div class="estiba-office-notices" data-office-notices role="status" aria-live="polite" hidden></div>
 
     <aside class="estiba-office-sidebar" id="officeSidebar" aria-label="Navegación de Oficina">
-        @unless ($gajosContext)
-            <x-office.global-search />
-        @endunless
         @php($operationNowDefinition = collect($offices['gerencia'])->firstWhere('key', 'operacion-ahora'))
         <nav class="estiba-office-primary" aria-label="Operación en tiempo real">
             <a @class(['estiba-office-area', 'is-active' => $office === 'operacion-ahora'])

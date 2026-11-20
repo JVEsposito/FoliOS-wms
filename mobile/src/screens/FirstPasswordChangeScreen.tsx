@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 
 import { colors } from '../theme/colors';
 import { deviceNoun } from '../config/appVariant';
+import { FieldCorner, FieldMark } from '../components/field/FieldMark';
 
 type Props = {
   userName: string;
@@ -49,6 +50,8 @@ export function FirstPasswordChangeScreen({ userName, onChangePassword, onLogout
   return (
     <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
       <View style={styles.panel}>
+        <FieldCorner area="operacion" />
+        <FieldMark area="operacion" />
         <Text style={styles.eyebrow}>FoliOS · PRIMER ACCESO</Text>
         <Text style={styles.title}>Crea tu contraseña</Text>
         <Text style={styles.description}>

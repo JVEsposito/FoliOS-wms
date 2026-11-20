@@ -48,7 +48,7 @@
     border: 1px solid var(--corporate-border, var(--line));
     border-top: 2px solid var(--corporate-blue, var(--cyan));
     border-radius: var(--radius, 12px);
-    background: var(--kpi-surface, var(--panel));
+    background: var(--corporate-card);
     box-shadow: var(--corporate-shadow, none);
 }
 
@@ -120,12 +120,13 @@
     width: 48px;
     height: 48px;
     place-items: center;
-    color: var(--info-text, var(--cyan-light));
+    color: var(--area-text);
     font-size: 1rem;
     font-weight: 900;
-    background: var(--info-bg, var(--soft));
-    border: 1px solid var(--logo-border, var(--line));
-    border-radius: calc(var(--radius, 7px) + 4px);
+    background: var(--area-tint);
+    border: 1px solid var(--area-line);
+    border-inline-end-style: dashed;
+    border-radius: var(--folios-control-shape);
 }
 
 .domain-lobby-card h3 {
