@@ -176,6 +176,44 @@ class TemasPerfilApiTest extends TestCase
         }
     }
 
+    public function test_nerv_sirve_el_png_original_y_el_fondo_opcional_al_perfil_habilitado(): void
+    {
+        $disco = Storage::fake('local');
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $perfil = PerfilAcceso::where('predeterminado', true)->where('rol_base', RolUsuario::SupervisorFrio)->firstOrFail();
+        $usuario = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => $perfil->id]);
+        $png = 'iVBORw0KGgoAAAANSUhEUgAAAAYAAAAGCAIAAABvrngfAAAAFUlEQVQI12P8z3qNARUwMWAAagoBANKnAeZyRjDUAAAAAElFTkSuQmCC';
+        $webp = 'UklGRhwAAABXRUJQVlA4TBAAAAAvB4AAAAcQxS9y/wMR0f8A';
+        $ruta = '/api/oficina/tema-personal/personal-nerv';
+
+        Sanctum::actingAs($administrador);
+        $this->getJson('/api/administracion/perfiles-acceso')->assertOk()
+            ->assertJsonMissingPath('catalogo_temas.personal-nerv');
+
+        $disco->put('temas-oficina/personal-nerv.png', base64_decode($png, true));
+        $disco->put('temas-oficina/personal-nerv-eva.webp', base64_decode($webp, true));
+        $this->getJson('/api/administracion/perfiles-acceso')->assertOk()
+            ->assertJsonPath('catalogo_temas.personal-nerv', 'NERV');
+
+        Sanctum::actingAs($usuario);
+        $this->get($ruta)->assertNotFound();
+
+        Sanctum::actingAs($administrador);
+        $this->patchJson("/api/administracion/perfiles-acceso/{$perfil->id}/temas", ['temas_oficina' => ['personal-nerv']])->assertOk();
+        Sanctum::actingAs($usuario->fresh());
+        $this->getJson('/api/oficina/contexto')->assertOk()
+            ->assertJsonPath('data.temas_oficina_personales.personal-nerv.color', '#0c090a');
+        $css = $this->get($ruta)->assertOk()->assertHeader('Content-Type', 'text/css; charset=UTF-8')->getContent();
+        $this->assertStringContainsString('--nerv-emblema: url("data:image/png;base64,'.$png.'");', $css);
+        $this->assertStringContainsString('--nerv-fondo: url("data:image/webp;base64,'.$webp.'");', $css);
+        $this->assertStringNotContainsString('__FOLIOS_TEMA_', $css);
+
+        $disco->delete('temas-oficina/personal-nerv-eva.webp');
+        $css = $this->get($ruta)->assertOk()->getContent();
+        $this->assertStringContainsString('data:image/png;base64,'.$png, $css);
+        $this->assertStringContainsString('--nerv-fondo: none;', $css);
+    }
+
     public function test_el_tema_instalado_con_css_antiguo_reutiliza_su_ilustracion_en_la_cabecera_actual(): void
     {
         $disco = Storage::fake('local');

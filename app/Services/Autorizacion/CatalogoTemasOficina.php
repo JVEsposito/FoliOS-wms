@@ -17,10 +17,19 @@ final class CatalogoTemasOficina
 
     private const MARCADOR_ILUSTRACION = 'data:image/webp;base64,__FOLIOS_TEMA_WEBP__';
 
+    private const MARCADOR_FONDO = '__FOLIOS_TEMA_FONDO__';
+
     private const ESTILOS_DE_PLANTA = [
         'personal-gundam' => ['nombre' => 'Gundam RX-78-2', 'color' => '#101e37', 'claro' => true],
         'personal-omegamon-x' => ['nombre' => 'Omegamon X', 'color' => '#0d111b', 'claro' => false],
         'personal-mugiwara' => ['nombre' => 'Mugiwara', 'color' => '#071c28', 'claro' => false],
+        'personal-nerv' => [
+            'nombre' => 'NERV',
+            'color' => '#0c090a',
+            'claro' => false,
+            'formato' => 'png',
+            'fondo' => 'personal-nerv-eva.webp',
+        ],
     ];
 
     private ?array $personales = null;
@@ -90,11 +99,13 @@ final class CatalogoTemasOficina
         }
 
         if ($tema['ilustracion'] !== null) {
-            $webp = $this->leerArchivo($tema['ilustracion']);
+            $contenido = $this->leerArchivo($tema['ilustracion']);
+            $formato = $tema['formato'];
+            if (! $this->esIlustracion($contenido, $formato)) {
+                return null;
+            }
 
-            return $this->esWebp($webp)
-                ? str_replace(self::MARCADOR_ILUSTRACION, 'data:image/webp;base64,'.base64_encode($webp), $css)
-                : null;
+            return $this->plantillaIlustrada($css, "data:image/{$formato};base64,".base64_encode($contenido), $tema['fondo']);
         }
 
         if (isset(self::ESTILOS_DE_PLANTA[$clave])) {
@@ -102,11 +113,21 @@ final class CatalogoTemasOficina
             $ilustracion = $this->ilustracionIncrustada($css);
             $plantilla = $ilustracion === null ? null : $this->leerArchivo(resource_path("temas-oficina/{$clave}.css"));
             if ($plantilla !== null) {
-                return str_replace(self::MARCADOR_ILUSTRACION, $ilustracion, $plantilla);
+                return $this->plantillaIlustrada($plantilla, $ilustracion, $tema['fondo']);
             }
         }
 
         return $css;
+    }
+
+    private function plantillaIlustrada(string $css, string $ilustracion, ?string $archivoFondo): string
+    {
+        $fondo = $archivoFondo === null ? null : $this->leerArchivo($archivoFondo);
+        $capaFondo = $this->esIlustracion($fondo, 'webp')
+            ? 'url("data:image/webp;base64,'.base64_encode($fondo).'")'
+            : 'none';
+
+        return str_replace([self::MARCADOR_ILUSTRACION, self::MARCADOR_FONDO], [$ilustracion, $capaFondo], $css);
     }
 
     private function ilustracionIncrustada(string $css): ?string
@@ -137,9 +158,13 @@ final class CatalogoTemasOficina
         return $contenido === false ? null : $contenido;
     }
 
-    private function esWebp(?string $contenido): bool
+    private function esIlustracion(?string $contenido, string $formato): bool
     {
-        return $contenido !== null && str_starts_with($contenido, 'RIFF') && substr($contenido, 8, 4) === 'WEBP';
+        return $contenido !== null && match ($formato) {
+            'png' => str_starts_with($contenido, "\x89PNG\r\n\x1a\n"),
+            'webp' => str_starts_with($contenido, 'RIFF') && substr($contenido, 8, 4) === 'WEBP',
+            default => false,
+        };
     }
 
     private function personales(): array
@@ -163,11 +188,13 @@ final class CatalogoTemasOficina
             $correo = $tema['correo'] ?? null;
             $ruta = "{$directorio}/{$clave}.css";
             $ilustracion = null;
-            if (isset(self::ESTILOS_DE_PLANTA[$clave])) {
-                $arte = "{$directorio}/{$clave}.webp";
+            $temaPlanta = self::ESTILOS_DE_PLANTA[$clave] ?? null;
+            $formato = $temaPlanta['formato'] ?? 'webp';
+            if ($temaPlanta !== null) {
+                $arte = "{$directorio}/{$clave}.{$formato}";
                 $estilo = resource_path("temas-oficina/{$clave}.css");
-                if ($this->esWebp($this->leerArchivo($arte, 12)) && is_file($estilo) && is_readable($estilo)) {
-                    $tema = self::ESTILOS_DE_PLANTA[$clave];
+                if ($this->esIlustracion($this->leerArchivo($arte, 12), $formato) && is_file($estilo) && is_readable($estilo)) {
+                    $tema = $temaPlanta;
                     $ruta = $estilo;
                     $ilustracion = $arte;
                 }
@@ -190,6 +217,8 @@ final class CatalogoTemasOficina
                 'claro' => ($tema['claro'] ?? false) === true,
                 'ruta' => $ruta,
                 'ilustracion' => $ilustracion,
+                'formato' => $formato,
+                'fondo' => isset($temaPlanta['fondo']) ? "{$directorio}/{$temaPlanta['fondo']}" : null,
             ];
         }
 
