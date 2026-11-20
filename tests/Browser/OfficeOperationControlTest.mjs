@@ -4,14 +4,21 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { chromium } from 'playwright';
+import { PNG } from 'pngjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
+const webpMagenta = 'UklGRhwAAABXRUJQVlA4TBAAAAAvB4AAAAcQxS9y/wMR0f8A';
 
-test('el centro de control muestra MP y PT y conserva la pestaña al refrescar', async () => {
+test('el centro de control conserva la pestaña y pinta las cabeceras de los temas habilitados', async () => {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     try {
         const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-        const identity = { nombre: 'Supervisión', rol: 'consulta', puede_consultar_panel_gerencial: true, modulos_acceso: ['gerencia.panel'] };
+        const temas = {
+            'personal-omegamon-x': { nombre: 'Omegamon X', color: '#0d111b', claro: false },
+            'personal-mugiwara': { nombre: 'Mugiwara', color: '#071c28', claro: false },
+        };
+        const preferencias = { temas_oficina: Object.keys(temas), temas_oficina_personales: temas };
+        const identity = { nombre: 'Supervisión', rol: 'consulta', puede_consultar_panel_gerencial: true, modulos_acceso: ['gerencia.panel'], ...preferencias };
         await context.addInitScript((user) => {
             localStorage.setItem('estiba_wms_office_token', 'fixture');
             localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
@@ -38,7 +45,12 @@ test('el centro de control muestra MP y PT y conserva la pestaña al refrescar',
             if (pathname === '/api/operacion-ahora') return route.fulfill({ json: { data: snapshot } });
             if (pathname === '/api/operacion-ahora/camareros') return route.fulfill({ json: { data: { generado_at: now, camareros: [] } } });
             if (pathname === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
-            return route.fulfill({ json: { data: { planta: 'Pruebas', temporada: snapshot.temporada } } });
+            const tema = pathname.slice('/api/oficina/tema-personal/'.length);
+            if (pathname.startsWith('/api/oficina/tema-personal/') && Object.hasOwn(temas, tema)) {
+                const css = readFileSync(resolve(root, 'resources', 'temas-oficina', `${tema}.css`), 'utf8');
+                return route.fulfill({ contentType: 'text/css', body: css.replace('__FOLIOS_TEMA_WEBP__', webpMagenta) });
+            }
+            return route.fulfill({ json: { data: { planta: 'Pruebas', temporada: snapshot.temporada, ...preferencias } } });
         });
 
         const page = await context.newPage();
@@ -66,6 +78,25 @@ test('el centro de control muestra MP y PT y conserva la pestaña al refrescar',
         await page.locator('#operationValidationRows').getByText('Conflicto', { exact: true }).waitFor();
         assert.equal(await page.locator('#operationPtApproved').innerText(), '24');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
+
+        const selector = page.getByRole('combobox', { name: 'Tema de Oficina' });
+        const cabecera = page.locator('.operation-now-command__title');
+        for (const tema of Object.keys(temas)) {
+            await page.setViewportSize({ width: 1440, height: 900 });
+            await selector.selectOption(tema);
+            await page.waitForFunction(clave => document.documentElement.dataset.officePersonalTheme === clave, tema);
+            for (const width of [1440, 1024, 390]) {
+                await page.setViewportSize({ width, height: 900 });
+                await page.evaluate(() => window.scrollTo(0, 0));
+                const titulo = await cabecera.getByRole('heading', { name: 'Operación ahora' }).boundingBox();
+                assert.ok(titulo?.height > 20, `${tema} mantiene el título visible a ${width}px`);
+                const imagen = PNG.sync.read(await cabecera.screenshot());
+                const posicion = (Math.floor(imagen.height / 2) * imagen.width + imagen.width - 12) * 4;
+                const [rojo, verde, azul] = imagen.data.subarray(posicion, posicion + 3);
+                assert.ok(rojo > 220 && verde < 45 && azul > 160, `${tema} pinta su WebP en la cabecera a ${width}px`);
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
+            }
+        }
         assert.deepEqual(errors, []);
         await context.close();
     } finally {

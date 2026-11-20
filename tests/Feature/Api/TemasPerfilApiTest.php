@@ -128,21 +128,23 @@ class TemasPerfilApiTest extends TestCase
         $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
         $perfil = PerfilAcceso::where('predeterminado', true)->where('rol_base', RolUsuario::SupervisorFrio)->firstOrFail();
         $usuario = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => $perfil->id]);
-        $claves = ['personal-gundam', 'personal-omegamon-x'];
+        $claves = ['personal-gundam', 'personal-omegamon-x', 'personal-mugiwara'];
         $webp = 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAgA0JaQAA3AA/vuUAAA=';
 
         Sanctum::actingAs($administrador);
         $disco->put('temas-oficina/personal-gundam.webp', 'imagen incompleta');
         $this->getJson('/api/administracion/perfiles-acceso')->assertOk()
             ->assertJsonMissingPath('catalogo_temas.personal-gundam')
-            ->assertJsonMissingPath('catalogo_temas.personal-omegamon-x');
+            ->assertJsonMissingPath('catalogo_temas.personal-omegamon-x')
+            ->assertJsonMissingPath('catalogo_temas.personal-mugiwara');
 
         foreach ($claves as $clave) {
             $disco->put("temas-oficina/{$clave}.webp", base64_decode($webp, true));
         }
         $this->getJson('/api/administracion/perfiles-acceso')->assertOk()
             ->assertJsonPath('catalogo_temas.personal-gundam', 'Gundam RX-78-2')
-            ->assertJsonPath('catalogo_temas.personal-omegamon-x', 'Omegamon X');
+            ->assertJsonPath('catalogo_temas.personal-omegamon-x', 'Omegamon X')
+            ->assertJsonPath('catalogo_temas.personal-mugiwara', 'Mugiwara');
 
         Sanctum::actingAs($usuario);
         foreach ($claves as $clave) {
@@ -161,6 +163,7 @@ class TemasPerfilApiTest extends TestCase
         $this->getJson('/api/oficina/contexto')->assertOk()
             ->assertJsonPath('data.temas_oficina_personales.personal-gundam.claro', true)
             ->assertJsonPath('data.temas_oficina_personales.personal-omegamon-x.nombre', 'Omegamon X')
+            ->assertJsonPath('data.temas_oficina_personales.personal-mugiwara.color', '#071c28')
             ->assertJsonMissingPath('data.temas_oficina_personales.personal-omegamon-x.correo')
             ->assertJsonMissingPath('data.temas_oficina_personales.personal-omegamon-x.ilustracion');
 

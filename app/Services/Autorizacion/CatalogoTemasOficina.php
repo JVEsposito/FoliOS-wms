@@ -18,6 +18,7 @@ final class CatalogoTemasOficina
     private const ESTILOS_DE_PLANTA = [
         'personal-gundam' => ['nombre' => 'Gundam RX-78-2', 'color' => '#101e37', 'claro' => true],
         'personal-omegamon-x' => ['nombre' => 'Omegamon X', 'color' => '#0d111b', 'claro' => false],
+        'personal-mugiwara' => ['nombre' => 'Mugiwara', 'color' => '#071c28', 'claro' => false],
     ];
 
     private ?array $personales = null;
