@@ -26,6 +26,7 @@ use App\Models\User;
 use App\Services\Cargas\ServicioPlanDespachoDirecto;
 use App\Services\Cargas\ServicioReingresoCamara;
 use App\Services\Cargas\ServicioTareasCarga;
+use App\Services\Planificador\ElegibilidadFolioPlanificador;
 use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Temporadas\GuardiaTemporadaActiva;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -553,8 +554,10 @@ class ServicioMovimientoEstiba
                 $tipoBulto,
                 $generadoDispositivoAt,
                 $datosFolio,
-            ));
-        } elseif ($folio->tipo_bulto !== $tipoBulto) {
+            ))->refresh();
+        }
+        $this->asegurarFolioOperable($folio);
+        if ($folio->tipo_bulto !== $tipoBulto) {
             throw new DomainException('El tipo de bulto no coincide con el folio existente.');
         } elseif ($tipoBulto === TipoBulto::Material
             && ! FolioMaterial::query()->whereKey($folio->id)->exists()) {
@@ -739,6 +742,7 @@ class ServicioMovimientoEstiba
             [$sesionOrigen->id, $sesionDestino->id],
         );
         $folioBloqueado = Folio::query()->lockForUpdate()->findOrFail($folio->id);
+        $this->asegurarFolioOperable($folioBloqueado);
         $ubicacion = UbicacionActual::query()
             ->where('folio_id', $folioBloqueado->id)
             ->lockForUpdate()
@@ -926,6 +930,7 @@ class ServicioMovimientoEstiba
         $posicion = Posicion::query()->lockForUpdate()->findOrFail($posicionLeida->id);
         $sesion = SesionEstiba::query()->lockForUpdate()->findOrFail($sesionOrigen->id);
         $folioBloqueado = Folio::query()->lockForUpdate()->findOrFail($folio->id);
+        $this->asegurarFolioOperable($folioBloqueado);
         $ubicacion = UbicacionActual::query()
             ->where('folio_id', $folioBloqueado->id)
             ->lockForUpdate()
@@ -987,6 +992,14 @@ class ServicioMovimientoEstiba
         $this->planificadorDespachoDirecto->sincronizarTrasMovimiento($movimiento, $usuario);
 
         return $movimiento;
+    }
+
+    /** El llamador ya mantiene bloqueado el folio; revalidar también la salida real de la carga. */
+    private function asegurarFolioOperable(Folio $folio): void
+    {
+        if (! ElegibilidadFolioPlanificador::operable($folio, bloquearSalida: true)) {
+            throw new ConflictoMovimiento(ElegibilidadFolioPlanificador::motivo($folio));
+        }
     }
 
     /**
