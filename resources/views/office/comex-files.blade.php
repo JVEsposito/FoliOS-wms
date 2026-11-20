@@ -28,11 +28,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="expediente">
             <x-office.navigation domain="administracion" office="comex-expedientes" context="ADMINISTRACIÓN · COMEX" icon="⚓" />
 
             <section class="cx-workspace">
-                <header class="cx-heading">
+                <header class="cx-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">COMEX · LEÍDO DEL CALENDARIO DE EMBARQUES</p>
                         <h1>Expedientes de embarque</h1>
@@ -56,14 +56,14 @@
                     <div class="cx-acciones" id="filesSetupActions"></div>
                 </section>
 
-                <div class="cx-kpis" id="filesKpis" aria-label="Resumen de los expedientes"></div>
+                <div class="cx-kpis" id="filesKpis" aria-label="Resumen de los expedientes" data-folios-metrics></div>
 
                 <section class="panel cx-panel" aria-labelledby="filesListTitle">
                     <div class="cx-panel__heading">
                         <div><p class="eyebrow">EMBARQUES DEL PERÍODO</p><h2 id="filesListTitle">Expedientes</h2></div>
                         <small>Primero lo más urgente. Abra un embarque para registrar sus documentos.</small>
                     </div>
-                    <form class="cx-filters" id="filesFilters" novalidate>
+                    <form class="cx-filters" id="filesFilters" novalidate data-folios-toolbar>
                         <label class="cx-filters__search"><span>Buscar</span><input id="filesSearch" type="search" maxlength="100" placeholder="Embarque, cliente, contenedor, booking, destino"></label>
                         <label><span>Cliente</span><select id="filesClient"><option value="">Todos</option></select></label>
                         <label><span>Situación</span>

@@ -4,13 +4,13 @@
 @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/css/office-material-standards.css', 'resources/js/office-material-standards.js'])
 @endif
 @include('office.partials.arranque')
-</head><body><main class="office-app" id="standardsApp">
+</head><body><main class="office-app" id="standardsApp" data-folios-workspace="catalogo">
 <x-office.navigation domain="materiales" office="estandares" context="ESTÁNDARES DE CONSUMO" icon="≡" />
 <div class="custody-shell">
-<header class="custody-heading"><div><p class="eyebrow">MATERIALES · PRODUCCIÓN</p><h1>Estándares de consumo</h1><p>Materiales que lleva cada caja de un embalaje PT. Si un embalaje tiene estándar propio y de planta, la rebaja usa el propio.</p></div>
+<header class="custody-heading" data-folios-masthead><div><p class="eyebrow">MATERIALES · PRODUCCIÓN</p><h1>Estándares de consumo</h1><p>Materiales que lleva cada caja de un embalaje PT. Si un embalaje tiene estándar propio y de planta, la rebaja usa el propio.</p></div>
 <div class="standards-heading-actions"><button id="standardsReload" type="button" class="secondary-button">Actualizar</button><button id="standardNew" type="button" class="primary-button" hidden>Nuevo estándar</button></div></header>
 <p id="standardsNotice" role="status" aria-live="polite"></p>
-<form id="standardsFilters" class="custody-filters standards-filters">
+<form id="standardsFilters" class="custody-filters standards-filters" data-folios-toolbar>
 <label>Buscar<input name="q" type="search" maxlength="100" placeholder="Código, descripción o embalaje"></label>
 <label>Temporada<select name="temporada_id"></select></label>
 <label>Cliente<select name="cliente_id"><option value="">Todos</option></select></label>

@@ -24,29 +24,29 @@
             <div class="operation-now estiba-ui" id="officeContent" data-density="compact">
                 <header class="operation-now-command folios-ticket">
                     <div class="operation-now-command__title">
-                        <p class="operation-now-eyebrow"><x-folios.gajo area="operacion" :size="20" />CENTRO DE CONTROL · INFORMACIÓN EN VIVO</p>
+                        <p class="operation-now-eyebrow"><x-folios.gajo area="operacion" :size="17" />Operación ahora · Centro de control</p>
                         <h1>Operación ahora</h1>
+                        <p class="operation-now-command__meta">
+                            <span aria-hidden="true">OPN</span>
+                            <span id="operationWorkday">—</span>
+                            <span id="operationShift">Turno sin configurar</span>
+                            <span id="operationWorkdayHours" hidden></span>
+                        </p>
                     </div>
-                    <div class="operation-now-command__state" aria-label="Estado de los datos">
+                    <div class="operation-now-command__date" aria-label="Fecha y hora operacional">
+                        <strong id="operationTime"><span id="operationTimeMinutes">--:--</span><span class="operation-now-command__seconds" id="operationTimeSeconds">:--</span></strong>
+                        <span class="operation-now-command__today"><span id="operationDate">—</span> · <span id="operationTimezone">Hora operacional</span></span>
+                    </div>
+                    <div class="operation-now-command__actions">
+                        <x-estiba.button class="operation-now-refresh" id="operationRefresh" variant="secondary" aria-describedby="operationDataState">Actualizar</x-estiba.button>
+                    </div>
+                    <div class="operation-now-command__state" id="operationDataState" hidden>
                         <strong class="operation-now-live" id="operationLiveSignal" data-tone="neutral">
                             <i aria-hidden="true"></i><span id="operationLiveText">Sin consultar</span>
                         </strong>
                         <small><span id="operationUpdatedAt">Última lectura: —</span> · <span id="operationSeason">Temporada sin consultar</span></small>
                     </div>
-                    <div class="operation-now-command__date" aria-label="Fecha y hora operacional">
-                        <strong id="operationTime">--:--:--</strong>
-                        <span><span id="operationDate">—</span> · <span id="operationShift">Turno sin configurar</span></span>
-                        <small id="operationTimezone">Hora operacional</small>
-                    </div>
-                    <div class="operation-now-command__actions">
-                        <x-estiba.button class="operation-now-refresh folios-action" id="operationRefresh" variant="secondary" icon="refresh">Actualizar</x-estiba.button>
-                    </div>
                 </header>
-
-                <div class="operation-now-connection" id="operationConnection" role="status" hidden>
-                    <strong id="operationConnectionTitle">Información conservada</strong>
-                    <span id="operationConnectionDetail">Se mantiene la última lectura disponible.</span>
-                </div>
 
                 <nav class="operation-now-tabs" aria-label="Secciones de Operación ahora">
                     <div class="operation-now-tabs__list" role="tablist">
@@ -62,6 +62,11 @@
                         <button type="button" class="operation-now-tab" role="tab" id="operationTab-personal" aria-controls="operationPanel-personal" aria-selected="false" tabindex="-1" data-operation-tab="personal"><span>Personal y equipos</span><span class="operation-now-tab__badge" data-tab-badge="personal" data-tone="neutral" hidden></span></button>
                     </div>
                 </nav>
+
+                <div class="operation-now-connection" id="operationConnection" role="status" hidden>
+                    <strong id="operationConnectionTitle">Información conservada</strong>
+                    <span id="operationConnectionDetail">Se mantiene la última lectura disponible.</span>
+                </div>
 
                 <section id="operationSagLotAlerts" role="status" hidden></section>
                 <div class="operation-now-workspace" aria-busy="true" id="operationWorkspace">
@@ -237,23 +242,29 @@
                         <p class="operation-now-tabpanel__note">Los avances de prefrío representan tiempo transcurrido, no progreso térmico.</p>
                     </section>
                     <section class="operation-now-tabpanel operation-now-tabpanel--despacho" role="tabpanel" id="operationPanel-despacho" aria-labelledby="operationTab-despacho" data-operation-panel="despacho" tabindex="0" hidden>
-                        <section class="operation-now-panel operation-now-panel--dispatch folios-ticket" data-ticket-area="frigorifico" aria-labelledby="operationDispatchTitle">
+                        <section class="operation-now-panel operation-now-panel--dispatch" aria-labelledby="operationDispatchTitle">
                             <header class="operation-now-panel__heading">
                                 <div class="operation-now-panel__title">
                                     <x-folios.gajo area="frigorifico" :size="30" />
                                     <div><h2 id="operationDispatchTitle">Despacho PT</h2><span>Separación y carguío por carga e instructivo</span></div>
                                 </div>
-                                <div class="operation-now-panel__tools"><strong class="operation-now-panel__summary" id="dispatchPanelSummary">—</strong><a class="folios-action" href="/oficina/frigorifico/despacho/estatus">Ver estatus <span aria-hidden="true">→</span></a></div>
+                                <ul class="operation-now-dispatch__metrics" id="dispatchPanelSummary" aria-label="Estado de las cargas">
+                                    <li><strong id="dispatchActiveCount">—</strong> <span id="dispatchActiveLabel">activas</span></li>
+                                    <li><strong id="dispatchLoadingCount">—</strong> <span>cargando</span></li>
+                                    <li><strong id="dispatchReadyCount">—</strong> <span id="dispatchReadyLabel">listas para cerrar</span></li>
+                                </ul>
                             </header>
-                            <ul class="operation-now-dispatch__legend folios-pallet-key" aria-label="Estados de las celdas de pallets">
+                            <ul class="operation-now-dispatch__legend folios-pallet-key" aria-label="Leyenda de pallets">
                                 <li><i data-cell="done" aria-hidden="true"></i>Hecho</li>
                                 <li><i data-cell="dock" aria-hidden="true"></i>En andén, por subir</li>
                                 <li><i data-cell="pending" aria-hidden="true"></i>Por hacer</li>
+                                <li class="operation-now-dispatch__legend-note">una celda por pallet</li>
                             </ul>
                         </section>
                         <div class="operation-now-dispatch__loads" id="operationDispatchRows">
                             <div class="operation-now-empty">Consultando cargas…</div>
                         </div>
+                        <a class="operation-now-dispatch__status" href="/oficina/frigorifico/despacho/estatus">Ver estatus de despacho <span aria-hidden="true">→</span></a>
                         <section class="operation-now-panel operation-now-panel--reentry" aria-labelledby="operationReentryTitle">
                             <header class="operation-now-panel__heading">
                                 <div class="operation-now-panel__title">

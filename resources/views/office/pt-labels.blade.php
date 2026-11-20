@@ -26,18 +26,18 @@
             <button class="primary-button" type="submit">Ingresar</button>
         </form>
     </section>
-    <main class="office-app is-hidden" id="officeApp">
+    <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
         <x-office.navigation domain="frigorifico" office="etiquetas-pt" context="FRIGORÍFICO · PT" icon="▥" />
         <div class="pt-labels-workspace">
-            <header class="panel pt-labels-heading">
+            <header class="panel pt-labels-heading" data-folios-masthead>
                 <div><p class="eyebrow">IMPRESIÓN DE PALLETS</p><h1>Etiquetas PT</h1><p id="ptSeason">Cargando temporada…</p></div>
                 <a class="secondary-button" href="/oficina/validacion">Revisar validaciones</a>
             </header>
             <p id="ptMessage" role="status" aria-live="polite"></p>
-            <section class="panel pt-labels-panel" aria-labelledby="ptListTitle">
+            <section class="panel pt-labels-panel" aria-labelledby="ptListTitle" data-folios-register>
                 <h2 id="ptListTitle">Pallets y saldos vigentes</h2>
                 <p>Se muestran folios activos de la temporada activa. Revisa sus datos antes de seleccionar. Los datos corresponden al inventario actual.</p>
-                <form id="ptFilters" class="pt-labels-filters">
+                <form id="ptFilters" class="pt-labels-filters" data-folios-toolbar>
                     <label>Folio exacto<input name="folio" maxlength="50" placeholder="Incluye los ceros iniciales"></label>
                     <label>Origen<select name="origen"><option value="">Todos</option><option value="validacion">Validación</option><option value="repaletizaje">Repaletizaje</option><option value="externo">Externo</option></select></label>
                     <label>Fecha de validación / repa<input name="fecha" type="date"></label>
@@ -55,7 +55,7 @@
                 <h2 id="ptPrintTitle">Preparar etiquetas</h2>
                 <p id="ptSelection">0 folios seleccionados</p>
                 <p id="ptMissingWeights" class="form-error is-hidden" role="alert"></p>
-                <form id="ptPrintForm" class="pt-labels-filters">
+                <form id="ptPrintForm" class="pt-labels-filters" data-folios-toolbar>
                     <label>Formato<select name="tipo"><option value="planta">Planta · 107 × 74 mm</option><option value="ventana">Ventana · 100 × 200 mm</option><option value="folio">Folio · 100 × 50 mm</option></select></label>
                     <label>Copias por folio<input name="copias" type="number" min="1" max="10" value="4" required></label>
                     <label class="pt-labels-reason">Motivo de reimpresión<input name="motivo_reimpresion" minlength="5" maxlength="1000" placeholder="Obligatorio si ya generaste este formato"></label>
@@ -68,7 +68,7 @@
                     <iframe id="ptPdfPreview" title="PDF de etiquetas PT" class="pt-labels-pdf"></iframe>
                 </div>
             </section>
-            <section class="panel pt-labels-panel" aria-labelledby="ptHistoryTitle">
+            <section class="panel pt-labels-panel" aria-labelledby="ptHistoryTitle" data-folios-register>
                 <h2 id="ptHistoryTitle">Historial de generación</h2>
                 <p>Últimas 25 generaciones de esta temporada.</p>
                 <div class="pt-labels-scroll"><table class="pt-labels-table"><thead><tr><th>Fecha / usuario</th><th>Formato / copias</th><th>Folios</th><th>Motivo</th></tr></thead><tbody id="ptHistory"></tbody></table></div>

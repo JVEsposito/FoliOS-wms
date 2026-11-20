@@ -7,10 +7,10 @@
     @include('office.partials.arranque')
 </head>
 <body>
-<main class="office-app is-hidden" id="shiftDutiesApp">
+<main class="office-app is-hidden" id="shiftDutiesApp" data-folios-workspace="catalogo">
     <x-office.navigation domain="frigorifico" office="labores-turno" context="FRIGORÍFICO · PT" icon="◷" />
     <div class="shift-shell estiba-ui">
-        <x-estiba.heading eyebrow="Supervisión de turno" title="Labores por turno" description="Define la función principal y los apoyos de cada camarero. Las labores comparten los destinos de las cargas.">
+        <x-estiba.heading data-folios-masthead eyebrow="Supervisión de turno" title="Labores por turno" description="Define la función principal y los apoyos de cada camarero. Las labores comparten los destinos de las cargas.">
             <a class="eui-button eui-button--secondary" href="/oficina/operacion-ahora">Operación ahora</a>
             <button class="eui-button eui-button--secondary" type="button" id="shiftReload">Actualizar</button>
         </x-estiba.heading>

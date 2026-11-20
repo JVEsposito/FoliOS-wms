@@ -28,11 +28,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="expediente">
             <x-office.navigation domain="administracion" office="finanzas-hechos" context="ADMINISTRACIÓN · FINANZAS" icon="$" />
 
             <section class="fin-workspace">
-                <header class="fin-heading">
+                <header class="fin-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">FINANZAS · SOLO LECTURA DE LA OPERACIÓN</p>
                         <h1>Hechos valorizables</h1>
@@ -46,7 +46,7 @@
 
                 <div class="fin-status" id="financeStatus" role="status">Cargando…</div>
 
-                <div class="fin-kpis" id="financeKpis" aria-label="Resumen del mes por fuente"></div>
+                <div class="fin-kpis" id="financeKpis" aria-label="Resumen del mes por fuente" data-folios-metrics></div>
 
                 <x-office.panel-switcher
                     id="finance-facts"
@@ -58,8 +58,8 @@
                     ]"
                 />
 
-                <section class="panel fin-panel" id="finance-facts-panel-facts" data-office-panel-group="finance-facts" data-office-panel-id="facts" role="tabpanel" aria-labelledby="finance-facts-tab-facts">
-                    <form class="fin-filters" id="financeFilters">
+                <section class="panel fin-panel" id="finance-facts-panel-facts" data-office-panel-group="finance-facts" data-office-panel-id="facts" role="tabpanel" aria-labelledby="finance-facts-tab-facts" data-folios-register>
+                    <form class="fin-filters" id="financeFilters" data-folios-toolbar>
                         <label><span>Cliente</span><select name="cliente" id="financeClient"><option value="">Todos los clientes</option></select></label>
                         <label><span>Fuente</span><select name="fuente" id="financeSource"><option value="">Todas las fuentes</option></select></label>
                         <label><span>Estado</span>
@@ -84,7 +84,7 @@
                     </nav>
                 </section>
 
-                <section class="panel fin-panel" id="finance-facts-panel-reads" data-office-panel-group="finance-facts" data-office-panel-id="reads" role="tabpanel" aria-labelledby="finance-facts-tab-reads" hidden>
+                <section class="panel fin-panel" id="finance-facts-panel-reads" data-office-panel-group="finance-facts" data-office-panel-id="reads" role="tabpanel" aria-labelledby="finance-facts-tab-reads" hidden data-folios-register>
                     <div class="fin-panel__heading"><div><p class="eyebrow">LECTURAS DE LA OPERACIÓN</p><h2>Cuándo se leyó y qué se encontró</h2></div><small id="financeReadsHelp"></small></div>
                     <div class="fin-table-scroll">
                         <table class="fin-table">

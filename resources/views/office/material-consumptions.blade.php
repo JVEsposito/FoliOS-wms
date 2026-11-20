@@ -4,11 +4,11 @@
 @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/js/office-material-consumptions.js'])
 @endif
 @include('office.partials.arranque')
-</head><body><main class="office-app" id="consumptionApp">
+</head><body><main class="office-app" id="consumptionApp" data-folios-workspace="registro">
 <x-office.navigation domain="materiales" office="consumos" context="CONSUMOS POR ORDEN" icon="⌖" />
-<div class="custody-shell"><header class="custody-heading"><div><p class="eyebrow">MATERIALES · PRODUCCIÓN</p><h1>Consumos por orden de trabajo</h1><p>Compara la receta con lo utilizado. Consulta devoluciones, mermas y quién registró cada movimiento.</p></div><button id="reloadConsumptions" class="secondary-button">Actualizar</button></header>
+<div class="custody-shell"><header class="custody-heading" data-folios-masthead><div><p class="eyebrow">MATERIALES · PRODUCCIÓN</p><h1>Consumos por orden de trabajo</h1><p>Compara la receta con lo utilizado. Consulta devoluciones, mermas y quién registró cada movimiento.</p></div><button id="reloadConsumptions" class="secondary-button">Actualizar</button></header>
 <p id="consumptionNotice" role="status"></p>
-<form id="consumptionFilters" class="custody-card custody-filters">
+<form id="consumptionFilters" class="custody-card custody-filters" data-folios-toolbar>
 <label>Temporada<select name="temporada_id"><option value="">Temporada activa</option></select></label>
 <label>Cliente<select name="cliente_id"><option value="">Todos</option></select></label>
 <label>Bodega de componentes<select name="almacen_id"><option value="">Todas</option></select></label>

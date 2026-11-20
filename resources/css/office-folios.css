@@ -99,7 +99,6 @@ body,
 
 /* Familias condensadas existentes: el ancho lo da el eje wdth de Archivo. */
 .office-app :is(
-    .operation-now-eyebrow,
     .operation-now-command__title h1,
     .operation-now-table thead,
     .operation-now-operator__label,
@@ -387,234 +386,273 @@ body,
 
 /* 4. Encabezado de página ---------------------------------------------------------- */
 
-.office-app :is(
-    header:has(h1):not(.operation-now-command),
-    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
-    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
-    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
-    .return-heading, .repa-heading, .annulment-heading, .process-heading,
-    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
-    .discrepancies-heading, .domain-lobby-heading
-):not([class*="panel__heading"]) {
-    min-height: 0 !important;
-    padding: 17px 20px 15px !important;
-    border: 1px solid var(--line) !important;
-    border-inline-start: 4px solid var(--area-ink) !important;
-    border-radius: var(--folios-ticket-shape) !important;
-    background: var(--folios-corner), linear-gradient(100deg, var(--area-tint), transparent min(55%, 350px)), var(--corporate-card) !important;
-    box-shadow: none !important;
-    align-items: flex-end;
+/* Los módulos declaran su cabecera, su navegación local y el grupo de datos que consultan. */
+.office-app [data-folios-masthead] {
+    --folios-heading-size: clamp(2.25rem, 3.35vw, 3.3rem);
+    position: relative;
+    display: flex;
     flex-wrap: wrap;
-    gap: 16px 32px;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 14px 26px;
+    min-block-size: 0;
+    min-inline-size: 0;
+    padding: clamp(16px, 1.8vw, 25px) clamp(15px, 2.05vw, 28px);
+    border: 1px solid var(--line);
+    border-radius: var(--folios-ticket-shape);
+    background: var(--folios-corner), var(--corporate-card);
+    box-shadow: none;
 }
 
-.office-app :is(
-    header:has(h1):not(.operation-now-command),
-    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
-    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
-    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
-    .return-heading, .repa-heading, .annulment-heading, .process-heading,
-    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
-    .discrepancies-heading, .domain-lobby-heading
-):not([class*="panel__heading"]) .eyebrow {
-    display: inline-flex !important;
+.office-app:is([data-folios-workspace="analisis"], [data-folios-workspace="area"]) [data-folios-masthead] {
+    --folios-heading-size: clamp(2.5rem, 3.6vw, 3.65rem);
+}
+
+.office-app:is([data-folios-workspace="registro"], [data-folios-workspace="catalogo"]) [data-folios-masthead] {
+    --folios-heading-size: clamp(2.1rem, 3.15vw, 3rem);
+}
+
+.office-app [data-folios-masthead] > div:first-child,
+.office-app [data-folios-masthead] .eui-heading__copy {
+    min-inline-size: 0;
+}
+
+.office-app [data-folios-masthead] :is(.eyebrow, .eui-heading__eyebrow) {
+    display: flex;
     align-items: center;
-    gap: 7px;
-    width: max-content;
-    max-width: 100%;
-    min-height: 24px;
-    margin: 0 0 10px !important;
+    gap: 8px;
+    min-block-size: 17px;
+    margin: 0 0 8px;
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--area-text) !important;
-    font: 700 .8125rem/1 var(--font-sans) !important;
-    letter-spacing: .02em !important;
-    text-transform: none;
+    color: var(--area-text);
+    font: 750 .76rem/1.3 var(--font-sans);
+    letter-spacing: .065em;
+    text-transform: uppercase;
     white-space: normal;
 }
 
-.office-app :is(
-    header:has(h1):not(.operation-now-command),
-    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
-    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
-    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
-    .return-heading, .repa-heading, .annulment-heading, .process-heading,
-    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
-    .discrepancies-heading, .domain-lobby-heading
-):not([class*="panel__heading"]) .eyebrow::before {
+.office-app [data-folios-masthead] :is(.eyebrow, .eui-heading__eyebrow)::before {
+    flex: 0 0 17px;
+    inline-size: 17px;
+    block-size: 17px;
+    background: var(--area-gajo) center / contain no-repeat;
     content: "";
-    flex: 0 0 16px;
-    width: 16px;
-    height: 16px;
-    background: var(--area-gajo) center / 16px 16px no-repeat;
 }
 
-.office-app h1:not([data-office-shell] *) {
+.office-app h1:not([data-office-shell] *, .operation-now-command *, [data-folios-masthead] *) {
     margin: 0;
-    padding-bottom: 0 !important;
-    border-bottom: 0 !important;
-    color: var(--text-strong) !important;
-    font-family: var(--font-sans) !important;
-    font-size: clamp(2rem, 2.6vw, 2.75rem) !important;
+    color: var(--text-strong);
+    font-family: var(--font-sans);
+    font-size: clamp(1.75rem, 2.6vw, 2.75rem);
     font-stretch: var(--font-masthead-stretch);
-    font-weight: 800 !important;
-    line-height: .92 !important;
-    letter-spacing: -.01em !important;
-    text-transform: none !important;
+    font-weight: 800;
+    line-height: 1;
 }
 
-.office-app :is(
-    header:has(h1):not(.operation-now-command),
-    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
-    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
-    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
-    .return-heading, .repa-heading, .annulment-heading, .process-heading,
-    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
-    .discrepancies-heading, .domain-lobby-heading
-) h1 + p {
-    max-width: 68ch;
-    margin-top: 10px !important;
-    color: var(--text-secondary) !important;
-    font-size: 1rem !important;
-    line-height: 1.5 !important;
+.office-app [data-folios-masthead] h1 {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: var(--text-strong);
+    font-family: var(--font-sans);
+    font-size: var(--folios-heading-size);
+    font-stretch: var(--font-masthead-stretch);
+    font-weight: 850;
+    line-height: 1;
+    letter-spacing: -.02em;
+    overflow-wrap: anywhere;
 }
 
-/* Solo el título de la página es masthead (40–64 px); otros h1 (estados vacíos) se quedan en 32–44 px. */
-.office-app :is(
-    .management-heading, .admin-heading, .accounts-heading, .dispatch-heading,
-    .weighbridge-heading, .validation-heading, .materials-heading, .prefrio-heading,
-    .hydrocooler-heading, .sag-heading, .shipment-heading, .raw-material-heading,
-    .return-heading, .repa-heading, .annulment-heading, .process-heading,
-    .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
-    .discrepancies-heading, .domain-lobby-heading
-) h1:not([data-office-shell] *) {
-    font-size: clamp(2.5rem, 3.4vw, 4rem) !important;
+.office-app [data-folios-masthead] h1 + p {
+    max-inline-size: 68ch;
+    margin: 8px 0 0;
+    color: var(--text-secondary);
+    font-size: .91rem;
+    line-height: 1.45;
 }
 
-/* Estas vistas tienen los módulos directamente bajo el encabezado. */
+.office-app [data-folios-masthead] > :is(.eui-actions, [class$="__actions"], [class$="-actions"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    max-inline-size: 100%;
+}
+
 .office-app > .management-heading { margin-inline: 28px; }
 .office-app > .queries-heading { margin-inline: 34px; }
 
-@media (max-width: 760px) {
-    .office-app > :is(.management-heading, .queries-heading) { margin-inline: 12px; }
-    .office-app .query-kpis { margin-inline: 12px !important; }
+.office-app [data-folios-section-nav] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 3px 5px;
+    min-inline-size: 0;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-block-start-style: dashed;
+    border-radius: var(--radius-card);
+    background: var(--corporate-card);
 }
 
-/* Eyebrows fuera del encabezado de página (paneles, diálogos, secciones): rótulo sobrio. */
-.office-app .eyebrow,
-dialog .eyebrow {
-    color: var(--text-subtle) !important;
-    font-family: var(--font-sans) !important;
-    font-size: .75rem !important;
-    font-weight: 700 !important;
-    letter-spacing: .04em !important;
+.office-app [data-folios-section-nav] > :is(button, a) {
+    min-block-size: 44px;
+    border-block-end-width: 3px;
 }
 
-/* 5. Indicadores en celdas ------------------------------------------------------------ */
-/* La fila de indicadores es una sola etiqueta dividida en celdas; la cifra manda. */
-
-.office-app :is(
-    [class$="-metrics"],
-    [class*="-metrics "],
-    [class$="-kpis"],
-    [class*="-kpis "],
-    [class*="kpi-grid"]
-) {
-    gap: 10px !important;
+.office-app [data-folios-masthead]:has(+ [data-folios-section-nav]) {
+    margin-block-end: 0;
+    border-block-end: 0;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
 }
 
-.office-app :is(
-    [class$="-metrics"],
-    [class*="-metrics "],
-    [class$="-kpis"],
-    [class*="-kpis "],
-    [class*="kpi-grid"]
-) > article,
-.office-app .management-kpi {
-    display: flex !important;
+.office-app [data-folios-masthead] + [data-folios-section-nav] {
+    margin-block-start: 0;
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
+}
+
+.office-app [data-folios-toolbar] {
+    gap: 8px 14px;
+    min-inline-size: 0;
+}
+
+.office-app [data-folios-toolbar] :is(input, select, button) { min-block-size: 38px; }
+.office-app [data-folios-toolbar] > label { min-inline-size: 0; }
+.office-app [data-folios-toolbar] > label:has(input[type="search"]) { flex: 1 0 min(100%, 210px); }
+
+.office-app:is([data-folios-workspace="registro"], [data-folios-workspace="catalogo"]) [data-folios-toolbar] {
+    align-items: end;
+    padding-block: 9px;
+    border-block-end: 1px dashed var(--line);
+}
+
+/* Una lectura para los datos de alcance común. Cada cifra conserva su etiqueta del módulo. */
+.office-app [data-folios-metrics] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr));
+    gap: 1px;
+    min-inline-size: 0;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--line);
+}
+
+.office-app :is([data-folios-masthead], [data-folios-section-nav], [data-folios-metrics])[hidden] { display: none; }
+
+.office-app [data-folios-metrics] > article {
+    display: flex;
     flex-direction: column;
-    gap: 6px;
-    min-width: 0;
-    margin: 0 !important;
-    padding: 14px 18px !important;
-    border: 1px solid var(--line) !important;
-    border-inline-start: 3px solid var(--area-line) !important;
-    border-radius: var(--folios-ticket-shape) !important;
-    background: var(--folios-corner), var(--kpi-surface) !important;
-    box-shadow: none !important;
+    justify-content: center;
+    gap: 4px;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 13px 16px;
+    border: 0;
+    border-radius: 0;
+    background: var(--corporate-card);
+    box-shadow: none;
 }
 
-.office-app :is(
-    [class$="-metrics"],
-    [class*="-metrics "],
-    [class$="-kpis"],
-    [class*="-kpis "],
-    [class*="kpi-grid"]
-) > article::before {
-    display: none !important;
+.office-app [data-folios-metrics] > article:first-child {
+    border-start-start-radius: calc(var(--radius-card) - 1px);
 }
 
-.office-app :is(
-    [class$="-metrics"],
-    [class*="-metrics "],
-    [class$="-kpis"],
-    [class*="-kpis "],
-    [class*="kpi-grid"]
-) > article > strong,
-.office-app .management-kpi > strong {
-    margin: 0 !important;
-    color: var(--text-strong) !important;
-    font-family: var(--font-sans) !important;
-    font-size: 2.25rem !important;
+.office-app [data-folios-metrics] > article:last-child {
+    border-end-end-radius: calc(var(--radius-card) - 1px);
+}
+
+.office-app [data-folios-metrics] > article::before { display: none; }
+
+.office-app [data-folios-metrics] > article > strong {
+    order: -1;
+    margin: 0;
+    color: var(--text-strong);
+    font: 850 clamp(1.55rem, 2.7vw, 2.35rem)/1 var(--font-sans);
     font-stretch: var(--font-figure-stretch);
-    font-weight: 800 !important;
-    line-height: 1 !important;
     font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
 }
 
-.office-app :is(
-    [class$="-metrics"],
-    [class*="-metrics "],
-    [class$="-kpis"],
-    [class*="-kpis "],
-    [class*="kpi-grid"]
-) > article > :is(span, small, p, h2, h3) {
-    margin: 0 !important;
-    color: var(--text-subtle) !important;
-    font-family: var(--font-sans) !important;
-    font-size: .875rem !important;
-    font-weight: 500 !important;
-    line-height: 1.3 !important;
-    letter-spacing: 0 !important;
-    text-transform: none !important;
+.office-app [data-folios-metrics] > article > :is(span, small, p, h2, h3) {
+    margin: 0;
+    color: var(--text-secondary);
+    font: 500 .82rem/1.3 var(--font-sans);
+    letter-spacing: 0;
+    text-transform: none;
 }
 
-.office-app :is(
-    [class$="-metrics"],
-    [class*="-metrics "],
-    [class$="-kpis"],
-    [class*="-kpis "],
-    [class*="kpi-grid"]
-) > article > :is(span, h2, h3):first-child {
-    color: var(--text-subtle) !important;
-    font-size: .75rem !important;
-    font-weight: 700 !important;
-    letter-spacing: .03em !important;
+.office-app [data-folios-metrics] > article > small {
+    color: var(--text-subtle);
+    font-size: .74rem;
 }
 
-/* Estas dos filas tenían relleno propio como margen de página: pasa a margen externo. */
-.office-app .management-kpis {
-    padding: 0 !important;
-    margin: 0 28px 16px !important;
+.office-app:is([data-folios-workspace="analisis"], [data-folios-workspace="area"]) [data-folios-metrics] > article:first-child {
+    background: color-mix(in srgb, var(--area-tint) 58%, var(--corporate-card));
 }
 
-.office-app .query-kpis {
-    padding: 0 !important;
-    margin: 0 34px 18px !important;
+.office-app .management-kpis { margin: 0 28px 16px; }
+.office-app .query-kpis { margin: 0 34px 18px; }
+
+@media (max-width: 760px) {
+    .office-app > .management-heading,
+    .office-app > .queries-heading,
+    .office-app .management-kpis,
+    .office-app .query-kpis { margin-inline: 12px; }
+
+    .office-app [data-folios-masthead] > :is(.eui-actions, [class$="__actions"], [class$="-actions"]) {
+        justify-content: start;
+    }
+
+    .office-app [data-folios-section-nav] {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+    }
+
+    .office-app [data-folios-section-nav] > :is(button, a) { flex: 0 0 auto; white-space: nowrap; }
+    .office-app [data-folios-metrics] > article { padding: 10px 12px; }
 }
 
 /* 6. Tablas ---------------------------------------------------------------------- */
+
+.office-app [data-folios-register] {
+    min-inline-size: 0;
+    border-radius: var(--radius-card);
+}
+
+.office-app [data-folios-register] > :first-child:has(h2) {
+    padding-block-end: 12px;
+    border-block-end: 1px dashed var(--line);
+}
+
+.office-app [data-folios-register] > :first-child:has(h2) h2 {
+    color: var(--text-strong);
+    font-stretch: var(--font-condensed-stretch);
+    font-weight: 800;
+}
+
+.office-app [data-folios-register] table {
+    font-variant-numeric: tabular-nums;
+}
+
+.office-app [data-folios-register] table th {
+    border-block-end: 1px solid var(--line) !important;
+    background: var(--surface-muted) !important;
+}
+
+.office-app [data-folios-register] tbody tr[aria-selected="true"] {
+    background: var(--area-tint);
+}
+
+.office-app [data-folios-register] tbody td:first-child :is(code, strong[data-folio]) {
+    font-family: var(--font-mono);
+    font-weight: 700;
+}
 
 .office-app table :where(th, td) {
     border-right: 0 !important;
@@ -639,12 +677,12 @@ dialog .eyebrow {
     font-size: .90625rem;
 }
 
-.office-app [role="tablist"] [role="tab"] {
+.office-app [role="tablist"]:not(.operation-now-tabs__list) [role="tab"] {
     border-radius: var(--folios-control-shape);
     border-block-end: 2px solid transparent;
 }
 
-.office-app [role="tablist"] [role="tab"][aria-selected="true"] {
+.office-app [role="tablist"]:not(.operation-now-tabs__list) [role="tab"][aria-selected="true"] {
     border-block-end-color: var(--area-ink);
     background: var(--area-tint);
     color: var(--area-text);

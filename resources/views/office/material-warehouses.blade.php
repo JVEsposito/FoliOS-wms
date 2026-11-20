@@ -12,11 +12,11 @@
     @include('office.partials.arranque')
 </head>
 <body>
-<main id="custodyApp" class="office-app is-hidden">
+<main id="custodyApp" class="office-app is-hidden" data-folios-workspace="catalogo">
     <x-office.navigation domain="materiales" office="custodia" context="INVENTARIO CC" icon="⌖" />
 
     <div class="custody-shell">
-        <header class="custody-heading">
+        <header class="custody-heading" data-folios-masthead>
             <div>
                 <p class="eyebrow">INVENTARIO CC · CENTROS DE COSTO</p>
                 <h1>Custodia distribuida de materiales</h1>
@@ -25,7 +25,7 @@
             <button class="secondary-button" id="custodyReload" type="button">↻ Actualizar</button>
         </header>
 
-        <section class="custody-metrics">
+        <section class="custody-metrics" data-folios-metrics>
             <article><span>FOLIOS VIGENTES</span><strong id="custodyFolioCount">0</strong></article>
             <article><span>ALMACENES CON SALDO</span><strong id="custodyWarehouseCount">0</strong></article>
             <article><span>ÍTEMS CON EXISTENCIA</span><strong id="custodyItemCount">0</strong></article>
@@ -38,7 +38,7 @@
         </div>
 
         <section class="custody-card">
-            <form class="custody-filters" id="custodyFilters">
+            <form class="custody-filters" id="custodyFilters" data-folios-toolbar>
                 <label>Buscar
                     <input name="q" type="search" placeholder="Almacén, cliente, ítem, folio, lote, cantidad, cámara o posición">
                 </label>
@@ -128,7 +128,7 @@
                 <p class="eyebrow">TRAZABILIDAD</p>
                 <h2>Kardex por almacén</h2>
                 <p>Consulta en pantalla los últimos 100 eventos o descarga el historial completo según tipo y período.</p>
-                <form class="custody-form" id="custodyHistoryFilters">
+                <form class="custody-form" id="custodyHistoryFilters" data-folios-toolbar>
                     <label class="wide">Historial a exportar
                         <select name="categoria">
                             <option value="todos">Todos los registros</option>

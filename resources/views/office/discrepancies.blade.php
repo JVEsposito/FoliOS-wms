@@ -18,7 +18,7 @@
         @include('office.partials.arranque')
     </head>
     <body>
-        <main class="office-app discrepancies-app is-hidden" id="discrepanciesApp">
+        <main class="office-app discrepancies-app is-hidden" id="discrepanciesApp" data-folios-workspace="registro">
             <x-office.navigation
                 domain="frigorifico"
                 office="discrepancias"
@@ -27,7 +27,7 @@
             />
 
             <div class="discrepancies-shell estiba-ui">
-                <x-estiba.heading
+                <x-estiba.heading data-folios-masthead
                     class="discrepancies-heading"
                     eyebrow="Supervisión operacional"
                     title="Discrepancias de maniobras"
@@ -40,14 +40,14 @@
                     Reanudar conserva lo ya ejecutado. Cancelar solo está disponible cuando no existe una tarea en proceso ni custodia temporal activa.
                 </x-estiba.alert>
 
-                <section class="discrepancies-metrics" aria-label="Resumen de discrepancias">
+                <section class="discrepancies-metrics" aria-label="Resumen de discrepancias" data-folios-metrics>
                     <article class="eui-panel"><span>ABIERTAS</span><strong id="openDiscrepanciesCount">0</strong><small>requieren decisión</small></article>
                     <article class="eui-panel"><span>RESUELTAS</span><strong id="resolvedDiscrepanciesCount">0</strong><small>temporada activa</small></article>
                     <article class="eui-panel"><span>PALLETS NO ENCONTRADOS</span><strong id="missingPalletsCount">0</strong><small>abiertas · localizar físicamente</small></article>
                 </section>
 
                 <section class="eui-panel discrepancies-panel">
-                    <form class="discrepancies-filters" id="discrepanciesFilters">
+                    <form class="discrepancies-filters" id="discrepanciesFilters" data-folios-toolbar>
                         <label>
                             <span>Estado</span>
                             <select class="eui-input" name="estado">

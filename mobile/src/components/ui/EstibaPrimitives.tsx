@@ -131,7 +131,12 @@ export function EstibaMetric({ label, value, total, detail, tone = 'info' }: {
       accessibilityLabel={label}
       accessibilityValue={{ min: 0, max: 100, now: percent, text: `${value} de ${total}` }}
       style={s.meter}
-    ><View style={{ width: `${percent}%`, height: '100%', backgroundColor: t.signal[tone].text }} /></View> : null}
+    >
+      {Array.from({ length: 10 }, (_, index) => {
+        const fill = Math.max(0, Math.min(100, (percent - index * 10) * 10));
+        return <View key={index} style={s.meterSegment}><View style={{ width: `${fill}%`, height: '100%', backgroundColor: t.signal[tone].text }} /></View>;
+      })}
+    </View> : null}
     {detail ? <Text style={s.smallMuted}>{detail}</Text> : null}
   </View>;
 }
@@ -212,9 +217,9 @@ const s = StyleSheet.create({
   headingCopy: { flexGrow: 1, flexShrink: 1, gap: t.space[2] },
   eyebrow: { fontFamily: font.heavy, color: t.color.muted, fontSize: t.fontSize.small,  letterSpacing: 1, textTransform: 'uppercase' },
   title: { fontFamily: font.heavy, color: t.color.text, fontSize: t.fontSize.title, lineHeight: t.fontSize.title * t.lineHeight.heading,  },
-  panel: { backgroundColor: t.color.surface, borderColor: t.color.border, borderWidth: 1, borderRadius: t.radius.panel },
+  panel: { backgroundColor: t.color.surface, borderColor: t.color.border, borderWidth: 1, borderRadius: t.radius.panel, borderTopRightRadius: 3 },
   panelHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: t.space[3], borderBottomWidth: 1, borderBottomColor: t.color.border, padding: t.space[4] },
-  panelTitle: { fontFamily: font.bold, color: t.color.text, fontSize: t.fontSize.body,  flexShrink: 1 },
+  panelTitle: { fontFamily: font.heavy, color: t.color.text, fontSize: t.fontSize.body + 2, flexShrink: 1 },
   panelBody: { padding: t.space[4], gap: t.space[4] },
   button: { minHeight: t.density.touch.control, paddingHorizontal: t.space[4], paddingVertical: t.space[3], borderRadius: t.radius.control, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: t.space[2] },
   buttonLabel: { fontSize: t.fontSize.body, lineHeight: t.fontSize.body * t.lineHeight.body, fontFamily: font.bold, textAlign: 'center', flexShrink: 1 },
@@ -232,7 +237,8 @@ const s = StyleSheet.create({
   metric: { gap: t.space[2] },
   metricHeading: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: t.space[2] },
   metricValue: { fontFamily: font.heavy, color: t.color.text, fontSize: t.fontSize.body,  fontVariant: ['tabular-nums'] },
-  meter: { height: 8, backgroundColor: t.color.disabledSurface, overflow: 'hidden' },
+  meter: { flexDirection: 'row', gap: 3, height: 8 },
+  meterSegment: { flex: 1, backgroundColor: t.color.disabledSurface, borderRadius: 1, overflow: 'hidden' },
   alert: { padding: t.space[4], borderWidth: 1, borderLeftWidth: 4, borderRadius: t.radius.control, gap: t.space[2] },
   empty: { padding: t.space[4], gap: t.space[3] },
   progress: { gap: t.space[4] },

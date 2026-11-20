@@ -17,10 +17,10 @@
             <button class="primary-button">Ingresar</button><p id="officeLoginError" role="alert"></p>
         </form>
     </section>
-    <main class="office-app is-hidden" id="officeApp">
+    <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
         <x-office.navigation domain="frigorifico" office="diagramas-sag" context="FRIGORÍFICO · SAG" icon="SAG" />
         <section class="pd-workspace">
-            <header class="pd-heading">
+            <header class="pd-heading" data-folios-masthead>
                 <div><p class="eyebrow">PRESENTACIÓN DE PALLETS · INSPECCIÓN SAG/USDA</p><h1 id="pdTitle">DIAGRAMA USDA</h1><p class="pd-help" id="pdSeason"></p></div>
                 <div class="pd-actions">
                     <button class="secondary-button" type="button" id="pdNew">Nuevo diagrama</button>
@@ -32,9 +32,9 @@
             <p class="pd-message" id="pdMessage" role="status"></p>
             <div class="pd-warning is-hidden" id="pdWarning" role="alert"><span id="pdWarningText"></span><div class="pd-warning__actions"><button class="secondary-button" type="button" id="pdDropMissing">Quitar esas marcas</button><button class="secondary-button" type="button" id="pdWarningOk">Entendido</button></div></div>
 
-            <section class="panel is-hidden" id="pdSaved">
+            <section class="panel is-hidden" id="pdSaved" data-folios-register>
                 <div class="pd-panel-heading"><h2>Diagramas guardados</h2><p class="pd-help" id="pdSavedSeason"></p></div>
-                <form class="pd-saved-filters" id="pdSavedFilters">
+                <form class="pd-saved-filters" id="pdSavedFilters" data-folios-toolbar>
                     <label>Buscar<input name="texto" maxlength="100" placeholder="N.º, lote, folio o exportadora"></label>
                     <button class="secondary-button">Buscar / actualizar</button>
                 </form>
@@ -57,7 +57,7 @@
                 <datalist id="pdSpecies"></datalist><datalist id="pdExporters"></datalist>
             </section>
 
-            <section class="panel">
+            <section class="panel" data-folios-register>
                 <div class="pd-panel-heading"><h2>Pallets</h2><p class="pd-totals" id="pdTotals"></p></div>
                 <form class="pd-quick" id="pdQuick">
                     <label>Cajas por base<input name="base" type="number" min="1" max="50" step="1" inputmode="numeric"></label>
@@ -98,7 +98,7 @@
                 <div class="pd-diagram" id="pdDiagram"></div>
             </section>
 
-            <section class="panel">
+            <section class="panel" data-folios-register>
                 <div class="pd-panel-heading"><h2>Resumen de pallets y cajas marcadas</h2><p class="pd-help">c = corrida contada desde abajo · p = posición contada desde la izquierda</p></div>
                 <div class="pd-scroll"><table class="pd-summary"><thead><tr><th>Pallet</th><th>Folio</th><th>Base × corridas</th><th>Cajas</th><th>Numeración</th><th>Cajas marcadas</th></tr></thead><tbody id="pdSummary"></tbody><tfoot id="pdSummaryTotal"></tfoot></table></div>
             </section>

@@ -29,11 +29,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
             <x-office.navigation domain="frigorifico" office="inspeccion-sag" context="FRIGORÍFICO · PT" icon="SAG" />
 
             <section class="sag-workspace">
-                <header class="panel sag-heading">
+                <header class="panel sag-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">CONTROL FITOSANITARIO</p>
                         <h1>Inspección SAG</h1>
@@ -45,7 +45,7 @@
 
                 <div class="sag-load-error" id="sagLoadError" role="alert" hidden></div>
 
-                <section class="sag-metrics" aria-label="Resumen SAG">
+                <section class="sag-metrics" aria-label="Resumen SAG" data-folios-metrics>
                     <article><span>LOTES ACTIVOS</span><strong id="activeLotsMetric">0</strong></article>
                     <article><span>PALLETS EN INSPECCIÓN</span><strong id="activePalletsMetric">0</strong></article>
                     <article><span>FINALIZADOS HOY</span><strong id="finishedTodayMetric">0</strong></article>
@@ -59,7 +59,7 @@
                     <button data-sag-panel="historial" type="button">Historial</button>
                 </nav>
 
-                <section class="sag-panel" data-sag-section="resumen">
+                <section class="sag-panel" data-sag-section="resumen" data-folios-register>
                     <div class="sag-summary-grid">
                         <article class="panel sag-rule-card"><p class="eyebrow">NOMENCLATURA</p><h2>Estado SAG visible</h2><div class="sag-code-grid"><span><strong>SI</strong> Sin inspección activa</span><span><strong>AO</strong> Aprobado Origen</span><span><strong>AU</strong> Aprobado USDA</span><span><strong>AF</strong> Aprobado Fumigación</span></div></article>
                         <article class="panel sag-rule-card"><p class="eyebrow">REGLA DE MERCADO</p><h2>Las aprobaciones se acumulan</h2><p>Segregar, rechazar o salir sin resolución no revoca mercados anteriores. En cambio de mercado, el destino aprobado se agrega al pallet.</p></article>
@@ -68,7 +68,7 @@
                     <div class="panel sag-table-panel"><div class="sag-panel-heading"><div><p class="eyebrow">OPERACIÓN ACTUAL</p><h2>Últimos lotes</h2></div></div><div class="table-scroll"><table><thead><tr><th>Lote</th><th>Tipo</th><th>Estado</th><th>Pallets</th><th>Destinos</th><th>Creación</th><th>Acción</th></tr></thead><tbody id="recentLotsBody"></tbody></table></div></div>
                 </section>
 
-                <section class="sag-panel is-hidden" data-sag-section="nueva">
+                <section class="sag-panel is-hidden" data-sag-section="nueva" data-folios-register>
                     <form class="panel sag-builder" id="sagBuilderForm">
                         <div class="sag-panel-heading"><div><p class="eyebrow">PREPARACIÓN</p><h2>Armar lote de inspección</h2><p>Cliente/exportadora y especie son obligatorios. Los filtros 3 al 7 son combinables y opcionales.</p></div></div>
                         <div class="sag-form-grid sag-form-grid--lot">
@@ -107,11 +107,11 @@
                     </form>
                 </section>
 
-                <section class="sag-panel is-hidden" data-sag-section="activos">
+                <section class="sag-panel is-hidden" data-sag-section="activos" data-folios-register>
                     <div class="panel sag-table-panel"><div class="sag-panel-heading"><div><p class="eyebrow">SEGUIMIENTO</p><h2>Lotes activos</h2></div></div><div class="table-scroll"><table><thead><tr><th>Lote</th><th>Tipo</th><th>Estado</th><th>Pallets</th><th>Destinos</th><th>Responsable</th><th>Acción</th></tr></thead><tbody id="activeLotsBody"></tbody></table></div></div>
                 </section>
 
-                <section class="sag-panel is-hidden" data-sag-section="historial">
+                <section class="sag-panel is-hidden" data-sag-section="historial" data-folios-register>
                     <div class="panel sag-table-panel"><div class="sag-panel-heading"><div><p class="eyebrow">TRAZABILIDAD</p><h2>Historial de inspecciones</h2></div></div><div class="table-scroll"><table><thead><tr><th>Lote</th><th>Tipo</th><th>Estado</th><th>Pallets</th><th>Destinos</th><th>Finalización</th><th>Acción</th></tr></thead><tbody id="historyLotsBody"></tbody></table></div></div>
                 </section>
 

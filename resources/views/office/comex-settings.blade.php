@@ -28,11 +28,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="catalogo">
             <x-office.navigation domain="administracion" office="comex-configuracion" context="ADMINISTRACIÓN · COMEX" icon="☰" />
 
             <section class="cx-workspace">
-                <header class="cx-heading">
+                <header class="cx-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">COMEX · CONFIGURACIÓN</p>
                         <h1>Configuración Comex</h1>
@@ -55,7 +55,7 @@
                         <div><p class="eyebrow">CLIENTES</p><h2 id="settingsClientsTitle">Cómo se sigue a cada cliente</h2></div>
                         <small>Servicio: la planta sigue los documentos del exportador. Exportación propia: la empresa exporta y se suman sus documentos (por ejemplo, la factura). Sin seguimiento: sus embarques no aparecen en los expedientes.</small>
                     </div>
-                    <form class="cx-filters cx-filters--una" id="settingsClientFilters" novalidate>
+                    <form class="cx-filters cx-filters--una" id="settingsClientFilters" novalidate data-folios-toolbar>
                         <label class="cx-filters__search"><span>Buscar cliente</span><input id="settingsClientSearch" type="search" maxlength="100" placeholder="Nombre del cliente"></label>
                         <label><span>Gestión</span>
                             <select id="settingsClientManagement">

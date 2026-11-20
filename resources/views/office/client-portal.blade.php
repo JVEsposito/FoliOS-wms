@@ -46,12 +46,12 @@
 
     <section class="portal-app" id="portalApp" hidden>
         <nav class="portal-tabs" role="tablist" aria-label="Secciones del portal">
-            <button type="button" role="tab" data-tab="resumen">Resumen</button>
-            <button type="button" role="tab" data-tab="recepciones">Recepciones</button>
-            <button type="button" role="tab" data-tab="embarques">Embarques</button>
-            <button type="button" role="tab" data-tab="horarios">Horario de carga</button>
-            <button type="button" role="tab" data-tab="folios">Folios</button>
-            <button type="button" role="tab" data-tab="materiales">Materiales</button>
+            <button type="button" role="tab" data-tab="resumen"><x-folios.gajo area="operacion" :size="18" />Resumen</button>
+            <button type="button" role="tab" data-tab="recepciones"><x-folios.gajo area="materia-prima" :size="18" />Recepciones</button>
+            <button type="button" role="tab" data-tab="embarques"><x-folios.gajo area="frigorifico" :size="18" />Embarques</button>
+            <button type="button" role="tab" data-tab="horarios"><x-folios.gajo area="frigorifico" :size="18" />Horario de carga</button>
+            <button type="button" role="tab" data-tab="folios"><x-folios.gajo area="consultas" :size="18" />Folios</button>
+            <button type="button" role="tab" data-tab="materiales"><x-folios.gajo area="materiales" :size="18" />Materiales</button>
         </nav>
         <p class="form-error" id="portalError" role="alert"></p>
 

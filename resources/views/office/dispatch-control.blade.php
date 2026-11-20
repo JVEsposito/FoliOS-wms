@@ -28,17 +28,17 @@
             </form>
         </section>
 
-        <main class="office-app dcx-app is-hidden" id="officeApp">
+        <main class="office-app dcx-app is-hidden" id="officeApp" data-folios-workspace="operacion">
             <x-office.navigation domain="frigorifico" office="control-despacho" context="FRIGORÍFICO · DESPACHO" icon="▤" />
 
             <section class="dcx-workspace">
-                <header class="dcx-heading panel">
+                <header class="dcx-heading panel" data-folios-masthead>
                     <div>
                         <p class="eyebrow">POEMP R-24 · CONSOLIDACIÓN</p>
                         <h1>Control de despacho</h1>
                         <p>Planilla de control de despacho del área de frío: inspección del camión o contenedor, posición y temperatura de cada pallet. La llena el equipo de consolidación desde la PDA.</p>
                     </div>
-                    <form class="dcx-filters" id="dcxFilters" role="search">
+                    <form class="dcx-filters" id="dcxFilters" role="search" data-folios-toolbar>
                         <label><span>Buscar</span><input name="buscar" maxlength="60" autocomplete="off" placeholder="Referencia embarque, carga, contenedor o folio"></label>
                         <label><span>Estado</span>
                             <select name="estado">
@@ -53,7 +53,7 @@
                     </form>
                 </header>
 
-                <section class="panel dcx-list" aria-labelledby="dcxListTitle">
+                <section class="panel dcx-list" aria-labelledby="dcxListTitle" data-folios-register>
                     <div class="dcx-list__head">
                         <h2 id="dcxListTitle">Planillas de la temporada</h2>
                         <p id="dcxCount" role="status">—</p>
@@ -73,7 +73,7 @@
                     </div>
                 </section>
 
-                <section class="panel dcx-detail is-hidden" id="dcxDetail" aria-labelledby="dcxDetailTitle">
+                <section class="panel dcx-detail is-hidden" id="dcxDetail" aria-labelledby="dcxDetailTitle" data-folios-register>
                     <div class="dcx-detail__head">
                         <div>
                             <p class="eyebrow" id="dcxDetailState">—</p>
@@ -94,7 +94,7 @@
                             <button class="primary-button" type="submit">Guardar y descargar</button>
                         </form>
                     </section>
-                    <div class="dcx-kpis" id="dcxKpis"></div>
+                    <div class="dcx-kpis" id="dcxKpis" data-folios-metrics></div>
                     <div class="dcx-columns">
                         <section aria-labelledby="dcxHeaderTitle"><h3 id="dcxHeaderTitle">Encabezado</h3><div id="dcxHeader"></div></section>
                         <section aria-labelledby="dcxInspectionTitle"><h3 id="dcxInspectionTitle">Inspección visual</h3><ul class="dcx-checks" id="dcxInspection"></ul></section>

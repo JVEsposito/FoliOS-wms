@@ -16,13 +16,13 @@
     @include('office.partials.arranque')
 </head>
 <body>
-    <main class="office-app is-hidden" id="officeApp">
+    <main class="office-app is-hidden" id="officeApp" data-folios-workspace="registro">
         <x-office.navigation domain="materia-prima" office="recepciones-csg" context="MATERIA PRIMA" icon="MP" />
         <section class="report-csg estiba-ui" id="officeContent">
-            <x-estiba.heading title="Informe de recepción por CSG"
+            <x-estiba.heading data-folios-masthead title="Informe de recepción por CSG"
                 description="Kilos netos de recepciones cerradas en la temporada activa, por fecha de ingreso en hora de planta." />
 
-            <form class="eui-panel" id="receptionCsgFilters">
+            <form class="eui-panel" id="receptionCsgFilters" data-folios-toolbar>
                 <fieldset class="report-csg__filters eui-panel__body" id="receptionCsgFields" disabled>
                     <label class="eui-field">Cliente
                         <select name="cliente" required><option value="">Cargando clientes…</option></select>
@@ -46,7 +46,7 @@
                 <div class="report-csg__balance" id="receptionCsgBalance" hidden></div>
 
                 <div class="report-csg__overview">
-                    <section class="eui-panel" aria-labelledby="receptionCsgSummaryTitle">
+                    <section class="eui-panel" aria-labelledby="receptionCsgSummaryTitle" data-folios-register>
                         <header class="eui-panel__header"><h2 class="eui-panel__title" id="receptionCsgSummaryTitle">Resumen por CSG</h2></header>
                         <div class="eui-table-scroll">
                             <table class="eui-table report-csg__summary">
@@ -61,7 +61,7 @@
                     </section>
                 </div>
 
-                <section class="eui-panel" aria-labelledby="receptionCsgDetailTitle">
+                <section class="eui-panel" aria-labelledby="receptionCsgDetailTitle" data-folios-register>
                     <header class="eui-panel__header"><h2 class="eui-panel__title" id="receptionCsgDetailTitle">Detalle de recepciones</h2></header>
                     <div class="eui-table-scroll" tabindex="0" aria-label="Detalle por guía y lote">
                         <table class="eui-table report-csg__detail">

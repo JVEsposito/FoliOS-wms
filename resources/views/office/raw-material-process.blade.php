@@ -29,16 +29,16 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
             <x-office.navigation domain="materia-prima" office="fruta-proceso" context="MATERIA PRIMA" icon="→" />
 
             <section class="process-workspace">
-                <header class="process-heading">
+                <header class="process-heading" data-folios-masthead>
                     <div><p class="eyebrow">CÁMARA MP ↔ PACKING</p><h1>Fruta a proceso</h1><p id="seasonDescription">Cargando circuito de proceso…</p></div>
                     <button class="secondary-button" id="reloadButton" type="button">↻ Actualizar</button>
                 </header>
 
-                <div class="process-kpis">
+                <div class="process-kpis" data-folios-metrics>
                     <article><span>LOTES ABIERTOS</span><strong id="openLotsCount">0</strong><small>Con bins disponibles</small></article>
                     <article><span>BINS DISPONIBLES</span><strong id="availableBinsCount">0</strong><small>Aún en cámara</small></article>
                     <article><span>BINS ENTREGADOS</span><strong id="deliveredBinsCount">0</strong><small>Movimientos vigentes</small></article>
@@ -49,7 +49,7 @@
                     <article><span>PENDIENTES DE UBICACIÓN</span><strong id="pendingLocationCount">0</strong><small>Sublotes sin cámara</small></article>
                 </div>
 
-                <nav class="process-section-tabs" aria-label="Etapas de Fruta a proceso">
+                <nav class="process-section-tabs" aria-label="Etapas de Fruta a proceso" data-folios-section-nav>
                     <button class="is-active" data-process-section="entregas" type="button">1. Entregas a Packing</button>
                     <button onclick="window.location.href='/oficina/materia-prima/retornos-packing'" type="button">2. Retornos de Packing</button>
                 </nav>
@@ -57,7 +57,7 @@
                 <section class="panel process-panel">
                     <div class="process-panel__heading">
                         <div><p class="eyebrow" id="panelEyebrow">CONTROL DE DESPACHO INTERNO</p><h2 id="panelTitle">Lotes disponibles para proceso</h2><p id="panelDescription">Desde cámara MP o directamente desde Hidrocooler, conservando el origen de cada viaje.</p></div>
-                        <form id="processFilters">
+                        <form id="processFilters" data-folios-toolbar>
                             <input name="buscar" maxlength="100" placeholder="Lote, cliente, CSG u orden">
                             <select name="estado"><option value="abiertos">Abiertos</option><option value="completados">Completados</option><option value="">Todos</option></select>
                             <button class="secondary-button" type="submit">Filtrar</button>

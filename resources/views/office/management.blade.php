@@ -46,10 +46,10 @@
             </form>
         </section>
 
-        <main class="office-app management-app is-hidden" id="officeApp">
+        <main class="office-app management-app is-hidden" id="officeApp" data-folios-workspace="analisis">
             <x-office.navigation domain="gerencia" office="panel" context="ADMINISTRACIÓN & GERENCIA" icon="◆" />
 
-            <section class="management-heading folios-ticket">
+            <section class="management-heading folios-ticket" data-folios-masthead>
                 <div>
                     <p class="eyebrow">RESUMEN DE LA OPERACIÓN</p>
                     <h1>Panel gerencial</h1>
@@ -72,7 +72,7 @@
                 </div>
             </section>
 
-            <section class="management-kpis" aria-label="Indicadores principales">
+            <section class="management-kpis" aria-label="Indicadores principales" data-folios-metrics>
                 <article class="management-kpi management-kpi--romana">
                     <span class="management-kpi__label">Kilos recepcionados</span>
                     <strong><span id="weighbridgeSeasonKpi">—</span><em>kg</em></strong>
@@ -164,7 +164,7 @@
                         <div class="management-occupancy" id="cameraOccupancyChart" role="list" aria-label="Ocupación por cámara"></div>
                     </article>
 
-                    <article class="management-panel management-table-panel">
+                    <article class="management-panel management-table-panel" data-folios-register>
                         <header><div><p class="eyebrow">DETALLE FÍSICO</p><h2>Capacidad por cámara</h2></div></header>
                         <div class="table-scroll">
                             <table>
@@ -173,7 +173,7 @@
                             </table>
                         </div>
                     </article>
-                    <article class="management-panel management-table-panel">
+                    <article class="management-panel management-table-panel" data-folios-register>
                         <header><div><p class="eyebrow">CONTEO CÍCLICO</p><h2>Exactitud de ubicación y cumplimiento</h2></div></header>
                         <div id="managementVerificationSummary">Sin rondas generadas.</div>
                         <div class="table-scroll"><table>
@@ -248,7 +248,7 @@
                             <div><p class="eyebrow">DESPACHO DE PRODUCTO TERMINADO</p><h2>Cargas activas y avance operativo</h2></div>
                             <a class="management-panel-link" href="/oficina/frigorifico/despacho/estatus">Ver estatus operativo →</a>
                         </header>
-                        <div class="management-operational-metrics management-operational-metrics--eight">
+                        <div class="management-operational-metrics management-operational-metrics--eight" data-folios-metrics>
                             <article><span>CARGAS ACTIVAS</span><strong id="activeLoadsMetric">0</strong><small>en circuito</small></article>
                             <article><span>PENDIENTES</span><strong id="pendingLoadsMetric">0</strong><small>sin preparar</small></article>
                             <article><span>EN PREPARACIÓN</span><strong id="preparingLoadsMetric">0</strong><small>separación activa</small></article>
@@ -275,7 +275,7 @@
                             <div><p class="eyebrow">CONTROL DE PRODUCTO TERMINADO</p><h2>Validación de pallets de hoy</h2></div>
                             <a class="management-panel-link" href="/oficina/validacion">Abrir Validación →</a>
                         </header>
-                        <div class="management-operational-metrics management-operational-metrics--five">
+                        <div class="management-operational-metrics management-operational-metrics--five" data-folios-metrics>
                             <article><span>PROCESADOS</span><strong id="validationProcessedMetric">0</strong><small>registros recibidos</small></article>
                             <article class="is-positive"><span>APROBADOS</span><strong id="validationApprovedMetric">0</strong><small>sin observación</small></article>
                             <article class="is-warning"><span>OBSERVADOS</span><strong id="validationObservedMetric">0</strong><small>requieren revisión</small></article>
@@ -294,7 +294,7 @@
                     role="tabpanel"
                     aria-labelledby="management-tab-precooling"
                 >
-                    <div class="management-precooling-kpis" aria-label="Indicadores de Prefrío">
+                    <div class="management-precooling-kpis" aria-label="Indicadores de Prefrío" data-folios-metrics>
                         @foreach ([
                             ['Activos', 'precoolingActiveMetric', 'procesos abiertos'],
                             ['Atrasados', 'precoolingOverdueMetric', 'sobre el objetivo'],
@@ -308,7 +308,7 @@
                             </article>
                         @endforeach
                     </div>
-                    <article class="management-panel folios-ticket" data-ticket-area="frigorifico">
+                    <article class="management-panel folios-ticket" data-ticket-area="frigorifico" data-folios-register>
                         <header>
                             <div class="management-panel__identity">
                                 <x-folios.gajo area="frigorifico" :size="34" />
@@ -336,7 +336,7 @@
                     role="tabpanel"
                     aria-labelledby="management-tab-materials"
                 >
-                    <article class="management-panel">
+                    <article class="management-panel" data-folios-register>
                         <header>
                             <div class="management-panel__identity">
                                 <x-folios.gajo area="materiales" :size="34" />
@@ -347,7 +347,7 @@
                                 <a class="management-panel-link" href="/oficina/materiales/exportaciones">Exportar materiales →</a>
                             </div>
                         </header>
-                        <div class="management-operational-metrics management-operational-metrics--four">
+                        <div class="management-operational-metrics management-operational-metrics--four" data-folios-metrics>
                             <article><span>DESPACHOS ABIERTOS</span><strong id="materialOpenDispatchesMetric">0</strong><small>pendientes o parciales</small></article>
                             <article class="is-warning"><span>PARCIALES</span><strong id="materialPartialDispatchesMetric">0</strong><small>retiro incompleto</small></article>
                             <article class="is-positive"><span>RECEPCIONES HOY</span><strong id="materialReceptionsTodayMetric">0</strong><small>confirmadas</small></article>
@@ -380,7 +380,7 @@
                             <a class="management-panel-link" href="/oficina/romana">Abrir Romana →</a>
                         </header>
                         <p class="management-panel-intro">Kilos netos de recepciones cerradas, sin las que solo traen envases. Los días se cuentan en hora de planta.</p>
-                        <div class="management-operational-metrics management-operational-metrics--four">
+                        <div class="management-operational-metrics management-operational-metrics--four" data-folios-metrics>
                             <article><span>TEMPORADA</span><strong id="weighbridgeSeasonMetric">0 kg</strong><small id="weighbridgeSeasonDetail">0 recepciones</small></article>
                             <article><span>ÚLTIMOS 7 DÍAS</span><strong id="weighbridgeWeekMetric">0 kg</strong><small id="weighbridgeWeekDetail">0 recepciones</small></article>
                             <article><span>HOY</span><strong id="weighbridgeTodayMetric">0 kg</strong><small id="weighbridgeTodayDetail">0 recepciones ingresadas hoy</small></article>
@@ -423,7 +423,7 @@
                             </div>
                         </header>
                         <p class="management-panel-intro">Lotes vigentes de la temporada: excluye borradores, anulados y entregados por completo.</p>
-                        <div class="management-operational-metrics management-operational-metrics--raw">
+                        <div class="management-operational-metrics management-operational-metrics--raw" data-folios-metrics>
                             <article><span>EN CIRCUITO</span><strong id="rawLotsActiveMetric">0</strong><small>lotes vigentes</small></article>
                             <article class="is-warning"><span>ESPERA HIDROCOOLER</span><strong id="rawHydrocoolerPendingMetric">0</strong><small>pendientes</small></article>
                             <article><span>EN HIDROCOOLER</span><strong id="rawHydrocoolerActiveMetric">0</strong><small>proceso activo</small></article>
@@ -449,7 +449,7 @@
                             <button type="button" data-management-container-type="totes" aria-pressed="false">Totes <strong id="containerTotesStock">0</strong></button>
                             <button type="button" data-management-container-type="esponjas" aria-pressed="false">Esponjas <strong id="containerEsponjasStock">0</strong></button>
                         </div>
-                        <div class="management-operational-metrics management-operational-metrics--four">
+                        <div class="management-operational-metrics management-operational-metrics--four" data-folios-metrics>
                             <article class="is-positive"><span>EXISTENCIA FÍSICA</span><strong id="containerStockMetric">0</strong><small id="containerStockUnit">bins de la temporada</small></article>
                             <article><span>ENTRADAS HOY</span><strong id="containerEntriesTodayMetric">0</strong><small id="containerEntriesUnit">bins ingresados</small></article>
                             <article><span>SALIDAS HOY</span><strong id="containerExitsTodayMetric">0</strong><small id="containerExitsUnit">bins despachados</small></article>
@@ -465,7 +465,7 @@
                                 <h3>Saldos de cuenta por cliente</h3>
                                 <p class="management-panel-intro">Hasta cinco saldos de mayor magnitud para el tipo seleccionado. Los negativos indican más salidas que ingresos en la cuenta.</p>
                                 <div class="management-container-balances" id="containerClientBalances"></div>
-                                <div class="management-operational-metrics management-operational-metrics--review">
+                                <div class="management-operational-metrics management-operational-metrics--review" data-folios-metrics>
                                     <article class="is-warning"><span>PENDIENTES</span><strong id="containerPendingReviewMetric">0</strong><small>sin revisión · todos los tipos</small></article>
                                     <article class="is-critical"><span>OBSERVADOS</span><strong id="containerObservedMetric">0</strong><small>requieren gestión · todos los tipos</small></article>
                                 </div>

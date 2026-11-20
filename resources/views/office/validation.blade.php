@@ -29,13 +29,13 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
             
             <x-office.navigation domain="frigorifico" office="validacion" context="FRIGORÍFICO · PT" icon="✓" />
 
 
             <section class="validation-workspace" data-validation-timezone="{{ config('app.operational_timezone') }}">
-                <header class="validation-heading validation-heading--history">
+                <header class="validation-heading validation-heading--history" data-folios-masthead>
                     <div><p class="eyebrow">CONTROL DE INGRESO</p><h1>Validación de pallets</h1><p>La aprobación crea el folio pendiente de prefrío; observar conserva la posibilidad de corregir y volver a validar.</p></div>
                     <div class="validation-toolbar">
                         <div class="validation-heading__actions">
@@ -51,7 +51,7 @@
                     </div>
                 </header>
 
-                <div class="validation-metrics">
+                <div class="validation-metrics" data-folios-metrics>
                     <article><span>PALLETS VALIDADOS</span><strong id="dayValidatedCount">0</strong><small id="dayValidatedLabel">hoy</small></article>
                     <article class="validation-metric--success"><span>APROBADOS</span><strong id="dayApprovedCount">0</strong><small>con folio pendiente de prefrío</small></article>
                     <article class="validation-metric--attention" data-validation-attention><span>OBSERVADOS</span><strong id="observedCount">0</strong><small>corrección pendiente</small></article>
@@ -64,12 +64,12 @@
                     <div class="validation-lines__grid" id="validationLines"></div>
                 </section>
 
-                <section class="panel validation-history-panel">
+                <section class="panel validation-history-panel" data-folios-register>
                     <div class="validation-panel__heading">
                         <div><p class="eyebrow">TRAZABILIDAD</p><h2>Validaciones recientes</h2></div>
                         <button class="secondary-button" id="reloadValidationButton" type="button">↻ Actualizar</button>
                     </div>
-                    <form class="validation-filters" id="validationFilters">
+                    <form class="validation-filters" id="validationFilters" data-folios-toolbar>
                             <input name="folio" maxlength="50" placeholder="Buscar folio">
                             <input name="fecha" type="date" value="{{ \App\Models\ValidacionPallet::fechaJornadaVigente() }}" aria-label="Fecha de jornada" title="Fecha de la jornada operativa de planta">
                             <select name="linea_proceso"><option value="">Todas las líneas</option><option value="1">Línea 1</option><option value="2">Línea 2</option><option value="3">Línea 3</option></select>

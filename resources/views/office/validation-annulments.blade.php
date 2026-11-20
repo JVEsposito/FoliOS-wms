@@ -29,11 +29,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="registro">
             <x-office.navigation domain="frigorifico" office="anulaciones-validacion" context="FRIGORÍFICO · PT" icon="⊘" />
 
             <section class="annulment-workspace">
-                <header class="annulment-heading panel">
+                <header class="annulment-heading panel" data-folios-masthead>
                     <div>
                         <p class="eyebrow">CONTROL DE ERRORES DE VALIDACIÓN</p>
                         <h1>Anulaciones de pallets</h1>
@@ -42,7 +42,7 @@
                     <button class="secondary-button" id="reloadButton" type="button">↻ Actualizar</button>
                 </header>
 
-                <div class="annulment-metrics">
+                <div class="annulment-metrics" data-folios-metrics>
                     <article><span>TOTAL ANULADOS</span><strong id="totalAnnulled">0</strong></article>
                     <article><span>ANULADOS HOY</span><strong id="todayAnnulled">0</strong></article>
                     <article><span>AÚN ANULABLES</span><strong id="candidateCount">0</strong></article>

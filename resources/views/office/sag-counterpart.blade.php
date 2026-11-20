@@ -21,12 +21,12 @@
             <p id="officeLoginError" role="alert"></p>
         </form>
     </section>
-    <main class="office-app is-hidden" id="officeApp">
+    <main class="office-app is-hidden" id="officeApp" data-folios-workspace="expediente">
         <x-office.navigation domain="frigorifico" office="contraparte-sag" context="FRIGORÍFICO · SAG" icon="SAG" />
         <section class="sc-workspace">
-            <header class="sc-heading"><div><p class="eyebrow">CONTROL FITOSANITARIO</p><h1>Contraparte SAG</h1><p>Existencias, responsables y documentos de la planta.</p></div><a class="secondary-button" href="/oficina/frigorifico/inspeccion-sag">Inspecciones</a></header>
+            <header class="sc-heading" data-folios-masthead><div><p class="eyebrow">CONTROL FITOSANITARIO</p><h1>Contraparte SAG</h1><p>Existencias, responsables y documentos de la planta.</p></div><a class="secondary-button" href="/oficina/frigorifico/inspeccion-sag">Inspecciones</a></header>
             <p id="scStatus" role="status"></p>
-            <nav class="sc-tabs" aria-label="Secciones SAG">
+            <nav class="sc-tabs" aria-label="Secciones SAG" data-folios-section-nav>
                 <button class="secondary-button" data-panel="existencias">Existencias</button>
                 <button class="secondary-button" data-panel="documentos">Documentos SAG</button>
                 <button class="secondary-button" data-panel="configuracion">Planta y responsables</button>
@@ -35,7 +35,7 @@
                 <h2>Documentos SAG</h2>
                 <div class="sc-actions"><button class="primary-button" id="scNewDocument" data-manage>Nuevo documento</button><button class="secondary-button" id="scReloadDocuments">Actualizar</button></div>
                 <div class="sc-actions"><label>Formulario en blanco<select id="scBlankType"><option value="repaletizaje">Repaletizaje</option><option value="anulacion">Anulación / devolución</option><option value="cambio_mercado">Cambio de mercado</option><option value="despacho">Despacho / Multipuerto</option></select></label><button class="secondary-button" data-blank="pdf">PDF en blanco</button><button class="secondary-button" data-blank="xlsx">Excel en blanco</button></div>
-                <form id="scDocumentFilters" class="sc-grid"><label>Tipo<select name="tipo"><option value="">Todos</option><option value="repaletizaje">Repaletizaje</option><option value="anulacion">Anulación / devolución</option><option value="cambio_mercado">Cambio de mercado</option><option value="despacho">Despacho / Multipuerto</option></select></label><label>Estado<select name="estado"><option value="">Todos</option>@foreach (['borrador', 'emitido', 'enviado', 'aprobado', 'rechazado', 'cancelado'] as $estado)<option value="{{ $estado }}">{{ ucfirst($estado) }}</option>@endforeach</select></label><label>Desde<input type="date" name="desde"></label><label>Hasta<input type="date" name="hasta"></label><button class="secondary-button">Filtrar</button></form>
+                <form id="scDocumentFilters" class="sc-grid" data-folios-toolbar><label>Tipo<select name="tipo"><option value="">Todos</option><option value="repaletizaje">Repaletizaje</option><option value="anulacion">Anulación / devolución</option><option value="cambio_mercado">Cambio de mercado</option><option value="despacho">Despacho / Multipuerto</option></select></label><label>Estado<select name="estado"><option value="">Todos</option>@foreach (['borrador', 'emitido', 'enviado', 'aprobado', 'rechazado', 'cancelado'] as $estado)<option value="{{ $estado }}">{{ ucfirst($estado) }}</option>@endforeach</select></label><label>Desde<input type="date" name="desde"></label><label>Hasta<input type="date" name="hasta"></label><button class="secondary-button">Filtrar</button></form>
                 <div id="scDocuments"></div><div class="sc-actions" id="scDocumentPages"></div>
                 <form id="scDocumentForm" class="sc-document-form is-hidden">
                     <h3 id="scDocumentTitle">Nuevo documento</h3>
@@ -57,9 +57,9 @@
                 </form>
                 <article class="sc-detail is-hidden" id="scDocumentDetail"></article>
             </section>
-            <section class="panel sc-panel" data-section="existencias">
+            <section class="panel sc-panel" data-section="existencias" data-folios-register>
                 <h2>Existencia de productos aprobados</h2>
-                <form id="scFilters" class="sc-grid">
+                <form id="scFilters" class="sc-grid" data-folios-toolbar>
                     <label>Folio<input name="folio" maxlength="100" placeholder="Escribir o escanear"></label>
                     <label>Especie<input name="especie" maxlength="100"></label>
                     <label>Movimientos desde<input name="desde" type="date"></label>
