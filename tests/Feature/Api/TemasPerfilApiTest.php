@@ -175,4 +175,37 @@ class TemasPerfilApiTest extends TestCase
             $this->assertStringNotContainsString('--estilo-anterior', $respuesta->getContent());
         }
     }
+
+    public function test_el_tema_instalado_con_css_antiguo_reutiliza_su_ilustracion_en_la_cabecera_actual(): void
+    {
+        $disco = Storage::fake('local');
+        $disco->put('temas-oficina/catalogo.json', json_encode([
+            'personal-omegamon-x' => ['nombre' => 'Omegamon X', 'color' => '#123456', 'correo' => 'personal@folios.test'],
+        ]));
+        $png = 'iVBORw0KGgoAAAANSUhEUgAAAAwAAAAICAIAAABChommAAAAFUlEQVQY02NMb/nAQAgwEVQx7BUBACt/AeuO+uroAAAAAElFTkSuQmCC';
+        $webp = 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAgA0JaQAA3AA/vuUAAA=';
+        $cssAnterior = <<<CSS
+            :root { --estilo-anterior: 1; --icono: url("data:image/webp;base64,{$webp}"); }
+            .estiba-office-signature::after { background-image: url("data:image/png;base64,{$png}"); }
+            CSS;
+        $disco->put('temas-oficina/personal-omegamon-x.css', $cssAnterior);
+        $ruta = '/api/oficina/tema-personal/personal-omegamon-x';
+
+        Sanctum::actingAs(User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => null]));
+        $this->get($ruta)->assertNotFound();
+
+        Sanctum::actingAs(User::factory()->create([
+            'rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => null, 'email' => 'personal@folios.test',
+        ]));
+        $css = $this->get($ruta)->assertOk()->assertHeader('Content-Type', 'text/css; charset=UTF-8')->getContent();
+        $this->assertStringContainsString('--omega-hero: url("data:image/png;base64,'.$png.'");', $css);
+        $this->assertStringContainsString('.operation-now-command__title', $css);
+        $this->assertStringNotContainsString('data:image/webp;base64,'.$webp, $css);
+        $this->assertStringNotContainsString('--estilo-anterior', $css);
+
+        $disco->put('temas-oficina/personal-omegamon-x.webp', base64_decode($webp, true));
+        $css = $this->get($ruta)->assertOk()->getContent();
+        $this->assertStringContainsString('data:image/webp;base64,'.$webp, $css);
+        $this->assertStringNotContainsString($png, $css);
+    }
 }
