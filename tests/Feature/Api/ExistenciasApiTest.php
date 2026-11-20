@@ -14,7 +14,9 @@ use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
 use App\Models\Carga;
 use App\Models\CargaFolio;
+use App\Models\Cliente;
 use App\Models\ConexionExistencia;
+use App\Models\Embarque;
 use App\Models\Folio;
 use App\Models\PosicionTunelPrefrio;
 use App\Models\ProcesoPrefrio;
@@ -23,11 +25,14 @@ use App\Models\TunelPrefrio;
 use App\Models\User;
 use App\Services\Existencias\ServicioExistencias;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
+use DOMDocument;
+use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\LazyCollection;
 use Illuminate\Support\Str;
 use Tests\TestCase;
+use ZipArchive;
 
 class ExistenciasApiTest extends TestCase
 {
@@ -388,6 +393,77 @@ class ExistenciasApiTest extends TestCase
             ->getJson('/api/existencias/despachos-producto-terminado/corte?desde=2026-09-30&hasta=2026-09-01')
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['hasta']);
+    }
+
+    public function test_excel_despachos_muestra_el_numero_externo_del_instructivo_de_cada_pallet_como_texto(): void
+    {
+        [$administrador, $token] = $this->acceso(RolUsuario::Administrador);
+        $temporadaId = DB::table('temporadas')->where('activa', true)->value('id');
+        $cliente = Cliente::create(['codigo' => 'CLI-ORD-EXT', 'nombre' => 'Cliente orden externa', 'activo' => true]);
+        $carga = Carga::create([
+            'temporada_id' => $temporadaId, 'codigo' => 'CAR-ORD-EXT', 'numero_orden_externa' => '000LEGACY',
+            'estado' => EstadoCarga::Cerrada, 'prioridad' => PrioridadCarga::Normal,
+            'creada_por_user_id' => $administrador->id, 'actualizada_por_user_id' => $administrador->id,
+            'cerrada_por_user_id' => $administrador->id, 'cerrada_at' => now(),
+        ]);
+        $embarque = Embarque::create([
+            'temporada_id' => $temporadaId, 'cliente_id' => $cliente->id, 'carga_id' => $carga->id,
+            'codigo' => 'EMB-EXT', 'numero_correlativo' => 1,
+            'fecha_programada' => now()->toDateString(), 'hora_programada' => '10:00:00',
+            'intervalo_minutos' => 45, 'modalidad' => 'maritimo', 'estado' => 'confirmado',
+            'creado_por_user_id' => $administrador->id, 'actualizado_por_user_id' => $administrador->id,
+        ]);
+        $esperado = ['PAL-EXT-1' => '000123', 'PAL-EXT-2' => '000456', 'PAL-EXT-3' => '0', 'PAL-ANTIGUO' => '000LEGACY'];
+        foreach ($esperado as $numeroFolio => $numeroExterno) {
+            $instructivo = $numeroFolio === 'PAL-ANTIGUO' ? null : $embarque->instructivos()->create([
+                'orden' => (int) substr($numeroFolio, -1), 'numero_externo' => $numeroExterno,
+            ]);
+            $folio = Folio::create([
+                'temporada_id' => $temporadaId, 'numero_folio' => $numeroFolio,
+                'tipo_bulto' => TipoBulto::Pallet, 'estado_operacional' => EstadoOperacionalFolio::Despachado,
+                'fecha_ingreso' => now(), 'activo' => true, 'exportadora' => $cliente->nombre,
+                'datos_externos' => ['cantidad_cajas' => 104],
+            ]);
+            CargaFolio::create([
+                'carga_id' => $carga->id, 'folio_id' => $folio->id, 'instructivo_embarque_id' => $instructivo?->id,
+                'estado' => EstadoCargaFolio::Despachado,
+                'asignado_por_user_id' => $administrador->id, 'asignado_at' => now(),
+                'finalizado_por_user_id' => $administrador->id, 'finalizado_at' => now(),
+            ]);
+        }
+
+        $filas = app(ServicioExistencias::class)->filas(ServicioExistencias::DESPACHOS_PRODUCTO_TERMINADO)->collect()->keyBy('folio');
+        $this->assertCount(4, $filas);
+        foreach ($esperado as $folio => $externo) {
+            $this->assertSame($externo, $filas[$folio]['orden_embarque']);
+        }
+
+        $respuesta = $this->withToken($token)->get('/api/existencias/despachos-producto-terminado/corte')->assertOk()->assertDownload();
+        $ruta = $respuesta->baseResponse->getFile()->getPathname();
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($ruta));
+        $xml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        @unlink($ruta);
+        $documento = new DOMDocument;
+        $this->assertTrue($documento->loadXML($xml));
+        $xpath = new DOMXPath($documento);
+        $xpath->registerNamespace('s', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+        $this->assertSame('Orden de embarque', $xpath->evaluate('string(//s:c[@r="F1"])'));
+        $registros = $xpath->query('//s:sheetData/s:row[position() > 1]');
+        $this->assertCount(4, $registros);
+        foreach ($registros as $registro) {
+            $numeroFila = $registro->getAttribute('r');
+            $folio = $xpath->evaluate('string(s:c[@r="J'.$numeroFila.'"])', $registro);
+            $celdaOrden = $xpath->query('s:c[@r="F'.$numeroFila.'"]', $registro)->item(0);
+            $this->assertSame($esperado[$folio], $celdaOrden->textContent);
+            $this->assertSame('inlineStr', $celdaOrden->getAttribute('t'));
+        }
+
+        // Una asignación histórica sin instructivo ni orden externa no toma la referencia de otro pallet.
+        $carga->update(['numero_orden_externa' => null]);
+        $antiguo = app(ServicioExistencias::class)->filas(ServicioExistencias::DESPACHOS_PRODUCTO_TERMINADO)->firstWhere('folio', 'PAL-ANTIGUO');
+        $this->assertNull($antiguo['orden_embarque']);
     }
 
     /** @return array{User, string} */
