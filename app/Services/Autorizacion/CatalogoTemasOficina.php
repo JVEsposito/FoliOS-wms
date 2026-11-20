@@ -15,6 +15,8 @@ final class CatalogoTemasOficina
         'dark-bit-neon' => 'Modo neón',
     ];
 
+    private const MARCADOR_ILUSTRACION = 'data:image/webp;base64,__FOLIOS_TEMA_WEBP__';
+
     private const ESTILOS_DE_PLANTA = [
         'personal-gundam' => ['nombre' => 'Gundam RX-78-2', 'color' => '#101e37', 'claro' => true],
         'personal-omegamon-x' => ['nombre' => 'Omegamon X', 'color' => '#0d111b', 'claro' => false],
@@ -83,16 +85,49 @@ final class CatalogoTemasOficina
 
         $tema = $this->personales()[$clave];
         $css = $this->leerArchivo($tema['ruta']);
-        if ($css === null || $tema['ilustracion'] === null) {
-            return $css;
-        }
-
-        $webp = $this->leerArchivo($tema['ilustracion']);
-        if (! $this->esWebp($webp)) {
+        if ($css === null) {
             return null;
         }
 
-        return str_replace('__FOLIOS_TEMA_WEBP__', base64_encode($webp), $css);
+        if ($tema['ilustracion'] !== null) {
+            $webp = $this->leerArchivo($tema['ilustracion']);
+
+            return $this->esWebp($webp)
+                ? str_replace(self::MARCADOR_ILUSTRACION, 'data:image/webp;base64,'.base64_encode($webp), $css)
+                : null;
+        }
+
+        if (isset(self::ESTILOS_DE_PLANTA[$clave])) {
+            // Los paquetes anteriores guardaban la ilustración dentro de la hoja privada.
+            $ilustracion = $this->ilustracionIncrustada($css);
+            $plantilla = $ilustracion === null ? null : $this->leerArchivo(resource_path("temas-oficina/{$clave}.css"));
+            if ($plantilla !== null) {
+                return str_replace(self::MARCADOR_ILUSTRACION, $ilustracion, $plantilla);
+            }
+        }
+
+        return $css;
+    }
+
+    private function ilustracionIncrustada(string $css): ?string
+    {
+        preg_match_all('~data:(image/(?:png|jpeg|webp));base64,([a-z0-9+/]+={0,2})~i', $css, $imagenes, PREG_SET_ORDER);
+        $ilustracion = null;
+        $areaMayor = 0;
+        foreach ($imagenes as [$uri, $tipo, $base64]) {
+            $contenido = base64_decode($base64, true);
+            $tamano = $contenido === false ? false : @getimagesizefromstring($contenido);
+            if ($tamano === false || $tamano['mime'] !== strtolower($tipo)) {
+                continue;
+            }
+            $area = $tamano[0] * $tamano[1];
+            if ($area > $areaMayor) {
+                $areaMayor = $area;
+                $ilustracion = $uri;
+            }
+        }
+
+        return $ilustracion;
     }
 
     private function leerArchivo(string $ruta, ?int $longitud = null): ?string
