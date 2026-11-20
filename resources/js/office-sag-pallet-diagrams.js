@@ -20,11 +20,11 @@ const CAMPOS = ['tipo', 'numero', 'csp', 'folio', 'fecha', 'lote', 'especie', 'e
 const state = {
     token: localStorage.getItem('estiba_wms_office_token'), catalog: null, registro: null, historial: [],
     pallets: palletsIniciales(), marcas: new Set(), firma: '', dirty: false, busy: false,
-    pendiente: null, descartar: null, zoom: null, listRevision: 0,
+    pendiente: null, descartar: null, zoom: null, listRevision: 0, ocrRevision: 0,
 };
 
 async function api(path = '', options = {}, { blob = false } = {}) {
-    const response = await fetch(url + path, { ...options, headers: { Accept: blob ? 'application/pdf' : 'application/json', Authorization: `Bearer ${state.token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) } });
+    const response = await fetch(url + path, { ...options, headers: { Accept: blob ? 'application/json, application/pdf' : 'application/json', Authorization: `Bearer ${state.token}`, ...(typeof options.body === 'string' ? { 'Content-Type': 'application/json' } : {}) } });
     if (response.status === 401) {
         localStorage.removeItem('estiba_wms_office_token');
         $('officeAccess').classList.remove('is-hidden'); $('officeApp').classList.add('is-hidden');
@@ -180,6 +180,10 @@ function cargar(detalle = null) {
     state.firma = firmaEstructura(state.pallets);
     state.dirty = false; state.pendiente = null; state.descartar = null;
     $('pdMarkResult').textContent = ''; $('pdQuick').reset();
+    state.ocrRevision += 1;
+    $('pdMarkInput').value = '';
+    $('pdOcrForm').reset();
+    $('pdOcrStatus').textContent = '';
     renderPallets();
 }
 
@@ -255,6 +259,17 @@ async function pdf() {
     const papel = $('pdPaper').value;
     return api('/pdf', { method: 'POST', body: JSON.stringify({ ...cargaDiagrama(datos(), state.pallets, [...state.marcas]), papel, mostrar_numeros: $('pdShowNumbers').checked }) }, { blob: true });
 }
+async function etiquetas() {
+    listoParaEmitir();
+    if (!state.marcas.size || !datos().exportadora.trim()) throw new Error('Marca las cajas de la muestra e ingresa la exportadora.');
+    const cuerpo = cargaDiagrama(datos(), state.pallets, [...state.marcas]);
+    const blob = await api('/etiquetas', {
+        method: 'POST',
+        body: JSON.stringify({ ...cuerpo, formato: $('pdLabelFormat').value }),
+    }, { blob: true });
+    descargar(blob, nombreArchivo('-adhesivos.pdf'));
+    message('Adhesivos descargados. Imprime al 100 % de escala.');
+}
 async function png() {
     listoParaEmitir();
     const { svg, ancho, alto } = laminaSvg(datos(), state.pallets, [...state.marcas], { temporada: state.catalog.temporada.nombre, mostrarNumeros: $('pdShowNumbers').checked });
@@ -290,6 +305,7 @@ async function exportar(tipo) {
         if (tipo === 'pdf') { descargar(await pdf(), nombreArchivo('.pdf')); message('PDF descargado.'); }
         if (tipo === 'png') { descargar(await png(), nombreArchivo('.png')); message('PNG descargado.'); }
         if (tipo === 'print') await imprimir();
+        if (tipo === 'etiquetas') await etiquetas();
     } finally { state.busy = false; }
 }
 
@@ -369,6 +385,33 @@ $('pdMarkForm').onsubmit = (e) => {
     $('pdMarkResult').textContent = partes.join(' ') || 'Escribe uno o más números de caja.';
     if (nuevos.length) { $('pdMarkInput').value = inexistentes.length || noReconocidos.length ? $('pdMarkInput').value : ''; cambio(); renderComputed(); }
 };
+$('pdOcrForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formulario = event.currentTarget;
+    const archivo = new FormData(formulario);
+    const revision = ++state.ocrRevision;
+    const boton = formulario.querySelector('button');
+    const estado = $('pdOcrStatus');
+    const entrada = $('pdMarkInput');
+    boton.disabled = true;
+    estado.textContent = 'Leyendo la captura…';
+    try {
+        const { numeros } = await api('/leer-captura', { method: 'POST', body: archivo });
+        if (revision !== state.ocrRevision) return;
+        if (!numeros.length) {
+            estado.textContent = 'No se encontraron números. Recorta la lista o escríbelos en el campo.';
+            return;
+        }
+        entrada.value = [entrada.value.trim(), numeros.join(', ')].filter(Boolean).join(', ');
+        const fuera = clasificarNumeros(numeros, numeracion()).inexistentes.length;
+        estado.textContent = `Se leyeron ${numeros.length} números${fuera ? ` (${fuera} fuera del diagrama actual)` : ''}. Revisa la lista antes de pulsar Marcar.`;
+        entrada.focus();
+    } catch (error) {
+        if (revision === state.ocrRevision) estado.textContent = error.message;
+    } finally {
+        boton.disabled = false;
+    }
+});
 $('pdClearMarks').onclick = () => {
     if (!state.marcas.size) return;
     const cantidad = state.marcas.size;

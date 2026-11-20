@@ -44,6 +44,10 @@ servidor vuelve a calcular la numeración y rechaza lo que no cuadra.
   inexistentes.
 - El resumen indica, por pallet, cada caja marcada con su corrida (desde abajo) y
   su posición (desde la izquierda).
+- **Leer captura** carga una imagen PNG o JPEG con la lista de números. La lectura
+  agrega los números al campo editable. Se aplican al diagrama al pulsar **Marcar**.
+  En el servidor, usa Tesseract con los datos de idioma inglés y configura
+  `SAG_TESSERACT_BINARY` si el ejecutable tiene otra ruta.
 
 ## Salidas
 
@@ -53,6 +57,8 @@ servidor vuelve a calcular la numeración y rechaza lo que no cuadra.
 - **PNG** de alta resolución, generado en el navegador.
 - **Imprimir** abre el mismo PDF con el papel elegido.
 - Mostrar u ocultar los números aplica a la pantalla y a las tres salidas.
+- **Adhesivos de muestreo** emite una etiqueta por caja marcada con la exportadora
+  y el pallet. Hay hoja A4 para recortar y rollo de 100 × 50 mm. Imprime al 100 %.
 
 Los documentos son neutrales: no llevan nombre ni logo de la planta. El CSP es un
 campo del diagrama; un diagrama nuevo lo toma de la configuración de Contraparte
