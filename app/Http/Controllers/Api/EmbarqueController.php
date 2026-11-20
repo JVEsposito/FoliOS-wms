@@ -191,6 +191,7 @@ class EmbarqueController extends Controller
             'intervalo_minutos' => $embarque->intervalo_minutos,
             'modalidad' => $embarque->modalidad->value,
             'estado' => $embarque->estado->value,
+            'editable_calendario' => $embarque->editableEnCalendario(),
             'cliente' => [
                 'id' => $embarque->cliente->id,
                 'codigo' => $embarque->cliente->codigo,

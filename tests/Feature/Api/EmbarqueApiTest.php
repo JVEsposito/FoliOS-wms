@@ -12,6 +12,7 @@ use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Temporadas\ServicioTemporadaGlobal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class EmbarqueApiTest extends TestCase
@@ -360,6 +361,104 @@ class EmbarqueApiTest extends TestCase
 
         $this->assertDatabaseHas('embarques', ['id' => $embarqueId, 'estado' => 'tentativo', 'carga_id' => null]);
         $this->assertSame(0, Carga::query()->count());
+    }
+
+    public function test_calendario_es_solo_lectura_para_cargas_en_operacion_o_finalizadas_incluso_para_admin(): void
+    {
+        $despachador = $this->usuario(RolUsuario::Despachador);
+        $administrador = $this->usuario(RolUsuario::Administrador);
+        $cliente = $this->cliente($despachador, 'CR');
+        $datos = [
+            'cliente_id' => $cliente->id,
+            'fecha_programada' => '2026-08-20',
+            'hora_programada' => '09:00',
+            'modalidad' => 'maritimo',
+            'instructivos' => [['numero_externo' => 'INS-CR', 'cantidad_pallets' => 2]],
+        ];
+
+        $creado = $this->actingAs($despachador, 'sanctum')
+            ->postJson('/api/embarques', $datos)
+            ->assertCreated()
+            ->assertJsonPath('data.editable_calendario', true);
+        $id = $creado->json('data.id');
+
+        $confirmado = $this->postJson("/api/embarques/{$id}/confirmar", [
+            'version_esperada' => $creado->json('data.version'),
+        ])->assertOk()
+            ->assertJsonPath('data.editable_calendario', true)
+            ->assertJsonPath('data.carga.estado', 'borrador');
+
+        $cargaId = $confirmado->json('data.carga.id');
+        $edicion = [...$datos, 'version_esperada' => $confirmado->json('data.version'), 'observacion' => 'Edición permitida antes del despacho'];
+        $this->putJson("/api/embarques/{$id}", $edicion)
+            ->assertOk()
+            ->assertJsonPath('data.editable_calendario', true);
+
+        DB::table('cargas')->where('id', $cargaId)->update(['estado' => 'pendiente']);
+        $this->getJson("/api/embarques/{$id}")
+            ->assertOk()
+            ->assertJsonPath('data.editable_calendario', true);
+
+        $version = Embarque::findOrFail($id)->version;
+        $intento = [...$datos, 'version_esperada' => $version, 'observacion' => 'No debe modificar un despacho'];
+        foreach ([
+            'en_preparacion', 'despacho_parcial', 'en_separacion',
+            'separada', 'separacion_completa', 'despachada', 'cerrada',
+            'cancelada', 'retornada', 'retorno_parcial',
+        ] as $estado) {
+            DB::table('cargas')->where('id', $cargaId)->update(['estado' => $estado]);
+
+            $this->actingAs($despachador, 'sanctum')
+                ->getJson("/api/embarques/{$id}")
+                ->assertOk()
+                ->assertJsonPath('data.editable_calendario', false)
+                ->assertJsonPath('data.carga.estado', $estado);
+            $this->getJson('/api/embarques?desde=2026-08-20&hasta=2026-08-20')
+                ->assertOk()
+                ->assertJsonPath('embarques.0.editable_calendario', false);
+
+            foreach ([$despachador, $administrador] as $usuario) {
+                $this->actingAs($usuario, 'sanctum')
+                    ->putJson("/api/embarques/{$id}", $intento)
+                    ->assertUnprocessable()
+                    ->assertJsonPath('codigo', 'regla_de_negocio');
+            }
+            $this->assertDatabaseHas('embarques', [
+                'id' => $id,
+                'version' => $version,
+                'observacion' => 'Edición permitida antes del despacho',
+            ]);
+        }
+    }
+
+    public function test_embarque_cancelado_queda_visible_pero_no_editable(): void
+    {
+        $despachador = $this->usuario(RolUsuario::Despachador);
+        $cliente = $this->cliente($despachador, 'CN');
+        $datos = [
+            'cliente_id' => $cliente->id,
+            'fecha_programada' => '2026-08-21',
+            'hora_programada' => '10:00',
+            'modalidad' => 'maritimo',
+            'instructivos' => [['numero_externo' => 'INS-CN']],
+        ];
+        $creado = $this->actingAs($despachador, 'sanctum')
+            ->postJson('/api/embarques', $datos)->assertCreated();
+        $id = $creado->json('data.id');
+
+        $cancelado = $this->postJson("/api/embarques/{$id}/cancelar", [
+            'version_esperada' => $creado->json('data.version'),
+            'motivo' => 'Anulado por decisión comercial.',
+        ])->assertOk()->assertJsonPath('data.editable_calendario', false);
+
+        $this->getJson("/api/embarques/{$id}")
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'cancelado')
+            ->assertJsonPath('data.editable_calendario', false);
+        $this->putJson("/api/embarques/{$id}", [
+            ...$datos,
+            'version_esperada' => $cancelado->json('data.version'),
+        ])->assertUnprocessable()->assertJsonPath('codigo', 'regla_de_negocio');
     }
 
     private function usuario(RolUsuario $rol): User
