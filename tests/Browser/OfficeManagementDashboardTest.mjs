@@ -172,3 +172,25 @@ test('Panel gerencial: el tema claro también separa pallets y saldos', async ()
         await context.close();
     } finally { await browser.close(); }
 });
+
+test('Panel gerencial: los gráficos se repintan al cargarse NERV', async () => {
+    const browser = await launch();
+    try {
+        const { context, page, errors } = await open(browser, 1366);
+        await page.locator('#management-tab-weighbridge').click();
+        const barra = '#weighbridgeClientRows .management-share i';
+        const leyenda = '#weighbridgeChartSummary i';
+        const rojo = 'rgb(238, 100, 117)';
+        await page.locator(barra).first().waitFor();
+        assert.notEqual(await page.locator(barra).first().evaluate(element => element.style.backgroundColor), rojo);
+
+        const css = readFileSync(resolve(root, 'resources/temas-oficina/personal-nerv.css'), 'utf8');
+        await page.addStyleTag({ content: css });
+        await page.evaluate(() => { document.documentElement.dataset.officePersonalTheme = 'personal-nerv'; });
+
+        await page.waitForFunction(({ barra, rojo }) => document.querySelector(barra)?.style.backgroundColor === rojo, { barra, rojo });
+        assert.equal(await page.locator(leyenda).first().evaluate(element => element.style.backgroundColor), rojo);
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
+});

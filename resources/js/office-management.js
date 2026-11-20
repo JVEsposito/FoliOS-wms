@@ -1081,7 +1081,7 @@ new MutationObserver(() => {
     renderWeighbridgeChart(state.dashboard.romana);
     renderWeighbridgeOperation(state.dashboard.romana);
     renderContainerType();
-}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-office-theme'] });
+}).observe(document.documentElement, { attributes: true, attributeFilter: ['data-office-theme', 'data-office-personal-theme'] });
 
 async function boot() {
     if (!state.token || state.identity?.puede_consultar_panel_gerencial !== true) return;
