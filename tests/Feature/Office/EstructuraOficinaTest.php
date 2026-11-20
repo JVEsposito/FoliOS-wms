@@ -306,6 +306,23 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_diagramas_sag_exporta_el_editor_de_pallets_y_sus_salidas(): void
+    {
+        $html = $this->get('/oficina/frigorifico/diagramas-sag')->assertOk()->getContent();
+        foreach (['pdForm', 'pdQuick', 'pdPallets', 'pdMarkForm', 'pdDiagram', 'pdSummary', 'pdSaved', 'pdZoom', 'pdPaper', 'pdWarning'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        foreach (['pdf', 'png', 'print'] as $salida) {
+            $this->assertStringContainsString('data-export="'.$salida.'"', $html);
+        }
+        $this->assertStringContainsString('No constituye aprobación del SAG ni del USDA', $html);
+        $this->assertDoesNotMatchRegularExpression('/agro\s*rosario/i', $html);
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/sag-diagramas.html'), $html);
+        }
+    }
+
     public function test_inspeccion_sag_exporta_el_aviso_de_carga(): void
     {
         $html = $this->get('/oficina/frigorifico/inspeccion-sag')->assertOk()->getContent();

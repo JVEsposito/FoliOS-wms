@@ -186,6 +186,7 @@ Route::view('/oficina/rrhh/marcaje', 'office.rrhh-clock');
 
 Route::view('/oficina/frigorifico/contraparte-sag', 'office.sag-counterpart');
 Route::view('/oficina/frigorifico/lotes-retenidos-sag', 'office.sag-retained-lots');
+Route::view('/oficina/frigorifico/diagramas-sag', 'office.sag-pallet-diagrams');
 Route::view('/oficina/frigorifico/control-despacho', 'office.dispatch-control');
 
 Route::view('/oficina/finanzas/costos-comex', 'office.finance-comex-costs');
