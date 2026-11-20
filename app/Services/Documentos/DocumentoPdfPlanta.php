@@ -56,21 +56,29 @@ class DocumentoPdfPlanta
         return $ancho;
     }
 
-    /** @param array<int, string> $paginas */
-    public function generar(array $paginas, array $tamanoPagina = [595, 842]): string
+    /**
+     * @param  array<int, string>  $paginas
+     * @param  bool  $conLogo  Un documento neutral (sin datos de la planta) no incorpora el logo.
+     */
+    public function generar(array $paginas, array $tamanoPagina = [595, 842], bool $conLogo = true): string
     {
-        $logo = resource_path('images/logo-agrorosario.jpg');
-        $imagen = file_get_contents($logo);
-        [$ancho, $alto] = getimagesize($logo);
+        if ($conLogo) {
+            $logo = resource_path('images/logo-agrorosario.jpg');
+            $imagen = file_get_contents($logo);
+            [$ancho, $alto] = getimagesize($logo);
+            $xobjeto = '<< /Type /XObject /Subtype /Image /Width '.$ancho.' /Height '.$alto.' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '.strlen($imagen)." >>\nstream\n{$imagen}\nendstream";
+        }
         $objetos = [
             '<< /Type /Catalog /Pages 2 0 R >>',
             '<< /Type /Pages /Kids ['.implode(' ', array_map(fn ($indice): string => (6 + $indice * 2).' 0 R', array_keys($paginas))).'] /Count '.count($paginas).' >>',
             '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
             '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
-            '<< /Type /XObject /Subtype /Image /Width '.$ancho.' /Height '.$alto.' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '.strlen($imagen)." >>\nstream\n{$imagen}\nendstream",
+            // Sin logo el objeto 5 queda vacío para conservar la numeración de las páginas.
+            $xobjeto ?? '<< >>',
         ];
+        $recursoLogo = $conLogo ? ' /XObject << /Logo 5 0 R >>' : '';
         foreach ($paginas as $indice => $contenido) {
-            $objetos[] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '.implode(' ', $tamanoPagina).'] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << /Logo 5 0 R >> >> /Contents '.(7 + $indice * 2).' 0 R >>';
+            $objetos[] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '.implode(' ', $tamanoPagina).'] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>'.$recursoLogo.' >> /Contents '.(7 + $indice * 2).' 0 R >>';
             $objetos[] = '<< /Length '.strlen($contenido)." >>\nstream\n{$contenido}endstream";
         }
         $pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";

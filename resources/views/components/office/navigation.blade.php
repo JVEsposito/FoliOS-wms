@@ -33,6 +33,7 @@
             ['key' => 'contraparte-sag', 'module' => 'frigorifico.contraparte-sag', 'label' => 'Contraparte SAG', 'href' => '/oficina/frigorifico/contraparte-sag', 'permissions' => ['puede_consultar_contraparte_sag']],
             ['key' => 'lotes-retenidos-sag', 'module' => 'frigorifico.lotes-retenidos-sag', 'label' => 'Lotes retenidos SAG', 'href' => '/oficina/frigorifico/lotes-retenidos-sag', 'permissions' => ['puede_gestionar_lotes_retenidos_sag']],
             ['key' => 'inspeccion-sag', 'module' => 'frigorifico.inspeccion-sag', 'label' => 'Inspección SAG', 'href' => '/oficina/frigorifico/inspeccion-sag', 'permissions' => ['puede_consultar_inspeccion_sag']],
+            ['key' => 'diagramas-sag', 'module' => 'frigorifico.inspeccion-sag', 'label' => 'Diagramas SAG/USDA', 'href' => '/oficina/frigorifico/diagramas-sag', 'permissions' => ['puede_consultar_inspeccion_sag']],
             ['key' => 'prefrio', 'module' => 'frigorifico.prefrio', 'label' => 'Prefrío', 'href' => '/oficina/prefrio', 'permissions' => ['puede_consultar_prefrio']],
             ['key' => 'punto-rocio', 'module' => 'frigorifico.prefrio', 'label' => 'Punto de rocío', 'href' => '/oficina/prefrio/punto-rocio', 'permissions' => ['puede_consultar_prefrio']],
             ['key' => 'camaras', 'module' => 'frigorifico.camaras', 'label' => 'Cámaras', 'href' => '/oficina/frigorifico/camaras', 'permissions' => ['ambito_camaras_productos']],

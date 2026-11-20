@@ -1,0 +1,91 @@
+/*
+ * Diagramas SAG/USDA. La caja marcada es amarilla en todos los temas porque así se lee en
+ * el papel que recibe la inspección; el resto usa las superficies del tema de Oficina.
+ */
+/* El diálogo «Ampliar» queda fuera de .pd-workspace y necesita las mismas variables. */
+.pd-workspace, .pd-zoom {
+    --pd-cell: 32px;
+    --pd-mark: #ffd21f;
+    --pd-mark-text: #1d1600;
+    --pd-mark-border: #7a5a00;
+}
+.pd-workspace {
+    display: grid;
+    gap: 18px;
+    max-width: 1600px;
+    margin: auto;
+    padding: 22px;
+}
+.pd-heading, .pd-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pd-actions { justify-content: flex-start; }
+.pd-heading h1, .pd-heading h2 { margin: 0; }
+.pd-help { margin: 0; color: var(--muted); line-height: 1.5; }
+.pd-message:empty { display: none; }
+.pd-message { margin: 0; }
+.pd-message[data-tone="error"] { color: var(--danger-text, var(--red)); font-weight: 700; }
+.pd-warning { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0; padding: 12px 14px; border: 1px solid var(--warning-text, var(--amber)); border-radius: var(--radius); background: var(--warning-bg, var(--soft)); color: var(--warning-text, var(--text)); line-height: 1.45; }
+.pd-warning .pd-warning__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; align-items: end; }
+.pd-workspace label { display: grid; gap: 7px; }
+.pd-workspace input, .pd-workspace select { width: 100%; min-width: 0; }
+.pd-workspace .pd-check { display: flex; align-items: center; gap: 8px; }
+.pd-check input { width: auto; }
+.pd-workspace > .panel { display: grid; gap: 14px; padding: 18px 20px; }
+.pd-panel-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.pd-panel-heading h2 { margin: 0; }
+.pd-totals { margin: 0; color: var(--text-secondary, var(--muted)); font-weight: 700; }
+.pd-quick { display: grid; grid-template-columns: repeat(3, minmax(150px, 200px)) auto; gap: 12px; align-items: end; padding: 14px; border: 1px dashed var(--line); border-radius: var(--radius); }
+.pd-quick__buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.pd-scroll { overflow: auto; }
+.pd-workspace table { width: 100%; border-collapse: collapse; }
+.pd-workspace th, .pd-workspace td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.pd-workspace thead th { background: var(--table-head, var(--soft)); font-size: .78rem; }
+.pd-workspace td small { display: block; margin-top: 3px; color: var(--muted); }
+.pd-table th, .pd-table td { padding: 6px 7px; white-space: nowrap; }
+.pd-table thead th { white-space: normal; line-height: 1.25; }
+.pd-table td[data-cell="rango"] { white-space: normal; min-width: 110px; max-width: 220px; }
+.pd-table input { width: 66px; min-width: 0; min-height: 34px; height: 34px; padding: 4px 7px; font-size: .9rem; }
+.pd-table input:is([data-field="ultima"], [data-field="declaradas"]) { width: 96px; }
+.pd-table input[data-field="folio"] { width: 118px; }
+.office-app .pd-table :is(.primary-button, .secondary-button) { min-height: 32px !important; padding: 4px 10px; font-size: .82rem; }
+.pd-table tr.is-invalid td:first-child { box-shadow: inset 4px 0 0 var(--danger-text, var(--red)); }
+.pd-table input[aria-invalid="true"] { border-color: var(--danger-text, var(--red)); }
+.pd-table .pd-error { color: var(--danger-text, var(--red)); font-weight: 700; }
+.pd-table .pd-row-actions { display: flex; gap: 6px; }
+.pd-mark-form { display: grid; grid-template-columns: minmax(240px, 1fr) auto auto; gap: 12px; align-items: end; }
+.pd-legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; color: var(--muted); }
+.pd-swatch { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--pd-mark-border); background: var(--pd-mark); }
+.pd-diagram { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 26px 30px; padding: 8px 4px 16px; overflow-x: auto; }
+.pd-diagram:empty::before { content: 'Configura la base y las corridas de los pallets para ver el diagrama.'; color: var(--muted); }
+.pd-pallet { display: grid; gap: 6px; min-width: 110px; }
+.pd-pallet header { display: grid; gap: 2px; }
+.pd-pallet header strong { font-size: .86rem; color: var(--text-strong, var(--text)); }
+.pd-pallet header small { color: var(--muted); font-size: .74rem; line-height: 1.35; }
+.office-app .pd-pallet button.pd-zoom-link { justify-self: start; min-height: 0 !important; padding: 0; border: 0 !important; background: none !important; color: var(--primary, var(--cyan)) !important; font-size: .76rem; font-weight: 700 !important; text-decoration: underline; text-underline-offset: 2px; }
+.pd-pallet__grid { display: grid; gap: 0; justify-content: start; }
+.pd-pallet__row { display: flex; }
+.pd-pallet__floor { height: 5px; margin: 0 -4px; border-radius: 2px; background: var(--area-frigorifico-bright, var(--primary)); }
+/* Oficina redondea y engruesa todos los botones; las cajas del diagrama son cuadradas. */
+.office-app .pd-pallet button.pd-box { border-radius: 0 !important; font-weight: 600 !important; }
+.office-app .pd-pallet button.pd-box[aria-pressed="true"] { font-weight: 900 !important; }
+.pd-box { display: grid; place-items: center; width: var(--pd-cell); height: var(--pd-cell); margin: 0 -1px -1px 0; padding: 0; border: 1px solid var(--input-border, var(--line)); border-radius: 0; background: var(--input-bg, var(--raised)); color: var(--text); font: 600 clamp(9px, calc(var(--pd-cell) * .34), 16px) / 1 var(--font-mono, ui-monospace, monospace); font-variant-numeric: tabular-nums; cursor: pointer; }
+.pd-box:hover { position: relative; z-index: 1; outline: 2px solid var(--primary, var(--cyan)); }
+.pd-box:focus-visible { position: relative; z-index: 2; outline: 3px solid var(--focus-ring, var(--cyan)); outline-offset: 0; }
+.pd-box[aria-pressed="true"] { position: relative; z-index: 1; border: 2px solid var(--pd-mark-border); background: var(--pd-mark); color: var(--pd-mark-text); font-weight: 900; }
+.pd-diagram.is-plain .pd-box, .pd-zoom.is-plain .pd-box { color: transparent; }
+.pd-summary td:last-child { overflow-wrap: anywhere; }
+.pd-summary tfoot td { font-weight: 800; }
+.pd-saved-filters { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-bottom: 12px; }
+.pd-saved-filters label { flex: 1 1 260px; }
+.pd-zoom { width: min(96vw, 1200px); max-height: 92vh; margin: auto; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card, var(--radius)); background: var(--panel); color: var(--text); }
+.pd-zoom::backdrop { background: var(--overlay, rgba(3, 11, 16, .7)); }
+.pd-zoom > header { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.pd-zoom > header h2 { margin: 0; }
+.pd-zoom__body { --pd-cell: 52px; display: flex; justify-content: center; padding: 22px; overflow: auto; }
+.pd-zoom__body .pd-zoom-link { display: none; }
+.pd-print-frame { position: fixed; right: 0; bottom: 0; width: 0; height: 0; border: 0; }
+@media (max-width: 900px) {
+    .pd-quick, .pd-mark-form { grid-template-columns: 1fr; }
+    .pd-workspace { --pd-cell: 28px; padding: 12px; }
+    .pd-workspace > .panel { padding: 14px; }
+}

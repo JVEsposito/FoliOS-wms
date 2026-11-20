@@ -270,6 +270,9 @@ class ServicioReinicioOperacional
                 'retenciones_lote_sag' => DB::table('retenciones_lote_sag')->where('temporada_id', $temporada->id)->count(),
                 'eventos_retencion_lote_sag' => DB::table('eventos_retencion_lote_sag')->whereIn('retencion_id',
                     DB::table('retenciones_lote_sag')->select('id')->where('temporada_id', $temporada->id))->count(),
+                'diagramas_pallets_sag' => DB::table('diagramas_pallets_sag')->where('temporada_id', $temporada->id)->count(),
+                'eventos_diagrama_pallets_sag' => DB::table('eventos_diagrama_pallets_sag')->whereIn('diagrama_id',
+                    DB::table('diagramas_pallets_sag')->select('id')->where('temporada_id', $temporada->id))->count(),
                 'folios' => (clone $folios)->count(),
                 'validaciones_pallet' => $this->validacionesPallet($temporada)->count(),
                 'cargas' => (clone $cargas)->count(),
@@ -529,6 +532,9 @@ class ServicioReinicioOperacional
         $eliminados['eventos_retencion_lote_sag'] = DB::table('eventos_retencion_lote_sag')->whereIn('retencion_id',
             DB::table('retenciones_lote_sag')->select('id')->where('temporada_id', $temporada->id))->delete();
         $eliminados['retenciones_lote_sag'] = DB::table('retenciones_lote_sag')->where('temporada_id', $temporada->id)->delete();
+        $eliminados['eventos_diagrama_pallets_sag'] = DB::table('eventos_diagrama_pallets_sag')->whereIn('diagrama_id',
+            DB::table('diagramas_pallets_sag')->select('id')->where('temporada_id', $temporada->id))->delete();
+        $eliminados['diagramas_pallets_sag'] = DB::table('diagramas_pallets_sag')->where('temporada_id', $temporada->id)->delete();
 
         DB::table('validaciones_pallet')
             ->where('temporada_id', $temporada->id)

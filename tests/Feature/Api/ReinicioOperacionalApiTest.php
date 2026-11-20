@@ -15,6 +15,7 @@ use App\Models\ItemMaterial;
 use App\Models\Temporada;
 use App\Models\User;
 use App\Models\VariedadValidacion;
+use App\Services\InspeccionSag\ServicioDiagramasPalletsSag;
 use App\Services\Planificador\ServicioRecalculosPendientesPlanificador;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -77,6 +78,8 @@ class ReinicioOperacionalApiTest extends TestCase
             $temporada->id,
         );
         $this->assertDatabaseCount('recalculos_pendientes_planificador', 2);
+        app(ServicioDiagramasPalletsSag::class)->guardar(['operacion_id' => (string) Str::uuid(), 'tipo' => 'usda', 'numero' => '1',
+            'pallets' => [['base' => 8, 'corridas' => 13]], 'cajas_marcadas' => [5]], $administrador);
         DB::table('secuencias_validacion_folio')->insert([
             'numero_folio' => $folioPt->numero_folio,
             'ultimo_intento' => 2,
@@ -114,6 +117,7 @@ class ReinicioOperacionalApiTest extends TestCase
             ->assertJsonPath('data.temporada.id', $temporada->id)
             ->assertJsonPath('data.frase_confirmacion', "REINICIAR {$temporada->codigo}")
             ->assertJsonPath('data.resumen.frigorifico.folios', 1)
+            ->assertJsonPath('data.resumen.frigorifico.diagramas_pallets_sag', 1)
             ->assertJsonPath('data.resumen.materia_prima.recepciones_romana', 1)
             ->assertJsonPath('data.resumen.materia_prima.guias_recepcion_romana', 1)
             ->assertJsonPath('data.resumen.materia_prima.inspecciones_envases', 2)
@@ -143,6 +147,8 @@ class ReinicioOperacionalApiTest extends TestCase
         $this->assertDatabaseCount('trazabilidad_folio_origenes', 0);
         $this->assertDatabaseCount('retenciones_lote_sag', 0);
         $this->assertDatabaseCount('eventos_retencion_lote_sag', 0);
+        $this->assertDatabaseCount('diagramas_pallets_sag', 0);
+        $this->assertDatabaseCount('eventos_diagrama_pallets_sag', 0);
         $this->assertDatabaseCount('validaciones_mp', 0);
         $this->assertDatabaseCount('segmentos_validacion_mp', 0);
         $this->assertDatabaseCount('procesos_hidrocooler_materia_prima', 0);
