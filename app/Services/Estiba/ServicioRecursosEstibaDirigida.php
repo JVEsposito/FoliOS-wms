@@ -7,6 +7,7 @@ use App\Models\Posicion;
 use App\Models\ReservaTareaMovimiento;
 use App\Models\TareaMovimiento;
 use App\Models\UbicacionActual;
+use Illuminate\Support\Facades\DB;
 
 /** Validación física bajo los bloqueos transaccionales de la cámara y de la tarea. */
 class ServicioRecursosEstibaDirigida
@@ -21,6 +22,7 @@ class ServicioRecursosEstibaDirigida
             throw new ConflictoOperacion('El acceso a la posición está bloqueado por un pallet delante. Actualiza el destino.');
         }
         if (ReservaTareaMovimiento::query()->whereIn('bloqueo_posicion_id', $frente)
+            ->when(DB::getDriverName() === 'mysql', fn ($consulta) => $consulta->forceIndex('reservas_bloqueo_posicion_unique'))
             ->where('tarea_movimiento_id', '!=', $tarea->id)->conCompromisoVigente()->lockForUpdate()->exists()) {
             throw new ConflictoOperacion('El acceso a la posición está comprometido por otra labor.');
         }

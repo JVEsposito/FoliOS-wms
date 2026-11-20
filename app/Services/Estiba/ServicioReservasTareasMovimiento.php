@@ -985,22 +985,29 @@ class ServicioReservasTareasMovimiento
 
     private function expirarRelacionadas(string $folioId, ?string $posicionDestinoId): void
     {
+        // Resolver primero las tareas del pallet con una lectura actual. El EXISTS
+        // unido por OR al destino hacía recorrer el índice global de reservas activas
+        // bajo FOR UPDATE, bloqueando claims de otros camareros mientras se retenía
+        // la cámara. Su liberación espera esa misma cámara: inversión de bloqueos.
+        $tareaIds = app(ServicioExclusionPallet::class)->tareasActuales($folioId)->pluck('id');
         $reservas = ReservaTareaMovimiento::query()
+            ->whereIn('tarea_movimiento_id', $tareaIds)
             ->where('estado', EstadoReservaTareaMovimiento::Activa->value)
-            ->where(function ($consulta) use ($folioId, $posicionDestinoId): void {
-                $consulta->whereHas(
-                    'tareaMovimiento',
-                    fn ($tareas) => $tareas->where('folio_id', $folioId),
-                );
-                if ($posicionDestinoId) {
-                    $consulta->orWhere('bloqueo_posicion_id', $posicionDestinoId);
-                }
-            })
+            ->when(DB::getDriverName() === 'mysql', fn ($consulta) => $consulta->forceIndex('reservas_tarea_fecha_idx'))
+            ->orderBy('id')
             ->lockForUpdate()
             ->get();
 
-        foreach ($reservas as $reserva) {
-            if ($this->estaVencida($reserva)) {
+        // El destino es otra clave acotada; también puede pertenecer a otro pallet.
+        if ($posicionDestinoId) {
+            $reservaDestino = ReservaTareaMovimiento::query()
+                ->where('bloqueo_posicion_id', $posicionDestinoId)->lockForUpdate()->first();
+            if ($reservaDestino) {
+                $reservas->push($reservaDestino);
+            }
+        }
+        foreach ($reservas->unique('id') as $reserva) {
+            if ($reserva->estado === EstadoReservaTareaMovimiento::Activa && $this->estaVencida($reserva)) {
                 $this->expirar($reserva);
             }
         }

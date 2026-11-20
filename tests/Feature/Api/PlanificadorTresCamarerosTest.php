@@ -119,6 +119,36 @@ class PlanificadorTresCamarerosTest extends TestCase
         $this->assertDatabaseCount('movimientos', 0);
     }
 
+    public function test_validar_un_movimiento_no_bloquea_la_reserva_de_otro_pallet(): void
+    {
+        $this->requiereMysql();
+        $temporada = Temporada::where('activa', true)->firstOrFail();
+        $supervisor = User::factory()->create(['rol' => RolUsuario::SupervisorFrio]);
+        $camara = $this->camara($supervisor, 'AISLADA', 3, 3);
+        $identidades = [];
+        foreach (range(0, 2) as $n) {
+            [$usuario, $tablet] = $this->identidad($n);
+            $folio = $this->folio($temporada, 'RESERVA-AISLADA-'.$n);
+            $posicion = $camara->posiciones()->where('banda', $n + 1)->where('posicion', 1)->sole();
+            $plan = PlanOperacional::create(['temporada_id' => $temporada->id, 'tipo' => 'almacenamiento_pallet',
+                'estado' => 'en_ejecucion', 'prioridad' => 'normal', 'titulo' => 'Movimiento independiente '.$n,
+                'creado_por_user_id' => $usuario->id, 'programado_at' => now(), 'contexto' => ['planner_horizon' => 'rolling']]);
+            $tarea = TareaMovimiento::create(['plan_operacional_id' => $plan->id, 'folio_id' => $folio->id,
+                'tipo_movimiento' => 'ubicacion_inicial', 'secuencia' => 1, 'estado' => 'en_proceso',
+                'camara_destino_id' => $camara->id, 'posicion_destino_id' => $posicion->id,
+                'prioridad' => 'normal', 'responsable_user_id' => $usuario->id, 'dispositivo_id' => $tablet->id]);
+            ReservaTareaMovimiento::create(['tarea_movimiento_id' => $tarea->id, 'bloqueo_tarea_id' => $tarea->id,
+                'posicion_destino_id' => $posicion->id, 'bloqueo_posicion_id' => $posicion->id,
+                'estado' => 'activa', 'user_id' => $usuario->id, 'dispositivo_id' => $tablet->id,
+                'reservada_at' => now(), 'renovada_at' => now(), 'vence_at' => now()->addMinutes(10)]);
+            $identidades[] = ['usuario' => $usuario->id, 'tablet' => $tablet->id, 'tarea' => $tarea->id];
+        }
+        $resultados = $this->ejecutar(['escenario' => 'validar_sin_bloquear_reserva_ajena', 'modo' => 'off', 'identidades' => $identidades]);
+        $this->assertSame(['protegida', 'validada', 'validada'], array_column($resultados, 'estado'));
+        $this->assertSame(3, ReservaTareaMovimiento::whereNotNull('bloqueo_tarea_id')->count());
+        $this->assertDatabaseCount('movimientos', 0);
+    }
+
     public function test_tres_camareros_llenan_la_camara_con_84_movimientos_sin_cruzar_labores_pallets_ni_bandas(): void
     {
         $this->requiereMysql();

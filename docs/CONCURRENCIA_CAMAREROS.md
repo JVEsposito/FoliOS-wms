@@ -8,6 +8,15 @@ La tablet recupera el destino propio ante una respuesta perdida y vuelve a leer/
 
 Las sesiones de tarea cierran al completar o liberar el trabajo. Una tarea en proceso mantiene sus recursos hasta completar o regularizar el pallet; cerrar la pantalla o forzar el cierre de sesión no los libera.
 
+La comprobación de reservas vencidas antes de un movimiento solo bloquea las reservas
+de las tareas del pallet y la clave del destino concreto. Se evitan recorridos globales
+de reservas activas mientras se retiene la cámara: podían bloquear el claim ajeno de un
+camarero que, al liberarlo, necesitaba actualizar esa misma cámara. Una prueba con tres
+procesos mantiene bloqueada una reserva ajena hasta que los otros dos validan sus
+movimientos y el acceso a las posiciones de frente en bandas independientes. La lectura
+de ese acceso utiliza el índice de la posición reservada, sin recorrer las reservas de
+otras bandas. El escenario completo conserva los 84 movimientos.
+
 ## Despliegue
 
 Ejecutar la migración `2026_10_30_120000_habilitar_sesiones_estiba_por_tarea`, reconstruir web y reiniciar procesos con el procedimiento habitual. Después publicar el mismo código móvil en `production` y `camaras-pruebas`. No cambia el runtime 1.5.0 ni requiere APK nuevo. El servidor acepta tablets previas durante la transición; la concurrencia requiere la actualización móvil.
