@@ -99,6 +99,11 @@
                         <section aria-labelledby="dcxHeaderTitle"><h3 id="dcxHeaderTitle">Encabezado</h3><div id="dcxHeader"></div></section>
                         <section aria-labelledby="dcxInspectionTitle"><h3 id="dcxInspectionTitle">Inspección visual</h3><ul class="dcx-checks" id="dcxInspection"></ul></section>
                     </div>
+                    <section id="dcxThermographs" aria-labelledby="dcxThermographsTitle" hidden>
+                        <h3 id="dcxThermographsTitle">Termógrafos</h3>
+                        <p class="dcx-muted">Cada bloque reúne el código de un equipo y el pallet donde se instaló.</p>
+                        <div class="dcx-thermographs" id="dcxThermographCards"></div>
+                    </section>
                     <section aria-labelledby="dcxPalletsTitle">
                         <h3 id="dcxPalletsTitle">Pallets en el camión</h3>
                         <div class="dcx-table-wrap">

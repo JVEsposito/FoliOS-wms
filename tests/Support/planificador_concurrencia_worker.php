@@ -3,6 +3,7 @@
 use App\Enums\TipoMovimiento;
 use App\Enums\TipoPlanOperacional;
 use App\Exceptions\ConflictoOperacion;
+use App\Models\Camara;
 use App\Models\Dispositivo;
 use App\Models\Folio;
 use App\Models\TareaMovimiento;
@@ -12,6 +13,7 @@ use App\Services\Cargas\ServicioAcopioCarga;
 use App\Services\Estiba\ServicioManiobrasOperacionales;
 use App\Services\Estiba\ServicioMovimientoEstiba;
 use App\Services\Estiba\ServicioPlanesOperacionales;
+use App\Services\Estiba\ServicioRecursosEstibaDirigida;
 use App\Services\Estiba\ServicioReservasTareasMovimiento;
 use App\Services\Estiba\ServicioSesionEstiba;
 use App\Services\Planificador\ServicioLaboresTurno;
@@ -52,6 +54,32 @@ function barrera(string $directorio, string $nombre, int $indice): void
     }
 }
 try {
+    if ($entrada['escenario'] === 'validar_sin_bloquear_reserva_ajena') {
+        DB::statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $paso = TareaMovimiento::findOrFail($identidad['tarea']);
+        if ($indice === 0) {
+            DB::beginTransaction();
+            DB::table('reservas_tareas_movimiento')->where('bloqueo_tarea_id', $paso->id)->lockForUpdate()->first();
+        }
+        barrera($directorio, 'reserva_ajena_bloqueada', $indice);
+        try {
+            if ($indice !== 0) {
+                DB::transaction(function () use ($paso, $usuario, $tablet): void {
+                    Camara::query()->whereKey($paso->camara_destino_id)->lockForUpdate()->firstOrFail();
+                    app(ServicioReservasTareasMovimiento::class)->validarParaMovimiento($paso, $paso->folio,
+                        TipoMovimiento::UbicacionInicial, null, $paso->posicion_destino_id, $usuario, $tablet);
+                    app(ServicioRecursosEstibaDirigida::class)->validarAcceso($paso->posicionDestino, $paso);
+                });
+            }
+        } finally {
+            barrera($directorio, 'validaciones_terminadas', $indice);
+            if ($indice === 0) {
+                DB::commit();
+            }
+        }
+        echo json_encode(['estado' => $indice === 0 ? 'protegida' : 'validada']);
+        exit(0);
+    }
     if ($entrada['escenario'] === 'iniciar_sin_bloquear_otro_camarero') {
         DB::statement('SET SESSION innodb_lock_wait_timeout = 1');
         $paso = TareaMovimiento::findOrFail($identidad['tarea']);

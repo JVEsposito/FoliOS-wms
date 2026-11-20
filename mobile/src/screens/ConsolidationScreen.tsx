@@ -249,15 +249,15 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
     </Pressable>)}
   </View>;
 
-  const field = (section: 'encabezado' | 'cierre', definition: ConsolidationField) => {
+  const field = (section: 'encabezado' | 'cierre', definition: ConsolidationField, presentation: { label?: string; accessibilityLabel?: string; placeholder?: string } = {}) => {
     const current = value(section, definition.clave);
     const suggested = control?.sugerido?.[section]?.[definition.clave];
     const hint = suggested !== undefined && suggested !== null && String(suggested) !== current ? `FoliOS sugiere: ${OPTION_LABELS[String(suggested)] ?? suggested}` : undefined;
     if (definition.tipo === 'opcion') {
       return <View key={definition.clave} style={s.gap}><Text style={s.label}>{definition.etiqueta}</Text>{chips(definition.opciones ?? [], current, (v) => setValue(section, definition.clave, v))}</View>;
     }
-    return <EstibaField key={definition.clave} label={definition.etiqueta} value={current} hint={hint} editable={editable && !blocked}
-      placeholder={definition.tipo === 'fecha' ? 'AAAA-MM-DD' : definition.tipo === 'hora' ? 'HH:MM' : undefined}
+    return <EstibaField key={definition.clave} label={presentation.label ?? definition.etiqueta} accessibilityLabel={presentation.accessibilityLabel} value={current} hint={hint} editable={editable && !blocked}
+      placeholder={presentation.placeholder ?? (definition.tipo === 'fecha' ? 'AAAA-MM-DD' : definition.tipo === 'hora' ? 'HH:MM' : undefined)}
       keyboardType={definition.tipo === 'entero' ? 'number-pad' : 'default'} multiline={definition.tipo === 'nota'} maxLength={definition.tipo === 'nota' ? 1000 : 150}
       autoCapitalize={['patente_camion', 'patente_carro', 'contenedor', 'sello_planta', 'sello_naviera'].includes(definition.clave) ? 'characters' : 'sentences'}
       onChangeText={(v) => setValue(section, definition.clave, v)} />;
@@ -357,7 +357,22 @@ export function ConsolidationScreen({ auth, baseUrl, onLogout }: { auth: AuthSes
 
         {tab === 'encabezado' ? <>
           {HEADER_GROUPS.map((group) => <EstibaPanel key={group.key} title={group.title}>
-            {catalog.encabezado.filter((f) => f.grupo === group.key && (f.clave !== 'frigorifico' || value('encabezado', 'frigorifico_tipo') !== '')).map((f) => field('encabezado', f))}
+            {group.key === 'termografos' ? <>
+              <Text style={s.muted}>Cada bloque reúne el código de un equipo y el pallet donde se instaló.</Text>
+              <View style={s.thermographs}>
+                {catalog.encabezado.filter((f) => f.grupo === 'termografos' && !f.clave.endsWith('_pallet')).map((f) => {
+                  const palletField = catalog.encabezado.find((candidate) => candidate.clave === `${f.clave}_pallet`);
+                  return <View key={f.clave} testID={`thermograph-${f.clave}`} style={[s.thermograph, f.clave === 'termografo_control' && s.thermographInternal]}>
+                    <Text accessibilityRole="header" style={s.label}>{f.etiqueta}</Text>
+                    {f.clave === 'termografo_control' ? <Text style={s.thermographNote}>Uso interno · control a puerto</Text> : null}
+                    <View style={s.thermographFields}>
+                      <View style={s.thermographField}>{field('encabezado', f, { label: 'Código del termógrafo', accessibilityLabel: `Código: ${f.etiqueta}`, placeholder: 'Serie o identificador del equipo' })}</View>
+                      {palletField ? <View style={s.thermographField}>{field('encabezado', palletField, { label: 'N° de pallet', accessibilityLabel: `N° de pallet: ${f.etiqueta}`, placeholder: 'Número del pallet' })}</View> : null}
+                    </View>
+                  </View>;
+                })}
+              </View>
+            </> : catalog.encabezado.filter((f) => f.grupo === group.key && (f.clave !== 'frigorifico' || value('encabezado', 'frigorifico_tipo') !== '')).map((f) => field('encabezado', f))}
           </EstibaPanel>)}
           {saveBar('encabezado')}
         </> : null}
@@ -555,6 +570,12 @@ const s = StyleSheet.create({
   error: { fontFamily: font.regular, color: signal.critical.text, fontSize: 13 },
   dim: { opacity: 0.45 },
   card: { gap: 6, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10, backgroundColor: colors.surface },
+  thermographs: { gap: 12 },
+  thermograph: { gap: 10, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 10, backgroundColor: colors.surface },
+  thermographInternal: { borderLeftWidth: 3, borderLeftColor: colors.primary },
+  thermographNote: { fontFamily: font.bold, color: colors.primary, fontSize: 13 },
+  thermographFields: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  thermographField: { flexGrow: 1, flexShrink: 1, flexBasis: 220, minWidth: 0 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: 44, minWidth: 64, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.inputBorder, borderRadius: 8, backgroundColor: colors.surface },
   chipOn: { borderColor: colors.primary, backgroundColor: colors.primary },

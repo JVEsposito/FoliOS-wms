@@ -15,6 +15,10 @@ const catalogo = {
         { clave: 'fecha_carga', etiqueta: 'Fecha de carga (real)', tipo: 'fecha', grupo: 'operacion' },
         { clave: 'contenedor', etiqueta: 'N° contenedor', tipo: 'texto', grupo: 'unidad' },
         { clave: 'conductor', etiqueta: 'Nombre conductor', tipo: 'texto', grupo: 'transporte' },
+        ...['1', '2', '3', 'control'].flatMap((key) => [
+            { clave: `termografo_${key}`, etiqueta: key === 'control' ? 'Termógrafo control a puerto (interno)' : `Termógrafo viaje ${key}`, tipo: 'texto', grupo: 'termografos' },
+            { clave: `termografo_${key}_pallet`, etiqueta: 'En pallet N°', tipo: 'texto', grupo: 'termografos' },
+        ]),
     ],
     inspeccion: [
         { clave: 'puertas', etiqueta: 'Puertas en buen estado', aplica: null },
@@ -39,7 +43,9 @@ const pallet = (folio, posicion, temperatura, estado = 'cargado') => ({
 const control = (extra = {}) => ({
     id: 'c1', estado: 'cerrado', version: 4, referencia_embarque: 'F025', archivos: { planilla: 'R-24_F025.xlsx', fotos: 'R-24_fotos_F025.pdf' },
     carga: { id: 'g1', codigo: 'CAR-0042', estado: 'cerrada', embarque: 'EMB-0099', anden: 'AND-2', patente: 'ABCD12' },
-    encabezado: { tipo_camion: 'contenedor', exportadora: 'Subsole', fecha_carga: '2026-11-11', contenedor: 'MSCU1234567', conductor: null },
+    encabezado: { tipo_camion: 'contenedor', exportadora: 'Subsole', fecha_carga: '2026-11-11', contenedor: 'MSCU1234567', conductor: null,
+        termografo_1: '00TG-1', termografo_1_pallet: '0011', termografo_2: '00TG-2', termografo_2_pallet: '0019',
+        termografo_3: null, termografo_3_pallet: null, termografo_control: 'CTRL-01', termografo_control_pallet: '0004' },
     sugerido: { encabezado: {}, cierre: {} },
     inspeccion: { puertas: 'si', danos_visuales: 'si', horometro: 'na', trinca: null },
     cierre: { cajas_guia: 160, responsable: 'Consolidador' },
@@ -112,6 +118,16 @@ for (const width of [1280, 390]) test(`lista las planillas y abre el detalle con
         assert.match(await page.locator('#dcxHeader').innerText(), /Tipo de camión\s*Contenedor/);
         assert.match(await page.locator('#dcxHeader').innerText(), /11-11-2026/);
         assert.doesNotMatch(await page.locator('#dcxHeader').innerText(), /Nombre conductor/);
+        assert.doesNotMatch(await page.locator('#dcxHeader').innerText(), /Termógrafo/);
+        assert.equal(await page.locator('.dcx-thermograph').count(), 3);
+        for (const [key, code, pallet] of [['1', '00TG-1', '0011'], ['2', '00TG-2', '0019'], ['control', 'CTRL-01', '0004']]) {
+            const card = page.locator(`[data-equipo="termografo_${key}"]`);
+            assert.deepEqual(await card.locator('dt').allTextContents(), ['Código del termógrafo', 'N° de pallet']);
+            assert.deepEqual(await card.locator('dd').allTextContents(), [code, pallet]);
+            const bounds = await card.boundingBox();
+            assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width, `El equipo ${key} cabe a ${width}px`);
+        }
+        assert.match(await page.locator('[data-equipo="termografo_control"]').innerText(), /Uso interno · control a puerto/);
         // «Daños visuales: sí» es un hallazgo, no una conformidad.
         assert.equal(await page.locator('#dcxInspection li', { hasText: 'daños aparentes' }).getAttribute('data-tone'), 'alerta');
         assert.equal(await page.locator('#dcxInspection li', { hasText: 'Puertas' }).getAttribute('data-tone'), 'ok');
@@ -130,6 +146,21 @@ for (const width of [1280, 390]) test(`lista las planillas y abre el detalle con
         const download = page.waitForEvent('download');
         await page.locator('#dcxDownload').click();
         assert.equal((await download).suggestedFilename(), 'R-24_F025.xlsx');
+        assert.deepEqual(errors, []);
+        await context.close();
+    } finally { await browser.close(); }
+});
+
+test('un pallet sin código se mantiene en su equipo y los termógrafos vacíos no dejan bloques sueltos', async () => {
+    const browser = await launch();
+    try {
+        const { context, page, errors } = await open(browser, { detail: control({ encabezado: { termografo_2_pallet: '0007' } }) });
+        await page.locator('#dcxRows tr[data-id="c1"]').click();
+        const card = page.locator('[data-equipo="termografo_2"]');
+        await card.waitFor();
+        assert.equal(await page.locator('.dcx-thermograph').count(), 1);
+        assert.match(await card.locator('h4').innerText(), /viaje 2/);
+        assert.deepEqual(await card.locator('dd').allTextContents(), ['Sin registrar', '0007']);
         assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }

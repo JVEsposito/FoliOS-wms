@@ -48,6 +48,19 @@ export function gruposEncabezado(campos, encabezado) {
         .filter((grupo) => grupo.filas.length > 0);
 }
 
+/** Cada equipo conserva su propio pallet, incluso si solo uno de los dos datos está registrado. */
+export function termografosEncabezado(campos, encabezado) {
+    return campos.filter((campo) => campo.grupo === 'termografos' && !campo.clave.endsWith('_pallet'))
+        .map((campo) => ({
+            clave: campo.clave,
+            titulo: campo.etiqueta,
+            codigo: encabezado?.[campo.clave],
+            pallet: encabezado?.[`${campo.clave}_pallet`],
+            interno: campo.clave === 'termografo_control',
+        }))
+        .filter((equipo) => [equipo.codigo, equipo.pallet].some((valor) => valor !== null && valor !== undefined && valor !== ''));
+}
+
 /** Pallets ordenados por posición; los que aún no tienen posición quedan al final. */
 export function palletsOrdenados(pallets = []) {
     return [...pallets].sort((a, b) => {
