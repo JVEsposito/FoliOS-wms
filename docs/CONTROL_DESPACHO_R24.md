@@ -63,6 +63,15 @@ todos igual. En la planilla se escribe la letra.
 
 Un campo que se deja vacío vuelve a la sugerencia.
 
+## Presentación de termógrafos
+
+En el encabezado móvil, cada termógrafo de viaje tiene su propio bloque con el código del
+equipo y su número de pallet. El control a puerto queda identificado como uso interno.
+La consulta de oficina muestra las mismas parejas en una sección independiente; omite los
+equipos sin datos e indica «Sin registrar» si solo se completó uno de los dos campos.
+Los códigos y números de pallet conservan sus ceros iniciales. Esta presentación reutiliza
+los campos existentes de R-24; se distribuye a las tablets y PDA por OTA.
+
 ## Inspección, cierre y fotos
 
 - **Inspección visual.** Tiene 13 puntos, y cada uno se responde Sí, No o No aplica. Los

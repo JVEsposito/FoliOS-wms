@@ -19,6 +19,10 @@ const catalog = {
   encabezado: [
     { clave: 'tipo_camion', etiqueta: 'Tipo de camión', tipo: 'opcion', opciones: ['contenedor', 'thermo'], grupo: 'operacion' },
     { clave: 'exportadora', etiqueta: 'Exportadora', tipo: 'texto', grupo: 'operacion' },
+    ...['1', '2', '3', 'control'].flatMap((key) => [
+      { clave: `termografo_${key}`, etiqueta: key === 'control' ? 'Termógrafo control a puerto (interno)' : `Termógrafo viaje ${key}`, tipo: 'texto', grupo: 'termografos' },
+      { clave: `termografo_${key}_pallet`, etiqueta: 'En pallet N°', tipo: 'texto', grupo: 'termografos' },
+    ]),
   ],
   inspeccion: [
     { clave: 'puertas', etiqueta: 'Puertas en buen estado', aplica: null },
@@ -157,6 +161,8 @@ function harness({ closedWithPdf = false, loadReference = null } = {}) {
     },
     async input(label, value) { await flush(() => renderer.root.findByProps({ accessibilityLabel: label }).props.onChangeText(value)); },
     value(label) { return renderer.root.findByProps({ accessibilityLabel: label }).props.value; },
+    thermographInputs(key) { return renderer.root.findByProps({ testID: `thermograph-${key}` }).findAllByType('TextInput').map((input) => input.props.accessibilityLabel); },
+    editable(label) { return renderer.root.findByProps({ accessibilityLabel: label }).props.editable; },
     text() { return renderer.root.findAllByType('Text').map((node) => flatten(node.props.children)).join('\n'); },
     async unmount() { await flush(() => renderer.unmount()); },
   };
@@ -233,6 +239,44 @@ test('la inspección marca «no aplica» lo del otro tipo de camión y el cierre
     await h.press('Cierre');
     assert.match(h.text(), /Para cerrar la planilla falta/);
     assert.equal(h.pressable('Cerrar planilla R-24').props.disabled, true);
+  } finally { await h.unmount(); }
+});
+
+test('cada termógrafo reúne su código y su pallet y guarda las asociaciones sin intercambiarlas', async () => {
+  const h = harness();
+  try {
+    await h.mount();
+    await h.press('Iniciar planilla R-24', { containing: true });
+    await h.press('Encabezado');
+    const expected = {};
+    for (const [index, key] of ['1', '2', '3', 'control'].entries()) {
+      const title = key === 'control' ? 'Termógrafo control a puerto (interno)' : `Termógrafo viaje ${key}`;
+      const labels = [`Código: ${title}`, `N° de pallet: ${title}`];
+      assert.deepEqual(h.thermographInputs(`termografo_${key}`), labels);
+      await h.input(labels[0], `00TG-${index + 1}`);
+      await h.input(labels[1], `00${index + 11}`);
+      expected[`termografo_${key}`] = `00TG-${index + 1}`;
+      expected[`termografo_${key}_pallet`] = `00${index + 11}`;
+    }
+    assert.match(h.text(), /Uso interno · control a puerto/);
+    await h.press('Guardar');
+    assert.deepEqual(h.calls.save[0].encabezado, expected);
+    await h.press('Pallets');
+    await h.press('Encabezado');
+    assert.equal(h.value('Código: Termógrafo viaje 2'), '00TG-2');
+    assert.equal(h.value('N° de pallet: Termógrafo viaje 2'), '0012');
+  } finally { await h.unmount(); }
+});
+
+test('los termógrafos de una planilla cerrada siguen siendo de solo lectura', async () => {
+  const h = harness({ closedWithPdf: true });
+  try {
+    await h.mount();
+    await h.press('Abrir planilla', { containing: true });
+    await h.press('Encabezado');
+    assert.equal(h.editable('Código: Termógrafo viaje 1'), false);
+    assert.equal(h.editable('N° de pallet: Termógrafo control a puerto (interno)'), false);
+    assert.equal(h.pressable('Guardar'), undefined);
   } finally { await h.unmount(); }
 });
 

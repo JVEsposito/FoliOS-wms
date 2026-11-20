@@ -42,6 +42,14 @@
 .dcx-fields div { display: grid; gap: 2px; padding-bottom: 6px; border-bottom: 1px solid var(--line-soft); min-width: 0; }
 .dcx-fields dt { color: var(--text-subtle); font-size: .74rem; font-weight: 700; }
 .dcx-fields dd { margin: 0; color: var(--text-strong); font-weight: 700; overflow-wrap: anywhere; }
+#dcxHeader { display: grid; gap: 14px; }
+.dcx-header-group { padding: 12px; border: 1px solid var(--line-soft); border-radius: 8px; }
+.dcx-thermographs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; margin-top: 12px; }
+.dcx-thermograph { min-width: 0; padding: 14px; border: 1px solid var(--line-soft); border-radius: 8px; }
+.dcx-thermograph[data-interno="true"] { border-left: 3px solid var(--info-text); }
+.dcx-thermograph .dcx-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dcx-thermograph__note { margin: 0 0 10px; color: var(--info-text); font-size: .78rem; font-weight: 700; }
+.dcx-detail .dcx-thermograph h4 { color: var(--text-strong); font-size: .88rem; letter-spacing: normal; text-transform: none; }
 .dcx-checks { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .dcx-checks li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-left: 3px solid var(--line-soft); border-radius: 4px; font-size: .86rem; }
 .dcx-checks li span { color: var(--text-strong); }

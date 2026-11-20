@@ -1,4 +1,4 @@
-import { ESTADOS_PALLET, gruposEncabezado, orientacion, palletsOrdenados, palletsSinTemperatura, temperatura, textoValor, tonoInspeccion } from './shared/dispatch-control.js';
+import { ESTADOS_PALLET, gruposEncabezado, orientacion, palletsOrdenados, palletsSinTemperatura, temperatura, termografosEncabezado, textoValor, tonoInspeccion } from './shared/dispatch-control.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -7,6 +7,7 @@ const elements = {
     filters: byId('dcxFilters'), rows: byId('dcxRows'), count: byId('dcxCount'), page: byId('dcxPage'), prev: byId('dcxPrev'), next: byId('dcxNext'),
     detail: byId('dcxDetail'), detailState: byId('dcxDetailState'), detailTitle: byId('dcxDetailTitle'), detailMeta: byId('dcxDetailMeta'),
     download: byId('dcxDownload'), missing: byId('dcxMissing'), kpis: byId('dcxKpis'), header: byId('dcxHeader'), inspection: byId('dcxInspection'),
+    thermographs: byId('dcxThermographs'), thermographCards: byId('dcxThermographCards'),
     pallets: byId('dcxPallets'), closing: byId('dcxClosing'), photos: byId('dcxPhotos'), photosPending: byId('dcxPhotosPending'),
     photosPdf: byId('dcxPhotosPdf'), photosPdfText: byId('dcxPhotosPdfText'), photosPdfButton: byId('dcxPhotosPdfButton'),
     print: byId('dcxPrint'), printText: byId('dcxPrintText'), printForm: byId('dcxPrintForm'), printTemps: byId('dcxPrintTemps'), printError: byId('dcxPrintError'),
@@ -135,7 +136,19 @@ function renderControl(control) {
     ].map(([label, value]) => `<div><span>${label}</span><strong>${escapeHtml(textoValor(value))}</strong></div>`).join('');
 
     elements.header.innerHTML = gruposEncabezado(catalog.encabezado, control.encabezado)
-        .map((group) => `<h4>${escapeHtml(group.titulo)}</h4>${definitionList(group.filas)}`).join('') || '<p class="dcx-muted">Sin datos de encabezado.</p>';
+        .filter((group) => group.clave !== 'termografos')
+        .map((group) => `<section class="dcx-header-group"><h4>${escapeHtml(group.titulo)}</h4>${definitionList(group.filas)}</section>`).join('') || '<p class="dcx-muted">Sin datos de encabezado.</p>';
+    const thermographs = termografosEncabezado(catalog.encabezado, control.encabezado);
+    elements.thermographs.hidden = thermographs.length === 0;
+    elements.thermographCards.innerHTML = thermographs.map((equipo) => `
+        <article class="dcx-thermograph" data-equipo="${escapeHtml(equipo.clave)}" data-interno="${equipo.interno}">
+            <h4>${escapeHtml(equipo.titulo)}</h4>
+            ${equipo.interno ? '<p class="dcx-thermograph__note">Uso interno · control a puerto</p>' : ''}
+            ${definitionList([
+                { etiqueta: 'Código del termógrafo', valor: textoValor(equipo.codigo) === '—' ? 'Sin registrar' : textoValor(equipo.codigo) },
+                { etiqueta: 'N° de pallet', valor: textoValor(equipo.pallet) === '—' ? 'Sin registrar' : textoValor(equipo.pallet) },
+            ])}
+        </article>`).join('');
     elements.inspection.innerHTML = catalog.inspeccion.map((item) => {
         const value = control.inspeccion[item.clave];
         return `<li data-tone="${tonoInspeccion(item.clave, value)}"><span>${escapeHtml(item.etiqueta)}</span><strong>${value ? escapeHtml(textoValor(value)) : 'Sin respuesta'}</strong></li>`;
