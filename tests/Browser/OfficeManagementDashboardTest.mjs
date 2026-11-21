@@ -4,6 +4,7 @@ import { extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { chromium } from 'playwright';
+import { OFFICE_THEMES } from '../../resources/js/shared/office-preferences.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const identity = { nombre: 'Gerencia General', rol: 'consulta', modulos_acceso: ['gerencia.panel'], puede_consultar_panel_gerencial: true, ambito_camaras: 'productos' };
@@ -83,13 +84,13 @@ function dashboard() {
     };
 }
 
-async function open(browser, width, theme = 'dark-industrial') {
+async function open(browser, width, theme = 'dark-industrial', user = identity) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     await context.addInitScript(({ user, officeTheme }) => {
         localStorage.setItem('estiba_wms_office_token', 'fixture');
         localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
         localStorage.setItem('estiba_wms_office_theme', officeTheme);
-    }, { user: identity, officeTheme: theme });
+    }, { user, officeTheme: theme });
     const html = readFileSync(resolve(root, 'storage/app/ui/oficina/gerencia.html'), 'utf8');
     await context.route('http://localhost/**', (route) => {
         const path = new URL(route.request().url()).pathname;
@@ -98,7 +99,7 @@ async function open(browser, width, theme = 'dark-industrial') {
             try { return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png' })[extname(path)] || 'application/octet-stream' }); } catch { return route.fulfill({ status: 404 }); }
         }
         if (path === '/api/gerencia/resumen') return route.fulfill({ json: { data: dashboard() } });
-        if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
+        if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: user } });
         return route.fulfill({ json: { data: { planta: 'Pruebas', temporada: null, avisos_materiales: [], avisos_cierre: [] } } });
     });
     const page = await context.newPage(); const errors = [];
@@ -114,6 +115,47 @@ const capture = async (page, name) => {
     await page.waitForTimeout(900); // los gráficos terminan su animación
     await page.screenshot({ path: resolve(process.env.FOLIOS_UI_CAPTURE_DIR, `${name}.png`), fullPage: true });
 };
+
+function luminance(rgb) {
+    const match = rgb.match(/^rgb\((\d+), (\d+), (\d+)\)$/);
+    assert.ok(match, `Se esperaba un color opaco: ${rgb}`);
+    const [red, green, blue] = match.slice(1).map((value) => {
+        const channel = Number(value) / 255;
+        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    });
+    return red * 0.2126 + green * 0.7152 + blue * 0.0722;
+}
+
+test('Panel gerencial: las tarjetas mantienen contraste al cambiar de tema', async () => {
+    const browser = await launch();
+    try {
+        const { page, errors } = await open(browser, 1366, 'light-professional', {
+            ...identity,
+            temas_oficina: OFFICE_THEMES,
+        });
+        const selector = page.getByRole('combobox', { name: 'Tema de Oficina' });
+        const cards = page.locator('.management-kpi');
+        assert.equal(await cards.count(), 5);
+        for (const theme of OFFICE_THEMES) {
+            await selector.selectOption(theme);
+            await page.waitForFunction((key) => document.documentElement.dataset.officeTheme === key, theme);
+            const colors = await cards.evaluateAll((elements) => elements.flatMap((card) => {
+                const background = getComputedStyle(card).backgroundColor;
+                return Array.from(card.querySelectorAll(':scope > :is(span, strong, p, small), :scope > strong em'), (text) => ({
+                    background,
+                    foreground: getComputedStyle(text).color,
+                    label: text.textContent.trim(),
+                }));
+            }));
+            for (const { background, foreground, label } of colors) {
+                const colorsByLight = [luminance(background), luminance(foreground)];
+                const ratio = (Math.max(...colorsByLight) + 0.05) / (Math.min(...colorsByLight) + 0.05);
+                assert.ok(ratio >= 4.5, `${theme}, «${label}»: contraste ${ratio.toFixed(2)}:1 (${foreground} sobre ${background})`);
+            }
+        }
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
 
 for (const width of [1366, 390]) test(`Panel gerencial: kilos por cliente, folios con saldos aparte y cámaras por nombre en ${width}px`, async () => {
     const browser = await launch();

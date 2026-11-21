@@ -1515,7 +1515,7 @@ body,
     border: 1px solid #b9c8d2 !important;
     border-top: 3px solid #176fae !important;
     border-radius: 2px !important;
-    background: #ffffff !important;
+    background: var(--kpi-surface) !important;
     box-shadow: 0 1px 3px rgba(15, 39, 55, .08) !important;
 }
 
