@@ -1,7 +1,7 @@
 export const $ = (id) => document.getElementById(id);
 export const escape = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[c]);
 export const choices = (items, empty = '') => (empty ? `<option value="">${escape(empty)}</option>` : '') + items.map(([id, label]) => `<option value="${escape(id)}">${escape(label)}</option>`).join('');
-export const table = (headers, rows) => `<table><thead><tr>${headers.map((h) => `<th>${escape(h)}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${headers.length}">Sin registros.</td></tr>`}</tbody></table>`;
+export const table = (headers, rows) => `<table class="cx-table"><thead><tr>${headers.map((h) => `<th scope="col">${escape(h)}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${headers.length}">Sin registros.</td></tr>`}</tbody></table>`;
 export const values = (f) => Object.fromEntries([...new FormData(f)].filter(([, v]) => v !== ''));
 export const roleLabels = { operador: 'Operador de planta', vendedor: 'Vendedor', exportador: 'Exportador legal', propietario: 'Propietario económico', comprador: 'Comprador', recibidor: 'Recibidor', consignatario: 'Consignatario', notify: 'Notify party', pagador: 'Pagador', naviera: 'Naviera', forwarder: 'Forwarder', agente_aduana: 'Agencia de aduana', transportista: 'Transportista' };
 export function open(id) { $(id).querySelector('[data-cc-error]')?.replaceChildren(); if (!$(id).open) $(id).showModal(); }

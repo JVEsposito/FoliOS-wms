@@ -58,6 +58,17 @@
     justify-content: center;
 }
 
+.folios-inicio__access-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-block-end: 8px;
+    padding-block-end: 14px;
+    border-block-end: 1px dashed var(--line);
+}
+
+.folios-inicio__access-title h2 { margin: 0; font-stretch: var(--font-masthead-stretch); }
+
 .folios-inicio__terreno {
     margin: 0;
     padding-top: 18px;

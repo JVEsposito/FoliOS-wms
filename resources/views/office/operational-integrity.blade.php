@@ -17,7 +17,7 @@
         @include('office.partials.arranque')
     </head>
     <body>
-        <main class="office-app integrity-app is-hidden" id="integrityApp">
+        <main class="office-app integrity-app is-hidden" id="integrityApp" data-folios-workspace="analisis">
             <x-office.navigation
                 domain="administracion"
                 office="integridad-operacional"
@@ -26,7 +26,7 @@
             />
 
             <div class="integrity-shell">
-                <header class="integrity-heading">
+                <header class="integrity-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">CONTROL TRANSVERSAL</p>
                         <h1>Salud operacional</h1>
@@ -48,7 +48,7 @@
                     <span>Esta capa registra hallazgos y resoluciones. No corrige, elimina ni regulariza datos operacionales.</span>
                 </section>
 
-                <section class="integrity-metrics" aria-label="Resumen de integridad operacional">
+                <section class="integrity-metrics" aria-label="Resumen de integridad operacional" data-folios-metrics>
                     <article>
                         <span>HALLAZGOS ACTIVOS</span>
                         <strong id="integrityActiveCount">0</strong>
@@ -72,7 +72,7 @@
                 </section>
 
                 <div class="integrity-workspace">
-                    <section class="integrity-panel integrity-findings-panel">
+                    <section class="integrity-panel integrity-findings-panel" data-folios-register>
                         <div class="integrity-panel__heading">
                             <div>
                                 <p class="eyebrow">HALLAZGOS</p>
@@ -81,7 +81,7 @@
                             <span id="integrityResultsSummary">0 registros</span>
                         </div>
 
-                        <form class="integrity-filters" id="integrityFilters">
+                        <form class="integrity-filters" id="integrityFilters" data-folios-toolbar>
                             <label>
                                 <span>Estado</span>
                                 <select name="estado">

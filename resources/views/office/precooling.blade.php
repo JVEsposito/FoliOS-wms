@@ -29,13 +29,13 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
             
             <x-office.navigation domain="frigorifico" office="prefrio" context="FRIGORÍFICO · PT" icon="❄" />
 
 
             <section class="prefrio-workspace">
-                <header class="prefrio-heading prefrio-command">
+                <header class="prefrio-heading prefrio-command" data-folios-masthead>
                     <div class="prefrio-heading__title"><p class="eyebrow">FRIGORÍFICO · CONTROL TÉRMICO</p><h1>Tablero de Prefrío</h1><p>La aprobación habilita almacenamiento; el folio solo queda disponible después de ser ubicado en cámara.</p></div>
                     <div class="prefrio-heading__status" aria-live="polite">
                         <span>ESTADO DE LA VISTA</span>
@@ -50,7 +50,7 @@
                     </div>
                 </header>
 
-                <div class="prefrio-metrics">
+                <div class="prefrio-metrics" data-folios-metrics>
                     <article data-tone="neutral"><span>TÚNELES ACTIVOS</span><strong id="activeTunnelCount">0</strong><small>Disponibles para operar</small></article>
                     <article data-tone="info"><span>EN PROCESO</span><strong id="runningProcessCount">0</strong><small>Ciclos térmicos activos</small></article>
                     <article data-tone="warning"><span>PENDIENTES DE VERIFICACIÓN</span><strong id="pendingVerificationCount">0</strong><small>Requieren decisión</small></article>
@@ -64,10 +64,10 @@
                         <div class="tunnel-list" id="tunnelList"></div>
                     </aside>
 
-                    <section class="panel process-panel">
+                    <section class="panel process-panel" data-folios-register>
                         <div class="prefrio-panel__heading process-heading" data-estiba-contrast="navy">
                             <div><p class="eyebrow">OPERACIÓN</p><h2>Procesos</h2></div>
-                            <form class="process-filters" id="processFilters">
+                            <form class="process-filters" id="processFilters" data-folios-toolbar>
                                 <select name="tunel_prefrio_id"><option value="">Todos los túneles</option></select>
                                 <select name="estado"><option value="">Todos los estados</option><option value="borrador">Borrador</option><option value="cargando">Cargando</option><option value="listo_para_iniciar">Listo para iniciar</option><option value="en_proceso">En proceso</option><option value="pendiente_verificacion">Pendiente de verificación</option><option value="aprobado">Aprobado</option><option value="requiere_reproceso">Requiere reproceso</option><option value="cancelado">Cancelado</option></select>
                                 <input name="folio" maxlength="50" placeholder="Buscar folio">
@@ -83,7 +83,7 @@
                         <div><p class="eyebrow">DETALLE DEL CICLO</p><h2 id="processDetailTitle">Proceso</h2><p id="processDetailSubtitle"></p></div>
                         <div class="process-detail__actions"><button class="secondary-button is-hidden" id="correctHoursButton" type="button">Corregir horas</button><button class="secondary-button is-hidden" id="correctProcessButton" type="button">Corregir historial</button><button class="secondary-button" id="refreshProcessButton" type="button">↻ Actualizar</button><button class="secondary-button" id="closeProcessDetailButton" type="button">Cerrar</button></div>
                     </div>
-                    <div class="process-detail__metrics" id="processDetailMetrics"></div>
+                    <div class="process-detail__metrics" id="processDetailMetrics" data-folios-metrics></div>
                     <div class="process-detail__layout">
                         <div class="prefrio-detail-panel">
                             <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">DISTRIBUCIÓN</p><h3 id="processTunnelMapTitle">Posiciones del túnel</h3></div></div>
@@ -108,7 +108,7 @@
                         </div>
                         <div class="decision-folios" id="partialHistory"></div>
                     </section>
-                    <section class="decision-panel r41-panel" id="r41Panel" aria-labelledby="r41PanelTitle">
+                    <section class="decision-panel r41-panel" id="r41Panel" aria-labelledby="r41PanelTitle" data-folios-register>
                         <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">POEMP R-41</p><h3 id="r41PanelTitle">Registro de prefrío</h3></div><button class="secondary-button" id="r41DownloadButton" type="button">Descargar R-41 (Excel)</button></div>
                         <p class="r41-status" id="r41Status" role="status"></p>
                         <div class="r41-reading__scroll"><table class="r41-readings"><thead><tr><th scope="col">Lectura</th><th scope="col">Sector</th><th scope="col">Izq. ext.</th><th scope="col">Izq. int.</th><th scope="col">Der. int.</th><th scope="col">Der. ext.</th></tr></thead><tbody id="r41Readings"></tbody></table></div>
@@ -121,7 +121,7 @@
                             <div class="dialog-actions prefrio-field-wide"><button class="secondary-button" type="submit">Guardar datos de la planilla</button></div>
                         </form>
                     </section>
-                    <section class="decision-panel is-hidden" id="operationalPanel">
+                    <section class="decision-panel is-hidden" id="operationalPanel" data-folios-register>
                         <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">OPERACIÓN MANUAL</p><h3>Registrar acción con fecha y hora real</h3></div><span>La hora indicada queda en la trazabilidad</span></div>
                         <form class="prefrio-form-grid" id="operationalActionForm">
                             <label><span>Acción *</span><select name="accion" id="operationalActionSelect" required></select></label>

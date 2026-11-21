@@ -29,11 +29,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
             <x-office.navigation domain="frigorifico" office="repaletizajes" context="FRIGORÍFICO · PT" icon="⇄" />
 
             <section class="repa-workspace">
-                <header class="repa-heading">
+                <header class="repa-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">CONSOLIDACIÓN Y TRANSFORMACIÓN DE PALLETS Y SALDOS</p>
                         <h1>Repaletizajes</h1>

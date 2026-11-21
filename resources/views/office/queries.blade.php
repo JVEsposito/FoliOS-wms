@@ -51,15 +51,15 @@
             </form>
         </section>
 
-        <main class="office-app queries-app is-hidden" id="officeApp" data-queries-section="{{ $activeQueriesSection }}">
+        <main class="office-app queries-app is-hidden" id="officeApp" data-queries-section="{{ $activeQueriesSection }}" data-folios-workspace="registro">
             <x-office.navigation domain="consultas" :office="$navigationOffice ?? 'busqueda'" context="CONSULTAS Y TRAZABILIDAD" icon="⌕" />
 
-            <section class="queries-heading">
+            <section class="queries-heading" data-folios-masthead>
                 <div><p class="eyebrow">OFICINA DE CONSULTAS</p><h1>{{ $activeQueriesMeta['title'] }}</h1><p>{{ $activeQueriesMeta['description'] }}</p></div>
                 <button class="secondary-button queries-refresh" id="reloadButton" type="button">↻ Actualizar</button>
             </section>
 
-            <section class="query-kpis" aria-label="Resumen">
+            <section class="query-kpis" aria-label="Resumen" data-folios-metrics>
                 <article><span>PRODUCTORES CSG</span><strong id="producerCount">0</strong><small>verificados en nuestra base</small></article>
                 <article><span>PENDIENTES DE CLIENTE</span><strong id="pendingCount">0</strong><small>requieren asociación</small></article>
                 <article><span>PRODUCTORES ASOCIADOS</span><strong id="associatedCount">0</strong><small>con al menos un cliente</small></article>
@@ -114,7 +114,7 @@
             <section class="query-panel producers-panel" data-queries-view="productores">
                 <header class="producers-heading">
                     <div><p class="eyebrow">BASE DE PRODUCTORES</p><h2>Productores CSG verificados</h2><p>Los CSG nuevos permanecen pendientes hasta que un responsable los asocie a un cliente.</p></div>
-                    <form id="producerFilters"><input name="buscar" placeholder="Buscar CSG, RUT, razón social o predio"><select name="estado"><option value="">Todos</option><option value="pendiente_cliente">Pendientes de cliente</option><option value="asociado">Asociados</option></select><button class="secondary-button" type="submit">Filtrar</button></form>
+                    <form id="producerFilters" data-folios-toolbar><input name="buscar" placeholder="Buscar CSG, RUT, razón social o predio"><select name="estado"><option value="">Todos</option><option value="pendiente_cliente">Pendientes de cliente</option><option value="asociado">Asociados</option></select><button class="secondary-button" type="submit">Filtrar</button></form>
                 </header>
                 <div class="producer-list" id="producerList"></div>
             </section>

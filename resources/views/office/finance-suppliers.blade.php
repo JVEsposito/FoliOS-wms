@@ -13,12 +13,12 @@
     <div class="office-access__brand"><div class="office-logo" aria-hidden="true">$</div><p class="eyebrow">FoliOS · FINANZAS</p><h1>Proveedores, documentos y gastos.</h1><p>La información necesaria para revisar cada compra y su registro contable.</p></div>
     <form class="office-access__form" id="officeLoginForm"><h2>Ingresar a Proveedores</h2><label>Correo electrónico<input name="email" type="email" autocomplete="username" required></label><label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label><p id="officeLoginError" role="alert"></p><button class="primary-button" type="submit">Entrar</button></form>
 </section>
-<main class="office-app is-hidden" id="officeApp">
+<main class="office-app is-hidden" id="officeApp" data-folios-workspace="catalogo">
     <x-office.navigation domain="administracion" office="finanzas-proveedores" context="FINANZAS · PROVEEDORES" icon="$" />
     <section class="fin-workspace cp-workspace">
-        <header class="fin-heading"><div><p class="eyebrow">FINANZAS · COMPRAS Y GASTOS</p><h1>Proveedores</h1><p>Ficha financiera, documentos recibidos y diario auxiliar en pesos chilenos.</p></div></header>
+        <header class="fin-heading" data-folios-masthead><div><p class="eyebrow">FINANZAS · COMPRAS Y GASTOS</p><h1>Proveedores</h1><p>Ficha financiera, documentos recibidos y diario auxiliar en pesos chilenos.</p></div></header>
         <p id="cpMessage" class="fin-status" role="status" aria-live="polite">Cargando…</p>
-        <nav class="cp-tabs" aria-label="Vistas de proveedores">
+        <nav class="cp-tabs" aria-label="Vistas de proveedores" data-folios-section-nav>
             <button type="button" data-cp-tab="proveedores" aria-pressed="true">Directorio</button><button type="button" data-cp-tab="documentos" aria-pressed="false">Documentos recibidos</button><button type="button" data-cp-tab="diario" aria-pressed="false">Diario contable</button><button type="button" data-cp-tab="cuentas" aria-pressed="false">Plan de cuentas</button>
             <button type="button" data-cp-tab="corriente" aria-pressed="false">Cuenta corriente</button><button type="button" data-cp-tab="reportes" aria-pressed="false">Balance y gastos</button><button type="button" data-cp-tab="evaluaciones" aria-pressed="false">Evaluación</button>
         </nav>
@@ -32,7 +32,7 @@
             <div class="cp-table" id="cpDocuments"></div><nav id="cpDocumentPages" class="cp-pages" aria-label="Páginas de documentos"></nav>
         </section>
         <section class="panel cp-panel" data-cp-panel="diario" hidden>
-            <form id="cpJournalFilters" class="cp-toolbar"><label>Desde<input name="desde" type="date" required></label><label>Hasta<input name="hasta" type="date" required></label><button class="secondary-button" type="submit">Consultar diario</button></form>
+            <form id="cpJournalFilters" class="cp-toolbar" data-folios-toolbar><label>Desde<input name="desde" type="date" required></label><label>Hasta<input name="hasta" type="date" required></label><button class="secondary-button" type="submit">Consultar diario</button></form>
             <p>Diario auxiliar de todos los proveedores. El IVA soportado queda por revisar; su ingreso aquí no determina el crédito fiscal ni reemplaza al RCV del SII.</p><div id="cpJournal"></div><nav id="cpJournalPages" class="cp-pages" aria-label="Páginas del diario"></nav>
         </section>
         <section class="panel cp-panel" data-cp-panel="cuentas" hidden>

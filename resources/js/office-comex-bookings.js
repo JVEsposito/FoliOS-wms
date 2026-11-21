@@ -36,8 +36,19 @@ $('cbActionForm').onsubmit = async (e) => {
     } catch (error) { e.target.querySelector('[data-cc-error]').textContent = error.message; } finally { button.disabled = false; }
 };
 async function load(page = 1) {
-    const gen = ++state.generation; const r = await api(`${base}/bookings?${new URLSearchParams({ ...values($('cbSearch')), page })}`); if (gen !== state.generation) return;
-    $('cbRows').innerHTML = table(['Booking / cliente', 'Viaje', 'Estado', 'Detalle'], r.data.data.map((b) => `<tr><td>${esc(b.codigo)}<small>${esc(b.cliente.nombre)} · ${esc(b.gestion)}</small></td><td>${esc(b.datos.nave)} / ${esc(b.datos.viaje)}<small>${esc(b.datos.fecha_salida)} → ${esc(b.datos.fecha_llegada)}</small></td><td>${esc(b.estado)}</td><td><button type="button" data-booking="${esc(b.id)}">Abrir booking</button></td></tr>`).join('')); pages('cbPages', r.data, load); message('Reservas comerciales disponibles.');
+    const generation = ++state.generation;
+    const result = await api(`${base}/bookings?${new URLSearchParams({ ...values($('cbSearch')), page })}`);
+    if (generation !== state.generation) return;
+
+    const rows = result.data.data.map(({ id, codigo, cliente, gestion, datos, estado }) => `<tr>
+        <td><strong class="cx-record-code">${esc(codigo)}</strong><small>${esc(cliente.nombre)} · ${esc(gestion)}</small></td>
+        <td><strong>${esc(datos.nave)} / ${esc(datos.viaje)}</strong><small>${esc(datos.fecha_salida || '—')} → ${esc(datos.fecha_llegada || '—')}</small></td>
+        <td><span class="cx-booking-state" data-state="${esc(estado)}">${esc(estado)}</span></td>
+        <td><button type="button" class="secondary-button" data-booking="${esc(id)}">Abrir booking</button></td>
+    </tr>`);
+    $('cbRows').innerHTML = table(['Booking / cliente', 'Viaje', 'Estado', 'Detalle'], rows.join(''));
+    pages('cbPages', result.data, load);
+    message(result.data.data.length ? 'Reservas comerciales disponibles.' : 'Sin reservas para esta búsqueda.');
 }
 function actionButton(a, id = '') { return `<button type="button" class="secondary-button" data-cb-action="${a}" data-id="${esc(id)}">${esc(labels[a] || 'Editar borrador')}</button>`; }
 async function show(id) {
@@ -47,7 +58,17 @@ async function show(id) {
     if (manage && b.estado === 'borrador') { acts.push('edit', 'asignar'); if (state.context.permisos.aprobar) acts.push('confirmar', 'anular'); }
     if (manage && b.estado === 'confirmado') { acts.push('vincular'); if (!links.some((l) => l.activo)) acts.push('volver_borrador'); if (state.context.permisos.aprobar) acts.push('cerrar', 'anular'); }
     $('cbActions').innerHTML = acts.map((a) => actionButton(a)).join('');
-    $('cbHeader').innerHTML = `<p>${esc(d.naviera.razon_social)} · Forwarder ${esc(d.forwarder.razon_social)}<br>${esc(d.nave)} / ${esc(d.viaje)}<br>${esc(d.origen.nombre)} → ${esc(d.destino.nombre)}<br>Salida ${esc(d.fecha_salida)} · Llegada ${esc(d.fecha_llegada)}<br>Cutoff físico ${esc(d.cutoff_fisico)} · Documental ${esc(d.cutoff_documental)} · ${esc(d.zona_horaria)}</p>`;
+    const facts = [
+        ['Ruta', `${d.origen.nombre} → ${d.destino.nombre}`],
+        ['Nave / viaje', `${d.nave} / ${d.viaje}`],
+        ['Naviera / forwarder', `${d.naviera.razon_social} / ${d.forwarder.razon_social}`],
+        ['Salida estimada', d.fecha_salida],
+        ['Llegada estimada', d.fecha_llegada],
+        ['Cutoff físico', d.cutoff_fisico],
+        ['Cutoff documental', d.cutoff_documental],
+        ['Zona horaria de los cutoffs', d.zona_horaria],
+    ];
+    $('cbHeader').innerHTML = `<dl class="cx-booking-facts">${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${esc(value || '—')}</dd></div>`).join('')}</dl>`;
     $('cbAssignments').innerHTML = table(['Contenedor', 'Acuerdo / producto', 'Cantidad', 'Estado'], cs.map((c) => `<tr><td>${esc(c.referencia)}<small>${esc(c.numero || 'Número pendiente')} · ${esc(c.tipo)}</small></td><td colspan="3">${esc(c.sello || 'Sello pendiente')}</td></tr>${assignments.filter((a) => a.contenedor_id === c.id).map((a) => `<tr><td>${esc(c.referencia)}</td><td>${esc(a.acuerdo.nota.folio)} · revisión ${a.acuerdo.revision.numero}<small>${esc(a.acuerdo.linea.sku)} · ${esc(a.acuerdo.linea.descripcion)}</small></td><td>${esc(a.cantidad)} ${esc(a.acuerdo.linea.unidad)}</td><td>${a.activa ? 'Reservada' : 'Retirada'} ${manage && b.estado === 'borrador' && a.activa ? actionButton('retirar_asignacion', a.id) : ''}</td></tr>`).join('')}`).join(''));
     $('cbLinks').innerHTML = table(['Contenedor / embarque', 'Evidencia capturada', 'Estado operativo actual', 'Vínculo'], links.map((l) => `<tr><td>${esc(cs.find((c) => c.id === l.contenedor_id)?.referencia)}<small>${esc(l.evidencia.codigo)}</small></td><td>${esc(l.evidencia.carga?.estado || 'Sin carga')}<small>${esc(l.captured_at)}</small>${l.al_cierre ? `<small>Al cierre comercial: ${esc(l.al_cierre.evidencia.carga?.estado)}</small>` : ''}</td><td>${esc(l.actual?.carga?.estado || (l.actual ? 'Sin carga' : 'No disponible'))}<small>${l.cambio_operacion ? 'Cambió desde la captura' : 'Coincide con la captura'} · ${l.actual?.carga?.folios ?? 0} pallets</small></td><td>${l.activo ? 'Vigente' : 'Retirado'} ${manage && b.estado === 'confirmado' && l.activo && l.actual && !l.actual.carga?.salio ? actionButton('retirar_vinculo', l.id) : ''}</td></tr>`).join(''));
     await history(); open('cbDetail');

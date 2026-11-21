@@ -125,7 +125,7 @@
 }
 
 .demo-brand, .demo-session-identity { display: flex; align-items: center; gap: 12px; }
-.demo-brand > span { color: var(--cyan-light); font-size: 1.45rem; }
+.demo-brand > .folios-gajo { flex: 0 0 auto; }
 .demo-brand > div { display: grid; gap: 1px; }
 /* La barra superior es oscura en ambos temas; su texto no depende del tema. */
 .demo-brand strong { color: #ffffff; }
@@ -174,25 +174,27 @@
     overflow-x: auto;
     border-bottom: 1px solid var(--line);
     background: var(--subnav-bg);
-    padding: 10px 24px;
+    padding: 0 24px;
 }
 
 .demo-tabs button {
-    min-height: 39px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 46px;
     flex: 0 0 auto;
-    border: 1px solid transparent;
-    border-radius: 8px;
+    border: 0;
+    border-block-end: 3px solid transparent;
     background: transparent;
     color: var(--muted);
     padding: 0 16px;
-    font-size: .74rem;
-    font-weight: 900;
+    font-size: .85rem;
+    font-weight: 750;
 }
 
 .demo-tabs button.is-active {
-    border-color: var(--line);
-    background: var(--surface-selected);
-    color: var(--cyan-light);
+    border-block-end-color: var(--area-operacion-ink);
+    color: var(--text-strong);
 }
 
 .demo-content { width: min(1500px, 100%); margin: 0 auto; padding: 24px; }
@@ -203,42 +205,42 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: 24px;
-    padding: 14px 18px;
+    padding: 22px 24px;
     border: 1px solid var(--line);
-    border-inline-start: 4px solid var(--primary);
     border-radius: var(--folios-ticket-shape);
     background: var(--folios-corner), var(--corporate-card);
 }
 
-.demo-section-heading h1 { margin: 0; font-size: clamp(1.75rem, 3vw, 2.7rem); font-stretch: 72%; }
+.demo-section-heading h1 { margin: 0; color: var(--text-strong); font-size: clamp(2.25rem, 3.35vw, 3.3rem); font-stretch: var(--font-masthead-stretch); font-weight: 850; line-height: 1; }
 .demo-section-heading p:not(.eyebrow) { margin: 7px 0 0; color: var(--muted); font-size: .83rem; }
 .demo-section-heading .primary-button { min-height: 42px; flex: 0 0 auto; }
 
 .demo-kpi-grid {
     display: grid;
     grid-template-columns: repeat(5, minmax(150px, 1fr));
-    gap: 12px;
+    gap: 1px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--line);
+    overflow: clip;
 }
 
 .demo-kpi-grid--compact { grid-template-columns: repeat(4, minmax(160px, 1fr)); }
 
 .demo-kpi {
     display: grid;
-    min-height: 128px;
     align-content: center;
-    gap: 6px;
-    border: 1px solid var(--line);
-    border-inline-start: 3px solid var(--area-line);
-    border-radius: var(--folios-ticket-shape);
-    background: var(--folios-corner), var(--kpi-surface);
-    padding: 18px;
+    gap: 4px;
+    min-inline-size: 0;
+    background: var(--corporate-card);
+    padding: 14px 16px;
 }
 
-.demo-kpi > span { color: var(--muted); font-size: .64rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.demo-kpi > strong { color: var(--text-strong); font-size: clamp(1.4rem, 2.3vw, 2rem); }
+.demo-kpi > span { color: var(--text-secondary); font-size: .85rem; font-weight: 550; }
+.demo-kpi > strong { order: -1; color: var(--text-strong); font-size: clamp(1.55rem, 2.7vw, 2.35rem); font-stretch: var(--font-figure-stretch); font-variant-numeric: tabular-nums; }
 .demo-kpi > small { color: var(--muted); font-size: .68rem; }
-.demo-kpi--warning { border-inline-start-color: var(--warning-text); }
-.demo-kpi--success { border-inline-start-color: var(--success-text); }
+.demo-kpi--warning > strong { color: var(--warning-text); }
+.demo-kpi--success > strong { color: var(--success-text); }
 
 .demo-dashboard-grid, .demo-two-columns {
     display: grid;
@@ -422,7 +424,7 @@
     .demo-topbar { position: static; align-items: flex-start; padding: 14px; }
     .demo-brand > b, .demo-session-identity > span, .demo-session-identity > small, .demo-session-identity button:first-of-type { display: none; }
     .demo-isolation-banner { align-items: flex-start; flex-direction: column; gap: 3px; }
-    .demo-tabs { padding: 8px 14px; }
+    .demo-tabs { padding-inline: 14px; }
     .demo-content { padding: 16px 12px; }
     .demo-section-heading { align-items: flex-start; flex-direction: column; }
     .demo-section-heading .primary-button { width: 100%; }

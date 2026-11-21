@@ -417,7 +417,7 @@
 @media screen and (max-width: 599px) {
     :root[data-office-personal-theme="personal-nerv"] .operation-now-command {
         grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-areas: "title title" "state actions";
+        grid-template-areas: "title title" "date actions" "state state";
     }
 
     :root[data-office-personal-theme="personal-nerv"] .operation-now-command__title {

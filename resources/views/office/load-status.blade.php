@@ -29,11 +29,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="expediente">
             <x-office.navigation domain="frigorifico" office="despacho-estatus" context="FRIGORÍFICO · PT" icon="⇥" />
 
             <section class="load-status-workspace" id="officeContent">
-                <header class="load-status-command">
+                <header class="load-status-command" data-folios-masthead>
                     <div>
                         <p class="eyebrow">DESPACHO · INFORMACIÓN EN VIVO</p>
                         <h1>Estatus operativo</h1>
@@ -50,7 +50,7 @@
                         <div class="load-status-list" id="activeLoadList"></div>
                     </aside>
 
-                    <section class="load-status-detail panel" id="activeLoadDetail" aria-live="polite">
+                    <section class="load-status-detail panel" id="activeLoadDetail" aria-live="polite" data-folios-register>
                         <div class="load-status-empty" id="activeLoadEmpty">
                             <span aria-hidden="true">⇥</span><p class="eyebrow">DESPACHO PT</p>
                             <h2>Sin cargas activas</h2><p>Las órdenes aparecerán aquí después de publicarse para la operación.</p>

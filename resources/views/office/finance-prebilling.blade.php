@@ -28,11 +28,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="expediente">
             <x-office.navigation domain="administracion" office="finanzas-prefactura" context="ADMINISTRACIÓN · FINANZAS" icon="$" />
 
             <section class="fin-workspace">
-                <header class="fin-heading">
+                <header class="fin-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">FINANZAS · EN PARALELO A LA FACTURACIÓN</p>
                         <h1>Prefactura</h1>
@@ -50,7 +50,7 @@
 
                 <div class="fin-revision" id="prebillingReview" hidden></div>
 
-                <div class="fin-kpis fin-kpis--datos" id="prebillingKpis" aria-label="Resumen de la prefactura"></div>
+                <div class="fin-kpis fin-kpis--datos" id="prebillingKpis" aria-label="Resumen de la prefactura" data-folios-metrics></div>
 
                 <section class="panel fin-panel" id="prebillingDifferences" aria-labelledby="prebillingDifferencesTitle" hidden>
                     <div class="fin-panel__heading">
@@ -69,7 +69,7 @@
                         <div><p class="eyebrow">POR CLIENTE</p><h2 id="prebillingClientsTitle">Clientes valorizados</h2></div>
                         <small>Abra un cliente para ver sus líneas y los hechos que forman cada una.</small>
                     </div>
-                    <form class="fin-filters fin-filters--una" id="prebillingFilters">
+                    <form class="fin-filters fin-filters--una" id="prebillingFilters" data-folios-toolbar>
                         <label class="fin-filters__search"><span>Buscar cliente</span><input name="q" id="prebillingSearch" type="search" maxlength="100" placeholder="Nombre del cliente"></label>
                     </form>
                     <div class="fin-clientes" id="prebillingClients"></div>

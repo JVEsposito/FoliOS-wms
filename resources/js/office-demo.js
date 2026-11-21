@@ -313,7 +313,9 @@ function renderTraceabilityRecord(record) {
 
 function activateTab(tab) {
     document.querySelectorAll('[data-demo-tab]').forEach((button) => {
-        button.classList.toggle('is-active', button.dataset.demoTab === tab);
+        const active = button.dataset.demoTab === tab;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', String(active));
     });
     document.querySelectorAll('[data-demo-panel]').forEach((panel) => {
         panel.classList.toggle('is-hidden', panel.dataset.demoPanel !== tab);

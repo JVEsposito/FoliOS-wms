@@ -12,13 +12,13 @@
         @include('office.partials.arranque')
     </head>
     <body>
-        <main class="office-app" id="catalogApp">
+        <main class="office-app" id="catalogApp" data-folios-workspace="catalogo">
             
             <x-office.navigation domain="administracion" office="maestros-temporada" context="ADMINISTRACIÓN · MAESTROS" icon="MT" />
 
 
             <section class="catalog-workspace">
-                <header class="validation-heading panel">
+                <header class="validation-heading panel" data-folios-masthead>
                     <div><p class="eyebrow">CONFIGURACIÓN MAESTRA</p><h1>Maestros de temporada</h1><p>Base transversal consumida por Validación, Materia Prima, Inspección SAG y los demás módulos operacionales.</p></div>
                     <div class="validation-heading__actions">
                         <label><span>Temporada</span><select id="catalogSeasonSelector"></select></label>
@@ -39,7 +39,7 @@
                         <div><p class="eyebrow">PROYECCIÓN PDA</p><h2 id="catalogProjectionTitle">Registros activos generados</h2></div>
                         <span>Se actualizan automáticamente con la jerarquía</span>
                     </div>
-                    <div class="validation-metrics catalog-projection-metrics">
+                    <div class="validation-metrics catalog-projection-metrics" data-folios-metrics>
                         <article><span>ARTÍCULOS</span><strong id="projectionArticleCount">—</strong></article>
                         <article><span>ORÍGENES</span><strong id="projectionOriginCount">—</strong></article>
                         <article><span>COMBINACIONES</span><strong id="projectionCombinationCount">—</strong></article>

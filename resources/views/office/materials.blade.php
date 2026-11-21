@@ -80,18 +80,18 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp" data-materials-section="{{ $activeMaterialsSection }}">
+        <main class="office-app is-hidden" id="officeApp" data-materials-section="{{ $activeMaterialsSection }}" data-folios-workspace="operacion">
             
             <x-office.navigation domain="materiales" :office="$navigationOffice ?? 'recepcion'" context="MATERIALES" icon="▦" />
 
 
             <section class="materials-workspace">
-                <header class="materials-heading panel">
+                <header class="materials-heading panel" data-folios-masthead>
                     <div><p class="eyebrow">{{ $activeMaterialsMeta['eyebrow'] }}</p><h1>{{ $activeMaterialsMeta['title'] }}</h1><p>{{ $activeMaterialsMeta['description'] }}</p></div>
                     <button class="secondary-button" id="reloadMaterialsButton" type="button">↻ Actualizar</button>
                 </header>
 
-                <div class="materials-metrics" data-materials-view="resumen">
+                <div class="materials-metrics" data-materials-view="resumen" data-folios-metrics>
                     <article><span>TEMPORADA ACTIVA</span><strong id="materialsSeasonActive">—</strong></article>
                     <article><span>CLIENTES ACTIVOS</span><strong id="materialsClientCount">0</strong></article>
                     <article><span>ÍTEMS ACTIVOS</span><strong id="materialsItemCount">0</strong></article>
@@ -148,7 +148,7 @@
                     </a>
                 </section>
 
-                <section class="panel materials-panel" data-materials-view="vencimientos">
+                <section class="panel materials-panel" data-materials-view="vencimientos" data-folios-register>
                     <div class="materials-panel__heading">
                         <div><h2>Control por folio</h2><p id="materialExpirySummary" aria-live="polite"></p></div>
                         <button class="secondary-button" id="exportMaterialExpiry" type="button">Exportar Excel</button>
@@ -348,7 +348,7 @@
                         </div>
                     </div>
 
-                    <div class="material-receptions-metrics">
+                    <div class="material-receptions-metrics" data-folios-metrics>
                         <article><span>BORRADORES</span><strong id="materialReceptionDraftCount">0</strong><small>abiertos</small></article>
                         <article data-material-reception-attention><span>SIN FOTO DE DOCUMENTO</span><strong id="materialReceptionNoPhotoCount">0</strong><small>requieren documento o autorización provisional</small></article>
                         <article><span>CONFIRMADAS</span><strong id="materialReceptionConfirmedCount">0</strong><small>en esta página</small></article>
@@ -361,7 +361,7 @@
                         <button class="secondary-button" id="dismissMaterialReceptionPrintNotice" type="button" aria-label="Cerrar aviso de impresión">Cerrar aviso</button>
                     </div>
 
-                    <form class="material-receptions-filters" id="materialReceptionsFilters">
+                    <form class="material-receptions-filters" id="materialReceptionsFilters" data-folios-toolbar>
                         <label><span>Documento</span><select name="sin_foto_documento"><option value="">Todas</option><option value="1">Sin foto de documento</option></select></label>
                         <label><span>Regularización</span><select name="regularizacion"><option value="">Todas</option><option value="pendiente">Provisionales pendientes</option><option value="vencida">Plazo vencido</option><option value="regularizada">Regularizadas</option><option value="retroactiva">Registro retroactivo</option></select></label>
                         <label class="is-hidden" id="materialPurchaseValueFilter"><span>Valor de compra</span><select name="valorizacion"><option value="">Todas</option><option value="pendiente">Confirmadas con valores pendientes</option><option value="completa">Confirmadas con valores completos</option></select></label>
@@ -546,7 +546,7 @@
                         </dialog>
                     </section>
 
-                    <section class="panel materials-panel materials-inventory-panel" id="materialInventoryWorkspace" data-materials-view="inventario">
+                    <section class="panel materials-panel materials-inventory-panel" id="materialInventoryWorkspace" data-materials-view="inventario" data-folios-register>
                         <div class="materials-panel__heading"><div><p class="eyebrow">EXISTENCIA POR CLIENTE</p><h2>Folios en cámaras</h2><span id="materialsInventorySummary">Sin existencias</span></div><div class="materials-panel__tools"><select id="materialsInventoryClient" aria-label="Filtrar inventario por cliente"><option value="">Todos los clientes</option></select><input id="materialsInventorySearch" type="search" placeholder="Buscar folio o ítem"></div></div>
                         <div class="materials-table-scroll"><table class="materials-table"><thead><tr><th>Folio</th><th>Cliente</th><th>Ítem</th><th>Actual</th><th>Reservada</th><th>Disponible</th><th>Estado</th><th>Ubicación</th><th>Acciones</th></tr></thead><tbody id="materialsInventoryBody"></tbody></table></div>
                         <div class="materials-pagination" aria-label="Paginación del inventario">
@@ -554,7 +554,7 @@
                             <div><button id="materialsInventoryPrevious" type="button">← Anterior</button><span id="materialsInventoryPage">Página 1 de 1</span><button id="materialsInventoryNext" type="button">Siguiente →</button></div>
                         </div>
                     </section>
-                    <section class="panel materials-panel" id="materialClientTransfers" data-materials-view="inventario" hidden>
+                    <section class="panel materials-panel" id="materialClientTransfers" data-materials-view="inventario" hidden data-folios-register>
                         <h2>Transferencias entre clientes</h2>
                         <form class="materials-panel__tools"><select name="cliente_id" aria-label="Cliente de transferencia"><option value="">Todos los clientes</option></select><label>Desde<input type="date" name="desde"></label><label>Hasta<input type="date" name="hasta"></label><input name="folio" placeholder="Número de folio" aria-label="Folio de transferencia"><button type="submit">Filtrar</button><button type="button" data-transfer-csv>Descargar CSV</button></form>
                         <div class="materials-table-scroll"><table class="materials-table"><thead><tr><th>Fecha</th><th>Folios</th><th>Clientes</th><th>Ítems</th><th>Cantidad</th><th>Motivo / respaldo</th><th>Usuario</th><th>Etiqueta</th></tr></thead><tbody></tbody></table></div>
@@ -580,7 +580,7 @@
             </form>
             <section class="materials-import__preview is-hidden" id="materialImportPreview">
                 <p id="materialImportOmitted" class="materials-help"></p>
-                <div class="materials-import__metrics" id="materialImportMetrics"></div>
+                <div class="materials-import__metrics" id="materialImportMetrics" data-folios-metrics></div>
                 <div class="materials-import__errors is-hidden" id="materialImportErrors"></div>
                 <div class="materials-table-scroll"><table class="materials-table"><thead><tr><th>Fila</th><th>Temporada</th><th>Cliente</th><th>Código</th><th>Nombre</th><th>Tipo</th><th>Unidad</th><th>Acción</th></tr></thead><tbody id="materialImportRows"></tbody></table></div>
                 <div class="materials-import__confirm"><p id="materialImportConfirmationHelp"></p><button class="primary-button" id="confirmMaterialImport" type="button">Confirmar importación</button></div>

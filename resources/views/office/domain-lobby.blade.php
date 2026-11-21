@@ -157,16 +157,16 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp" data-lobby-domain="{{ $lobbyDomain }}">
+        <main class="office-app is-hidden" id="officeApp" data-lobby-domain="{{ $lobbyDomain }}" data-folios-workspace="area">
             <x-office.navigation :domain="$lobbyDomain" office="resumen" :context="$lobby['context']" :icon="$lobby['icon']" />
 
             <section class="domain-lobby-workspace">
-                <header class="domain-lobby-heading panel">
+                <header class="domain-lobby-heading panel" data-folios-masthead>
                     <div><p class="eyebrow">{{ $lobby['eyebrow'] }}</p><h1>{{ $lobby['title'] }}</h1><p>{{ $lobby['description'] }}</p></div>
                     <button class="secondary-button" id="reloadLobbyButton" type="button">↻ Actualizar</button>
                 </header>
 
-                <div class="domain-lobby-metrics" aria-label="Indicadores del macromódulo">
+                <div class="domain-lobby-metrics" aria-label="Indicadores del macromódulo" data-folios-metrics>
                     @foreach ($lobby['metrics'] as $key => $label)
                         <article><span>{{ $label }}</span><strong data-lobby-metric="{{ $key }}">—</strong></article>
                     @endforeach

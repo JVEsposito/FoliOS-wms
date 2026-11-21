@@ -4,13 +4,13 @@
 @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/css/office-material-standards.css', 'resources/js/office-material-standard-consumption.js'])
 @endif
 @include('office.partials.arranque')
-</head><body><main class="office-app" id="standardsApp" data-page="rebaja-estandar">
+</head><body><main class="office-app" id="standardsApp" data-page="rebaja-estandar" data-folios-workspace="registro">
 <x-office.navigation domain="materiales" office="rebajas-estandar" context="REBAJA POR ESTÁNDAR" icon="⇣" />
 <div class="custody-shell">
-<header class="custody-heading"><div><p class="eyebrow">MATERIALES · PRODUCCIÓN</p><h1>Rebaja por estándar</h1><p>Descuenta del almacén de Packing los materiales de lo validado en PT, según el estándar de cada embalaje. Lo que falte por saldo queda pendiente y se descuenta en la próxima rebaja.</p></div>
+<header class="custody-heading" data-folios-masthead><div><p class="eyebrow">MATERIALES · PRODUCCIÓN</p><h1>Rebaja por estándar</h1><p>Descuenta del almacén de Packing los materiales de lo validado en PT, según el estándar de cada embalaje. Lo que falte por saldo queda pendiente y se descuenta en la próxima rebaja.</p></div>
 <div class="standards-heading-actions"><button id="rebateHistoryReload" type="button" class="secondary-button">Ver rebajas</button></div></header>
 <p id="rebateNotice" role="status" aria-live="polite"></p>
-<form id="rebateFilters" class="custody-filters standards-filters">
+<form id="rebateFilters" class="custody-filters standards-filters" data-folios-toolbar>
 <label>Día de proceso desde<input name="desde" type="date" required></label>
 <label>Hasta<input name="hasta" type="date" required></label>
 <label>Almacén de Packing<select name="almacen_id" required></select></label>

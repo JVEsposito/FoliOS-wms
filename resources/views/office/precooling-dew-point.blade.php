@@ -28,11 +28,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="analisis">
             <x-office.navigation domain="frigorifico" office="punto-rocio" context="FRIGORÍFICO · PT" icon="❄" />
 
             <section class="prefrio-workspace dew-workspace">
-                <header class="prefrio-heading prefrio-command dew-command">
+                <header class="prefrio-heading prefrio-command dew-command" data-folios-masthead>
                     <div class="prefrio-heading__title"><p class="eyebrow">FRIGORÍFICO · PREFRÍO · CONDENSACIÓN</p><h1>Punto de rocío</h1><p>Chequeos diarios del aire y de la fruta. Si la superficie queda bajo el punto de rocío, puede condensar agua antes de sellar o al salir del túnel.</p></div>
                     <div class="dew-day" aria-label="Día operacional">
                         <span>DÍA OPERACIONAL</span>
@@ -52,7 +52,7 @@
                 </header>
                 <p class="dew-message" id="dewPointMessage" role="status" aria-live="polite"></p>
 
-                <div class="prefrio-metrics dew-metrics">
+                <div class="prefrio-metrics dew-metrics" data-folios-metrics>
                     <article data-tone="primary"><span>REGISTROS</span><strong id="readingCount">0</strong><small id="surfaceCount">0 con T° superficial</small></article>
                     <article data-tone="info"><span>ROCÍO MÁXIMO</span><strong id="maxDewPoint">—</strong><small>Aire más húmedo del día</small></article>
                     <article data-tone="neutral"><span>MARGEN MÍNIMO</span><strong id="minMargin">—</strong><small id="minMarginHelp">Superficie − rocío de cada medición</small></article>
@@ -79,7 +79,7 @@
                     </section>
                 </div>
 
-                <section class="panel dew-panel">
+                <section class="panel dew-panel" data-folios-register>
                     <div class="prefrio-panel__heading" data-estiba-contrast="navy"><div><p class="eyebrow">REGISTRO</p><h2>Mediciones del día</h2></div></div>
                     <div class="dew-filters" id="stageFilters" role="group" aria-label="Filtrar por etapa"></div>
                     <div class="dew-table-scroll"><table class="dew-table"><thead><tr><th>Hora</th><th>Etapa y punto</th><th>Aire</th><th>T° sup.</th><th>Rocío</th><th>Margen</th><th>Estado</th><th>Gotas</th><th>Registró</th><th aria-label="Acciones"></th></tr></thead><tbody id="readingsBody"></tbody></table></div>

@@ -3,7 +3,26 @@
 @vite(['resources/css/office.css', 'resources/css/office-comex.css', 'resources/js/office-comex-bookings.js'])
 @endif
 @include('office.partials.arranque')</head><body>@include('office.partials.comex-commercial-access')
-<main class="office-app is-hidden" id="officeApp"><x-office.navigation domain="administracion" office="comex-bookings" context="ADMINISTRACIÓN · COMEX" icon="⚓" /><section class="cx-workspace"><header class="cx-heading"><div><p class="eyebrow">COMEX · RESERVAS MARÍTIMAS</p><h1>Bookings y contenedores</h1><p>Cantidades comerciales por contenedor y evidencia de los despachos vinculados.</p></div><button type="button" class="primary-button" id="cbNew" hidden>Nuevo booking</button></header><p id="ccMessage" class="cx-status" role="status">Cargando…</p><section class="panel cx-panel"><form id="cbSearch" class="cx-filters"><label><span>Código de booking</span><input name="buscar" type="search" maxlength="100"></label><button type="submit" class="secondary-button">Buscar</button></form><div id="cbRows" class="cx-table-scroll"></div><div id="cbPages" class="cx-acciones"></div></section></section></main>
+<main class="office-app is-hidden" id="officeApp" data-folios-workspace="expediente">
+    <x-office.navigation domain="administracion" office="comex-bookings" context="ADMINISTRACIÓN · COMEX" icon="⚓" />
+    <section class="cx-workspace">
+        <header class="cx-heading" data-folios-masthead>
+            <div><p class="eyebrow">COMEX · RESERVAS MARÍTIMAS</p><h1>Bookings y contenedores</h1><p>Cantidades comerciales por contenedor y evidencia de los despachos vinculados.</p></div>
+            <button type="button" class="primary-button" id="cbNew" hidden>Nuevo booking</button>
+        </header>
+        <section class="panel cx-panel cx-booking-register" data-folios-register>
+            <form id="cbSearch" class="cx-filters cx-filters--una" data-folios-toolbar>
+                <label><span>Código de booking</span><input name="buscar" type="search" maxlength="100"></label>
+                <button type="submit" class="secondary-button">Buscar</button>
+            </form>
+            <div id="cbRows" class="cx-table-scroll"></div>
+            <div class="cx-booking-register__footer">
+                <p id="ccMessage" class="cx-status" role="status">Cargando…</p>
+                <div id="cbPages" class="cx-acciones"></div>
+            </div>
+        </section>
+    </section>
+</main>
 <dialog id="cbEdit" class="cx-dialog cx-dialog--ancho"><form id="cbForm"><header class="cx-dialog__heading"><h2>Reserva marítima</h2><button type="button" data-cc-close class="cx-dialog__close" aria-label="Cerrar">×</button></header><div class="cx-form">
 <label><span>Código permanente del booking</span><input name="codigo" maxlength="80" required></label><label><span>Gestión configurada</span><select name="gestion"><option value="servicio">Servicio</option><option value="propia">Exportación propia</option></select></label><div id="cbClient" class="cx-form__wide"></div><div id="cbNaviera"></div><div id="cbForwarder"></div><div id="cbOrigen"></div><div id="cbDestino"></div>
 <label><span>Nave</span><input name="nave" maxlength="120" required></label><label><span>Viaje</span><input name="viaje" maxlength="80" required></label>

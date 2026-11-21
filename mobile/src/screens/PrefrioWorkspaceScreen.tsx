@@ -1,5 +1,6 @@
 import { font } from '../theme/typography';
 import { FieldHeader } from '../components/field/FieldHeader';
+import { FieldTabs } from '../components/field/FieldTabs';
 import * as Crypto from 'expo-crypto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -433,19 +434,11 @@ export function PrefrioWorkspaceScreen({ auth, baseUrl, onLogout }: PrefrioWorks
 }
 
 function WorkspaceTabs({ activeView, pendingCount, busy, onChange }: { activeView: WorkspaceView; pendingCount: number; busy: boolean; onChange: (view: WorkspaceView) => void }) {
-  return (
-    <View style={styles.tabs}>
-      <Pressable disabled={busy} onPress={() => onChange('pendientes')} style={[styles.tab, activeView === 'pendientes' && styles.tabActive]}>
-        <Text style={[styles.tabText, activeView === 'pendientes' && styles.tabTextActive]}>Pendientes ({pendingCount})</Text>
-      </Pressable>
-      <Pressable disabled={busy} onPress={() => onChange('tuneles')} style={[styles.tab, activeView === 'tuneles' && styles.tabActive]}>
-        <Text style={[styles.tabText, activeView === 'tuneles' && styles.tabTextActive]}>Túneles y procesos</Text>
-      </Pressable>
-      <Pressable disabled={busy} onPress={() => onChange('rocio')} style={[styles.tab, activeView === 'rocio' && styles.tabActive]}>
-        <Text style={[styles.tabText, activeView === 'rocio' && styles.tabTextActive]}>Punto de rocío</Text>
-      </Pressable>
-    </View>
-  );
+  return <FieldTabs<WorkspaceView> area="frigorifico" current={activeView} onSelect={onChange} busy={busy} options={[
+    { key: 'pendientes', label: 'Pendientes', count: pendingCount },
+    { key: 'tuneles', label: 'Túneles y procesos' },
+    { key: 'rocio', label: 'Punto de rocío' },
+  ]} />;
 }
 
 function CandidateCard({ candidate, canOperate, onOpen }: { candidate: PrefrioFolioCandidate; canOperate: boolean; onOpen: (candidate: PrefrioFolioCandidate) => void }) {
@@ -633,11 +626,6 @@ function messageFrom(reason: unknown) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   tunnelWorkspace: { flex: 1 },
-  tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 18, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.backgroundDeep },
-  tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
-  tabActive: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  tabText: { color: colors.muted, fontFamily: font.heavy, fontSize: 14 },
-  tabTextActive: { color: colors.cyan },
   page: { padding: 18, gap: 16, paddingBottom: 44 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 18, padding: 18, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 9, flexWrap: 'wrap', justifyContent: 'flex-end' },

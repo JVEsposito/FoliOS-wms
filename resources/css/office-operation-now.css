@@ -36,7 +36,7 @@
     --eui-color-disabled-surface: var(--surface-muted);
     --eui-color-disabled-text: var(--text-subtle);
     min-height: calc(100vh - var(--office-header-height, 76px));
-    padding: 10px 14px 16px;
+    padding: 14px 16px 16px;
     background: var(--corporate-canvas);
     color: var(--text);
     font-family: "Arial Narrow", "Roboto Condensed", "Segoe UI", Arial, sans-serif;
@@ -60,31 +60,31 @@
     /* El gajo identifica el área. El color de los estados viene de la señal. */
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin: 0 0 5px;
+    gap: 8px;
+    margin: 0 0 8px;
     color: var(--area-operacion-ink);
-    font-family: var(--eui-font-family-condensed);
-    font-size: .7rem;
+    font-family: var(--font-sans);
+    font-size: .78rem;
     font-weight: 800;
-    letter-spacing: .1em;
+    letter-spacing: .055em;
     text-transform: uppercase;
 }
 
-/* Cabecera compacta: identidad, estado de los datos, reloj y una sola acción. El resto
-   de la información vive en su pestaña para no competir con lo que se está mirando. */
-.operation-now-command {
+/* La cabecera y su pestañero comparten los bordes de una tarja. */
+.operation-now .operation-now-command {
+    --ticket-ink: var(--area-operacion-ink);
     position: relative;
     isolation: isolate;
     display: grid;
-    grid-template-columns: minmax(240px, 1fr) minmax(0, 1.1fr) auto auto;
-    grid-template-areas: "title state date actions";
-    align-items: center;
-    gap: 12px 28px;
-    margin-block-end: 10px;
-    padding: 14px 18px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "title date actions" "state state state";
+    align-items: end;
+    column-gap: 18px;
+    padding: 22px clamp(16px, 2vw, 26px) 20px;
     overflow: clip;
     border: 1px solid var(--line);
-    border-radius: var(--eui-radius-panel);
+    border-block-end: 0;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
     background: var(--corporate-card);
 }
 
@@ -100,19 +100,36 @@
     margin: 0;
     color: var(--text-strong);
     font-family: var(--eui-font-family-condensed);
-    font-size: clamp(2rem, 2.6vw, 2.4rem);
+    font-size: clamp(2.4rem, 4.5vw, 3.5rem);
     font-stretch: 66%;
-    font-weight: 800;
-    letter-spacing: -.01em;
+    font-weight: 850;
+    letter-spacing: -.018em;
     line-height: 1;
 }
 
+.operation-now-command__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 9px;
+    margin: 10px 0 0;
+    color: var(--text-secondary);
+    font: 500 .75rem/1.4 var(--eui-font-family-mono);
+    text-transform: uppercase;
+}
+.operation-now-command__meta > span { white-space: nowrap; }
+.operation-now-command__meta > span + span::before { margin-inline-end: 9px; content: "·"; }
+
 .operation-now-command__state {
     grid-area: state;
-    display: grid;
-    gap: 3px;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin-block-start: 10px;
     min-width: 0;
 }
+
+.operation-now-command__state[hidden] { display: none; }
 
 .operation-now-command__state small {
     color: var(--text-subtle);
@@ -123,22 +140,28 @@
 .operation-now-command__date {
     grid-area: date;
     display: grid;
-    gap: 2px;
+    gap: 5px;
     min-width: 0;
     text-align: right;
 }
 
 .operation-now-command__date strong {
     color: var(--text-strong);
-    font: 700 1.75rem/1 var(--eui-font-family-mono);
+    font: 850 clamp(1.75rem, 3.8vw, 2.8rem)/1 var(--eui-font-family-mono);
     font-variant-numeric: tabular-nums;
     letter-spacing: -.04em;
 }
 
-.operation-now-command__date span,
-.operation-now-command__date small {
+.operation-now-command__seconds {
+    padding-inline-start: 3px;
+    color: var(--text-secondary);
+    font-size: .53em;
+    font-weight: 700;
+}
+
+.operation-now-command__today {
     color: var(--text-subtle);
-    font-size: .8rem;
+    font-size: .83rem;
 }
 
 /* Sincronización de equipos (pestaña «Personal y equipos»). */
@@ -217,17 +240,17 @@
 .office-app .operation-now-live[data-tone="critical"] { color: var(--danger-text); }
 .office-app .operation-now-live[data-tone="neutral"] { color: var(--text-subtle); }
 
-.operation-now-refresh {
+.operation-now .operation-now-refresh {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     min-height: 44px;
     padding: 8px 16px;
-    border: 1.5px solid var(--input-border, var(--corporate-border));
-    border-radius: var(--eui-radius-control);
+    border: 1px solid var(--input-border, var(--corporate-border));
+    border-radius: var(--folios-control-shape);
     background: transparent;
-    color: var(--text-strong);
+    color: var(--area-operacion-ink);
     font-weight: 700;
     cursor: pointer;
 }
@@ -283,15 +306,32 @@
 
 /* Pestañas ----------------------------------------------------------------------- */
 .operation-now-tabs {
-    margin: 0 -14px;
-    padding: 0 14px;
-    border-bottom: 1px solid var(--corporate-border);
-    background: var(--corporate-canvas);
+    position: relative;
+    border: 1px solid var(--line);
+    border-block-start-style: dashed;
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
+    background: var(--corporate-card);
 }
+
+.operation-now-tabs::before,
+.operation-now-tabs::after {
+    position: absolute;
+    inset-block-start: -9px;
+    z-index: 1;
+    inline-size: 9px;
+    block-size: 17px;
+    border: 1px solid var(--line);
+    background: var(--corporate-canvas);
+    content: "";
+    pointer-events: none;
+}
+.operation-now-tabs::before { inset-inline-start: -1px; border-inline-start: 0; border-radius: 0 10px 10px 0; }
+.operation-now-tabs::after { inset-inline-end: -1px; border-inline-end: 0; border-radius: 10px 0 0 10px; }
 
 .operation-now-tabs__list {
     display: flex;
-    gap: 2px;
+    gap: 0;
+    padding-inline: 5px;
     overflow-x: auto;
     scrollbar-width: thin;
 }
@@ -300,25 +340,24 @@
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
-    gap: 9px;
-    min-height: 50px;
-    margin-bottom: -1px;
-    padding: 0 16px;
+    gap: 7px;
+    min-height: 48px;
+    padding: 0 11px;
     border: 0;
     border-bottom: 3px solid transparent;
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
     font: inherit;
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: .92rem;
+    font-weight: 650;
     white-space: nowrap;
 }
 
 .operation-now-tab:hover { color: var(--text-strong); background: var(--surface-hover); }
 .operation-now-tab[aria-selected="true"] {
     border-bottom-color: var(--area-operacion-ink);
-    background: var(--surface-selected);
+    background: transparent;
     color: var(--text-strong);
     font-weight: 800;
 }
@@ -338,34 +377,25 @@
 .operation-now-tab__badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    min-height: 24px;
-    padding: 0 9px;
+    gap: 4px;
+    min-height: 22px;
+    padding: 0 5px;
     border: 1px solid var(--corporate-border);
-    border-radius: 12px;
-    background: var(--surface-muted);
+    border-radius: 4px;
+    background: var(--corporate-card);
     color: var(--text-secondary);
-    font-size: .76rem;
+    font-size: .71rem;
     font-weight: 700;
 }
 
 .operation-now-tab__badge[hidden] { display: none; }
-.operation-now-tab__badge:is([data-tone="critical"], [data-tone="warning"]) {
-    padding-left: 7px;
-    font-family: var(--eui-font-family-mono);
-    font-size: .8rem;
-}
-
-.operation-now-tab__badge:is([data-tone="critical"], [data-tone="warning"])::before {
-    width: 8px;
-    height: 8px;
-    background: currentColor;
-    content: "";
-}
-
 .operation-now-tab__badge[data-tone="critical"] { border-color: var(--danger-text); background: var(--danger-bg); color: var(--danger-text); }
 .operation-now-tab__badge[data-tone="warning"] { border-color: var(--warning-text); background: var(--warning-bg); color: var(--warning-text); }
-.operation-now-tab__badge[data-tone="warning"]::before { transform: rotate(45deg) scale(.85); }
+.operation-now-tab[aria-selected="true"] .operation-now-tab__badge[data-tone="neutral"] {
+    border-color: var(--area-operacion-line);
+    background: var(--area-operacion-tint);
+    color: var(--area-operacion-ink);
+}
 
 @media (min-width: 1200px) {
     .operation-now-tabs {
@@ -375,7 +405,7 @@
     }
 }
 
-.operation-now-workspace { padding-top: 16px; }
+.operation-now-workspace { padding-top: 22px; }
 .operation-now-tabpanel { display: grid; gap: 16px; }
 .operation-now-tabpanel[hidden] { display: none; }
 .operation-now-tabpanel:focus-visible { outline: 3px solid var(--focus-ring, var(--eui-color-frost)); outline-offset: 4px; }
@@ -908,16 +938,59 @@
 .operation-now-reception-wait i { display: block; block-size: 100%; background: var(--area-materia-prima-ink); }
 
 .operation-now-dispatch__legend {
+    --pallet-cell-size: 14px;
     display: flex;
     flex-wrap: wrap;
-    gap: 5px 14px;
+    gap: 7px 16px;
     margin: 0;
-    padding: 8px 16px;
+    padding: 7px clamp(14px, 2vw, 24px) 19px;
     color: var(--text-secondary);
-    font-size: .79rem;
+    font-size: .83rem;
     list-style: none;
 }
 .operation-now-dispatch__legend li { display: flex; align-items: center; gap: 6px; }
+.operation-now-dispatch__legend-note::before { content: "·"; }
+
+.operation-now-panel--dispatch .operation-now-panel__heading {
+    padding: 19px clamp(14px, 2vw, 24px) 12px;
+    border-bottom: 0;
+}
+.operation-now-panel--dispatch .operation-now-panel__title {
+    gap: 13px;
+}
+.operation-now-panel--dispatch .operation-now-panel__title h2 {
+    font-size: clamp(1.5rem, 2.65vw, 1.92rem);
+}
+.operation-now-panel--dispatch .operation-now-panel__title > div > span {
+    display: block;
+    font-size: .89rem;
+}
+
+.operation-now-dispatch__metrics {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 7px clamp(12px, 2.1vw, 28px);
+    margin: 0;
+    padding: 0;
+    color: var(--text-secondary);
+    list-style: none;
+}
+.operation-now-dispatch__metrics > li { white-space: nowrap; }
+.operation-now-dispatch__metrics strong {
+    color: var(--text-strong);
+    font-size: clamp(1.5rem, 2.65vw, 1.92rem);
+    font-weight: 850;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.operation-now-dispatch__status {
+    justify-self: end;
+    color: var(--area-frigorifico-ink);
+    font-size: .875rem;
+    font-weight: 700;
+    text-underline-offset: 3px;
+}
 
 .operation-now-dispatch__loads { display: grid; gap: 12px; min-inline-size: 0; }
 .operation-now-dispatch__heading {
@@ -2170,12 +2243,6 @@
 
 @keyframes operation-now-spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 1500px) {
-    .operation-now { padding-inline: 12px; }
-    .operation-now-tabs { margin-inline: -12px; padding-inline: 12px; }
-}
-
-
 .operation-now-planner__detail {
     display: inline-flex;
     min-height: 30px;
@@ -3171,10 +3238,6 @@
 }
 
 @media (max-width: 899px) {
-    .operation-now-command {
-        grid-template-columns: minmax(0, 1fr) auto auto;
-        grid-template-areas: "title date actions" "state state state";
-    }
     .operation-now-personal { grid-template-columns: 1fr; }
     .operation-now-tab { min-height: 46px; padding-inline: 12px; font-size: .94rem; }
     .operation-now-map-tools .operation-now-map-status,
@@ -3218,20 +3281,23 @@
     .operation-supervision__steps li { grid-template-columns: 30px minmax(0, 1fr); }
     .operation-supervision__steps em { grid-column: 2; }
     .operation-now { padding: 10px 8px 16px; }
-    .operation-now-command {
+    .operation-now .operation-now-command {
         grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-areas: "title title" "state actions";
+        grid-template-areas: "title title" "date actions" "state state";
+        row-gap: 12px;
+        padding-block: 15px;
     }
-    .operation-now-command__date { display: none; }
-    .operation-now-command__title h1 { font-size: 1.8rem; }
+    .operation-now-command__date { text-align: start; }
+    .operation-now-command__title h1 { font-size: clamp(2.05rem, 8.7vw, 2.75rem); }
+    .operation-now-command__meta { gap: 2px 7px; font-size: .69rem; }
     .operation-now-operator { grid-template-columns: 1fr; }
     .operation-now-operator__identity,
     .operation-now-operator__location,
     .operation-now-operator__task { border-right: 0; border-bottom: 1px solid var(--corporate-border); }
     .operation-now-operator__task { border-bottom: 0; }
     .operation-now-syncbar__metrics { grid-template-columns: repeat(5, minmax(76px, 1fr)); overflow-x: auto; }
-    .operation-now-tabs { margin-inline: -8px; padding-inline: 8px; }
     .operation-now-panel__title > div > span:not(#operationAlertBreakdown) { display: none; }
+    .operation-now-panel--dispatch .operation-now-panel__title > div > span { display: block; }
     .operation-now-panel__tools { margin-left: auto; }
     .operation-now-panel__heading a { padding-inline: 6px; }
     .operation-now-alert { grid-template-columns: 1fr; gap: 8px; padding: 12px 14px; }
@@ -3274,7 +3340,7 @@
     .operation-cycle-comparison__actions button,
     .operation-cycle-replay__toolbar button { min-height: 48px; }
     .operation-now { --eui-control-height: var(--eui-density-touch-control); }
-    .operation-now-refresh,
+    .operation-now .operation-now-refresh,
     .operation-now-panel__heading a,
     .operation-now-tab,
     .operation-now-alert .operation-now-action { min-height: 56px; }

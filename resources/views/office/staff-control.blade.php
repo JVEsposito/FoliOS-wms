@@ -7,17 +7,17 @@
     @include('office.partials.arranque')
 </head>
 <body>
-<main class="office-app is-hidden" id="staffApp">
+<main class="office-app is-hidden" id="staffApp" data-folios-workspace="registro">
     <x-office.navigation domain="frigorifico" office="control-personal" context="FRIGORÍFICO · SUPERVISIÓN" icon="◷" />
     <div class="staff-shell estiba-ui">
-        <x-estiba.heading eyebrow="Supervisión · Control interno" title="Control de personal" description="Registro propio del supervisor: ingresos, salidas, horas extra y ausencias para contrastar a fin de mes con lo que informa RRHH.">
+        <x-estiba.heading data-folios-masthead eyebrow="Supervisión · Control interno" title="Control de personal" description="Registro propio del supervisor: ingresos, salidas, horas extra y ausencias para contrastar a fin de mes con lo que informa RRHH.">
             <button class="eui-button eui-button--secondary" type="button" id="staffPeopleOpen">Personal</button>
             <button class="eui-button eui-button--secondary" type="button" id="staffAbsenceNew">Registrar ausencia</button>
             <button class="eui-button" type="button" id="staffNew">Registrar jornada</button>
         </x-estiba.heading>
         <p id="staffStatus" role="status" aria-live="polite">Consultando control de personal…</p>
         <p id="staffError" class="form-error" role="alert"></p>
-        <form id="staffFilters" class="eui-panel staff-panel staff-toolbar">
+        <form id="staffFilters" class="eui-panel staff-panel staff-toolbar" data-folios-toolbar>
             <label>Mes<input class="eui-input" type="month" id="staffMonth" required></label>
             <label>Persona<select class="eui-input" id="staffPersonFilter"><option value="">Todas las personas</option></select></label>
             <label>Sector<select class="eui-input" id="staffSectorFilter"><option value="">Todos los sectores</option></select></label>
@@ -29,15 +29,15 @@
         </form>
         <div class="staff-totals" id="staffTotals" aria-live="polite"></div>
         <p class="staff-help" id="staffCriterion"></p>
-        <section class="eui-panel staff-panel" aria-labelledby="staffSummaryTitle">
+        <section class="eui-panel staff-panel" aria-labelledby="staffSummaryTitle" data-folios-register>
             <h2 id="staffSummaryTitle">Resumen mensual por persona</h2>
             <div class="staff-table-wrap"><table class="staff-table"><thead><tr><th>Persona</th><th>Cerradas</th><th>Pendientes</th><th>Trabajado</th><th>Horas extra</th><th>Ausencias</th><th>Ficha mensual</th></tr></thead><tbody id="staffSummary"></tbody></table></div>
         </section>
-        <section class="eui-panel staff-panel" aria-labelledby="staffRecordsTitle">
+        <section class="eui-panel staff-panel" aria-labelledby="staffRecordsTitle" data-folios-register>
             <div class="staff-toolbar"><h2 id="staffRecordsTitle">Jornadas del mes</h2><label>Estado<select class="eui-input" id="staffState"><option value="">Todas las jornadas</option><option value="pendiente">Sin salida</option><option value="cerrada">Cerradas</option><option value="anulada">Anuladas</option></select></label></div>
             <div class="staff-table-wrap"><table class="staff-table"><thead><tr><th>Persona / sector</th><th>Ingreso</th><th>Salida</th><th>Base / colación</th><th>Trabajado</th><th>Extra</th><th>Acciones</th></tr></thead><tbody id="staffRecords"></tbody></table></div>
         </section>
-        <section class="eui-panel staff-panel" aria-labelledby="staffAbsencesTitle">
+        <section class="eui-panel staff-panel" aria-labelledby="staffAbsencesTitle" data-folios-register>
             <div class="staff-toolbar"><h2 id="staffAbsencesTitle">Ausencias del mes</h2><label>Estado<select class="eui-input" id="staffAbsenceState"><option value="">Todas las ausencias</option><option value="vigente">Vigentes</option><option value="anulada">Anuladas</option></select></label></div>
             <div class="staff-table-wrap"><table class="staff-table"><thead><tr><th>Persona</th><th>Tipo</th><th>Periodo</th><th>Días en el mes</th><th>Observación</th><th>Acciones</th></tr></thead><tbody id="staffAbsences"></tbody></table></div>
         </section>
