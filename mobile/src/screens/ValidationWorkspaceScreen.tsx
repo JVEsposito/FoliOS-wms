@@ -1,9 +1,8 @@
-import { font } from '../theme/typography';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { AuthSession } from '../domain/estiba';
-import { areas } from '../theme/areas';
+import { FieldTabs } from '../components/field/FieldTabs';
 import { operatorTheme as o } from '../theme/operatorTheme';
 import { RepalletizingScreen } from './RepalletizingScreen';
 import { ValidationScreen } from './ValidationScreen';
@@ -25,33 +24,10 @@ export function ValidationWorkspaceScreen({ auth, baseUrl, onLogout }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View accessibilityRole="tablist" style={styles.tabs}>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: section === 'validacion' }}
-          onPress={() => setSection('validacion')}
-          style={[styles.tab, section === 'validacion' && styles.tabActive]}
-        >
-          <Text style={[styles.tabText, section === 'validacion' && styles.tabTextActive]}>
-            Validar folio
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="tab"
-          accessibilityState={{ selected: section === 'repaletizaje', disabled: !baseUrl }}
-          disabled={!baseUrl}
-          onPress={() => setSection('repaletizaje')}
-          style={[
-            styles.tab,
-            section === 'repaletizaje' && styles.tabActive,
-            !baseUrl && styles.tabDisabled,
-          ]}
-        >
-          <Text style={[styles.tabText, section === 'repaletizaje' && styles.tabTextActive]}>
-            Repaletizajes
-          </Text>
-        </Pressable>
-      </View>
+      <FieldTabs<Section> area="frigorifico" current={section} onSelect={setSection} options={[
+        { key: 'validacion', label: 'Validar folio' },
+        { key: 'repaletizaje', label: 'Repaletizajes', disabled: !baseUrl },
+      ]} />
 
       <View style={styles.content}>
         {section === 'repaletizaje' && baseUrl ? (
@@ -66,24 +42,5 @@ export function ValidationWorkspaceScreen({ auth, baseUrl, onLogout }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: o.color.canvas },
-  tabs: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: o.color.disabled,
-    backgroundColor: o.color.navy,
-  },
-  tab: {
-    flex: 1,
-    minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  tabActive: { borderBottomColor: areas.frigorifico.bright },
-  tabDisabled: { opacity: 0.45 },
-  tabText: { color: o.color.muted, fontSize: 16, fontFamily: font.semibold },
-  tabTextActive: { color: o.color.text, fontFamily: font.heavy },
   content: { flex: 1 },
 });

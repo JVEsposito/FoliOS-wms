@@ -5,6 +5,8 @@ namespace Tests\Feature\Api;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
+use App\Enums\TipoMovimiento;
+use App\Enums\TipoPlanOperacional;
 use App\Models\Anden;
 use App\Models\Camara;
 use App\Models\Carga;
@@ -16,6 +18,7 @@ use App\Models\Posicion;
 use App\Models\User;
 use App\Services\Cargas\ServicioCarga;
 use App\Services\Estiba\ServicioMovimientoEstiba;
+use App\Services\Estiba\ServicioPlanesOperacionales;
 use App\Services\Estiba\ServicioSesionEstiba;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -181,6 +184,14 @@ class DespachoFrigorificoApiTest extends TestCase
         );
         $asignacion = $carga->asignacionesActuales()->firstOrFail();
         $operacionRetiro = (string) Str::uuid();
+        // Recepción REPA antigua que debe cerrarse al salir el pallet hacia el andén.
+        $planRepa = app(ServicioPlanesOperacionales::class)->crear(
+            $folio->temporada, TipoPlanOperacional::RecepcionRepaletizaje, 'Retiro REPA pendiente', $contexto['despachador'],
+            [['folio_id' => $folio->id, 'tipo_movimiento' => TipoMovimiento::TrasladoEntreCamaras,
+                'camara_origen_id' => $contexto['camara']->id, 'posicion_origen_id' => $folio->ubicacionActual->posicion_id]],
+            contexto: ['planner_horizon' => 'rolling'],
+        );
+        $retiroRepa = $planRepa->tareas->sole();
         $payloadRetiro = [
             'operacion_id' => $operacionRetiro,
             'anden_id' => $contexto['anden']->id,
@@ -208,6 +219,8 @@ class DespachoFrigorificoApiTest extends TestCase
             'tipo_movimiento' => 'retiro',
         ]);
         $this->assertSame(1, $folio->movimientos()->where('tipo_movimiento', 'retiro')->count());
+
+        $this->assertSame('cancelada', $retiroRepa->refresh()->estado->value);
 
         $salidaFisica = now()->toImmutable()->addHour()->startOfMinute();
         $this->travelTo($salidaFisica);
@@ -262,6 +275,9 @@ class DespachoFrigorificoApiTest extends TestCase
             'activo' => false,
         ]);
         $this->assertDatabaseMissing('reservas_carga_folio', ['folio_id' => $folio->id]);
+        $this->assertSame('cancelada', $retiroRepa->refresh()->estado->value);
+        $this->assertSame('cancelada', $retiroRepa->maniobraOperacional->refresh()->estado->value);
+        $this->assertStringContainsString('andén o camión', $retiroRepa->motivo_cancelacion);
         $this->assertDatabaseHas('carga_folios', ['folio_id' => $folio->id, 'estado' => 'despachado']);
         $this->assertDatabaseHas('eventos_carga', [
             'carga_id' => $carga->id,

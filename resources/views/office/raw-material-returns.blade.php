@@ -33,11 +33,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="registro">
             <x-office.navigation domain="materia-prima" office="fruta-proceso" context="MATERIA PRIMA" icon="↩" />
 
             <section class="return-workspace">
-                <header class="return-heading">
+                <header class="return-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">PACKING → CÁMARA MP</p>
                         <h1>Retornos de Packing</h1>
@@ -51,7 +51,7 @@
                     <a class="is-active" href="/oficina/materia-prima/retornos-packing">2. Retornos de Packing</a>
                 </nav>
 
-                <div class="return-kpis">
+                <div class="return-kpis" data-folios-metrics>
                     <article><span>BINS REGISTRADOS</span><strong id="registeredBins">0</strong><small>Modelo individual</small></article>
                     <article><span>CAJAS 3/4 REGISTRADAS</span><strong id="registeredBoxes">0</strong><small>Cantidad de cajas retornadas</small></article>
                     <article><span>KILOS VERDES REGISTRADOS</span><strong id="registeredKilos">0</strong><small>Peso provisorio informado al retornar</small></article>
@@ -59,7 +59,7 @@
                     <article><span>RETORNOS ANTERIORES</span><strong id="legacyReturns">0</strong><small>Pendientes de migrar o descartar</small></article>
                 </div>
 
-                <nav class="return-section-tabs" aria-label="Etapas de retorno">
+                <nav class="return-section-tabs" aria-label="Etapas de retorno" data-folios-section-nav>
                     <button class="is-active" data-return-section="recepcion" type="button">Recepción</button>
                     <button data-return-section="pendientes" type="button">Pendientes de regularizar</button>
                     <button data-return-section="anteriores" type="button">Registros anteriores</button>

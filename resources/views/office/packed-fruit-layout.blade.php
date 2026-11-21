@@ -6,9 +6,9 @@
 </head><body>
 <section class="office-access" id="officeAccess"><div class="office-access__brand"><p class="eyebrow">FoliOS · FRUTA EMBALADA</p><h1>{{ $titulo }}</h1><p>Captura de fruta proveniente de otras plantas.</p></div>
 <form class="office-access__form" id="officeLoginForm"><h2>Acceso de Oficina</h2><label>Correo electrónico<input name="email" type="email" autocomplete="username" required></label><label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label><p class="form-error" id="officeLoginError" role="alert"></p><button class="primary-button">Entrar</button></form></section>
-<main class="office-app is-hidden" id="officeApp">
+<main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
 <x-office.navigation :domain="$dominio" :office="$oficina" context="FRUTA EMBALADA" icon="↘" />
-<section class="rfe-workspace"><header class="rfe-heading"><div><p class="eyebrow">{{ $dominio === 'administracion' ? 'ADMINISTRACIÓN' : 'FRÍO · RECEPCIONES EXTERNAS' }}</p><h1>{{ $titulo }}</h1></div><button class="secondary-button" id="reloadButton" type="button">Actualizar</button></header>
+<section class="rfe-workspace"><header class="rfe-heading" data-folios-masthead><div><p class="eyebrow">{{ $dominio === 'administracion' ? 'ADMINISTRACIÓN' : 'FRÍO · RECEPCIONES EXTERNAS' }}</p><h1>{{ $titulo }}</h1></div><button class="secondary-button" id="reloadButton" type="button">Actualizar</button></header>
 <p id="rfeMessage" role="status" aria-live="polite"></p>
 @yield('workspace')
 </section></main>

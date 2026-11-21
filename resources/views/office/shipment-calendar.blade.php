@@ -29,11 +29,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="expediente">
             <x-office.navigation domain="frigorifico" office="embarques" context="FRIGORÍFICO · PT" icon="◷" />
 
             <section class="shipment-workspace">
-                <header class="shipment-heading panel">
+                <header class="shipment-heading panel" data-folios-masthead>
                     <div><p class="eyebrow">PLANIFICACIÓN 24/7</p><h1>Calendario de embarques</h1><p id="seasonSummary">Cargando temporada…</p></div>
                     <div class="shipment-heading__actions">
                         <button class="secondary-button" id="previousPeriod" type="button">← Anterior</button>

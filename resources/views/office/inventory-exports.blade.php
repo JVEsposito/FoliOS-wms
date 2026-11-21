@@ -51,7 +51,7 @@
             class="office-app inventory-app is-hidden"
             id="officeApp"
             data-inventory-type="{{ $inventoryType }}"
-        >
+         data-folios-workspace="registro">
             <x-office.navigation
                 :domain="$inventoryDomain"
                 :office="$inventoryOffice"
@@ -60,7 +60,7 @@
             />
 
             <section class="inventory-workspace">
-                <header class="inventory-heading panel">
+                <header class="inventory-heading panel" data-folios-masthead>
                     <div>
                         <p class="eyebrow">EXISTENCIA DEL ÁREA · {{ strtoupper($inventoryArea) }}</p>
                         <h1>{{ $inventoryTitle }}</h1>
@@ -69,7 +69,7 @@
                     <button class="secondary-button" id="reloadInventoryButton" type="button">↻ Actualizar estado</button>
                 </header>
 
-                <form class="panel inventory-filters" id="inventoryFilters" hidden onsubmit="return false"></form>
+                <form class="panel inventory-filters" id="inventoryFilters" hidden onsubmit="return false" data-folios-toolbar></form>
 
                 <section class="inventory-cards inventory-cards--dedicated" id="inventoryCards" aria-live="polite"></section>
 
@@ -94,7 +94,7 @@
                     </article>
                 </section>
 
-                <section class="panel inventory-connections-panel">
+                <section class="panel inventory-connections-panel" data-folios-register>
                     <header>
                         <div><p class="eyebrow">SEGURIDAD DEL ÁREA</p><h2>Conexiones emitidas</h2><p>Solo se muestran conexiones de {{ strtolower($inventoryArea) }}. Revócalas cuando el archivo deje de usarse o sea compartido por error.</p></div>
                         <span class="inventory-connection-count" id="inventoryConnectionCount">0</span>

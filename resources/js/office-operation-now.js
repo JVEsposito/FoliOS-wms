@@ -65,14 +65,17 @@ const elements = {
     season: byId('operationSeason'),
     updatedAt: byId('operationUpdatedAt'),
     date: byId('operationDate'),
-    time: byId('operationTime'),
+    timeMinutes: byId('operationTimeMinutes'),
+    timeSeconds: byId('operationTimeSeconds'),
     timezone: byId('operationTimezone'),
     shift: byId('operationShift'),
+    workday: byId('operationWorkday'),
+    workdayHours: byId('operationWorkdayHours'),
+    dataState: byId('operationDataState'),
     cameraRows: byId('operationCameraRows'),
     operatorList: byId('operationOperatorList'),
     tunnelList: byId('operationTunnelList'),
     dispatchRows: byId('operationDispatchRows'),
-    dispatchSummary: byId('dispatchPanelSummary'),
     reentryRows: byId('operationReentryRows'),
     reentrySummary: byId('reentryPanelSummary'),
     verificationRows: byId('operationVerificationRows'),
@@ -439,18 +442,20 @@ function renderClock() {
     if (!state.snapshot) return;
     const now = new Date(Date.now() + state.clockOffsetMs);
     const timeZone = state.snapshot.jornada?.zona_horaria;
+    let hora = state.snapshot.jornada?.hora || '--:--:--';
 
     try {
         elements.date.textContent = new Intl.DateTimeFormat('es-CL', {
-            weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone,
-        }).format(now);
-        elements.time.textContent = new Intl.DateTimeFormat('es-CL', {
-            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone,
+            weekday: 'short', day: '2-digit', month: 'short', timeZone,
+        }).format(now).replace(/[,.]/g, '');
+        hora = new Intl.DateTimeFormat('es-CL', {
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone,
         }).format(now);
     } catch {
         elements.date.textContent = state.snapshot.jornada?.fecha_real || state.snapshot.jornada?.fecha || '—';
-        elements.time.textContent = state.snapshot.jornada?.hora || '--:--:--';
     }
+    elements.timeMinutes.textContent = hora.slice(0, 5);
+    elements.timeSeconds.textContent = hora.slice(5);
     elements.timezone.textContent = timeZone || 'Hora operacional';
 }
 
@@ -467,17 +472,20 @@ function renderHeader(data) {
         ? `${data.temporada.codigo} · ${data.temporada.nombre}`
         : 'Sin temporada activa';
     elements.updatedAt.textContent = `Última lectura: ${dateTime(data.generado_at)}`;
-    // La jornada operativa puede no venir (respuestas antiguas o sin calendario): el turno se muestra igual.
-    const jornada = data.jornada?.fecha ? ` · Jornada ${String(data.jornada.fecha).split('-').reverse().join('-')}` : '';
+    const day = data.jornada?.fecha ? String(data.jornada.fecha).split('-').reverse().join('-') : '';
+    const shift = data.jornada?.turno ? `Turno ${humanize(data.jornada.turno)}` : '';
     const workday = document.querySelector('[data-office-workday]');
-    if (workday) {
-        const day = data.jornada?.fecha ? String(data.jornada.fecha).split('-').reverse().join('-') : '';
-        const shift = data.jornada?.turno ? `Turno ${humanize(data.jornada.turno)}` : '';
-        workday.textContent = [day, shift].filter(Boolean).join(' · ') || 'Sin configurar';
+    if (workday) workday.textContent = [day, shift].filter(Boolean).join(' · ') || 'Sin configurar';
+    elements.workday.textContent = day || '—';
+    elements.shift.textContent = shift || 'Turno sin configurar';
+
+    const start = Date.parse(data.jornada?.inicio);
+    const end = Date.parse(data.jornada?.fin);
+    elements.workdayHours.hidden = !(end > start);
+    if (!elements.workdayHours.hidden) {
+        const hora = new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: data.jornada.zona_horaria });
+        elements.workdayHours.textContent = `Jornada ${hora.format(start)}–${hora.format(end - 60_000)}`;
     }
-    elements.shift.textContent = data.jornada?.turno
-        ? `Turno ${humanize(data.jornada.turno)}${jornada}`
-        : 'Turno sin configurar';
 
     const status = data.sincronizacion?.estado || 'sin_actividad';
     const tone = { aceptada: 'success', procesando: 'info', pendiente: 'warning', rechazada: 'critical', conflicto: 'critical' }[status] || 'neutral';
@@ -490,6 +498,8 @@ function renderHeader(data) {
     }[status] || 'Sin actividad sincronizada';
     elements.liveSignal.dataset.tone = tone;
     elements.liveText.textContent = statusLabel;
+    elements.dataState.hidden = !['warning', 'critical'].includes(tone);
+    elements.refresh.title = `${statusLabel} · ${elements.updatedAt.textContent}`;
     startClock();
 }
 
@@ -1225,8 +1235,14 @@ function renderTabBadges(badges) {
         node.hidden = !badge;
         node.textContent = badge?.text || '';
         node.dataset.tone = badge?.tone || 'neutral';
-        if (badge?.label) node.title = badge.label;
-        else node.removeAttribute('title');
+        const tab = node.closest('[role="tab"]');
+        if (badge?.label) {
+            node.title = badge.label;
+            tab?.setAttribute('aria-description', badge.label);
+        } else {
+            node.removeAttribute('title');
+            tab?.removeAttribute('aria-description');
+        }
     });
     renderOperatorAvailabilityBadge();
 }
@@ -1413,9 +1429,11 @@ function dispatchTicket(load) {
 function renderDispatch(dispatch = {}) {
     const loads = dispatch.cargas || [];
     const summary = dispatch.resumen || {};
-    elements.dispatchSummary.textContent = loads.length
-        ? `${number(summary.activas)} ${summary.activas === 1 ? 'activa' : 'activas'} · ${number(summary.cargando)} cargando · ${number(summary.listas_para_cerrar)} ${summary.listas_para_cerrar === 1 ? 'lista' : 'listas'} para cerrar`
-        : 'Sin cargas publicadas';
+    setText('dispatchActiveCount', number(summary.activas));
+    setText('dispatchActiveLabel', Number(summary.activas) === 1 ? 'activa' : 'activas');
+    setText('dispatchLoadingCount', number(summary.cargando));
+    setText('dispatchReadyCount', number(summary.listas_para_cerrar));
+    setText('dispatchReadyLabel', Number(summary.listas_para_cerrar) === 1 ? 'lista para cerrar' : 'listas para cerrar');
     elements.dispatchRows.innerHTML = loads.length
         ? loads.map(dispatchTicket).join('')
         : empty('Sin cargas en despacho', 'Las cargas aparecen al publicarse y salen al cerrar el despacho.');
@@ -1536,6 +1554,7 @@ function showConnectionIssue(error) {
         : error.message;
     elements.liveSignal.dataset.tone = 'critical';
     elements.liveText.textContent = navigator.onLine ? 'Servidor sin respuesta' : 'Equipo sin conexión';
+    elements.refresh.title = elements.liveText.textContent;
 }
 
 async function load({ blocking = false, silent = false, propagate = false } = {}) {

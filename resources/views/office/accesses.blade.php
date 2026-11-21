@@ -48,13 +48,13 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="catalogo">
             
             <x-office.navigation domain="administracion" office="accesos" context="ADMINISTRACIÓN & GERENCIA" icon="⚙" />
 
 
             <section class="admin-workspace">
-                <header class="admin-heading">
+                <header class="admin-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">CONFIGURACIÓN TRANSVERSAL</p>
                         <h1>Accesos, temporada y clientes</h1>
@@ -63,7 +63,7 @@
                     <button class="secondary-button admin-reload" id="reloadAccessesButton" type="button">↻ Actualizar listados</button>
                 </header>
 
-                <div class="admin-metrics">
+                <div class="admin-metrics" data-folios-metrics>
                     <article><span>USUARIOS ACTIVOS</span><strong id="activeUsersCount">0</strong></article>
                     <article><span>TABLETS ACTIVAS</span><strong id="activeDevicesCount">0</strong></article>
                     <article><span>ACCESOS VIGENTES</span><strong id="activeAccessSessionsCount">—</strong></article>
@@ -96,7 +96,7 @@
 
                 @include('office.partials.operational-calendar')
 
-                <section class="admin-panel panel" id="administration-panel-formats" data-office-panel-group="administration" data-office-panel-id="formats" role="tabpanel" aria-labelledby="administration-tab-formats" hidden>
+                <section class="admin-panel panel" id="administration-panel-formats" data-office-panel-group="administration" data-office-panel-id="formats" role="tabpanel" aria-labelledby="administration-tab-formats" hidden data-folios-register>
                     <div class="admin-panel__heading"><div><p class="eyebrow">CONTROL DE DOCUMENTOS</p><h2>Formatos de registro</h2></div><span id="recordFormatsSummary">Sin cargar</span></div>
                     <p class="admin-form__hint">La versión activa se guarda al emitir cada registro; en hidrocooler, al iniciar el ciclo. Las reimpresiones conservan su encabezado original. La fecha corresponde a la vigencia documental; la casilla Activo publica el formato para los nuevos cierres.</p>
                     <form class="admin-form" id="recordFormatForm">
@@ -125,7 +125,7 @@
                     <div class="is-hidden" id="recordFormatHistory"><h3 id="recordFormatHistoryTitle">Historial del formato</h3><div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>Fecha y usuario</th><th>Anterior</th><th>Nuevo</th></tr></thead><tbody id="recordFormatHistoryBody"></tbody></table></div><button class="secondary-button" id="recordFormatHistoryMore" type="button">Ver más cambios</button></div>
                 </section>
 
-                <section class="admin-panel panel" id="administration-panel-hydro-products" data-office-panel-group="administration" data-office-panel-id="hydro-products" role="tabpanel" aria-labelledby="administration-tab-hydro-products" hidden>
+                <section class="admin-panel panel" id="administration-panel-hydro-products" data-office-panel-group="administration" data-office-panel-id="hydro-products" role="tabpanel" aria-labelledby="administration-tab-hydro-products" hidden data-folios-register>
                     <div class="admin-panel__heading"><div><p class="eyebrow">HIDROCOOLER</p><h2>Productos para aplicación</h2></div></div>
                     <p>La unidad se sugiere al iniciar el ciclo. Cada aplicación conserva el nombre, dosis y unidad registrados.</p>
                     <form class="admin-form" id="hydroProductForm" hidden>
@@ -138,7 +138,7 @@
                     <div id="hydroProductHistory" class="is-hidden"><h3>Historial de modificaciones</h3><div id="hydroProductHistoryBody"></div><button class="secondary-button" type="button" id="hydroProductHistoryMore">Ver más cambios</button></div>
                 </section>
 
-                <section class="admin-panel admin-season-panel panel" id="administration-panel-seasons" data-office-panel-group="administration" data-office-panel-id="seasons" role="tabpanel" aria-labelledby="administration-tab-seasons">
+                <section class="admin-panel admin-season-panel panel" id="administration-panel-seasons" data-office-panel-group="administration" data-office-panel-id="seasons" role="tabpanel" aria-labelledby="administration-tab-seasons" data-folios-register>
                     <div class="admin-panel__heading">
                         <div><p class="eyebrow">TEMPORADA GLOBAL</p><h2 id="seasonsTitle">Ciclo operacional compartido</h2></div>
                         <span id="seasonsSummary">0 registradas</span>
@@ -204,7 +204,7 @@
                     </form>
                 </section>
 
-                <section class="admin-panel admin-client-panel panel" id="administration-panel-clients" data-office-panel-group="administration" data-office-panel-id="clients" role="tabpanel" aria-labelledby="administration-tab-clients">
+                <section class="admin-panel admin-client-panel panel" id="administration-panel-clients" data-office-panel-group="administration" data-office-panel-id="clients" role="tabpanel" aria-labelledby="administration-tab-clients" data-folios-register>
                     <div class="admin-panel__heading">
                         <div><p class="eyebrow">MAESTRO TRANSVERSAL</p><h2 id="clientsTitle">Clientes de servicio</h2></div>
                         <span id="globalClientsSummary">0 registrados</span>
@@ -234,7 +234,7 @@
                     </div>
                 </section>
 
-                <section class="admin-panel panel" id="administration-panel-labels" data-office-panel-group="administration" data-office-panel-id="labels" role="tabpanel" aria-labelledby="administration-tab-labels">
+                <section class="admin-panel panel" id="administration-panel-labels" data-office-panel-group="administration" data-office-panel-id="labels" role="tabpanel" aria-labelledby="administration-tab-labels" data-folios-register>
                     <div class="admin-panel__heading">
                         <div><p class="eyebrow">IMPRESIÓN TRANSVERSAL</p><h2 id="labelProfilesTitle">Perfiles de etiquetas</h2></div>
                         <span id="labelProfilesSummary">0 registrados</span>
@@ -269,7 +269,7 @@
                     </div>
                 </section>
 
-                <section class="admin-panel panel access-profiles-panel" id="administration-panel-profiles" data-office-panel-group="administration" data-office-panel-id="profiles" role="tabpanel" aria-labelledby="administration-tab-profiles">
+                <section class="admin-panel panel access-profiles-panel" id="administration-panel-profiles" data-office-panel-group="administration" data-office-panel-id="profiles" role="tabpanel" aria-labelledby="administration-tab-profiles" data-folios-register>
                     <div class="admin-panel__heading">
                         <div><p class="eyebrow">PERFILES Y PERMISOS</p><h2 id="accessProfilesTitle">Perfiles de acceso</h2></div>
                         <span id="accessProfilesSummary">0 configurados</span>
@@ -325,7 +325,7 @@
                 </section>
 
                 <div class="admin-grid office-panel-workspace">
-                    <section class="admin-panel panel" id="administration-panel-users" data-office-panel-group="administration" data-office-panel-id="users" role="tabpanel" aria-labelledby="administration-tab-users">
+                    <section class="admin-panel panel" id="administration-panel-users" data-office-panel-group="administration" data-office-panel-id="users" role="tabpanel" aria-labelledby="administration-tab-users" data-folios-register>
                         <div class="admin-panel__heading">
                             <div><p class="eyebrow">PERSONAS</p><h2 id="usersTitle">Usuarios</h2></div>
                             <span id="usersSummary">0 registrados</span>
@@ -352,7 +352,7 @@
                         </div>
                     </section>
 
-                    <section class="admin-panel panel" id="administration-panel-client-users" data-office-panel-group="administration" data-office-panel-id="client-users" role="tabpanel" aria-labelledby="administration-tab-client-users">
+                    <section class="admin-panel panel" id="administration-panel-client-users" data-office-panel-group="administration" data-office-panel-id="client-users" role="tabpanel" aria-labelledby="administration-tab-client-users" data-folios-register>
                         <div class="admin-panel__heading">
                             <div><p class="eyebrow">PORTAL DE CLIENTES</p><h2 id="clientUsersTitle">Usuarios de clientes</h2></div>
                             <span id="clientUsersSummary">0 registrados</span>
@@ -381,7 +381,7 @@
                         </div>
                     </section>
 
-                    <section class="admin-panel panel" id="administration-panel-devices" data-office-panel-group="administration" data-office-panel-id="devices" role="tabpanel" aria-labelledby="administration-tab-devices">
+                    <section class="admin-panel panel" id="administration-panel-devices" data-office-panel-group="administration" data-office-panel-id="devices" role="tabpanel" aria-labelledby="administration-tab-devices" data-folios-register>
                         <div class="admin-panel__heading">
                             <div><p class="eyebrow">EQUIPOS</p><h2 id="devicesTitle">Tablets autorizadas</h2></div>
                             <span id="devicesSummary">0 registradas</span>
@@ -406,7 +406,7 @@
                     </section>
                 </div>
 
-                <section class="admin-panel admin-sessions-panel panel" id="administration-panel-sessions" data-office-panel-group="administration" data-office-panel-id="sessions" role="tabpanel" aria-labelledby="administration-tab-sessions">
+                <section class="admin-panel admin-sessions-panel panel" id="administration-panel-sessions" data-office-panel-group="administration" data-office-panel-id="sessions" role="tabpanel" aria-labelledby="administration-tab-sessions" data-folios-register>
                     <div class="admin-panel__heading">
                         <div><p class="eyebrow">CONTROL DE ACCESOS</p><h2>Sesiones con acceso vigente</h2></div>
                         <span id="accessSessionsSummary">0 sesiones</span>

@@ -309,17 +309,23 @@ export function buildOperationTabBadges(snapshot = {}, attention = buildAttentio
                 label: plural(attention.total, ['condición abierta', 'condiciones abiertas']),
             }
             : null,
-        'recepcion-mp': reception ? { text: `${formatNumber(reception)} en curso`, tone: 'neutral' } : null,
-        'validacion-pt': validation ? { text: plural(validation, ['registro', 'registros']), tone: 'neutral' } : null,
+        'recepcion-mp': reception
+            ? { text: formatNumber(reception), tone: 'neutral', label: `${plural(reception, ['recepción', 'recepciones'])} en curso` }
+            : null,
+        'validacion-pt': validation
+            ? { text: formatNumber(validation), tone: 'neutral', label: plural(validation, ['registro', 'registros']) }
+            : null,
         maniobras: cycle && running ? { text: `${formatNumber(running)} en curso`, tone: 'neutral' } : null,
         plano: null,
         camaras: occupancy
             ? { text: occupancy, tone: 'neutral', label: `${occupancy} de ocupación en cámaras PT` }
             : null,
-        prefrio: precooling ? { text: `${formatNumber(precooling)} en proceso`, tone: 'neutral' } : null,
+        prefrio: precooling
+            ? { text: formatNumber(precooling), tone: 'neutral', label: `${plural(precooling, ['túnel', 'túneles'])} en proceso` }
+            : null,
         despacho: loads || reentries
             ? {
-                text: [loads ? plural(loads, ['carga', 'cargas']) : null, reentries ? `${formatNumber(reentries)} por reingresar` : null].filter(Boolean).join(' · '),
+                text: [loads ? formatNumber(loads) : null, reentries ? `${formatNumber(reentries)} por reingresar` : null].filter(Boolean).join(' · '),
                 tone: 'neutral',
                 label: 'Cargas publicadas en separación o carguío y pallets pendientes de volver a cámara',
             }

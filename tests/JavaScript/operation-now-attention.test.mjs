@@ -121,13 +121,13 @@ test('las insignias dan contexto neutro y solo Atención lleva severidad', () =>
 
     assert.equal(badges.atencion.tone, 'critical');
     assert.equal(badges.atencion.text, String(attention.total));
-    assert.deepEqual(badges['recepcion-mp'], { text: '3 en curso', tone: 'neutral' });
-    assert.deepEqual(badges['validacion-pt'], { text: '1 registro', tone: 'neutral' });
+    assert.deepEqual(badges['recepcion-mp'], { text: '3', tone: 'neutral', label: '3 recepciones en curso' });
+    assert.deepEqual(badges['validacion-pt'], { text: '1', tone: 'neutral', label: '1 registro' });
     assert.deepEqual(badges.maniobras, { text: '2 en curso', tone: 'neutral' });
     assert.equal(badges.plano, null);
     assert.equal(badges.camaras.text, '61 %');
     assert.equal(badges.camaras.tone, 'neutral');
-    assert.deepEqual(badges.prefrio, { text: '2 en proceso', tone: 'neutral' });
+    assert.deepEqual(badges.prefrio, { text: '2', tone: 'neutral', label: '2 túneles en proceso' });
     assert.deepEqual(badges.personal, { text: '2 activos', tone: 'neutral' });
 });
 
@@ -142,7 +142,7 @@ test('la insignia de Despacho cuenta las cargas publicadas en separación o carg
     const data = { camaras: [], prefrio: { tuneles: [] }, camareros: [], despacho: { resumen: { activas: 3 } } };
     const badges = buildOperationTabBadges(data, buildAttention(data));
 
-    assert.deepEqual(badges.despacho, { text: '3 cargas', tone: 'neutral', label: 'Cargas publicadas en separación o carguío y pallets pendientes de volver a cámara' });
+    assert.deepEqual(badges.despacho, { text: '3', tone: 'neutral', label: 'Cargas publicadas en separación o carguío y pallets pendientes de volver a cámara' });
 
     const reentry = { ...data, despacho: { resumen: { activas: 0, pendientes_reingreso: 2 } } };
     assert.equal(buildOperationTabBadges(reentry, buildAttention(reentry)).despacho.text, '2 por reingresar');

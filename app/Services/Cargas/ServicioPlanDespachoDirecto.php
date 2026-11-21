@@ -286,6 +286,14 @@ class ServicioPlanDespachoDirecto
                 throw new ConflictoOperacion('El pallet ya no posee un Prefrío aprobado para salida directa.');
             }
 
+            // Validar y completar la entrega mientras la asignación aún está pendiente.
+            // Al pasar a andén, el folio deja de ser elegible para maniobras de cámara.
+            // Ambos cambios se confirman o revierten juntos en esta transacción.
+            $tarea = $this->maniobras->completarPasoSinMovimiento(
+                $tarea,
+                $usuario,
+                $dispositivo,
+            );
             $ahora = now();
             $prefrio->confirmarRetiroSiParcial($usuario, $ahora);
             $asignacion->update([
@@ -335,12 +343,6 @@ class ServicioPlanDespachoDirecto
                 'completada_at' => $ahora,
                 'version' => $reserva->version + 1,
             ]);
-            $tarea = $this->maniobras->completarPasoSinMovimiento(
-                $tarea,
-                $usuario,
-                $dispositivo,
-            );
-
             $this->sincronizar($presencia, $usuario);
 
             return $tarea->refresh();

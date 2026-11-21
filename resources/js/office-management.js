@@ -527,7 +527,7 @@ function renderCameraOccupancy(cameras) {
                     const percent = clampPercentage(camera.ocupacion_porcentaje);
                     return `<div class="management-occupancy__row" data-tone="${occupancyTone(percent)}">
                         <span class="management-occupancy__name" title="${escapeHtml(camera.codigo)}">${escapeHtml(cameraName(camera))}</span>
-                        <span class="management-occupancy__track" aria-hidden="true"><i style="width:${percent}%"></i></span>
+                        <span class="management-occupancy__track folios-capacity-track" aria-hidden="true"><i style="width:${percent}%"></i></span>
                         <span class="management-occupancy__value"><b>${formatQuantity(camera.ocupacion_porcentaje)} %</b>${formatInteger(camera.ocupadas)} / ${formatInteger(camera.operativas)}</span>
                     </div>`;
                 }).join('')}

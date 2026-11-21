@@ -46,25 +46,25 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="expediente">
             
             <x-office.navigation domain="frigorifico" office="cargas" context="FRIGORÍFICO · PT" icon="▤" />
 
 
             <section class="loads-workspace">
-                <aside class="load-catalog panel">
-                    <div class="panel-heading load-catalog__heading">
-                        <div>
-                            <p class="eyebrow">DESPACHO</p>
-                            <h2>Órdenes de carga</h2>
-                        </div>
-                        <div class="catalog-actions">
-                            <button class="icon-button" id="reloadLoadsButton" type="button" aria-label="Actualizar órdenes">↻</button>
-                            <button class="secondary-button compact-button is-hidden" id="directDispatchButton" type="button" title="Registrar salida directa desde Prefrío">⇥ Prefrío</button>
-                            <button class="primary-button compact-button" id="newLoadButton" type="button">+ Nueva</button>
-                        </div>
+                <header class="loads-command" data-folios-masthead>
+                    <div>
+                        <p class="eyebrow">Frigorífico · Despacho PT</p>
+                        <h1>Órdenes de carga</h1>
                     </div>
+                    <div class="catalog-actions">
+                        <button class="icon-button" id="reloadLoadsButton" type="button" aria-label="Actualizar órdenes">↻</button>
+                        <button class="secondary-button compact-button is-hidden" id="directDispatchButton" type="button" title="Registrar salida directa desde Prefrío">⇥ Prefrío</button>
+                        <button class="primary-button compact-button" id="newLoadButton" type="button">+ Nueva</button>
+                    </div>
+                </header>
 
+                <aside class="load-catalog panel" aria-label="Bandeja de órdenes de carga" data-folios-register>
                     <div class="load-filters">
                         <label>
                             <span>Buscar</span>
@@ -109,7 +109,7 @@
                     <div class="pagination" id="loadPagination" aria-label="Paginación de órdenes"></div>
                 </aside>
 
-                <section class="load-editor panel">
+                <section class="load-editor panel" data-folios-register>
                     <div class="load-empty" id="loadEmptyState">
                         <span aria-hidden="true">⇥</span>
                         <p class="eyebrow">OFICINA DEL DESPACHADOR</p>
@@ -176,7 +176,7 @@
                         </form>
 
                         <section class="load-operation is-hidden" id="loadOperation">
-                            <div class="load-metrics">
+                            <div class="load-metrics" data-folios-metrics>
                                 <article><span>FOLIOS ASIGNADOS</span><strong id="loadTotalFolios">0 / 26</strong></article>
                                 <article><span>CÁMARAS INVOLUCRADAS</span><strong id="loadTotalCameras">0</strong></article>
                                 <article><span>CONCENTRACIÓN</span><strong id="loadConcentration">0%</strong></article>

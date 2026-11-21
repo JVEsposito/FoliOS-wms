@@ -87,7 +87,7 @@ test('crea un estándar propio eligiendo el ítem desde la búsqueda y con varia
         const post = calls.find((c) => c.method === 'POST');
         assert.equal(post.body.cliente_id, 'c1'); assert.equal(post.body.envase_validacion_id, 'v1');
         assert.deepEqual(post.body.lineas, [{ item_material_id: 'i-AR5048', cantidad_por_caja: '0.5', redondeo: 'entero', variacion_tipo: 'marca', variacion_valor: 'FALCO FRUIT' }]);
-        assert.match(await page.locator('#standardsNotice').textContent(), /creado/);
+        await page.locator('#standardsNotice').filter({ hasText: 'Estándar FC50PM creado.' }).waitFor();
         assert.match(await page.locator('#standardDetail').textContent(), /Marca: FALCO FRUIT/);
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }

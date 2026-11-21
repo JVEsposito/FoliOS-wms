@@ -26,26 +26,34 @@ export function FieldHeader({ area, auth, busy = false, children, offline = fals
     if (onBeforeLeave) onBeforeLeave(proceed, target);
     else proceed();
   }
-  return <View style={[styles.header, { borderBottomColor: definition.bright }]}>
+  return <View style={[styles.header, { borderColor: definition.line }]}>
     <FieldCorner area={area} />
-    <FieldMark area={area} />
-    <View style={styles.copy}>
-      <Text accessibilityRole="header" numberOfLines={2} style={styles.title}>{title}</Text>
-      {subtitle && (!compact || subtitleCompact) ? <Text numberOfLines={1} style={styles.subtitle}>{subtitle}</Text> : null}
-      {offline ? <Text accessibilityLiveRegion="polite" style={styles.offline}>Sin conexión</Text> : null}
+    <View style={styles.heading}>
+      <FieldMark area={area} />
+      <View style={styles.copy}>
+        <Text accessibilityRole="header" numberOfLines={2} style={[styles.title, compact && styles.titleCompact]}>{title}</Text>
+        {subtitle && !compact ? <Text numberOfLines={1} style={styles.subtitle}>{subtitle}</Text> : null}
+      </View>
+      {children ? <View style={styles.actions}>{children}</View> : null}
+      <OperatorMenu disabled={busy} deviceName={identity?.dispositivo.nombre ?? ''}
+        onChangeModule={changeModule ? () => leave(changeModule, 'module') : undefined} onLogout={() => leave(onLogout, 'logout')}
+        role={identity?.usuario.rol ?? ''} userName={identity?.usuario.nombre ?? 'Operador'} />
     </View>
-    <View style={styles.actions}>{children}</View>
-    <OperatorMenu disabled={busy} deviceName={identity?.dispositivo.nombre ?? ''}
-      onChangeModule={changeModule ? () => leave(changeModule, 'module') : undefined} onLogout={() => leave(onLogout, 'logout')}
-      role={identity?.usuario.rol ?? ''} userName={identity?.usuario.nombre ?? 'Operador'} />
+    {(compact && subtitleCompact && subtitle) || offline ? <View style={styles.context}>
+      {compact && subtitleCompact && subtitle ? <Text numberOfLines={2} style={styles.subtitle}>{subtitle}</Text> : null}
+      {offline ? <Text accessibilityLiveRegion="polite" style={styles.offline}>Sin conexión</Text> : null}
+    </View> : null}
   </View>;
 }
 
 const styles = StyleSheet.create({
-  header: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 3, backgroundColor: o.color.navy },
+  header: { marginHorizontal: 10, marginVertical: 6, borderWidth: 1, borderRadius: o.radius.panel, borderTopRightRadius: 3, backgroundColor: o.color.surface, overflow: 'hidden' },
+  heading: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 10, paddingVertical: 9 },
+  context: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8, paddingHorizontal: 12, paddingVertical: 7, borderTopWidth: 1, borderColor: o.color.border, backgroundColor: o.color.navy },
   copy: { flex: 1, minWidth: 0 },
-  title: { fontFamily: font.heavy, color: o.color.text, fontSize: 20, lineHeight: 24 },
-  subtitle: { fontFamily: font.regular, color: o.color.muted, fontSize: 13, marginTop: 2 },
-  offline: { fontFamily: font.bold, color: o.color.warning, fontSize: 13, marginTop: 2 },
+  title: { fontFamily: font.heavy, color: o.color.text, fontSize: 26, lineHeight: 30 },
+  titleCompact: { fontSize: 19, lineHeight: 23 },
+  subtitle: { flexShrink: 1, fontFamily: font.regular, color: o.color.muted, fontSize: 13, marginTop: 2 },
+  offline: { fontFamily: font.bold, color: o.color.warning, fontSize: 13 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });

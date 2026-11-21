@@ -32,10 +32,10 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
             <x-office.navigation domain="materia-prima" office="despacho-comercial" context="MATERIA PRIMA" icon="⇥" />
             <section class="commercial-workspace" id="officeContent">
-                <header class="commercial-heading">
+                <header class="commercial-heading" data-folios-masthead>
                     <div><p class="eyebrow">SALIDAS DE RETORNOS DE PACKING</p><h1>Despacho Comercial</h1><p>Precalibre, comercial, descarte y demás clasificaciones. Solo bins con folio y kilos definitivos.</p></div>
                     <button class="secondary-button" id="reloadButton" type="button">↻ Actualizar</button>
                 </header>
