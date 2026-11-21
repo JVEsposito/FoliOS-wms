@@ -92,10 +92,12 @@ test('reasigna parte de un movimiento a otro CSG de la cuenta, con razón social
             assert.equal(movementQueries.at(-1).get('cliente_id'), client.id);
             assert.equal(movementQueries.at(-1).get('buscar'), '1512');
             // Es una opción más del menú de la fila; las correcciones existentes siguen ahí.
-            const options = await page.locator('#movementsBody .office-action-select option').allTextContents();
+            const actions = page.locator('#movementsBody .office-action-select');
+            await actions.locator('option').filter({ hasText: /^Reasignar guía$/ }).waitFor({ state: 'attached' });
+            const options = await actions.locator('option').allTextContents();
             assert.ok(options.includes('Reasignar guía'));
             assert.ok(options.includes('Reasignar movimiento a otro productor / CSG'));
-            await page.locator('#movementsBody .office-action-select').selectOption({ label: 'Reasignar movimiento a otro productor / CSG' });
+            await actions.selectOption({ label: 'Reasignar movimiento a otro productor / CSG' });
             const dialog = page.locator('#producerReassignDialog');
             await dialog.locator('[name="documento_clave"]').first().waitFor();
             // Parte en la guía del movimiento, con su productor actual y sus cantidades.
