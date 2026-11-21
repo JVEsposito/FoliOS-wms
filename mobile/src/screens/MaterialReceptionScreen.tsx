@@ -1,5 +1,6 @@
 import { font } from '../theme/typography';
 import { FieldHeader } from '../components/field/FieldHeader';
+import { FieldTabs } from '../components/field/FieldTabs';
 import * as Crypto from 'expo-crypto';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -479,11 +480,11 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
     <View style={styles.screen}>
       <FieldHeader area="materiales" auth={auth} title="Recepción de materiales" subtitle={catalog.temporada?.nombre} onLogout={onLogout}><Button label="Actualizar" onPress={() => void refresh()} secondary /></FieldHeader>
 
-      <View style={styles.tabs}>
-        {canManage ? <TabButton label="Nueva recepción" active={tab === 'nueva'} onPress={() => switchTab('nueva')} /> : null}
-        <TabButton label="Recepciones" active={tab === 'historial'} onPress={() => switchTab('historial')} />
-        <TabButton label={`Pendientes (${pending.length})`} active={tab === 'pendientes'} onPress={() => switchTab('pendientes')} />
-      </View>
+      <FieldTabs<Tab> area="materiales" current={tab} onSelect={switchTab} options={[
+        ...(canManage ? [{ key: 'nueva' as const, label: 'Nueva recepción' }] : []),
+        { key: 'historial', label: 'Recepciones' },
+        { key: 'pendientes', label: 'Pendientes', count: pending.length },
+      ]} />
 
       {error ? <Banner text={error} danger /> : null}
       {message ? <Banner text={message} /> : null}
@@ -691,7 +692,7 @@ export function MaterialReceptionScreen({ auth, baseUrl, onLogout }: Props) {
           <View style={styles.fill}>
             <View style={styles.filters}>
               {(['todas', 'borrador', 'confirmada', 'anulada'] as const).map((state) => (
-                <TabButton
+                <FilterButton
                   key={state}
                   label={stateLabel(state)}
                   active={filter === state}
@@ -1090,12 +1091,10 @@ function Button({ label, onPress, secondary = false, danger = false, small = fal
   );
 }
 
-function TabButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.tab, active && styles.tabActive]}>
-      <Text style={[styles.tabText, active && styles.linkText]}>{label}</Text>
-    </Pressable>
-  );
+function FilterButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress} style={[styles.filterButton, active && styles.filterSelected]}>
+    <Text style={[styles.filterLabel, active && styles.linkText]}>{label}</Text>
+  </Pressable>;
 }
 
 function Banner({ text, danger = false }: { text: string; danger?: boolean }) {
@@ -1444,10 +1443,9 @@ const styles = StyleSheet.create({
   muted: { fontFamily: font.regular, color: colors.muted, fontSize: 14, lineHeight: 18, marginTop: 3 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 9, flexWrap: 'wrap' },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
-  tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 10, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: colors.borderSoft, backgroundColor: colors.panel },
-  tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundDeep },
-  tabActive: { borderColor: colors.cyan, backgroundColor: colors.selected },
-  tabText: { color: colors.muted, fontSize: 14, fontFamily: font.heavy },
+  filterButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1, borderRadius: 6, borderColor: colors.border, backgroundColor: colors.panel },
+  filterSelected: { borderColor: colors.cyan, backgroundColor: colors.selected },
+  filterLabel: { color: colors.muted, fontSize: 14, fontFamily: font.semibold },
   banner: { marginHorizontal: 18, marginTop: 10, padding: 11, borderRadius: 10, borderWidth: 1, borderColor: colors.greenDark, backgroundColor: '#102C20' },
   bannerDanger: { borderColor: colors.blockedBorder, backgroundColor: colors.blocked },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },

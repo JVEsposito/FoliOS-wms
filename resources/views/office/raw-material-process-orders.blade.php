@@ -12,11 +12,11 @@
         @include('office.partials.arranque')
     </head>
     <body>
-        <main class="office-app" id="ordersApp">
+        <main class="office-app" id="ordersApp" data-folios-workspace="expediente">
             <x-office.navigation domain="materia-prima" office="ordenes-proceso" context="MATERIA PRIMA" icon="≡" />
 
             <section class="orders-workspace">
-                <header class="orders-heading">
+                <header class="orders-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">PRE-SIF · CÁMARA MP → PACKING</p>
                         <h1>Órdenes de proceso</h1>
@@ -30,7 +30,7 @@
 
                 <p class="orders-notice" id="ordersNotice" role="status"></p>
 
-                <form class="orders-filters" id="ordersFilters">
+                <form class="orders-filters" id="ordersFilters" data-folios-toolbar>
                     <label>Estado
                         <select name="estado">
                             <option value="abiertas">Abiertas</option>
@@ -49,7 +49,7 @@
 
                 <section class="orders-panel" id="orderDetail" hidden aria-labelledby="orderDetailTitle"></section>
 
-                <section class="orders-panel" id="orderEditor" hidden aria-labelledby="orderEditorTitle">
+                <section class="orders-panel" id="orderEditor" hidden aria-labelledby="orderEditorTitle" data-folios-register>
                     <header class="orders-panel__heading">
                         <div><p class="eyebrow" id="orderEditorEyebrow">NUEVA ORDEN</p><h2 id="orderEditorTitle">Programar proceso</h2></div>
                         <button class="secondary-button" id="orderEditorClose" type="button">Cerrar</button>

@@ -40,7 +40,8 @@ test('Despacho PT muestra los subestados de cada instructivo sin duplicar el cam
             instructivos: [{ ...instruction('i3', 'F003', 'pendiente', 0), destino: 'Estados Unidos' }] };
         const snapshot = {
             generado_at: '2026-11-11T17:00:00Z', temporada: { id: 'temp', codigo: 'TEMP-2627', nombre: 'Prueba' },
-            jornada: { zona_horaria: 'America/Santiago', turno: 'dia' }, sincronizacion: { estado: 'sin_actividad', operaciones_hoy: {} },
+            jornada: { fecha: '2026-11-11', zona_horaria: 'America/Santiago', turno: 'A', inicio: '2026-11-11T10:00:00Z', fin: '2026-11-12T10:00:00Z' },
+            sincronizacion: { estado: 'sin_actividad', operaciones_hoy: {} },
             camaras: [], camareros: [], prefrio: { resumen: {}, tuneles: [] }, incidencias: { resumen: {}, abiertas: [] },
             planificador: { despliegue: { mode_global: 'off' }, salud: { riesgos: {} }, arbitraje: { vigencia: {} } },
             planta: { catalogo: [], elementos: [], conexiones: [], configurado: false, puede_editar: false },
@@ -81,6 +82,13 @@ test('Despacho PT muestra los subestados de cada instructivo sin duplicar el cam
         assert.equal(await second.locator('img').count(), 0);
         assert.equal(await page.evaluate(() => window.__dispatchXss), undefined);
         assert.match(await page.locator('#dispatchPanelSummary').innerText(), /^2 activas/);
+        assert.equal(await page.locator('#dispatchLoadingCount').innerText(), '1');
+        assert.equal(await page.locator('#dispatchReadyCount').innerText(), '0');
+        assert.equal(await page.locator('#operationWorkday').textContent(), '11-11-2026');
+        assert.match(await page.locator('#operationWorkdayHours').textContent(), /Jornada 07:00–06:59/);
+        const masthead = page.locator('.operation-now-command h1');
+        assert.ok(await masthead.evaluate((title) => parseFloat(getComputedStyle(title).fontSize)) >= 48);
+        assert.equal(await page.locator('[data-tab-badge="despacho"]').textContent(), '2');
         assert.equal(await rows.locator('[data-dispatch-load="load"] .operation-now-dispatch__dock').count(), 1);
         assert.equal(await first.locator('.operation-now-dispatch__progress').count(), 2);
         const cells = rows.locator('[data-dispatch-load="single"] .operation-now-dispatch__progress').last();

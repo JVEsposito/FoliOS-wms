@@ -29,11 +29,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
             <x-office.navigation domain="materia-prima" office="hidrocooler" context="MATERIA PRIMA" icon="❄" />
 
             <section class="hydrocooler-workspace">
-                <header class="hydrocooler-heading">
+                <header class="hydrocooler-heading" data-folios-masthead>
                     <div><p class="eyebrow">CONTROL DE ENFRIAMIENTO MP</p><h1>Hidrocooler</h1><p id="seasonDescription">Cargando ciclos de la temporada…</p></div>
                     <div class="hydrocooler-heading__actions">
                         <button class="secondary-button" data-register="blank-xlsx" type="button">↓ Blanco Excel</button>
@@ -44,7 +44,7 @@
                     </div>
                 </header>
 
-                <div class="hydrocooler-kpis">
+                <div class="hydrocooler-kpis" data-folios-metrics>
                     <article><span>LOTES EN ESPERA</span><strong id="pendingCount">0</strong><small>Confirmados por Digitación</small></article>
                     <article><span>CICLOS EN CURSO</span><strong id="activeCount">0</strong><small>Un lote por equipo</small></article>
                     <article><span>KILOS EN CURSO</span><strong id="activeKilos">0</strong><small>Peso congelado al iniciar</small></article>
@@ -61,7 +61,7 @@
                             <button data-tray="retenidos" type="button">Retenidos</button>
                             <button data-tray="historial" type="button">Historial</button>
                         </div>
-                        <form id="hydrocoolerFilters">
+                        <form id="hydrocoolerFilters" data-folios-toolbar>
                             <input name="buscar" maxlength="100" placeholder="Lote, recepción, cliente, ciclo o equipo">
                             <select name="equipo" id="equipmentFilter"><option value="">Todos los equipos</option></select>
                             <select name="turno"><option value="">Todos los turnos</option><option value="A">Turno A</option><option value="B">Turno B</option></select>

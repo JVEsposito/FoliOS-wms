@@ -11,6 +11,8 @@
     padding: 16px;
 }
 
+.loads-command { grid-column: 1 / -1; }
+
 .load-catalog {
     min-height: calc(100vh - 104px);
     max-height: calc(100vh - 104px);

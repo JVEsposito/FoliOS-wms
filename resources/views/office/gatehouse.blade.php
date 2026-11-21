@@ -20,10 +20,10 @@
         <p id="officeLoginError" role="alert"></p><button class="primary-button" type="submit">Entrar</button>
     </form>
 </section>
-<main class="office-app is-hidden" id="officeApp">
+<main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
     <x-office.navigation domain="materia-prima" office="porteria" context="PORTERÍA · INGRESOS" />
     <section class="gate-workspace" id="officeContent">
-        <header><p class="eyebrow">PORTERÍA</p><h1>Ingresos Portería</h1><p>Registra cada llegada, aunque la patente o la guía hayan ingresado antes.</p></header>
+        <header data-folios-masthead><p class="eyebrow">PORTERÍA</p><h1>Ingresos Portería</h1><p>Registra cada llegada, aunque la patente o la guía hayan ingresado antes.</p></header>
         <p id="gateStatus" role="status" aria-live="polite"></p>
         <div class="gate-columns">
             <section class="panel gate-panel" id="gateCapture" hidden>
@@ -51,7 +51,7 @@
             </section>
             <section class="panel gate-panel">
                 <h2>Bitácora diaria</h2>
-                <form id="gateFilters" class="gate-filters"><label>Fecha de jornada<input id="gateDate" name="fecha" type="date" required></label><label>Buscar<input name="buscar" type="search" placeholder="Patente, cliente, conductor o guía" maxlength="100"></label><button class="secondary-button" type="submit">Consultar</button></form>
+                <form id="gateFilters" class="gate-filters" data-folios-toolbar><label>Fecha de jornada<input id="gateDate" name="fecha" type="date" required></label><label>Buscar<input name="buscar" type="search" placeholder="Patente, cliente, conductor o guía" maxlength="100"></label><button class="secondary-button" type="submit">Consultar</button></form>
                 <div class="gate-actions"><label id="gatePendingRow" hidden><input id="gatePending" type="checkbox"> Pendientes de cualquier fecha</label><button class="secondary-button" id="gatePdf" type="button" hidden>Descargar PDF diario</button><a class="secondary-button" id="gateBackRomana" href="/oficina/romana" hidden>Volver a Romana</a></div>
                 <p id="gateCount" aria-live="polite"></p><div id="gateEntries" class="gate-entries"></div>
                 <div class="gate-actions"><button class="secondary-button" id="gatePrev" type="button">Anterior</button><span id="gatePage"></span><button class="secondary-button" id="gateNext" type="button">Siguiente</button></div>

@@ -28,11 +28,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="catalogo">
             <x-office.navigation domain="administracion" office="atributos-pt" context="ADMINISTRACIÓN & GERENCIA" icon="✎" />
 
             <section class="pta-workspace">
-                <header class="pta-heading panel">
+                <header class="pta-heading panel" data-folios-masthead>
                     <div>
                         <p class="eyebrow">NIVEL ADMINISTRADOR</p>
                         <h1>Cambio de atributos PT</h1>

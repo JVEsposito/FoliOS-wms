@@ -22,10 +22,10 @@
         <p class="form-error" id="officeLoginError" role="alert"></p><button class="primary-button" type="submit">Entrar →</button>
     </form>
 </section>
-<main class="office-app is-hidden" id="officeApp">
+<main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
     <x-office.navigation domain="administracion" :office="$clock ? 'rrhh-marcaje' : 'rrhh'" context="ADMINISTRACIÓN · RRHH" icon="♙" />
     <section class="rh-workspace">
-        <header class="rh-heading"><div><p class="eyebrow">RECURSOS HUMANOS</p><h1>{{ $clock ? 'Puesto de marcaje' : 'Personal y dotación' }}</h1>
+        <header class="rh-heading" data-folios-masthead><div><p class="eyebrow">RECURSOS HUMANOS</p><h1>{{ $clock ? 'Puesto de marcaje' : 'Personal y dotación' }}</h1>
             <p>{{ $clock ? 'La hora del comprobante la registra el servidor.' : 'La programación y la asistencia se conservan por separado, incluso si se cancela una asignación.' }}</p></div></header>
         <p id="rhMessage" role="status" aria-live="polite"></p>
         @if($clock)
@@ -39,7 +39,7 @@
                 <small>Marcaje operativo de FoliOS. Para emplearlo como registro laboral oficial se requiere autorización del sistema por la Dirección del Trabajo.</small>
             </section>
         @else
-            <nav class="rh-tabs" aria-label="Secciones RRHH"><button type="button" data-rh-tab="personal" aria-pressed="true">Personal</button><button type="button" data-rh-tab="dotacion" aria-pressed="false">Dotación y asistencia</button><button type="button" data-rh-tab="cargos" aria-pressed="false">Cargos</button><button type="button" data-rh-tab="nomina" id="rnTab" aria-pressed="false" hidden>Remuneraciones</button><button type="button" data-rh-tab="prevision" id="rpTab" aria-pressed="false" hidden>Instituciones y empleadores</button><button type="button" data-rh-tab="fuentes" aria-pressed="false">Integraciones</button></nav>
+            <nav class="rh-tabs" aria-label="Secciones RRHH" data-folios-section-nav><button type="button" data-rh-tab="personal" aria-pressed="true">Personal</button><button type="button" data-rh-tab="dotacion" aria-pressed="false">Dotación y asistencia</button><button type="button" data-rh-tab="cargos" aria-pressed="false">Cargos</button><button type="button" data-rh-tab="nomina" id="rnTab" aria-pressed="false" hidden>Remuneraciones</button><button type="button" data-rh-tab="prevision" id="rpTab" aria-pressed="false" hidden>Instituciones y empleadores</button><button type="button" data-rh-tab="fuentes" aria-pressed="false">Integraciones</button></nav>
             <section class="panel" data-rh-panel="personal"><div class="rh-heading"><h2>Personal</h2><button type="button" class="primary-button" data-rh-manage id="rhNewPerson">Agregar persona</button></div>
                 <form id="rhSearchForm" class="rh-toolbar"><label><span>Nombre o código</span><input name="buscar" type="search" maxlength="100"></label><button class="secondary-button" type="submit">Buscar</button></form>
                 <div id="rhPeople" class="rh-table-scroll"></div><div id="rhPeoplePages" class="rh-toolbar"></div>

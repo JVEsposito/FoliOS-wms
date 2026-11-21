@@ -663,7 +663,7 @@ a[aria-disabled="true"] {
     color: var(--text-strong);
 }
 
-.office-app h1 {
+.office-app h1:where(:not([data-folios-masthead] *, .operation-now-command *)) {
     font-weight: 780 !important;
     letter-spacing: -.025em !important;
 }
@@ -689,14 +689,11 @@ a[aria-disabled="true"] {
 }
 
 /* KPIs y resúmenes */
-.validation-metrics article,
-.management-kpi,
-.weighbridge-kpis article,
-.raw-material-kpis article,
-.office-app [class*="metrics"] > article,
-.office-app [class*="metric-grid"] > article,
-.office-app [class*="summary-grid"] > article,
-.office-app [class*="kpi-grid"] > article {
+.validation-metrics:where(:not([data-folios-metrics])) article,
+.management-kpi:where(:not([data-folios-metrics] > *)),
+.weighbridge-kpis:where(:not([data-folios-metrics])) article,
+.raw-material-kpis:where(:not([data-folios-metrics])) article,
+.office-app :is([class*="metrics"], [class*="metric-grid"], [class*="summary-grid"], [class*="kpi-grid"]):where(:not([data-folios-metrics])) > article {
     border: 1px solid var(--corporate-border) !important;
     border-top: 2px solid var(--corporate-blue) !important;
     border-radius: 7px !important;
@@ -1407,7 +1404,7 @@ body,
     .custody-heading,
     .discrepancies-heading,
     .domain-lobby-heading
-) {
+):where(:not([data-folios-masthead])) {
     min-height: 82px;
     padding: 13px 16px !important;
     border: 0 !important;
@@ -1416,7 +1413,7 @@ body,
     box-shadow: none !important;
 }
 
-.office-app h1:not([data-office-shell] *) {
+.office-app h1:not([data-office-shell] *):where(:not([data-folios-masthead] *, .operation-now-command *)) {
     color: #0a2035 !important;
     font-size: clamp(1.9rem, 2.4vw, 2.55rem) !important;
     font-weight: 800 !important;
@@ -2284,15 +2281,15 @@ body,
     .custody-heading,
     .discrepancies-heading,
     .domain-lobby-heading
-) { border-bottom-color: var(--corporate-border) !important; }
+):where(:not([data-folios-masthead])) { border-bottom-color: var(--corporate-border) !important; }
 
 .office-app :is(
     [class$="-metrics"],
     [class*="-metrics "],
     [class$="-kpis"],
     [class*="-kpis "]
-) > article,
-.office-app .management-kpi {
+):where(:not([data-folios-metrics])) > article,
+.office-app .management-kpi:where(:not([data-folios-metrics] > *)) {
     border-color: var(--corporate-border) !important;
     border-top: 3px solid var(--corporate-blue) !important;
     background: var(--kpi-surface) !important;
@@ -2588,13 +2585,13 @@ dialog[class*="dialog"] :is(.vc-hint.is-warning, .vc-review__missing) { color: v
  * selector se lo habría robado sin tener el resto de las variables.
  */
 
-.eyebrow {
+.eyebrow:where(:not([data-folios-masthead] *, .operation-now-command *)) {
     color: var(--frost) !important;
     font-family: var(--font-condensed) !important;
     text-transform: uppercase;
 }
 
-.office-app h1:not([data-office-shell] *) {
+.office-app h1:not([data-office-shell] *):where(:not([data-folios-masthead] *, .operation-now-command *)) {
     padding-bottom: 10px;
     border-bottom: var(--rule-heavy) solid var(--frost);
     font-family: var(--font-condensed);
@@ -2734,7 +2731,7 @@ dialog[class*="dialog"],
  * tabla, el plano o el formulario que se opera. Va al final para prevalecer sobre las
  * capas anteriores sin tocar cada módulo.
  */
-.office-app h1:not([data-office-shell] *) {
+.office-app h1:not([data-office-shell] *):where(:not([data-folios-masthead] *, .operation-now-command *)) {
     padding-bottom: 6px;
     font-size: clamp(1.4rem, 1.55vw, 1.75rem) !important;
     line-height: 1.1 !important;
@@ -2749,7 +2746,7 @@ dialog[class*="dialog"],
     .return-heading, .repa-heading, .annulment-heading, .process-heading,
     .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
     .discrepancies-heading, .domain-lobby-heading
-) {
+):where(:not([data-folios-masthead])) {
     padding-top: 10px !important;
     padding-bottom: 10px !important;
 }
@@ -2761,7 +2758,7 @@ dialog[class*="dialog"],
     .return-heading, .repa-heading, .annulment-heading, .process-heading,
     .queries-heading, .integrity-heading, .inventory-heading, .custody-heading,
     .discrepancies-heading, .domain-lobby-heading
-) h1 + p {
+):where(:not([data-folios-masthead])) h1 + p {
     margin-top: 4px !important;
     font-size: .88rem !important;
     line-height: 1.4 !important;
@@ -2773,8 +2770,8 @@ dialog[class*="dialog"],
     [class$="-kpis"],
     [class*="-kpis "],
     [class*="kpi-grid"]
-) > article,
-.office-app .management-kpi {
+):where(:not([data-folios-metrics])) > article,
+.office-app .management-kpi:where(:not([data-folios-metrics] > *)) {
     min-height: 0 !important;
     padding-top: 10px !important;
     padding-bottom: 10px !important;
@@ -2786,8 +2783,8 @@ dialog[class*="dialog"],
     [class$="-kpis"],
     [class*="-kpis "],
     [class*="kpi-grid"]
-) > article > strong,
-.office-app .management-kpi > strong {
+):where(:not([data-folios-metrics])) > article > strong,
+.office-app .management-kpi:where(:not([data-folios-metrics] > *)) > strong {
     margin-top: 2px !important;
     font-size: clamp(1.25rem, 1.5vw, 1.6rem) !important;
     line-height: 1.1 !important;
@@ -2805,7 +2802,7 @@ dialog[class*="dialog"],
     line-height: 1.35 !important;
 }
 
-.office-app .management-kpi > p {
+.office-app .management-kpi:where(:not([data-folios-metrics] > *)) > p {
     margin: 2px 0 8px !important;
 }
 

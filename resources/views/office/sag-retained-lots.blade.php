@@ -17,14 +17,14 @@
             <button class="primary-button">Ingresar</button><p id="officeLoginError" role="alert"></p>
         </form>
     </section>
-    <main class="office-app is-hidden" id="officeApp">
+    <main class="office-app is-hidden" id="officeApp" data-folios-workspace="registro">
         <x-office.navigation domain="frigorifico" office="lotes-retenidos-sag" context="FRIGORÍFICO · SAG" icon="SAG" />
         <section class="sl-workspace">
-            <header class="sl-heading"><div><p class="eyebrow">CONTROL DE LOTES DE RECEPCIÓN</p><h1>Lotes retenidos SAG</h1><p id="slSeason"></p></div><button class="primary-button" id="slNew">Registrar lote</button></header>
+            <header class="sl-heading" data-folios-masthead><div><p class="eyebrow">CONTROL DE LOTES DE RECEPCIÓN</p><h1>Lotes retenidos SAG</h1><p id="slSeason"></p></div><button class="primary-button" id="slNew">Registrar lote</button></header>
             <p class="sl-help">Los pallets pueden asignarse a cargas y movilizarse. La salida del camión se impide cuando el destino está restringido.</p>
             <p id="slMessage" role="status"></p>
-            <section class="panel">
-                <form class="sl-grid" id="slFilters">
+            <section class="panel" data-folios-register>
+                <form class="sl-grid" id="slFilters" data-folios-toolbar>
                     <label>Cliente<select name="cliente_id" data-clients><option value="">Todos los clientes</option></select></label>
                     <label>Número de lote<input name="lote" maxlength="100" placeholder="Lote de recepción"></label>
                     <label>Estado<select name="estado"><option value="">Todos</option><option value="con_observaciones">Con observaciones</option><option value="retenido">Retenido</option><option value="liberado_con_restricciones">Liberado con restricciones</option><option value="liberado">Liberado</option></select></label>
@@ -33,7 +33,7 @@
                 <div class="sl-scroll"><table><thead><tr><th>Cliente / lote</th><th>Estado</th><th>Restricción de destinos</th><th>Actualización</th><th>Detalle</th></tr></thead><tbody id="slRows"></tbody></table></div>
                 <div class="sl-actions" id="slPages"></div>
             </section>
-            <section class="panel is-hidden" id="slEditor">
+            <section class="panel is-hidden" id="slEditor" data-folios-register>
                 <header class="sl-heading"><div><p class="eyebrow" id="slVersion"></p><h2 id="slTitle">Registrar lote</h2></div><button class="secondary-button" type="button" id="slClose">Cerrar detalle</button></header>
                 <form id="slForm">
                     <div class="sl-grid">

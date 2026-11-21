@@ -4,6 +4,18 @@ Oficina → Frigorífico → Contraparte SAG reúne la existencia de productos c
 los responsables de la planta y sus documentos fitosanitarios. Inspección SAG conserva
 la preparación física, sus traslados y la resolución por destino.
 
+## Herramientas SAG
+
+- **Descripción del lote** carga un `.INS` según el anexo 5 del Manual para Externos
+  del Programa Origen. El PDF organiza folio, cajas, acumulado y certificados de
+  premuestreo e inspección por pallet, como en el formulario SAG/USDA.
+- **México · SdP** lee XLSX o CSV con SdP, fecha de embalaje y cajas. Especie,
+  variedad y clasificación SdP se cotejan cuando vienen en el archivo. El reporte
+  conserva las fechas de consulta, cajas por fecha y observaciones de cada fila.
+  La revisión queda disponible durante una hora para generar el PDF.
+- **China · Cerezas** coteja CSG y CSP con el listado de inscritos que publica
+  el SAG. Desde la misma vista se abre el listado de plantas autorizadas.
+
 ## Instalación de la base
 
 1. Aplicar migraciones. El perfil inicial de Administrador recibe el módulo

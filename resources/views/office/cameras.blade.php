@@ -46,12 +46,12 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp" data-camera-mode="{{ $cameraMode ?? 'operacion' }}">
+        <main class="office-app is-hidden" id="officeApp" data-camera-mode="{{ $cameraMode ?? 'operacion' }}" data-folios-workspace="operacion">
             
             <x-office.navigation :domain="$navigationDomain ?? 'frigorifico'" :office="$navigationOffice ?? 'camaras'" context="CÁMARAS" icon="❄" />
 
             <section class="camera-ops" id="cameraOperations" aria-labelledby="cameraOperationsTitle">
-                <header class="camera-ops__command">
+                <header class="camera-ops__command" data-folios-masthead>
                     <div>
                         <p class="camera-ops__eyebrow">FRIGORÍFICO · CONTROL DE CÁMARAS</p>
                         <h1 id="cameraOperationsTitle">Cámaras PT</h1>
@@ -187,7 +187,7 @@
                                     </div>
                                 </section>
 
-                                <section class="camera-ops-panel camera-ops-panel--bands" aria-labelledby="cameraBandTableTitle">
+                                <section class="camera-ops-panel camera-ops-panel--bands" aria-labelledby="cameraBandTableTitle" data-folios-register>
                                     <header class="camera-ops-panel__header" data-estiba-contrast="navy">
                                         <div><h2 id="cameraBandTableTitle">Bandas operacionales</h2><p>Estado, capacidad, uso y afinidad real</p></div>
                                     </header>

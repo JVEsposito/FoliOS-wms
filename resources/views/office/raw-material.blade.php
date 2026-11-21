@@ -29,11 +29,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="registro">
             <x-office.navigation domain="materia-prima" office="digitacion" context="MATERIA PRIMA" icon="◫" />
 
             <section class="raw-material-workspace">
-                <header class="raw-material-heading">
+                <header class="raw-material-heading" data-folios-masthead>
                     <div><p class="eyebrow">OFICINA MADRE</p><h1>Materia prima</h1><p id="seasonDescription">Lotización de recepciones validadas y despacho operacional hacia cámara.</p></div>
                     <div><a class="secondary-button" href="#movimientos" id="movementOpen">Registro de movimientos</a><button class="secondary-button" id="reloadButton" type="button">↻ Actualizar</button></div>
                 </header>
@@ -46,7 +46,7 @@
                     <a href="/oficina/materia-prima/envases"><span>05</span><strong>Envases</strong><small>Cuenta corriente y trazabilidad</small></a>
                 </nav>
 
-                <div class="raw-material-kpis">
+                <div class="raw-material-kpis" data-folios-metrics>
                     <article><span>SEGMENTOS POR LOTIZAR</span><strong id="pendingSegmentsCount">0</strong><small>Validados por la APK</small></article>
                     <article><span>BORRADORES</span><strong id="draftLotsCount">0</strong><small>Pendientes de confirmación</small></article>
                     <article><span>HIDROCOOLER</span><strong id="hydrocoolerLotsCount">0</strong><small>Pendientes, en curso o retenidos</small></article>
@@ -59,10 +59,10 @@
                         <div class="segment-list" id="segmentList"></div>
                     </section>
 
-                    <section class="panel raw-material-lots">
+                    <section class="panel raw-material-lots" data-folios-register>
                         <div class="raw-material-panel-heading">
                             <div><p class="eyebrow">TRAZABILIDAD OPERACIONAL</p><h2>Lotes de la temporada</h2></div>
-                            <form class="lot-filters" id="lotFilters">
+                            <form class="lot-filters" id="lotFilters" data-folios-toolbar>
                                 <input name="buscar" maxlength="100" placeholder="Lote, recepción, GGN o SdP">
                                 <select name="estado"><option value="">Todos los estados</option><option value="borrador">Borrador</option><option value="pendiente_hidrocooler">Pendiente hidrocooler</option><option value="hidrocooler_en_curso">Hidrocooler en curso</option><option value="hidrocooler_retenido">Retenido por Hidrocooler</option><option value="pendiente_asignacion">Pendiente cámara</option><option value="disponible_proceso">Disponible directo a proceso</option><option value="asignado_camara">Asignado</option><option value="entrega_parcial_proceso">Entrega parcial a Packing</option><option value="entregado_proceso">Entregado a Packing</option><option value="anulado">Anulado</option></select>
                                 <button class="secondary-button" type="submit">Filtrar</button>

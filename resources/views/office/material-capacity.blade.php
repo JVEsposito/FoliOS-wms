@@ -8,10 +8,10 @@
     @endif
     @include('office.partials.arranque')
 </head>
-<body><main class="office-app" id="materialCapacityApp">
+<body><main class="office-app" id="materialCapacityApp" data-folios-workspace="analisis">
     <x-office.navigation domain="materiales" office="capacidad" context="CAPACIDAD DE BODEGAS" icon="▦" />
     <div class="custody-shell">
-        <header class="custody-heading"><div><p class="eyebrow">MATERIALES · ESPACIO FÍSICO</p><h1>Capacidad de bodegas</h1><p>Dimensiones de almacenes físicos, zonas útiles y cargas. Todas las medidas se ingresan en metros.</p></div><button type="button" id="capacityReload" class="secondary-button">Actualizar</button></header>
+        <header class="custody-heading" data-folios-masthead><div><p class="eyebrow">MATERIALES · ESPACIO FÍSICO</p><h1>Capacidad de bodegas</h1><p>Dimensiones de almacenes físicos, zonas útiles y cargas. Todas las medidas se ingresan en metros.</p></div><button type="button" id="capacityReload" class="secondary-button">Actualizar</button></header>
         <p id="capacityNotice" role="status" aria-live="polite"></p>
         <section class="custody-card"><label>Almacén físico<select id="capacityWarehouse"></select></label><p id="capacityMetrics"></p>
             <p class="materials-help">La superficie y el volumen útiles corresponden a las zonas definidas. Los pasillos y espacios de seguridad deben quedar fuera de ellas.</p>

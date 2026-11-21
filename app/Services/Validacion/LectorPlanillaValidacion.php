@@ -17,17 +17,35 @@ class LectorPlanillaValidacion
     {
         $extension = mb_strtolower($archivo->getClientOriginalExtension());
 
-        return match ($extension) {
-            'csv', 'txt' => $this->leerCsv($archivo->getRealPath()),
-            'xlsx' => $this->leerXlsx($archivo->getRealPath()),
-            default => throw new DomainException('El archivo debe estar en formato CSV o XLSX.'),
-        };
+        foreach ($this->hojas($archivo->getRealPath(), $extension, acotar: false) as $hoja) {
+            return $this->convertirFilas(array_values($hoja['filas']));
+        }
+
+        return [];
     }
 
     /**
-     * @return array<int, array<string, string|int>>
+     * Reutiliza la lectura tabular para libros con más de una hoja o títulos antes de las cabeceras.
+     *
+     * @return iterable<array{nombre: string, filas: array<int, list<string>>, fecha_1904: bool}>
      */
-    private function leerCsv(string $ruta): array
+    public function hojas(string $ruta, string $extension, bool $acotar = true): iterable
+    {
+        if (in_array($extension, ['csv', 'txt'], true)) {
+            yield ['nombre' => '', 'filas' => $this->leerCsv($ruta, $acotar), 'fecha_1904' => false];
+
+            return;
+        }
+        if ($extension !== 'xlsx') {
+            throw new DomainException('El archivo debe estar en formato CSV o XLSX.');
+        }
+        yield from $this->leerXlsx($ruta, $acotar);
+    }
+
+    /**
+     * @return array<int, list<string>>
+     */
+    private function leerCsv(string $ruta, bool $variasLineas): array
     {
         $manejador = fopen($ruta, 'rb');
         if ($manejador === false) {
@@ -40,27 +58,28 @@ class LectorPlanillaValidacion
                 return [];
             }
 
-            $delimitador = $this->detectarDelimitador($primeraLinea);
+            $muestra = $primeraLinea.($variasLineas ? fread($manejador, 8192) : '');
+            $delimitador = $this->detectarDelimitador($muestra);
             rewind($manejador);
             $filas = [];
 
-            while (($fila = fgetcsv($manejador, 0, $delimitador)) !== false) {
-                $filas[] = array_map(
+            while (($fila = fgetcsv($manejador, 0, $delimitador, '"', '\\')) !== false) {
+                $filas[count($filas) + 1] = array_map(
                     fn ($valor): string => trim((string) $valor),
                     $fila,
                 );
             }
 
-            return $this->convertirFilas($filas);
+            return $filas;
         } finally {
             fclose($manejador);
         }
     }
 
     /**
-     * @return array<int, array<string, string|int>>
+     * @return iterable<array{nombre: string, filas: array<int, list<string>>, fecha_1904: bool}>
      */
-    private function leerXlsx(string $ruta): array
+    private function leerXlsx(string $ruta, bool $acotar): iterable
     {
         if (! class_exists(ZipArchive::class)) {
             throw new DomainException('El servidor no posee la extensión ZIP necesaria para leer XLSX.');
@@ -72,117 +91,100 @@ class LectorPlanillaValidacion
         }
 
         try {
-            $compartidos = $this->leerTextosCompartidos($zip);
-            $rutaHoja = $this->resolverPrimeraHoja($zip);
-            $contenido = $zip->getFromName($rutaHoja);
-
-            if ($contenido === false) {
-                throw new DomainException('La planilla XLSX no contiene una hoja legible.');
-            }
-
-            $xml = simplexml_load_string($contenido);
-            if (! $xml instanceof SimpleXMLElement) {
-                throw new DomainException('La hoja del archivo XLSX no posee un XML válido.');
-            }
-
-            $xml->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-            $filas = [];
-
-            foreach ($xml->xpath('//m:sheetData/m:row') ?: [] as $filaXml) {
-                $fila = [];
-                foreach ($filaXml->c as $celda) {
-                    $referencia = (string) $celda['r'];
-                    $indice = $this->indiceColumna($referencia);
-                    $tipo = (string) $celda['t'];
-                    $valor = '';
-
-                    if ($tipo === 'inlineStr') {
-                        $valor = $this->textoNodo($celda->is);
-                    } else {
-                        $valorCrudo = (string) $celda->v;
-                        $valor = $tipo === 's'
-                            ? ($compartidos[(int) $valorCrudo] ?? '')
-                            : $valorCrudo;
-                    }
-
-                    $fila[$indice] = trim($valor);
+            $compartidos = $this->leerTextosCompartidos($zip, $acotar);
+            $libro = $this->xml($zip, 'xl/workbook.xml', $acotar);
+            $fecha1904 = in_array((string) ($libro?->workbookPr['date1904'] ?? ''), ['1', 'true'], true);
+            foreach ($this->rutasHojas($zip, $libro, $acotar) as [$nombre, $ruta]) {
+                $hoja = $this->xml($zip, $ruta, $acotar);
+                if (! $hoja) {
+                    throw new DomainException('La planilla XLSX no contiene una hoja legible.');
                 }
-
-                if ($fila !== []) {
-                    ksort($fila);
-                    $maximo = max(array_keys($fila));
-                    $filas[] = array_map(
-                        fn (int $indice): string => $fila[$indice] ?? '',
-                        range(0, $maximo),
-                    );
-                }
+                yield ['nombre' => $nombre, 'filas' => $this->filasXlsx($hoja, $compartidos, $acotar), 'fecha_1904' => $fecha1904];
             }
-
-            return $this->convertirFilas($filas);
         } finally {
             $zip->close();
         }
     }
 
+    private function filasXlsx(SimpleXMLElement $hoja, array $compartidos, bool $acotar): array
+    {
+        $filas = [];
+        $cantidadCeldas = 0;
+        foreach ($hoja->sheetData->row ?? [] as $filaXml) {
+            $fila = [];
+            foreach ($filaXml->c as $celda) {
+                $indice = $this->indiceColumna((string) $celda['r']);
+                $tipo = (string) $celda['t'];
+                $valor = (string) $celda->v;
+                $fila[$indice] = trim(match ($tipo) {
+                    'inlineStr' => $this->textoNodo($celda->is),
+                    's' => $compartidos[(int) $valor] ?? '',
+                    default => $valor,
+                });
+            }
+            if ($fila === []) {
+                continue;
+            }
+            $columnas = max(array_keys($fila)) + 1;
+            $cantidadCeldas += $columnas;
+            if ($acotar && $cantidadCeldas > 1000000) {
+                throw new DomainException('La hoja XLSX supera el límite de celdas que puede procesar FoliOS.');
+            }
+            $numero = (int) $filaXml['r'] ?: count($filas) + 1;
+            $filas[$numero] = array_map(fn (int $i): string => $fila[$i] ?? '', range(0, $columnas - 1));
+        }
+
+        return $filas;
+    }
+
     /**
      * @return array<int, string>
      */
-    private function leerTextosCompartidos(ZipArchive $zip): array
+    private function leerTextosCompartidos(ZipArchive $zip, bool $acotar): array
     {
-        $contenido = $zip->getFromName('xl/sharedStrings.xml');
-        if ($contenido === false) {
-            return [];
-        }
-
-        $xml = simplexml_load_string($contenido);
-        if (! $xml instanceof SimpleXMLElement) {
-            return [];
-        }
-
         $textos = [];
-        foreach ($xml->si as $item) {
+        foreach ($this->xml($zip, 'xl/sharedStrings.xml', $acotar)?->si ?? [] as $item) {
             $textos[] = $this->textoNodo($item);
         }
 
         return $textos;
     }
 
-    private function resolverPrimeraHoja(ZipArchive $zip): string
+    private function rutasHojas(ZipArchive $zip, ?SimpleXMLElement $libro, bool $acotar): array
     {
-        $libro = $zip->getFromName('xl/workbook.xml');
-        $relaciones = $zip->getFromName('xl/_rels/workbook.xml.rels');
-
-        if ($libro === false || $relaciones === false) {
-            return 'xl/worksheets/sheet1.xml';
-        }
-
-        $xmlLibro = simplexml_load_string($libro);
-        $xmlRelaciones = simplexml_load_string($relaciones);
-        if (! $xmlLibro instanceof SimpleXMLElement || ! $xmlRelaciones instanceof SimpleXMLElement) {
-            return 'xl/worksheets/sheet1.xml';
-        }
-
-        $xmlLibro->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-        $xmlLibro->registerXPathNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
-        $hoja = ($xmlLibro->xpath('//m:sheets/m:sheet') ?: [])[0] ?? null;
-        if (! $hoja instanceof SimpleXMLElement) {
-            return 'xl/worksheets/sheet1.xml';
-        }
-
-        $atributos = $hoja->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships');
-        $relacionId = (string) ($atributos['id'] ?? '');
-
-        foreach ($xmlRelaciones->Relationship as $relacion) {
-            if ((string) $relacion['Id'] !== $relacionId) {
-                continue;
-            }
-
+        $destinos = [];
+        foreach ($this->xml($zip, 'xl/_rels/workbook.xml.rels', $acotar)?->Relationship ?? [] as $relacion) {
             $destino = ltrim((string) $relacion['Target'], '/');
-
-            return str_starts_with($destino, 'xl/') ? $destino : 'xl/'.$destino;
+            $destinos[(string) $relacion['Id']] = str_starts_with($destino, 'xl/') ? $destino : 'xl/'.$destino;
+        }
+        $hojas = [];
+        foreach ($libro?->sheets->sheet ?? [] as $hoja) {
+            $atributos = $hoja->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships');
+            $ruta = $destinos[(string) ($atributos['id'] ?? '')] ?? '';
+            if (str_starts_with($ruta, 'xl/worksheets/')) {
+                $hojas[] = [(string) $hoja['name'], $ruta];
+            }
         }
 
-        return 'xl/worksheets/sheet1.xml';
+        return $hojas ?: [['', 'xl/worksheets/sheet1.xml']];
+    }
+
+    private function xml(ZipArchive $zip, string $entrada, bool $acotar): ?SimpleXMLElement
+    {
+        $detalle = $zip->statName($entrada);
+        if ($detalle === false) {
+            return null;
+        }
+        if ($acotar && $detalle['size'] > 25000000) {
+            throw new DomainException('La planilla XLSX supera el tamaño de lectura permitido.');
+        }
+
+        $xml = simplexml_load_string($zip->getFromName($entrada), SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        if ($xml === false) {
+            throw new DomainException('La planilla XLSX contiene XML inválido.');
+        }
+
+        return $xml;
     }
 
     private function textoNodo(SimpleXMLElement $nodo): string
@@ -195,7 +197,7 @@ class LectorPlanillaValidacion
 
     private function indiceColumna(string $referencia): int
     {
-        preg_match('/^[A-Z]+/i', $referencia, $coincidencias);
+        preg_match('/^[A-Z]{1,3}(?=[0-9]|$)/i', $referencia, $coincidencias);
         $letras = mb_strtoupper($coincidencias[0] ?? 'A');
         $indice = 0;
 

@@ -43,6 +43,25 @@ destinos preferentes continúa fuera de este incremento.
 
 El objetivo se completa cuando todas sus tareas, incluidas las cadenas de reemplazo, terminan completadas. Si REPA se anula antes de iniciar su ejecución, el objetivo y sus labores pendientes se cancelan en la misma transacción. Una recepción ya ejecutada bloquea la anulación.
 
+## Pallets que ya salieron por despacho
+
+Una asignación `en_anden`, `cargado` o `despachado` impide publicar, asumir o ejecutar
+maniobras de cámara para ese folio. La regla considera la asignación de la carga
+además del estado del folio: una carga puede aparecer `despachada` al completar su
+envío al andén mientras sus folios aún siguen activos hasta el cierre del camión.
+
+El plano también revalida esa salida en el servidor antes de ubicar o mover el
+folio, aunque la tablet conserve una operación anterior pendiente de sincronizar.
+Para volver a ubicarlo se debe registrar el reingreso o retorno correspondiente;
+el retorno autorizado cambia la asignación y vuelve a habilitar el circuito normal.
+
+Los eventos de envío al andén, carga al camión y despacho depuran las labores
+obsoletas después de confirmar la transacción. El barrido y el worker siguen
+recuperando tareas históricas. Se conservan las custodias activas y su resolución
+supervisada, así como el historial de las maniobras canceladas. Esta depuración
+no elimina ubicaciones virtuales incorrectas que ya existían: esas diferencias
+requieren conciliación con la evidencia del despacho.
+
 ## Activación y rollback
 
 La generación requiere simultáneamente:

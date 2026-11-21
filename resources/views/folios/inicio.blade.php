@@ -19,8 +19,8 @@
             <div class="office-access__brand">
                 <x-folios-logo surface="dark" class="folios-inicio__logo" />
                 <p class="eyebrow">{{ $planta ? 'FOLIOS · '.mb_strtoupper($planta) : 'FOLIOS · PLATAFORMA OPERACIONAL' }}</p>
-                <h1 id="foliosInicioTitle">Un solo acceso para toda la planta.</h1>
-                <p>Ingresa con tu cuenta y FoliOS te lleva directo a las oficinas habilitadas para tu perfil.</p>
+                <h1 id="foliosInicioTitle">Operación de planta</h1>
+                <p>Ingresa a las áreas habilitadas para tu perfil.</p>
                 <ul class="folios-inicio__areas" aria-label="Áreas de FoliOS">
                     @foreach (['materia-prima' => 'Materia Prima', 'frigorifico' => 'Frigorífico', 'materiales' => 'Materiales', 'consultas' => 'Consultas', 'gerencia' => 'Gerencia', 'administracion' => 'Administración'] as $area => $label)
                         <li><x-folios.gajo :area="$area" :size="24" />{{ $label }}</li>
@@ -33,7 +33,7 @@
             </div>
 
             <form class="office-access__form" id="foliosLoginForm" data-inicio-panel="acceso" novalidate hidden>
-                <div><p class="eyebrow">ACCESO</p><h2>Iniciar sesión</h2><p>Usa tus credenciales habituales de FoliOS.</p></div>
+                <div class="folios-inicio__access-title"><x-folios.gajo area="operacion" :size="28" /><h2>Iniciar sesión</h2></div>
                 <label><span>Correo electrónico</span><input name="email" type="email" autocomplete="username" required></label>
                 <label><span>Contraseña</span><input name="password" type="password" autocomplete="current-password" required></label>
                 <p class="form-error" id="foliosLoginError" role="alert"></p>

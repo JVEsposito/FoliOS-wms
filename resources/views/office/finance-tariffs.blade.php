@@ -28,11 +28,11 @@
             </form>
         </section>
 
-        <main class="office-app is-hidden" id="officeApp">
+        <main class="office-app is-hidden" id="officeApp" data-folios-workspace="catalogo">
             <x-office.navigation domain="administracion" office="finanzas-tarifario" context="ADMINISTRACIÓN · FINANZAS" icon="$" />
 
             <section class="fin-workspace">
-                <header class="fin-heading">
+                <header class="fin-heading" data-folios-masthead>
                     <div>
                         <p class="eyebrow">FINANZAS · PRECIOS POR CLIENTE</p>
                         <h1>Tarifario</h1>
@@ -57,8 +57,8 @@
                     ]"
                 />
 
-                <section class="panel fin-panel" id="finance-tariffs-panel-prices" data-office-panel-group="finance-tariffs" data-office-panel-id="prices" role="tabpanel" aria-labelledby="finance-tariffs-tab-prices">
-                    <form class="fin-filters" id="tariffFilters">
+                <section class="panel fin-panel" id="finance-tariffs-panel-prices" data-office-panel-group="finance-tariffs" data-office-panel-id="prices" role="tabpanel" aria-labelledby="finance-tariffs-tab-prices" data-folios-register>
+                    <form class="fin-filters" id="tariffFilters" data-folios-toolbar>
                         <label><span>Cliente</span>
                             <select name="cliente" id="tariffClient">
                                 <option value="">Todos</option>
@@ -94,7 +94,7 @@
                     </div>
                 </section>
 
-                <section class="panel fin-panel" id="finance-tariffs-panel-charges" data-office-panel-group="finance-tariffs" data-office-panel-id="charges" role="tabpanel" aria-labelledby="finance-tariffs-tab-charges" hidden>
+                <section class="panel fin-panel" id="finance-tariffs-panel-charges" data-office-panel-group="finance-tariffs" data-office-panel-id="charges" role="tabpanel" aria-labelledby="finance-tariffs-tab-charges" hidden data-folios-register>
                     <div class="fin-panel__heading"><div><p class="eyebrow">CARGOS ACORDADOS</p><h2>Lo que se cobra por acuerdo o declaración</h2></div><div class="fin-acciones"><button class="secondary-button" id="chargeNew" type="button" hidden>+ Nuevo cargo</button><button class="secondary-button" id="chargeFromRrhh" type="button" hidden>Desde dotación RRHH</button></div></div>
                     <p>Puede cobrar cualquier concepto operativo por ejecución, compromiso o disponibilidad. El estado real del servicio se conserva; un servicio cancelado puede seguir siendo cobrable según su acuerdo.</p>
                     <label><span>Mes del cargo</span><input id="chargeMonth" type="month"></label>
@@ -103,7 +103,7 @@
                     <div class="fin-acciones"><button class="fin-boton" id="chargePrev" type="button">Anterior</button><span id="chargePage"></span><button class="fin-boton" id="chargeNext" type="button">Siguiente</button></div>
                 </section>
 
-                <section class="panel fin-panel" id="finance-tariffs-panel-services" data-office-panel-group="finance-tariffs" data-office-panel-id="services" role="tabpanel" aria-labelledby="finance-tariffs-tab-services" hidden>
+                <section class="panel fin-panel" id="finance-tariffs-panel-services" data-office-panel-group="finance-tariffs" data-office-panel-id="services" role="tabpanel" aria-labelledby="finance-tariffs-tab-services" hidden data-folios-register>
                     <div class="fin-panel__heading">
                         <div><p class="eyebrow">CONCEPTOS DE SERVICIO</p><h2>Qué se cobra y qué proceso lo respalda</h2></div>
                         <button class="secondary-button fin-heading__button" id="serviceNewButton" type="button" hidden>+ Nuevo concepto</button>
@@ -118,7 +118,7 @@
                     <p>Todo concepto operativo puede cobrarse por acuerdo, compromiso o disponibilidad, aunque no se ejecute. Use la modalidad acordada/manual para registrar sus cantidades y respaldo; la captura automática usa los procesos realizados.</p>
                 </section>
 
-                <section class="panel fin-panel" id="finance-tariffs-panel-currencies" data-office-panel-group="finance-tariffs" data-office-panel-id="currencies" role="tabpanel" aria-labelledby="finance-tariffs-tab-currencies" hidden>
+                <section class="panel fin-panel" id="finance-tariffs-panel-currencies" data-office-panel-group="finance-tariffs" data-office-panel-id="currencies" role="tabpanel" aria-labelledby="finance-tariffs-tab-currencies" hidden data-folios-register>
                     <div class="fin-panel__heading">
                         <div><p class="eyebrow">MONEDAS</p><h2>En qué se expresan los precios</h2></div>
                         <button class="secondary-button fin-heading__button" id="tariffNewCurrency" type="button" hidden>+ Nueva moneda</button>

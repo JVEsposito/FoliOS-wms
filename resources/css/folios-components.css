@@ -57,7 +57,7 @@
 }
 
 .office-app :is(.eui-button--primary, .eui-button--confirm, .folios-action):not(:disabled)::after,
-.office-app :is(.operation-now-tab, .office-panel-tab)[aria-selected="true"]::after {
+.office-app .office-panel-tab[aria-selected="true"]::after {
     position: absolute;
     inset-block-start: 2px;
     inset-inline-end: 2px;

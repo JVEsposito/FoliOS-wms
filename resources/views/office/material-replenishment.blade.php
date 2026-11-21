@@ -4,11 +4,11 @@
 @vite(['resources/css/office.css', 'resources/css/office-materials.css', 'resources/js/office-material-replenishment.js'])
 @endif
     @include('office.partials.arranque')
-</head><body><main class="office-app" id="materialReplenishmentApp" data-levels-mode="{{ $niveles ? 'true' : 'false' }}">
+</head><body><main class="office-app" id="materialReplenishmentApp" data-levels-mode="{{ $niveles ? 'true' : 'false' }}" data-folios-workspace="analisis">
 <x-office.navigation domain="materiales" :office="$niveles ? 'niveles-stock' : 'reposicion'" context="REPOSICIÓN" icon="▦" />
-<div class="custody-shell"><header class="custody-heading"><div><p class="eyebrow">MATERIALES · BODEGA CENTRAL</p><h1>{{ $niveles ? 'Ítems · niveles de stock' : 'Reposición' }}</h1><p>Prioriza compras según el disponible para entregar y las salidas reales de bodega.</p></div><button id="reload" class="secondary-button">Actualizar</button></header>
+<div class="custody-shell"><header class="custody-heading" data-folios-masthead><div><p class="eyebrow">MATERIALES · BODEGA CENTRAL</p><h1>{{ $niveles ? 'Ítems · niveles de stock' : 'Reposición' }}</h1><p>Prioriza compras según el disponible para entregar y las salidas reales de bodega.</p></div><button id="reload" class="secondary-button">Actualizar</button></header>
 <p id="notice" role="status"></p><section class="custody-card"><p id="summary"></p>
-<form id="filters" class="custody-filters"><label>Cliente<select name="cliente_id"><option value="">Todos</option></select></label><label>Categoría<select name="categoria"><option value="">Todas</option></select></label>
+<form id="filters" class="custody-filters" data-folios-toolbar><label>Cliente<select name="cliente_id"><option value="">Todos</option></select></label><label>Categoría<select name="categoria"><option value="">Todas</option></select></label>
 @unless($niveles)<label>Estado<select name="estado"><option value="">Pendientes de reposición</option><option value="quiebre">Quiebre</option><option value="bajo_minimo">Bajo mínimo</option><option value="reponer">Reponer</option><option value="normal">Normal</option><option value="sobre_maximo">Sobre máximo</option></select></label>@endunless
 <label>Consumo<select name="dias"><option value="">Predeterminado</option><option value="30">30 días</option><option value="60">60 días</option><option value="90">90 días</option></select></label><button type="button" id="excel" class="primary-button" @if($niveles) hidden @endif>Exportar Excel</button></form>
 <div class="custody-table-wrap"><table class="custody-table"><thead id="columns"></thead><tbody id="rows"></tbody></table></div></section>

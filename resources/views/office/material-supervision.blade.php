@@ -9,16 +9,16 @@
     @include('office.partials.arranque')
 </head>
 <body>
-<main class="office-app" id="materialSupervisionApp">
+<main class="office-app" id="materialSupervisionApp" data-folios-workspace="analisis">
     <x-office.navigation domain="materiales" office="supervision" context="SUPERVISIÓN" icon="▦" />
     <div class="custody-shell">
-        <header class="custody-heading">
+        <header class="custody-heading" data-folios-masthead>
             <div><p class="eyebrow">MATERIALES · SUPERVISIÓN</p><h1>Supervisión de Materiales</h1><p>Existencias, actividad y diferencias. Abre un registro para ver quién lo realizó y la evidencia disponible.</p></div>
             <button type="button" id="supervisionReload" class="secondary-button">Actualizar</button>
         </header>
         <p id="supervisionNotice" role="status" aria-live="polite"></p>
         <section class="custody-card" aria-label="Consulta de supervisión">
-            <form id="supervisionFilters" class="custody-filters">
+            <form id="supervisionFilters" class="custody-filters" data-folios-toolbar>
                 <label>Vista<select name="vista"><option value="stock">Existencias actuales</option><option value="inventario">Movimientos de inventario</option><option value="almacenes">Movimientos de almacenes</option><option value="recepciones">Auditoría de recepciones</option><option value="diferencias">Diferencias de inventario</option></select></label>
                 <label>Temporada<select name="temporada_id" required></select></label>
                 <label>Cliente<select name="cliente_id"><option value="">Todos</option></select></label>

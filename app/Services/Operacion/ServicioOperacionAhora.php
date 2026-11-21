@@ -67,6 +67,8 @@ class ServicioOperacionAhora
         $ventana = app(VentanasVerificacion::class)->actual($ahora);
         $calendario = app(CalendarioOperativo::class);
         $jornada = $calendario->clasificar($ahora);
+        [$inicioJornada] = $calendario->rangoTurno($jornada['fecha_jornada'], 'A') ?? [null, null];
+        [, $finJornada] = $calendario->rangoTurno($jornada['fecha_jornada'], 'B') ?? [null, null];
         app(ServicioVerificacionesUbicacion::class)->vencer($temporada);
         $despacho = app(ResumenDespachoOperacion::class)->obtener($temporada);
 
@@ -79,6 +81,8 @@ class ServicioOperacionAhora
                 'hora' => $horaOperacional->format('H:i:s'),
                 'zona_horaria' => $horaOperacional->getTimezone()->getName(),
                 'turno' => $jornada['turno_operativo'] ?? $ventana['nombre'],
+                'inicio' => $inicioJornada?->toAtomString(),
+                'fin' => $finJornada?->toAtomString(), // Límite exclusivo del calendario.
             ],
             'temporada' => [
                 'id' => $temporada->id,

@@ -21,12 +21,12 @@
             <p class="form-error" id="officeLoginError" role="alert"></p><button class="primary-button" type="submit">Ingresar <span>→</span></button>
         </form>
     </section>
-    <main class="office-app is-hidden" id="officeApp">
+    <main class="office-app is-hidden" id="officeApp" data-folios-workspace="registro">
         <x-office.navigation domain="materia-prima" office="defectos-recepcion" context="MATERIA PRIMA" icon="!" />
         <section class="defect-workspace" id="officeContent">
-            <header class="defect-heading"><div><p class="eyebrow">CONTROL DE CALIDAD · MATERIA PRIMA</p><h1>Defectos de recepción</h1><p>Registro fotográfico vinculado a la recepción y a la temporada original.</p></div><button class="secondary-button" id="refreshDefects" type="button">↻ Actualizar</button></header>
+            <header class="defect-heading" data-folios-masthead><div><p class="eyebrow">CONTROL DE CALIDAD · MATERIA PRIMA</p><h1>Defectos de recepción</h1><p>Registro fotográfico vinculado a la recepción y a la temporada original.</p></div><button class="secondary-button" id="refreshDefects" type="button">↻ Actualizar</button></header>
             <section class="defect-panel" aria-label="Filtros de auditoría">
-                <form id="defectFilters" class="defect-filters">
+                <form id="defectFilters" class="defect-filters" data-folios-toolbar>
                     <label>Temporada<select name="temporada_id" id="defectSeason"><option value="">Cargando temporadas…</option></select></label>
                     <label>Desde<input name="desde" type="date"></label><label>Hasta<input name="hasta" type="date"></label>
                     <label>Categoría<select name="categoria"><option value="">Todas las categorías</option><option value="envase_danado">Envase dañado</option><option value="envase_sucio">Envase sucio</option><option value="producto_danado">Producto dañado</option><option value="otro">Otro</option></select></label>
@@ -35,7 +35,7 @@
                 </form>
                 <div class="defect-export"><p>Descarga los registros filtrados. El ZIP incluye planilla, PDF y fotos originales.</p><div><button class="secondary-button" data-defect-export="xlsx" type="button">Excel</button><button class="secondary-button" data-defect-export="pdf" type="button">PDF</button><button class="secondary-button" data-defect-export="zip" type="button">ZIP con fotos</button></div></div>
             </section>
-            <section class="defect-panel" aria-labelledby="defectResultsTitle"><div class="defect-results-heading"><h2 id="defectResultsTitle">Registros</h2><span id="defectCount">—</span></div>
+            <section class="defect-panel" aria-labelledby="defectResultsTitle" data-folios-register><div class="defect-results-heading"><h2 id="defectResultsTitle">Registros</h2><span id="defectCount">—</span></div>
                 <div class="defect-table-wrap"><table class="defect-table"><thead><tr><th>Fecha</th><th>Recepción / guía</th><th>Cliente</th><th>Defecto</th><th>Validador</th><th>Evidencias</th></tr></thead><tbody id="defectRows"><tr><td colspan="6">Consultando registros…</td></tr></tbody></table></div>
                 <nav class="defect-pages" aria-label="Páginas de resultados"><button id="defectPrevious" class="secondary-button" type="button">← Anterior</button><span id="defectPage">Página 1</span><button id="defectNext" class="secondary-button" type="button">Siguiente →</button></nav>
             </section>

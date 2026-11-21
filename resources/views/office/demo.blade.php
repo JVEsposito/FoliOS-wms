@@ -53,7 +53,7 @@
         <main class="demo-app is-hidden" id="demoApp">
             <header class="demo-topbar">
                 <div class="demo-brand">
-                    <span aria-hidden="true">▶</span>
+                    <x-folios.gajo area="operacion" :size="30" />
                     <div><strong>FoliOS</strong><small>RECORRIDO COMERCIAL</small></div>
                     <b>DEMO LOCAL</b>
                 </div>
@@ -71,11 +71,11 @@
             </aside>
 
             <nav class="demo-tabs" aria-label="Áreas de la demostración">
-                <button class="is-active" data-demo-tab="summary" type="button">Resumen gerencial</button>
-                <button data-demo-tab="raw-material" type="button">Materia Prima</button>
-                <button data-demo-tab="refrigerated" type="button">Frigorífico</button>
-                <button data-demo-tab="materials" type="button">Materiales</button>
-                <button data-demo-tab="traceability" type="button">Trazabilidad</button>
+                <button class="is-active" data-demo-tab="summary" type="button" aria-pressed="true"><x-folios.gajo area="gerencia" :size="16" />Resumen gerencial</button>
+                <button data-demo-tab="raw-material" type="button" aria-pressed="false"><x-folios.gajo area="materia-prima" :size="16" />Materia Prima</button>
+                <button data-demo-tab="refrigerated" type="button" aria-pressed="false"><x-folios.gajo area="frigorifico" :size="16" />Frigorífico</button>
+                <button data-demo-tab="materials" type="button" aria-pressed="false"><x-folios.gajo area="materiales" :size="16" />Materiales</button>
+                <button data-demo-tab="traceability" type="button" aria-pressed="false"><x-folios.gajo area="consultas" :size="16" />Trazabilidad</button>
             </nav>
 
             <section class="demo-content">

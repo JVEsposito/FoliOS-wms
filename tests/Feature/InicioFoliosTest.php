@@ -21,7 +21,10 @@ class InicioFoliosTest extends TestCase
             ->assertSee('id="foliosInicio"', false)
             ->assertSee('id="foliosLoginForm"', false)
             ->assertSee('data-inicio-panel="sin-oficinas"', false)
-            ->assertSee('Un solo acceso para toda la planta.')
+            ->assertSee('Operación de planta')
+            ->assertSee('Iniciar sesión')
+            ->assertSee('name="email"', false)
+            ->assertSee('name="password"', false)
             ->assertDontSee('data-office-shell', false);
     }
 

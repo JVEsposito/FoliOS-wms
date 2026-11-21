@@ -1,4 +1,5 @@
 import { showOfficeToast } from './office-toast.js';
+import { initSagTools } from './office-sag-tools.js';
 
 const $ = (id) => document.getElementById(id);
 const tokenKey = 'estiba_wms_office_token';
@@ -7,16 +8,18 @@ let configuration;
 let stockRequest = 0;
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-export async function sagApi(path, options = {}) {
+export async function sagApi(path, options = {}, pdf = false) {
     const response = await fetch(`/api/contraparte-sag${path}`, {
-        ...options, headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
+        ...options, headers: { Accept: pdf ? 'application/json, application/pdf' : 'application/json', Authorization: `Bearer ${token}`, ...(typeof options.body === 'string' ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
     });
     if (response.status === 401) {
         localStorage.removeItem(tokenKey); token = null;
         $('officeApp').classList.add('is-hidden'); $('officeAccess').classList.remove('is-hidden');
     }
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.message || 'No se pudo completar la operación.');
+    if (response.status === 204) return null;
+    if (response.ok && pdf) return response.blob();
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(Object.values(body.errors || {}).flat().join(' ') || body.message || 'No se pudo completar la operación.');
     return body;
 }
 
@@ -94,4 +97,5 @@ async function enter() {
     await config(); $('officeAccess').classList.add('is-hidden'); $('officeApp').classList.remove('is-hidden'); await stock();
     const documents = await import('./office-sag-documents.js'); await documents.init();
 }
+initSagTools(sagApi, esc);
 if (token) run(enter);
