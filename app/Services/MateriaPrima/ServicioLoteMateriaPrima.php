@@ -87,7 +87,12 @@ class ServicioLoteMateriaPrima
                 $datos['operacion_id'],
                 null,
                 EstadoLoteMateriaPrima::Borrador,
-                ['payload_hash' => $hash],
+                [
+                    'payload_hash' => $hash,
+                    'csg_validado' => $preparados['segmento']->csg_snapshot,
+                    'csg' => $lote->csg_snapshot,
+                    'predio' => $lote->predio,
+                ],
             );
 
             return $this->cargar($lote);
@@ -121,7 +126,7 @@ class ServicioLoteMateriaPrima
                 throw new ConflictoOperacion('El lote cambió desde la última lectura.');
             }
 
-            $preparados = $this->prepararDatos($datos);
+            $preparados = $this->prepararDatos($datos, $lote);
             $this->asegurarNumeroUnico(
                 $preparados['recepcion']->temporada_id,
                 $preparados['recepcion']->cliente_id,
@@ -145,7 +150,13 @@ class ServicioLoteMateriaPrima
                 $datos['operacion_id'],
                 EstadoLoteMateriaPrima::Borrador,
                 EstadoLoteMateriaPrima::Borrador,
-                ['payload_hash' => $hash, 'version' => $lote->version],
+                [
+                    'payload_hash' => $hash,
+                    'version' => $lote->version,
+                    'csg_validado' => $preparados['segmento']->csg_snapshot,
+                    'csg' => $lote->csg_snapshot,
+                    'predio' => $lote->predio,
+                ],
             );
 
             return $this->cargar($lote);
@@ -921,7 +932,7 @@ class ServicioLoteMateriaPrima
      * @param  array<string, mixed>  $datos
      * @return array<string, mixed>
      */
-    private function prepararDatos(array $datos): array
+    private function prepararDatos(array $datos, ?LoteMateriaPrima $borrador = null): array
     {
         $segmento = SegmentoValidacionMp::query()
             ->with(['envases', 'validacion'])
@@ -950,7 +961,12 @@ class ServicioLoteMateriaPrima
             throw ValidationException::withMessages(['envases' => 'El segmento no contiene envases contenedores para repartir el neto.']);
         }
 
-        $csgId = $segmento->csg_validacion_id ?? ($datos['csg_validacion_id'] ?? null);
+        $csgValidadoId = $segmento->csg_validacion_id;
+        $csgDigitadoId = $datos['csg_validacion_id'] ?? null;
+        $predioCsgId = $datos['predio_csg_validacion_id'] ?? null;
+        $mismoOrigenBorrador = $borrador && $borrador->segmento_validacion_mp_id === $segmento->id
+            && $borrador->csg_validacion_id === ($predioCsgId ?? $csgDigitadoId);
+        $csgId = $predioCsgId ?? ($mismoOrigenBorrador ? $csgDigitadoId : ($csgValidadoId ?? $csgDigitadoId));
         $especieId = $recepcion->especie_validacion_id ?? ($datos['especie_validacion_id'] ?? null);
         $variedadId = $segmento->variedad_validacion_id ?? ($datos['variedad_validacion_id'] ?? null);
         $csg = CsgValidacion::query()
@@ -959,6 +975,12 @@ class ServicioLoteMateriaPrima
             ->where('activo', true)
             ->disponibleParaCliente($recepcion->cliente_id)
             ->first();
+        $predio = $predioCsgId ? $csg?->predioRegistrado() : ($datos['predio'] ?? null);
+        if ($predioCsgId && $predio === null) {
+            throw ValidationException::withMessages([
+                'predio_csg_validacion_id' => 'Selecciona un predio registrado y habilitado para el cliente de la recepción.',
+            ]);
+        }
         $especie = EspecieValidacion::query()
             ->whereKey($especieId)
             ->where('temporada_id', $recepcion->temporada_id)
@@ -979,11 +1001,20 @@ class ServicioLoteMateriaPrima
             || (isset($datos['variedad_validacion_id']) && $datos['variedad_validacion_id'] !== $variedad->id)) {
             throw ValidationException::withMessages(['catalogo' => 'El origen del lote debe coincidir con el segmento validado.']);
         }
-        if ($segmento->csg_validacion_id
-            && $segmento->csg_validacion_id !== $csg->id) {
-            throw ValidationException::withMessages([
-                'csg_validacion_id' => 'El CSG debe coincidir con la segregación confirmada en Validación MP.',
-            ]);
+        $conservaOrigen = $mismoOrigenBorrador && $borrador->predio === $predio;
+        if ($csgValidadoId && $csgValidadoId !== $csg->id && ! $conservaOrigen) {
+            $titularValidado = $segmento->csg?->productor;
+            if (! $predioCsgId || ! $titularValidado || ! $csg->productor?->comparteTitularCon($titularValidado)) {
+                throw ValidationException::withMessages([
+                    'predio_csg_validacion_id' => 'Selecciona un predio de la misma razón social que el CSG confirmado en Validación MP.',
+                ]);
+            }
+            $variedadesCsg = $csg->variedades()->pluck('variedades_validacion.id');
+            if ($variedadesCsg->isNotEmpty() && ! $variedadesCsg->contains($variedad->id)) {
+                throw ValidationException::withMessages([
+                    'predio_csg_validacion_id' => 'El predio seleccionado no está habilitado para la variedad del lote.',
+                ]);
+            }
         }
         if ($segmento->variedad_validacion_id
             && $segmento->variedad_validacion_id !== $variedad->id) {
@@ -999,7 +1030,7 @@ class ServicioLoteMateriaPrima
             ]);
         }
 
-        return compact('segmento', 'recepcion', 'csg', 'especie', 'variedad');
+        return compact('segmento', 'recepcion', 'csg', 'especie', 'variedad', 'predio');
     }
 
     /**
@@ -1050,7 +1081,7 @@ class ServicioLoteMateriaPrima
             'sdp' => $datos['sdp'],
             'ggn' => $datos['ggn'] ?? null,
             'fecha_cosecha' => $datos['fecha_cosecha'],
-            'predio' => $datos['predio'],
+            'predio' => $preparados['predio'],
             'especie_validacion_id' => $preparados['especie']->id,
             'especie_snapshot' => $preparados['especie']->nombre,
             'variedad_validacion_id' => $preparados['variedad']->id,
@@ -1402,7 +1433,7 @@ class ServicioLoteMateriaPrima
             'recepcion',
             'temporada',
             'cliente',
-            'csg',
+            'csg.productor:id,razon_social',
             'especie',
             'variedad',
             'calibre',

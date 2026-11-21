@@ -93,7 +93,7 @@ test('reasigna parte de un movimiento a otro CSG de la cuenta, con razón social
             assert.equal(movementQueries.at(-1).get('buscar'), '1512');
             // Es una opción más del menú de la fila; las correcciones existentes siguen ahí.
             const actions = page.locator('#movementsBody .office-action-select');
-            await actions.waitFor();
+            await actions.locator('option').filter({ hasText: /^Reasignar guía$/ }).waitFor({ state: 'attached' });
             const options = await actions.locator('option').allTextContents();
             assert.ok(options.includes('Reasignar guía'));
             assert.ok(options.includes('Reasignar movimiento a otro productor / CSG'));

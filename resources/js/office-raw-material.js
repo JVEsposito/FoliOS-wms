@@ -434,7 +434,12 @@ function renderLots() {
     elements.lotTableBody.innerHTML = state.lots.map((lot) => `
         <tr>
             <td><strong>${escapeHtml(lot.numero_lote)}</strong><small>${escapeHtml(lot.recepcion?.numero_recepcion)} · guía ${escapeHtml(lot.segmento?.numero_guia_despacho || lot.recepcion?.numero_guia_despacho)}</small><small>${escapeHtml(lot.cliente?.nombre)}</small></td>
-            <td><strong>CSG ${escapeHtml(lot.trazabilidad.csg)}</strong><small>SdP ${escapeHtml(lot.trazabilidad.sdp)} · GGN ${escapeHtml(lot.trazabilidad.ggn)}</small><small>${escapeHtml(lot.trazabilidad.predio)}${lot.trazabilidad.cuartel ? ` · ${escapeHtml(lot.trazabilidad.cuartel)}` : ' · Sin cuartel'}</small></td>
+            <td>
+                <strong>CSG ${escapeHtml(lot.trazabilidad.csg)}</strong>
+                <small>${escapeHtml(lot.trazabilidad.razon_social?.trim() || 'Razón social no registrada')}</small>
+                <small>SdP ${escapeHtml(lot.trazabilidad.sdp)} · GGN ${escapeHtml(lot.trazabilidad.ggn)}</small>
+                <small>${[lot.trazabilidad.predio, lot.trazabilidad.cuartel || 'Sin cuartel'].filter(Boolean).map(escapeHtml).join(' · ')}</small>
+            </td>
             <td><strong>${escapeHtml(lot.trazabilidad.especie)} · ${escapeHtml(lot.trazabilidad.variedad)}</strong><small>${escapeHtml(label(lot.trazabilidad.tipo_producto))}${lot.trazabilidad.calibre ? ` · Calibre histórico: ${escapeHtml(lot.trazabilidad.calibre)}` : ''}</small><small>Cosecha ${escapeHtml(lot.trazabilidad.fecha_cosecha)}</small></td>
             <td><strong>${(lot.envases.detalle || []).map((item) => `${escapeHtml(item.cantidad)} ${escapeHtml(label(item.tipo_envase))}`).join(' · ')}</strong>${plantBinsLabel(lot.envases.bins_prestados_planta) ? `<small data-plant-bins>${escapeHtml(plantBinsLabel(lot.envases.bins_prestados_planta))} · ${escapeHtml(lot.envases.cantidad_primarios)} bins en proceso</small>` : ''}<small class="weight-value">${escapeHtml(lot.pesos.destare_pendiente ? 'Kilos: pendiente de destare' : formatWeight(lot.pesos.kilos_netos_confirmados) + ' netos')}</small><small>${lot.pesos.destare_pendiente ? 'Confirma el lote después del destare' : lot.pesos.corregido_por_digitador ? `Calculado: ${escapeHtml(formatWeight(lot.pesos.kilos_netos_calculados))}` : 'Neto calculado confirmado'}</small></td>
             <td>${stateBadge(lot.estado)}<small>${lot.requiere_hidrocooler ? 'Con hidrocooler' : 'Sin hidrocooler'}</small>${lot.asignacion_camara?.camara ? `<small>Cámara ${escapeHtml(lot.asignacion_camara.camara.codigo)}</small>` : ''}</td>
@@ -442,21 +447,60 @@ function renderLots() {
         </tr>`).join('');
 }
 
-function fillBaseCatalogs() {
-    const form = elements.lotForm.elements;
+function availableLotCsg() {
     const clientId = state.selectedSegment?.recepcion?.cliente?.id;
-    const availableCsg = state.catalogs.csg.filter((item) => (
+    return state.catalogs.csg.filter((item) => (
         item.disponible_todos_clientes
         || item.cliente_ids?.includes(clientId)
     ));
+}
+
+function fillBaseCatalogs() {
+    const form = elements.lotForm.elements;
     form.csg_validacion_id.innerHTML = '<option value="">Seleccionar CSG</option>'
-        + availableCsg.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.codigo)} · ${escapeHtml(item.predio)}</option>`).join('');
+        + availableLotCsg().map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.codigo)} · ${escapeHtml(item.razon_social?.trim() || 'Razón social no registrada')}</option>`).join('');
     form.especie_validacion_id.innerHTML = '<option value="">Seleccionar especie</option>'
         + state.catalogs.especies.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.nombre)}</option>`).join('');
     form.tipo_producto.innerHTML = state.catalogs.tipos_producto
         .map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(label(type))}</option>`)
         .join('');
     updateSpeciesDependants();
+}
+
+function sameLotProducer(first, second) {
+    if (!first || !second) return false;
+    if (first.rut_hash && second.rut_hash) return first.rut_hash === second.rut_hash;
+    return Boolean(first.razon_social && first.razon_social === second.razon_social);
+}
+
+function updateLotPredios(savedPredio = null) {
+    const form = elements.lotForm.elements;
+    const available = availableLotCsg();
+    const selected = available.find((item) => item.id === form.csg_validacion_id.value);
+    const origin = available.find((item) => item.id === state.selectedSegment?.csg?.id) || selected;
+    const variety = form.variedad_validacion_id.value;
+    const predios = selected ? available.filter((item) => item.predio && (
+        item.id === selected.id || (
+            sameLotProducer(origin.titular_predios, item.titular_predios)
+            && (!variety || !item.variedad_ids?.length || item.variedad_ids.includes(variety))
+        )
+    )) : [];
+    const select = form.predio_csg_validacion_id;
+    const manual = selected && (!selected.predio || (savedPredio && savedPredio !== selected.predio));
+    const placeholder = selected ? 'Predio ingresado manualmente' : 'Primero selecciona un CSG';
+    select.innerHTML = (!selected || manual ? `<option value="">${placeholder}</option>` : '')
+        + predios.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.predio)} · CSG ${escapeHtml(item.codigo)}</option>`).join('');
+    select.value = selected && !manual ? selected.id : '';
+    select.dataset.manualCsg = manual ? selected.id : '';
+    select.disabled = predios.length === 0;
+    select.hidden = Boolean(selected && predios.length === 0);
+    form.predio.value = savedPredio ?? '';
+    form.predio.hidden = !manual;
+    form.predio.disabled = !manual;
+    byId('lotPredioLabel').htmlFor = select.hidden ? form.predio.id : select.id;
+    const hint = byId('lotPredioHint');
+    hint.hidden = predios.length < 2;
+    hint.textContent = hint.hidden ? '' : 'El lote usa el CSG del predio seleccionado.';
 }
 
 function updateSpeciesDependants(selectedVariety = '') {
@@ -528,7 +572,6 @@ function openCreateLot(segmentId) {
     form.requiere_hidrocooler.value = '0';
     if (segment.csg) {
         form.csg_validacion_id.value = segment.csg.id;
-        form.predio.value = segment.csg.predio || '';
     }
     if (segment.variedad) {
         form.especie_validacion_id.value = segment.variedad.especie_id;
@@ -537,6 +580,7 @@ function openCreateLot(segmentId) {
     form.csg_validacion_id.disabled = Boolean(segment.csg);
     form.especie_validacion_id.disabled = Boolean(segment.variedad);
     form.variedad_validacion_id.disabled = Boolean(segment.variedad);
+    updateLotPredios();
     form.cuartel.value = segment.cuartel || '';
     elements.lotDialog.showModal();
     form.numero_lote.focus();
@@ -572,7 +616,6 @@ function openEditLot(lotId) {
     form.fecha_cosecha.value = lot.trazabilidad.fecha_cosecha;
     form.fecha_cosecha.max = localDateValue();
     form.csg_validacion_id.value = lot.trazabilidad.csg_id;
-    form.predio.value = lot.trazabilidad.predio;
     form.sdp.value = lot.trazabilidad.sdp;
     form.ggn.value = lot.trazabilidad.ggn;
     form.especie_validacion_id.value = lot.trazabilidad.especie_id;
@@ -580,6 +623,7 @@ function openEditLot(lotId) {
     form.csg_validacion_id.disabled = Boolean(segment.csg);
     form.especie_validacion_id.disabled = Boolean(segment.variedad);
     form.variedad_validacion_id.disabled = Boolean(segment.variedad);
+    updateLotPredios(lot.trazabilidad.predio);
     form.cuartel.value = lot.trazabilidad.cuartel;
     form.tipo_producto.value = lot.trazabilidad.tipo_producto;
     updateCalculatedNet();
@@ -591,6 +635,7 @@ function openEditLot(lotId) {
 
 function lotPayload() {
     const form = elements.lotForm.elements;
+    const predioCsg = form.predio_csg_validacion_id.value;
     return {
         operacion_id: form.operacion_id.value,
         version_conocida: form.version_conocida.value || undefined,
@@ -600,7 +645,8 @@ function lotPayload() {
         sdp: form.sdp.value,
         ggn: form.ggn.value,
         fecha_cosecha: form.fecha_cosecha.value,
-        predio: form.predio.value,
+        predio_csg_validacion_id: predioCsg || undefined,
+        predio: predioCsg ? undefined : form.predio.value,
         especie_validacion_id: form.especie_validacion_id.value,
         variedad_validacion_id: form.variedad_validacion_id.value,
         cuartel: form.cuartel.value,
@@ -968,13 +1014,23 @@ elements.segmentList.addEventListener('click', (event) => {
 
 elements.lotForm.elements.especie_validacion_id.addEventListener('change', () => {
     updateSpeciesDependants();
+    const predio = elements.lotForm.elements.predio;
+    updateLotPredios(predio.disabled ? null : predio.value);
 });
 
-elements.lotForm.elements.csg_validacion_id.addEventListener('change', () => {
-    const selected = state.catalogs?.csg.find(
-        (item) => item.id === elements.lotForm.elements.csg_validacion_id.value,
-    );
-    if (selected) elements.lotForm.elements.predio.value = selected.predio || '';
+elements.lotForm.elements.variedad_validacion_id.addEventListener('change', () => {
+    const predio = elements.lotForm.elements.predio;
+    updateLotPredios(predio.disabled ? null : predio.value);
+});
+
+elements.lotForm.elements.csg_validacion_id.addEventListener('change', () => updateLotPredios());
+
+elements.lotForm.elements.predio_csg_validacion_id.addEventListener('change', (event) => {
+    const form = elements.lotForm.elements;
+    const selectedPredio = event.target.value;
+    form.csg_validacion_id.value = selectedPredio || event.target.dataset.manualCsg;
+    form.predio.disabled = Boolean(selectedPredio);
+    form.predio.hidden = form.predio.disabled;
 });
 
 ['sdp', 'ggn'].forEach((name) => {

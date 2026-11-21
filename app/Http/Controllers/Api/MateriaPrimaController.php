@@ -24,6 +24,7 @@ use App\Models\Camara;
 use App\Models\CsgValidacion;
 use App\Models\EspecieValidacion;
 use App\Models\LoteMateriaPrima;
+use App\Models\ProductorCsg;
 use App\Models\SegmentoValidacionMp;
 use App\Models\Temporada;
 use App\Models\VariedadValidacion;
@@ -119,6 +120,7 @@ class MateriaPrimaController extends Controller
             ->where('activo', true)
             ->with([
                 'variedades:id',
+                'productor:id,rut,razon_social,estado_sag',
                 'productor.clientes' => fn ($consulta) => $consulta
                     ->where('clientes_productores_csg.activo', true),
             ])
@@ -127,7 +129,9 @@ class MateriaPrimaController extends Controller
             ->map(fn (CsgValidacion $item): array => [
                 'id' => $item->id,
                 'codigo' => $item->codigo,
-                'predio' => $item->predio,
+                'predio' => $item->predioRegistrado(),
+                'razon_social' => $item->productor?->razon_social,
+                'titular_predios' => $item->productor?->titularPredios(),
                 'disponible_todos_clientes' => ! $item->productor_csg_id,
                 'cliente_ids' => $item->productor?->clientes->pluck('id')->values() ?? [],
                 'variedad_ids' => $item->variedades->pluck('id')->values(),
@@ -453,7 +457,8 @@ class MateriaPrimaController extends Controller
             'recepcion',
             'temporada',
             'cliente',
-            'csg',
+            'csg:id,productor_csg_id',
+            'csg.productor:id,razon_social',
             'especie',
             'variedad',
             'calibre',
@@ -479,6 +484,8 @@ class MateriaPrimaController extends Controller
         $huella = json_encode([
             'temporada_id' => $temporada->id,
             'version_catalogo' => $temporada->version_catalogo,
+            'titulares_csg' => ProductorCsg::query()->orderBy('id')->toBase()
+                ->get(['id', 'rut', 'razon_social', 'estado_sag']),
             'tipos_producto' => array_column(TipoProductoMateriaPrima::cases(), 'value'),
             'envases_primarios' => array_column(array_filter(TipoEnvaseRomana::cases(), fn ($tipo): bool => $tipo->contieneFruta()), 'value'),
             'camaras' => $camaras
