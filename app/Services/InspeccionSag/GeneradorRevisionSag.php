@@ -43,8 +43,8 @@ class GeneradorRevisionSag
             'Fuente '.$revision['fuente'],
         ];
         if ($revision['consulta_hasta']) {
-            $desde = new DateTimeImmutable($revision['consulta_desde'])->format('d-m-Y H:i');
-            $hasta = new DateTimeImmutable($revision['consulta_hasta'])->format('d-m-Y H:i');
+            $desde = (new DateTimeImmutable($revision['consulta_desde']))->format('d-m-Y H:i');
+            $hasta = (new DateTimeImmutable($revision['consulta_hasta']))->format('d-m-Y H:i');
             $metadatos[] = 'Consulta SAG '.$desde.($desde === $hasta ? '' : ' a '.$hasta).' (hora de planta)';
         }
         $porFecha = array_map(fn (array $fila): array => [
