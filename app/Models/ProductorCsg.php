@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 #[Fillable([
     'codigo',
@@ -53,6 +54,35 @@ class ProductorCsg extends Model
     public function ultimaConsultaPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'ultima_consulta_user_id');
+    }
+
+    /** @return array{rut_hash: ?string, razon_social: string}|null */
+    public function titularPredios(): ?array
+    {
+        if ($this->estado_sag !== 'activo') {
+            return null;
+        }
+
+        $rut = preg_replace('/[.\s-]+/u', '', mb_strtoupper($this->rut ?? ''));
+
+        return [
+            'rut_hash' => filled($rut) ? hash_hmac('sha256', $rut, (string) config('app.key')) : null,
+            'razon_social' => Str::lower(Str::squish($this->razon_social)),
+        ];
+    }
+
+    public function comparteTitularCon(self $otro): bool
+    {
+        $titular = $this->titularPredios();
+        $comparado = $otro->titularPredios();
+        if (! $titular || ! $comparado) {
+            return false;
+        }
+        if ($titular['rut_hash'] !== null && $comparado['rut_hash'] !== null) {
+            return $titular['rut_hash'] === $comparado['rut_hash'];
+        }
+
+        return $titular['razon_social'] !== '' && $titular['razon_social'] === $comparado['razon_social'];
     }
 
     public function getEstadoAsociacionAttribute(): string

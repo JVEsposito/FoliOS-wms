@@ -97,7 +97,12 @@
                     <label class="field"><span>Número de lote *</span><input name="numero_lote" maxlength="80" autocomplete="off" required></label>
                     <label class="field"><span>Fecha cosecha *</span><input name="fecha_cosecha" type="date" required></label>
                     <label class="field"><span>CSG *</span><select name="csg_validacion_id" required></select></label>
-                    <label class="field"><span>Predio *</span><input name="predio" maxlength="150" required></label>
+                    <div class="field">
+                        <label id="lotPredioLabel" for="lotPredioSelect">Predio *</label>
+                        <select name="predio_csg_validacion_id" id="lotPredioSelect" aria-describedby="lotPredioHint"></select>
+                        <input name="predio" id="lotPredioManual" aria-label="Predio manual" maxlength="150" required hidden disabled>
+                        <small id="lotPredioHint" hidden></small>
+                    </div>
                     <label class="field"><span>SdP *</span><input name="sdp" inputmode="numeric" pattern="[0-9]+" maxlength="30" required></label>
                     <label class="field"><span>GGN · 13 dígitos (opcional)</span><input name="ggn" inputmode="numeric" pattern="[0-9]{13}" minlength="13" maxlength="13"></label>
                     <label class="field"><span>Especie *</span><select name="especie_validacion_id" required></select></label>

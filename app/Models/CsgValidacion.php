@@ -27,6 +27,13 @@ class CsgValidacion extends Model
         return $this->belongsTo(Temporada::class);
     }
 
+    public function predioRegistrado(): ?string
+    {
+        $predio = trim($this->predio ?? '');
+
+        return $predio !== '' && mb_strtolower($predio) !== 'sin predio informado' ? $predio : null;
+    }
+
     public function variedades(): BelongsToMany
     {
         return $this->belongsToMany(

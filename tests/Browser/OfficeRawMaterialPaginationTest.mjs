@@ -53,7 +53,7 @@ test('lotes: búsqueda desde Romana encuentra recepción y paginación conserva 
         await page.goto('http://localhost/oficina/materia-prima/lotes?buscar=REC-2611-0017');
         await page.getByText('LOTE-ANTIGUO-4443', { exact: true }).waitFor();
         assert.match(await origin.innerText(), /Razón social no registrada/);
-        assert.doesNotMatch(await origin.innerText(), /Fundo El Maitén/);
+        assert.match(await origin.innerText(), /Fundo El Maitén/);
         assert.equal(await page.locator('#lotFilters [name="buscar"]').inputValue(), 'REC-2611-0017');
         assert.equal(queries[0].buscar, 'REC-2611-0017'); assert.equal(queries[0].estado, undefined);
         await page.locator('#lotFilters [name="buscar"]').fill('');
@@ -61,8 +61,7 @@ test('lotes: búsqueda desde Romana encuentra recepción y paginación conserva 
         await page.getByText('LOTE-NUEVO', { exact: true }).waitFor();
         const renderedOrigin = await origin.innerText();
         assert.match(renderedOrigin, /CSG 123456\s+Agrícola El Maitén SpA/);
-        assert.match(renderedOrigin, /Cuartel 7/);
-        assert.doesNotMatch(renderedOrigin, /Fundo El Maitén/);
+        assert.match(renderedOrigin, /Fundo El Maitén · Cuartel 7/);
         assert.match(await page.locator('#lotPageStatus').innerText(), /Página 1 de 2 · 101 lotes/);
         assert.equal(await page.locator('#lotPrevious').isDisabled(), true);
         await page.locator('#lotNext').click();

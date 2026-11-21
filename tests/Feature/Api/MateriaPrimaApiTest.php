@@ -708,6 +708,89 @@ class MateriaPrimaApiTest extends TestCase
             ->assertDontSee('Camino Interior 1500');
     }
 
+    public function test_digitacion_elige_un_predio_del_mismo_titular_y_conserva_el_segmento_validado(): void
+    {
+        $contexto = $this->prepararRecepcionValidada();
+        $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
+        $origen = CsgValidacion::findOrFail($contexto['csg_id']);
+        $asociar = function (CsgValidacion $csg, ?string $rut, bool $asociado = true) use ($contexto, $digitador): ProductorCsg {
+            $productor = ProductorCsg::create([
+                'codigo' => $csg->codigo, 'rut' => $rut, 'razon_social' => 'Agrícola El Maitén SpA',
+                'predio' => $csg->predio, 'direccion' => 'Camino Interior 1500', 'estado_sag' => 'activo',
+                'fuente_url' => 'https://ejemplo.invalid/csg', 'primera_verificacion_at' => now(), 'ultima_verificacion_at' => now(),
+                'ultima_consulta_user_id' => $digitador->id, 'respuesta_hash' => hash('sha256', $csg->codigo),
+            ]);
+            $csg->update(['productor_csg_id' => $productor->id]);
+            if ($asociado) {
+                $productor->clientes()->attach($contexto['cliente']->id, [
+                    'id' => (string) Str::uuid(), 'activo' => true,
+                    'asociado_por_user_id' => $digitador->id, 'actualizado_por_user_id' => $digitador->id,
+                ]);
+            }
+
+            return $productor;
+        };
+        $crearCsg = fn (string $codigo, string $predio): CsgValidacion => CsgValidacion::create([
+            'temporada_id' => $origen->temporada_id, 'codigo' => $codigo, 'predio' => $predio, 'activo' => true,
+        ]);
+        $alternativo = $crearCsg('12345679', 'Fundo Las Brisas');
+        $homonimo = $crearCsg('12345680', 'Fundo El Roble');
+        $sinAsociar = $crearCsg('12345681', 'Fundo Los Boldos');
+        $asociar($origen, '76.123.456-0');
+        $productorAlternativo = $asociar($alternativo, null);
+        $asociar($homonimo, '77.123.456-0');
+        $asociar($sinAsociar, '76.123.456-0', false);
+        $alternativo->variedades()->attach($contexto['variedad_id']);
+
+        $catalogo = $this->actingAs($digitador, 'sanctum')->getJson('/api/materia-prima/catalogos')->assertOk();
+        $porId = collect($catalogo->json('csg'))->keyBy('id');
+        $this->assertSame('Agrícola El Maitén SpA', $porId[$alternativo->id]['razon_social']);
+        $this->assertSame('Fundo Las Brisas', $porId[$alternativo->id]['predio']);
+        $this->assertSame(['rut_hash' => null, 'razon_social' => 'agrícola el maitén spa'], $porId[$alternativo->id]['titular_predios']);
+        $catalogo->assertDontSee('Camino Interior 1500');
+
+        foreach ([$homonimo, $sinAsociar] as $noHabilitado) {
+            $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, [
+                'csg_validacion_id' => $noHabilitado->id, 'predio_csg_validacion_id' => $noHabilitado->id,
+            ]))->assertUnprocessable()->assertJsonValidationErrors('predio_csg_validacion_id');
+        }
+        $this->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto, [
+            'csg_validacion_id' => $alternativo->id,
+        ]))->assertUnprocessable()->assertJsonValidationErrors('catalogo');
+
+        $payload = $this->payloadLote($contexto, [
+            'csg_validacion_id' => $alternativo->id, 'predio_csg_validacion_id' => $alternativo->id,
+        ]);
+        unset($payload['predio']);
+        $lote = $this->postJson('/api/materia-prima/lotes', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.trazabilidad.csg', $alternativo->codigo)
+            ->assertJsonPath('data.trazabilidad.razon_social', 'Agrícola El Maitén SpA')
+            ->assertJsonPath('data.trazabilidad.predio', 'Fundo Las Brisas')
+            ->assertJsonPath('data.segmento.id', $contexto['segmento_id'])
+            ->assertJsonPath('data.pesos.kilos_netos_calculados', 18000)
+            ->json('data');
+        $this->postJson('/api/materia-prima/lotes', $payload)->assertCreated()->assertJsonPath('data.id', $lote['id']);
+        $this->assertDatabaseHas('segmentos_validacion_mp', [
+            'id' => $contexto['segmento_id'], 'csg_validacion_id' => $origen->id,
+        ]);
+        $evento = EventoLoteMateriaPrima::query()->where('lote_materia_prima_id', $lote['id'])->firstOrFail();
+        $this->assertSame($origen->codigo, $evento->datos['csg_validado']);
+        $this->assertSame($alternativo->codigo, $evento->datos['csg']);
+
+        $productorAlternativo->update(['rut' => '76123456-0', 'razon_social' => 'Agrícola El Maitén S.P.A.']);
+        $catalogoActualizado = $this->withHeader('If-None-Match', $catalogo->headers->get('ETag'))
+            ->getJson('/api/materia-prima/catalogos')->assertOk();
+        $titulares = collect($catalogoActualizado->json('csg'))->keyBy('id');
+        $this->assertSame('Agrícola El Maitén S.P.A.', $titulares[$alternativo->id]['razon_social']);
+        $this->assertSame($titulares[$origen->id]['titular_predios']['rut_hash'], $titulares[$alternativo->id]['titular_predios']['rut_hash']);
+
+        $alternativo->update(['predio' => 'Las Brisas nuevo']);
+        $this->putJson("/api/materia-prima/lotes/{$lote['id']}", $this->payloadLote($contexto, [
+            'version_conocida' => $lote['version'], 'csg_validacion_id' => $alternativo->id, 'predio' => $lote['trazabilidad']['predio'],
+        ]))->assertOk()->assertJsonPath('data.trazabilidad.predio', 'Fundo Las Brisas');
+    }
+
     public function test_lotes_y_resumen_no_muestran_temporadas_anteriores_ni_operacion_sin_temporada_activa(): void
     {
         $contexto = $this->prepararRecepcionValidada();

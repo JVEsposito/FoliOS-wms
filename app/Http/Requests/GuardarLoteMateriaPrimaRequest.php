@@ -22,10 +22,11 @@ class GuardarLoteMateriaPrimaRequest extends FormRequest
             'segmento_validacion_mp_id' => ['required', 'uuid', 'exists:segmentos_validacion_mp,id'],
             'numero_lote' => ['required', 'string', 'max:80'],
             'csg_validacion_id' => ['sometimes', 'nullable', 'uuid', 'exists:csg_validacion,id'],
+            'predio_csg_validacion_id' => ['sometimes', 'nullable', 'uuid', 'exists:csg_validacion,id'],
             'sdp' => ['required', 'string', 'regex:/^[0-9]+$/', 'max:30'],
             'ggn' => ['nullable', 'string', 'regex:/^[0-9]{13}$/'],
             'fecha_cosecha' => ['required', 'date', 'before_or_equal:today'],
-            'predio' => ['required', 'string', 'max:150'],
+            'predio' => ['required_without:predio_csg_validacion_id', 'nullable', 'string', 'max:150'],
             'especie_validacion_id' => ['sometimes', 'nullable', 'uuid', 'exists:especies_validacion,id'],
             'variedad_validacion_id' => ['sometimes', 'nullable', 'uuid', 'exists:variedades_validacion,id'],
             'cuartel' => ['nullable', 'string', 'max:100'],
@@ -51,7 +52,6 @@ class GuardarLoteMateriaPrimaRequest extends FormRequest
             'numero_lote' => mb_strtoupper(trim((string) $this->input('numero_lote'))),
             'sdp' => trim((string) $this->input('sdp')),
             'ggn' => filled($this->input('ggn')) ? trim((string) $this->input('ggn')) : null,
-            'predio' => trim((string) $this->input('predio')),
             'cuartel' => filled($this->input('cuartel'))
                 ? trim((string) $this->input('cuartel'))
                 : null,
