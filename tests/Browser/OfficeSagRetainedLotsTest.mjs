@@ -43,19 +43,22 @@ test('registra una retención y libera parcialmente un bloque sin perder el borr
         await page.locator('#slNew').click();
         await page.locator('#slForm [name=cliente_id]').selectOption('client');
         await page.locator('#slForm [name=numero_lote]').fill('10056');
-        await page.locator('#slForm [name=estado]').selectOption('retenido');
+        await page.locator('#slForm [name=estado]').selectOption('liberado_con_restricciones');
         await page.locator('#slForm [name=observacion]').fill('Detección informada por contraparte.');
         await page.locator('[data-destination="bloque|block"]').check();
         await page.locator('#slSave').click();
         await page.locator('#slVersion').filter({ hasText: 'VERSIÓN 1' }).waitFor();
         assert.deepEqual(writes[0].destinos, [{ tipo: 'bloque', id: 'block' }]);
+        assert.equal(writes[0].estado, 'liberado_con_restricciones');
         assert.equal(await page.locator('#slForm [name=cliente_id]').isDisabled(), true);
         assert.match(await page.locator('#slFolios').textContent(), /60001.*1 \/ 120.*89868.*CAM-09.*CAR-1/);
         await page.locator('#slExpand').click();
         assert.deepEqual(await page.locator('[data-destination^="pais|"]').evaluateAll((inputs) => inputs.map((input) => input.checked)), [true, true]);
         // Quitar todos limpia también «Todos los destinos»; luego se busca y marca el que sigue restringido.
         await page.locator('#slForm [name=todos_destinos]').check();
+        assert.equal(await page.locator('#slForm [name=estado]').inputValue(), 'retenido');
         await page.locator('#slClear').click();
+        assert.equal(await page.locator('#slForm [name=estado]').inputValue(), 'liberado_con_restricciones');
         assert.equal(await page.locator('#slForm [name=todos_destinos]').isChecked(), false);
         assert.equal(await page.locator('#slDestinations input:checked').count(), 0);
         assert.equal(await page.locator('#slSelected').textContent(), '0 países / bloques seleccionados.');

@@ -39,7 +39,7 @@ class ResumenDespachoOperacion
                 'presenciaAndenActiva.anden:id,codigo,nombre',
                 'embarque:id,carga_id,cliente_id,codigo',
                 'embarque.cliente:id,nombre',
-                'embarque.instructivos' => fn ($consulta) => $consulta->orderBy('orden')->orderBy('id'),
+                'embarque.instructivos' => fn ($consulta) => $consulta->with('paisDestino:id,nombre_es')->orderBy('orden')->orderBy('id'),
                 'incidencias' => fn ($consulta) => $consulta
                     ->where('incidencias_carga_folio.estado', EstadoIncidenciaCarga::Abierta->value)
                     ->with('asignacion:id,carga_id,instructivo_embarque_id'),
@@ -146,7 +146,7 @@ class ResumenDespachoOperacion
                 'numero_externo' => $instructivo->numero_externo,
                 'booking' => $instructivo->booking,
                 'recibidor' => $instructivo->recibidor,
-                'destino' => $alertas->first()['destino'] ?? $instructivo->destino_pais,
+                'destino' => $instructivo->paisDestino?->nombre_es ?? $alertas->first()['destino'] ?? $instructivo->destino_pais,
                 ...$this->subestado($grupo, $progreso['segregaciones'][$instructivo->id] ?? null,
                     $instructivo->cantidad_pallets,
                     $incidencias->filter(fn ($incidencia): bool => $incidencia->asignacion?->instructivo_embarque_id === $instructivo->id)->count(),

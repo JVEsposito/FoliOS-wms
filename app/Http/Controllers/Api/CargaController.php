@@ -112,7 +112,7 @@ class CargaController extends Controller
     ): Response {
         Gate::authorize('consultar-cargas-operacion');
 
-        $etag = 'cargas-operacion-'.$revision->calcular();
+        $etag = 'cargas-operacion-v2-'.$revision->calcular();
         $respuestaCondicional = $this->configurarCacheOperacion(response('', 200), $etag);
 
         if ($respuestaCondicional->isNotModified($request)) {
@@ -159,7 +159,7 @@ class CargaController extends Controller
         $turno = $ventanas->actual();
         $temporada = app(ServicioTemporadaActiva::class)->buscar();
         // El cambio de turno invalida la bandeja aunque no haya cambiado ninguna carga.
-        $etag = 'cargas-turno-v2-'.$temporada?->id.'-'.$turno['inicio']->timestamp.'-'.$turno['fin']->timestamp.'-'.$revision->calcular();
+        $etag = 'cargas-turno-v3-'.$temporada?->id.'-'.$turno['inicio']->timestamp.'-'.$turno['fin']->timestamp.'-'.$revision->calcular();
         $condicional = $this->configurarCacheOperacion(response('', 200), $etag);
         if ($condicional->isNotModified($request)) {
             return $condicional;

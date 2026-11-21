@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\RetencionLoteSag;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -21,7 +22,7 @@ class GuardarRetencionLoteSagRequest extends FormRequest
             'version' => [$nuevo ? 'prohibited' : 'required', 'integer', 'min:1'],
             'cliente_id' => [$nuevo ? 'required' : 'prohibited', 'uuid', 'exists:clientes,id'],
             'numero_lote' => [$nuevo ? 'required' : 'prohibited', 'string', 'max:100', 'not_regex:/[\x00-\x1f\x7f]/u'],
-            'estado' => ['required', Rule::in($nuevo ? ['con_observaciones', 'retenido'] : ['con_observaciones', 'retenido', 'liberado'])],
+            'estado' => ['required', Rule::in($nuevo ? array_diff(RetencionLoteSag::ESTADOS, ['liberado']) : RetencionLoteSag::ESTADOS)],
             'fecha_deteccion' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'observacion' => ['required', 'string', 'min:5', 'max:4000'],
             'referencia_informe' => ['nullable', 'string', 'max:250'],

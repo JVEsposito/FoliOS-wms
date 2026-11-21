@@ -68,6 +68,7 @@ class ServicioOperacionAhora
         $calendario = app(CalendarioOperativo::class);
         $jornada = $calendario->clasificar($ahora);
         app(ServicioVerificacionesUbicacion::class)->vencer($temporada);
+        $despacho = app(ResumenDespachoOperacion::class)->obtener($temporada);
 
         return [
             'generado_at' => $ahora->toAtomString(),
@@ -97,8 +98,8 @@ class ServicioOperacionAhora
                     ...$estadoEmergencias->resumir($plan),
                 ])->all(),
             'verificaciones' => $this->verificaciones($temporada, $ventana),
-            'despacho' => app(ResumenDespachoOperacion::class)->obtener($temporada),
-            'retenciones_sag' => app(ServicioRetencionesLoteSag::class)->alertasOperacion(),
+            'despacho' => $despacho,
+            'retenciones_sag' => app(ServicioRetencionesLoteSag::class)->alertasOperacion($temporada->id, $despacho['cargas']),
             'planificador' => [
                 ...$this->puestoMando->obtener($temporada),
                 'conciliacion' => $this->conciliacion->diagnosticar($temporada, 0),

@@ -16,7 +16,9 @@ class TareaMovimientoResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'alertas_sag' => app(ServicioRetencionesLoteSag::class)->paraFolios([$this->folio_id])[$this->folio_id] ?? [],
+            'alertas_sag' => $this->estado->esActiva()
+                ? app(ServicioRetencionesLoteSag::class)->alertasTarea($this->folio_id)
+                : [],
             'permite_sesion_por_tarea' => $this->maniobra_operacional_id !== null
                 && (($this->planOperacional?->contexto ?? [])['planner_horizon'] ?? config('planificador.horizon')) === 'rolling',
             'plan' => $this->whenLoaded('planOperacional', fn (): array => [

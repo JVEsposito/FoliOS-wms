@@ -100,7 +100,8 @@ test('Despacho PT muestra los subestados de cada instructivo sin duplicar el cam
         Object.assign(load, { alertas_sag: [compatible, bloqueada], salida_restringida_sag: true });
         await page.locator('#operationRefresh').click();
         await second.getByText('Salida restringida SAG', { exact: true }).waitFor();
-        assert.match(await first.innerText(), /Cargado completo\s+Restricciones en otros destinos · China/);
+        assert.match(await first.innerText(), /Cargado completo/);
+        assert.equal(await first.locator('.sag-lot-alerts__compact').count(), 0);
         assert.match(await second.innerText(), /1 folio bloqueado · Perú/);
         assert.equal(await rows.locator('.sag-lot-alerts ul').count(), 0);
         await page.setViewportSize({ width: 768, height: 1000 });

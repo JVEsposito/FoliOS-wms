@@ -1326,7 +1326,13 @@ function dispatchProgress(label, done, total, detail, waiting = 0) {
 }
 
 function dispatchLoadState(load) {
-    if (load.salida_restringida_sag) return signal('Salida restringida SAG', 'critical');
+    if (load.salida_restringida_sag) {
+        const blocked = (load.alertas_sag || []).filter((alert) => alert.bloquea_salida);
+        if (blocked.length && blocked.every((alert) => alert.destino_sin_definir)) {
+            return signal('Destino SAG pendiente', 'warning');
+        }
+        return signal('Salida restringida SAG', 'critical');
+    }
     if (load.incidencias_abiertas) return signal(`${number(load.incidencias_abiertas)} ${load.incidencias_abiertas === 1 ? 'incidencia' : 'incidencias'}`, 'critical');
     if (load.lista_para_cerrar) return signal('Lista para cerrar', 'success');
     if (['cargado_completo', 'separacion_completa'].includes(load.estado)) return signal(DISPATCH_STATES[load.estado], 'success');
@@ -1507,7 +1513,10 @@ function renderVerifications(data = {}) {
 function render(data) {
     state.snapshot = data;
     const sag = document.getElementById('operationSagLotAlerts');
-    if (sag) { sag.hidden = !(data.retenciones_sag || []).length; sag.innerHTML = sagLotAlertsHtml(data.retenciones_sag || []); }
+    if (sag) {
+        sag.innerHTML = sagLotAlertsHtml(data.retenciones_sag);
+        sag.hidden = !sag.innerHTML;
+    }
     renderHeader(data);
     renderMetrics(data);
     renderPlantFlow(data);
