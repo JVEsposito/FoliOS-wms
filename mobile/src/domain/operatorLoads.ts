@@ -1,7 +1,7 @@
 import type { LoadFolio, RefrigeratedLoad } from './estiba';
 
 export type OperatorLoad = Omit<RefrigeratedLoad, 'estado' | 'folios'> & {
-  estado: RefrigeratedLoad['estado'] | 'despachada' | 'cerrada' | 'cancelada';
+  estado: RefrigeratedLoad['estado'] | 'cerrada' | 'cancelada' | 'retornada' | 'retorno_parcial';
   folios: Array<Omit<LoadFolio, 'estado_carga'> & { estado_carga: string }>;
   progreso: RefrigeratedLoad['progreso'] & { folios_concentrados?: string[] };
   camion_en_anden: { patente: string; anden: { nombre: string } | null } | null;
@@ -15,8 +15,10 @@ export type OperatorLoadFeed = {
   meta: { turno: { nombre: string; inicio_at: string; fin_at: string; zona_horaria: string } };
 };
 
-export function isFinishedLoad(load: Pick<OperatorLoad, 'estado'>) {
-  return ['cerrada', 'despachada', 'cancelada'].includes(load.estado);
+export function isFinishedLoad(load: Pick<OperatorLoad, 'estado' | 'folios'>) {
+  return ['cerrada', 'cancelada', 'retornada', 'retorno_parcial'].includes(load.estado)
+    || (load.estado === 'despachada' && load.folios.length > 0
+      && load.folios.every((folio) => folio.estado_carga === 'despachado'));
 }
 
 export function operatorLoadState(state: string) {

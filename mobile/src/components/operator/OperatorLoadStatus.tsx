@@ -54,7 +54,7 @@ function LoadStatusCard({ load, zone, expanded, onToggle }: { load: OperatorLoad
     <View style={styles.card}>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={onToggle} style={styles.cardHeading}>
         <FolioIdentifier value={load.codigo} digits={3} style={styles.code} />
-        <Text style={styles.copy}>{operatorLoadState(load.estado)}</Text>
+        <Text style={styles.copy}>{load.estado === 'despachada' && !finished ? 'Todo en andén' : operatorLoadState(load.estado)}</Text>
         <Text style={styles.priority}>Prioridad {load.prioridad} · {expanded ? 'Ocultar detalle −' : 'Ver detalle +'}</Text>
       </Pressable>
       {load.numero_orden_externa ? <Text style={styles.copy}>Orden: {load.numero_orden_externa}</Text> : null}

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\CondicionTermicaFolio;
 use App\Enums\EstadoCarga;
+use App\Enums\EstadoCargaFolio;
 use App\Enums\EstadoIncidenciaCarga;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\EstadoTareaMovimiento;
@@ -175,9 +176,13 @@ class CargaController extends Controller
                         ->where('cerrada_at', '>=', $inicio)->where('cerrada_at', '<', $fin))
                     ->orWhere(fn (Builder $canceladas): Builder => $canceladas->where('estado', EstadoCarga::Cancelada)
                         ->whereNotNull('publicada_at')->where('cancelada_at', '>=', $inicio)->where('cancelada_at', '<', $fin))
-                    // El estado legado «despachada» no tiene una fecha propia de término.
+                    // Las reservas en andén siguen vigentes al cambiar el turno.
                     ->orWhere(fn (Builder $despachadas): Builder => $despachadas->where('estado', EstadoCarga::Despachada)
-                        ->where('updated_at', '>=', $inicio)->where('updated_at', '<', $fin));
+                        ->where(fn (Builder $vigentes): Builder => $vigentes
+                            ->whereHas('asignacionesActuales', fn (Builder $asignaciones): Builder => $asignaciones
+                                ->whereIn('estado', EstadoCargaFolio::valoresFueraDeCamara()))
+                            ->orWhere(fn (Builder $historicas): Builder => $historicas
+                                ->where('updated_at', '>=', $inicio)->where('updated_at', '<', $fin))));
             })
             ->with($this->relacionesOperacion())
             ->withCount(['incidencias as incidencias_abiertas' => fn (Builder $consulta): Builder => $consulta

@@ -149,6 +149,12 @@ class RetencionesLoteSagApiTest extends TestCase
         $this->assertNotSame($revision, app(RevisionCargaOperacional::class)->calcular());
         $carga = $this->crearCargaPublicada($ctx['despachador'], $ctx['anden'], [$folio]);
         $this->enviarAlAnden($ctx, $carga, $folio);
+        $this->travel(14)->hours();
+        $this->conToken($ctx['token'])->getJson('/api/cargas/operacion-turno')->assertOk()
+            ->assertJsonPath('data.0.estado', 'despachada')
+            ->assertJsonPath('data.0.salida_restringida_sag', true)
+            ->assertJsonPath('data.0.alertas_sag.0.lote', '10056');
+        $this->travelBack();
         $payload = ['operacion_id' => (string) Str::uuid(), 'patente' => 'ABCD12', 'conductor' => 'Conductor prueba'];
         $this->conToken($ctx['tokenOficina'])->postJson('/api/cargas/'.$carga->id.'/cerrar-despacho', $payload)->assertUnprocessable();
         $this->assertTrue($folio->fresh()->activo);
