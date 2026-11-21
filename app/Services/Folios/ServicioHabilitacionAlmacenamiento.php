@@ -11,6 +11,7 @@ use App\Models\Dispositivo;
 use App\Models\Folio;
 use App\Models\RegistroHabilitacionAlmacenamiento;
 use App\Models\User;
+use App\Services\Planificador\ElegibilidadFolioPlanificador;
 use App\Services\Retenciones\ServicioRetencionesOperacionales;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -236,6 +237,9 @@ class ServicioHabilitacionAlmacenamiento
 
     public function validarIngresoCamara(Folio $folio): void
     {
+        if ($folio->asignacionesCarga()->whereIn('estado', ElegibilidadFolioPlanificador::FUERA_DE_CAMARA)->exists()) {
+            throw new DomainException(ElegibilidadFolioPlanificador::motivo($folio));
+        }
         if (! $folio->activo) {
             throw new DomainException('El folio se encuentra inactivo y no puede ingresar a cámara.');
         }
