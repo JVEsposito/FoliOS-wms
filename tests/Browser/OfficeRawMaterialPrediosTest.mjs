@@ -82,7 +82,7 @@ test('digitación: el selector de predios conserva el titular y envía el CSG el
         const page = await context.newPage();
         page.on('pageerror', (error) => errors.push(error.message));
         await page.goto('http://localhost/oficina/materia-prima/lotes');
-        await page.getByRole('button', { name: '+ Crear lote' }).click();
+        await page.locator('.segment-card__actions select.office-action-select').selectOption({ label: '+ Crear lote' });
         const form = page.locator('#lotForm');
         const codigo = form.getByLabel('CSG *');
         const predio = form.getByLabel('Predio *', { exact: true });
