@@ -8,6 +8,8 @@ Route::middleware(['auth:sanctum', 'can:consultar-inspeccion-sag'])->prefix('sag
     Route::get('/catalogo', [DiagramaPalletsSagController::class, 'catalogo']);
     Route::get('/', [DiagramaPalletsSagController::class, 'index']);
     Route::post('/pdf', [DiagramaPalletsSagController::class, 'pdf']);
+    Route::post('/leer-captura', [DiagramaPalletsSagController::class, 'leerCaptura'])->middleware('throttle:12,1');
+    Route::post('/etiquetas', [DiagramaPalletsSagController::class, 'etiquetas']);
     Route::get('/{diagrama}', [DiagramaPalletsSagController::class, 'show'])->whereUuid('diagrama');
     Route::middleware('can:gestionar-inspeccion-sag')->group(function (): void {
         Route::post('/', [DiagramaPalletsSagController::class, 'store']);

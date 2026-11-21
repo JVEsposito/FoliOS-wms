@@ -29,8 +29,10 @@
             <nav class="sc-tabs" aria-label="Secciones SAG">
                 <button class="secondary-button" data-panel="existencias">Existencias</button>
                 <button class="secondary-button" data-panel="documentos">Documentos SAG</button>
+                <button class="secondary-button" data-panel="herramientas">Herramientas SAG</button>
                 <button class="secondary-button" data-panel="configuracion">Planta y responsables</button>
             </nav>
+            @include('office.partials.sag-tools')
             <section class="panel sc-panel is-hidden" data-section="documentos">
                 <h2>Documentos SAG</h2>
                 <div class="sc-actions"><button class="primary-button" id="scNewDocument" data-manage>Nuevo documento</button><button class="secondary-button" id="scReloadDocuments">Actualizar</button></div>

@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EmitirDiagramaPalletsSagRequest;
+use App\Http\Requests\EmitirEtiquetasMuestreoSagRequest;
 use App\Http\Requests\GuardarDiagramaPalletsSagRequest;
 use App\Models\Cliente;
 use App\Models\DiagramaPalletsSag;
 use App\Services\InspeccionSag\GeneradorDiagramaPalletsSag;
+use App\Services\InspeccionSag\GeneradorEtiquetasMuestreoSag;
+use App\Services\InspeccionSag\LectorCapturaMuestreoSag;
 use App\Services\InspeccionSag\ServicioDiagramasPalletsSag;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\Request;
@@ -83,6 +86,25 @@ class DiagramaPalletsSagController extends Controller
         return response($generador->pdf($contenido, $datos['papel'], (bool) $datos['mostrar_numeros'], $temporada->nombre, $request->user()->name), 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.$nombre.'.pdf"',
+        ]);
+    }
+
+    public function leerCaptura(Request $request, LectorCapturaMuestreoSag $lector)
+    {
+        $datos = $request->validate(['imagen' => ['required', 'file', 'mimes:png,jpg,jpeg', 'max:4096']]);
+
+        return response()->json(['numeros' => $lector->leer($datos['imagen'])]);
+    }
+
+    public function etiquetas(EmitirEtiquetasMuestreoSagRequest $request, ServicioDiagramasPalletsSag $servicio, GeneradorEtiquetasMuestreoSag $generador)
+    {
+        $datos = $request->validated();
+        $contenido = $servicio->contenido($datos);
+
+        return response($generador->generar($contenido, $datos['formato']), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="Adhesivos-muestreo.pdf"',
+            'Cache-Control' => 'private, no-store',
         ]);
     }
 
