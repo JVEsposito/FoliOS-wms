@@ -1,5 +1,5 @@
 import { buildOperationalAlerts } from './operation-now-alerts.js';
-import { sagLotAlertText } from './sag-lot-alerts.js';
+import { sagLotAlertText, sagLotOperationalAlerts } from './sag-lot-alerts.js';
 
 // Pestaña «Atención»: una sola lista de condiciones abiertas que reúne las alertas
 // operacionales, los riesgos físicos del planificador y las incidencias. Cada fila
@@ -241,17 +241,18 @@ export function buildAttention(snapshot = {}, { describeIncident } = {}) {
         ...alertRows(snapshot),
         ...plannerRows(snapshot.planificador),
         ...incidentRows(snapshot.incidencias?.abiertas || [], describeIncident),
-        ...(snapshot.retenciones_sag || []).map((lot) => ({
-            key: `sag:${lot.id ?? lot.lote}`,
-            severity: lot.estado === 'retenido' ? 'critical' : 'warning',
+        ...sagLotOperationalAlerts(snapshot.retenciones_sag).map((lot) => ({
+            key: `sag:${lot.id ?? lot.lote}:${lot.carga_id || ''}:${lot.instructivo_id || ''}`,
+            severity: (lot.bloquea_salida && !lot.destino_sin_definir) || lot.todos_destinos ? 'critical' : 'warning',
             source: 'SAG',
-            condition: lot.estado === 'retenido' ? 'Retención de lote' : 'Observación de lote',
+            condition: lot.destino_sin_definir ? 'Destino SAG pendiente' : lot.carga_id ? 'Salida restringida SAG'
+                : lot.todos_destinos ? 'Retención de lote' : lot.solo_segregacion ? 'Segregación indicada' : 'Observación de lote',
             detail: sagLotAlertText(lot),
             items: [],
             ageMinutes: null,
             overdueMinutes: null,
-            href: '/oficina/frigorifico/lotes-retenidos-sag',
-            action: 'Ver lotes retenidos SAG',
+            href: lot.carga_id ? `/oficina/frigorifico/despacho/cargas?carga=${encodeURIComponent(lot.carga_id)}` : '/oficina/frigorifico/lotes-retenidos-sag',
+            action: lot.carga_id ? 'Ver carga' : 'Ver lotes retenidos SAG',
             tab: null,
         })),
     ].map((row) => ({

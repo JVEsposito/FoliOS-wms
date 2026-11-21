@@ -1,3 +1,5 @@
+import { SAG_LOT_STATES as states } from './shared/sag-lot-alerts.js';
+
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function operationId() {
@@ -6,13 +8,13 @@ function operationId() {
     const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
     return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
 }
-const states = { con_observaciones: 'Con observaciones', retenido: 'Retenido', liberado: 'Liberado' };
 const state = { token: localStorage.getItem('estiba_wms_office_token'), catalog: null, detail: null, targets: new Map(), pending: null, busy: false, listRevision: 0, detailRevision: 0 };
 const form = $('slForm');
 const field = (name) => form.elements.namedItem(name);
 const url = '/api/sag/lotes-retenidos';
 const date = (value) => value ? new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' }).format(new Date(value)) : '—';
 const labelDestinations = (r) => r.todos_destinos ? 'Todos los destinos' : r.destinos.map((d) => d.nombre).join(' · ') || 'Sin restricciones de destino';
+const partial = 'liberado_con_restricciones';
 
 async function api(path = '', options = {}) {
     const response = await fetch(url + path, { ...options, headers: { Accept: 'application/json', Authorization: `Bearer ${state.token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) } });
@@ -64,7 +66,14 @@ function destinations() {
     }).join('');
     field('todos_destinos').disabled = released;
     $('slClear').disabled = released || (!all && state.targets.size === 0);
+    $('slExpand').disabled = released;
     $('slSelected').textContent = released ? 'La liberación elimina las restricciones de este lote.' : all ? 'Despacho restringido a todos los destinos.' : selectedSummary();
+}
+function selectRestrictionScope() {
+    if (field('estado').value === 'retenido' || field('estado').value === partial) {
+        field('estado').value = field('todos_destinos').checked ? 'retenido' : partial;
+    }
+    destinations();
 }
 function editor(detail = null) {
     state.detail = detail; state.pending = null; state.targets = new Map();
@@ -84,7 +93,9 @@ function editor(detail = null) {
         field('todos_destinos').checked = r.todos_destinos; field('definitivo').checked = r.definitivo;
         state.targets = new Map(r.destinos.map((d) => [`${d.tipo}|${d.id}`, { tipo: d.tipo, id: d.id }]));
         const active = detail.folios.filter((f) => f.activo);
-        $('slTotals').textContent = `${active.length} folios activos · ${active.reduce((n, f) => n + f.cajas_lote, 0)} cajas del lote.`;
+        $('slTotals').textContent = active.length
+            ? `${active.length} folios activos · ${active.reduce((n, f) => n + f.cajas_lote, 0)} cajas del lote en planta.`
+            : 'Sin cajas del lote en planta.';
         $('slFolios').innerHTML = detail.folios.map((f) => `<tr><td>${esc(f.folio)}</td><td>${f.cajas_lote} / ${f.cajas_pallet}</td><td>${esc(f.csg)}</td><td>${esc(f.ubicacion || f.estado)}<small>${esc(f.estado)}</small></td><td>${esc(f.carga || 'Sin carga')}</td></tr>`).join('') || '<tr><td colspan="5">Aún no hay folios con cajas de este cliente y lote. Los que ingresen después heredarán el control.</td></tr>';
         $('slHistory').innerHTML = detail.historial.map((e) => `<article class="sl-history"><strong>Versión ${e.version} · ${esc(e.usuario)} · ${esc(date(e.fecha.replace(' ', 'T') + 'Z'))}</strong><p>${esc(states[e.despues.estado])} · ${esc(labelDestinations(e.despues))}</p><p>${esc(e.despues.resolucion || e.despues.observacion)}</p><small>${e.folios_afectados.length} folios identificados al registrar. ${esc(e.despues.instruccion_segregacion || '')}</small></article>`).join('');
     }
@@ -117,7 +128,13 @@ $('slRows').onclick = (e) => {
 };
 $('slDestinationSearch').oninput = destinations;
 field('definitivo').onchange = () => { field('resolucion').required = Boolean(state.detail) || field('definitivo').checked; };
-field('todos_destinos').onchange = destinations; field('estado').onchange = destinations;
+field('todos_destinos').onchange = selectRestrictionScope;
+field('estado').onchange = () => {
+    if (field('estado').value === 'retenido' || field('estado').value === partial) {
+        field('todos_destinos').checked = field('estado').value === 'retenido';
+    }
+    destinations();
+};
 $('slDestinations').onchange = (e) => {
     const key = e.target.dataset.destination; if (!key) return;
     const [tipo, id] = key.split('|'); if (e.target.checked) state.targets.set(key, { tipo, id }); else state.targets.delete(key); destinations();
@@ -126,14 +143,14 @@ $('slExpand').onclick = () => {
     if (!state.detail) { $('slError').textContent = 'Guarda primero el seguimiento para desglosar sus restricciones por país.'; return; }
     field('todos_destinos').checked = false;
     state.targets = new Map(state.detail.paises_restringidos.map((id) => [`pais|${id}`, { tipo: 'pais', id }]));
-    destinations();
+    selectRestrictionScope();
 };
 // Para dejar solo unos pocos destinos: se quitan todos y se buscan y marcan los que siguen restringidos.
 $('slClear').onclick = () => {
     field('todos_destinos').checked = false;
     state.targets = new Map();
     $('slDestinationSearch').value = '';
-    destinations();
+    selectRestrictionScope();
     $('slDestinationSearch').focus();
 };
 form.onsubmit = (e) => {

@@ -27,7 +27,7 @@
                 <form class="sl-grid" id="slFilters" data-folios-toolbar>
                     <label>Cliente<select name="cliente_id" data-clients><option value="">Todos los clientes</option></select></label>
                     <label>Número de lote<input name="lote" maxlength="100" placeholder="Lote de recepción"></label>
-                    <label>Estado<select name="estado"><option value="">Todos</option><option value="con_observaciones">Con observaciones</option><option value="retenido">Retenido</option><option value="liberado">Liberado</option></select></label>
+                    <label>Estado<select name="estado"><option value="">Todos</option><option value="con_observaciones">Con observaciones</option><option value="retenido">Retenido</option><option value="liberado_con_restricciones">Liberado con restricciones</option><option value="liberado">Liberado</option></select></label>
                     <button class="secondary-button">Buscar / actualizar</button>
                 </form>
                 <div class="sl-scroll"><table><thead><tr><th>Cliente / lote</th><th>Estado</th><th>Restricción de destinos</th><th>Actualización</th><th>Detalle</th></tr></thead><tbody id="slRows"></tbody></table></div>
@@ -40,14 +40,14 @@
                         <label>Cliente<select name="cliente_id" data-clients required><option value="">Seleccionar cliente</option></select></label>
                         <label>Lote de recepción<input name="numero_lote" maxlength="100" required></label>
                         <label>Fecha de detección<input name="fecha_deteccion" type="date" required></label>
-                        <label>Estado<select name="estado"><option value="con_observaciones">Con observaciones</option><option value="retenido">Retenido</option><option value="liberado">Liberado</option></select></label>
+                        <label>Estado<select name="estado"><option value="con_observaciones">Con observaciones</option><option value="retenido">Retenido</option><option value="liberado_con_restricciones">Liberado con restricciones</option><option value="liberado">Liberado</option></select></label>
                     </div>
                     <label>Detección y observaciones<textarea name="observacion" rows="3" minlength="5" maxlength="4000" required></textarea></label>
                     <label>N.º de informe / antecedentes<input name="referencia_informe" maxlength="250"></label>
                     <fieldset class="sl-destinations">
                         <legend>Destinos con despacho restringido</legend>
                         <label class="sl-check"><input type="checkbox" name="todos_destinos"> Todos los destinos</label>
-                        <p class="sl-help">Puede restringir destinos desde la primera observación. La resolución permite confirmar, ampliar o liberar restricciones.</p>
+                        <p class="sl-help">Marca los países o bloques a los que el lote no puede salir. Puedes confirmar, ampliar o liberar estas restricciones en la resolución.</p>
                         <div class="sl-grid"><label>Buscar país o bloque<input id="slDestinationSearch" type="search" placeholder="Ej.: Estados Unidos o Unión Europea"></label><div class="sl-destination-actions"><button class="secondary-button" type="button" id="slExpand">Editar países individualmente</button><button class="secondary-button" type="button" id="slClear">Quitar todos</button></div></div>
                         <p id="slSelected" role="status"></p><div class="sl-options" id="slDestinations"></div>
                     </fieldset>

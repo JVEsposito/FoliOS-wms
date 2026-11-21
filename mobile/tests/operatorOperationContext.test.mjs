@@ -39,7 +39,8 @@ test('distingue preparación de carga, separación de retenido e inspección aun
 test('una carga cerrada conserva el conteo despachado sin convertirlo en pendiente o en andén', () => {
   const load = { estado: 'cerrada', total_folios: 2, folios: [{ estado_carga: 'despachado' }, { estado_carga: 'despachado' }] };
   assert.equal(isFinishedLoad(load), true);
-  assert.equal(isFinishedLoad({ estado: 'separacion_completa' }), false);
+  assert.equal(isFinishedLoad({ ...load, estado: 'separacion_completa' }), false);
+  assert.equal(isFinishedLoad({ ...load, estado: 'despachada' }), true);
   assert.deepEqual(operatorLoadCounts(load), { total: 2, dock: 0, shipped: 2, pending: 0 });
   assert.match(operatorLoadDate('2026-10-21T05:30:00Z', 'America/Santiago'), /2:30|02:30/);
 });
@@ -57,6 +58,7 @@ test('la tarea de reingreso explica que el pallet vuelve desde el andén', () =>
 
 test('un pallet cargado en el camión sigue contando en andén y deja de estar pendiente', () => {
   const load = { estado: 'despachada', total_folios: 3, folios: [{ estado_carga: 'cargado' }, { estado_carga: 'en_anden' }, { estado_carga: 'pendiente' }] };
+  assert.equal(isFinishedLoad(load), false);
   assert.deepEqual(operatorLoadCounts(load), { total: 3, dock: 2, shipped: 0, pending: 1 });
 });
 

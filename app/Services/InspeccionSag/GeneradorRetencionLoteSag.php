@@ -31,9 +31,11 @@ class GeneradorRetencionLoteSag
 
     private const BORDE = '0.78 0.82 0.85';
 
-    private const ESTADOS = ['con_observaciones' => 'Con observaciones', 'retenido' => 'Retenido', 'liberado' => 'Liberado'];
+    private const ESTADOS = ['con_observaciones' => 'Con observaciones', 'retenido' => 'Retenido',
+        RetencionLoteSag::LIBERADO_CON_RESTRICCIONES => 'Liberado con restricciones', 'liberado' => 'Liberado'];
 
-    private const COLORES_ESTADO = ['con_observaciones' => '0.70 0.42 0.02', 'retenido' => '0.66 0.11 0.11', 'liberado' => '0.11 0.45 0.24'];
+    private const COLORES_ESTADO = ['con_observaciones' => '0.70 0.42 0.02', 'retenido' => '0.66 0.11 0.11',
+        RetencionLoteSag::LIBERADO_CON_RESTRICCIONES => '0.70 0.42 0.02', 'liberado' => '0.11 0.45 0.24'];
 
     private const ESTADOS_FOLIO = ['pendiente_prefrio' => 'Pendiente de prefrío', 'pendiente_ubicacion' => 'Pendiente de ubicación',
         'disponible' => 'Disponible', 'bloqueado' => 'Bloqueado', 'anulado' => 'Anulado',

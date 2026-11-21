@@ -13,6 +13,7 @@ use App\Services\InspeccionSag\ServicioRetencionesLoteSag;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class RetencionLoteSagController extends Controller
 {
@@ -30,7 +31,7 @@ class RetencionLoteSagController extends Controller
     public function index(Request $request)
     {
         $datos = $request->validate(['cliente_id' => ['nullable', 'uuid'], 'lote' => ['nullable', 'string', 'max:100'],
-            'estado' => ['nullable', 'in:con_observaciones,retenido,liberado'], 'page' => ['nullable', 'integer', 'min:1']]);
+            'estado' => ['nullable', Rule::in(RetencionLoteSag::ESTADOS)], 'page' => ['nullable', 'integer', 'min:1']]);
         $consulta = RetencionLoteSag::with('cliente:id,nombre,codigo')
             ->where('temporada_id', app(ServicioTemporadaActiva::class)->obtener()->id);
         if (filled($datos['cliente_id'] ?? null)) {
@@ -40,7 +41,7 @@ class RetencionLoteSagController extends Controller
             $consulta->where('numero_lote', mb_strtoupper(trim($datos['lote'])));
         }
         if (filled($datos['estado'] ?? null)) {
-            $consulta->where('estado', $datos['estado']);
+            $consulta->conEstado($datos['estado']);
         }
 
         return response()->json($consulta->orderByDesc('updated_at')->orderBy('id')->paginate(25));

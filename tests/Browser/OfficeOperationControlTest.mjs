@@ -34,7 +34,7 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
             planificador: { despliegue: { mode_global: 'off' }, salud: { riesgos: {} }, arbitraje: { vigencia: {} } },
             planta: { catalogo: [], elementos: [], conexiones: [], configurado: false },
             despacho: { resumen: { activas: 2, cargando: 1 }, cargas: [], reingresos: [] },
-            retenciones_sag: [{ id: 'lote-prueba', lote: '31012', estado: 'retenido', destinos: [{ nombre: 'Perú' }] }],
+            retenciones_sag: [{ id: 'lote-prueba', lote: '31012', estado: 'retenido', todos_destinos: true, destinos: [] }],
             recepcion_mp: { en_curso: 1, en_ingreso: 0, en_pesaje: 0, pendientes_destare: 1, cerradas_jornada: 4, kilos_netos_jornada: 12350,
                 recepciones: [{ numero: 'REC-2611-0011', cliente: 'Cliente prueba', guias: ['1511', '1512'], patente: 'ABCD12', ingreso_at: now,
                     estado: 'en_bascula_salida', validacion_mp: 'validada' }] },
