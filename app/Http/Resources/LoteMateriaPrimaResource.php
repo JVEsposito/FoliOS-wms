@@ -56,6 +56,9 @@ class LoteMateriaPrimaResource extends JsonResource
             'trazabilidad' => [
                 'csg_id' => $this->csg_validacion_id,
                 'csg' => $this->csg_snapshot,
+                'razon_social' => $this->whenLoaded('csg', fn () => $this->csg->relationLoaded('productor')
+                    ? $this->csg->productor?->razon_social
+                    : null, null),
                 'sdp' => $this->sdp,
                 'ggn' => $this->ggn,
                 'fecha_cosecha' => $this->fecha_cosecha?->toDateString(),

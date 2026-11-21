@@ -18,6 +18,7 @@ use App\Models\LineaProceso;
 use App\Models\LoteMateriaPrima;
 use App\Models\ProcesoHidrocoolerMateriaPrima;
 use App\Models\ProductoHidrocooler;
+use App\Models\ProductorCsg;
 use App\Models\Temporada;
 use App\Models\TipoResultadoPacking;
 use App\Models\User;
@@ -673,6 +674,38 @@ class MateriaPrimaApiTest extends TestCase
         ]);
         $this->assertDatabaseHas('lotes_materia_prima', ['id' => $lote['id'], 'estado' => 'pendiente_hidrocooler']);
         $this->assertDatabaseHas('regularizaciones_cierre_temporada', ['entidad_id' => $proceso->id]);
+    }
+
+    public function test_listado_de_lotes_muestra_la_razon_social_del_csg_asociado(): void
+    {
+        $contexto = $this->prepararRecepcionValidada();
+        $digitador = User::factory()->create(['rol' => RolUsuario::DigitadorMateriaPrima]);
+        $lote = $this->actingAs($digitador, 'sanctum')
+            ->postJson('/api/materia-prima/lotes', $this->payloadLote($contexto))
+            ->assertCreated()
+            ->json('data');
+
+        $this->getJson('/api/materia-prima/lotes')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $lote['id'])
+            ->assertJsonPath('data.0.trazabilidad.razon_social', null);
+
+        $csg = CsgValidacion::findOrFail($contexto['csg_id']);
+        $productor = ProductorCsg::create([
+            'codigo' => $csg->codigo, 'razon_social' => 'Agrícola El Maitén SpA',
+            'predio' => 'Fundo El Maitén', 'direccion' => 'Camino Interior 1500', 'estado_sag' => 'activo',
+            'fuente_url' => 'https://ejemplo.invalid/csg', 'primera_verificacion_at' => now(), 'ultima_verificacion_at' => now(),
+            'ultima_consulta_user_id' => $digitador->id, 'respuesta_hash' => hash('sha256', $csg->codigo),
+        ]);
+        $csg->update(['productor_csg_id' => $productor->id]);
+
+        $this->getJson('/api/materia-prima/lotes')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $lote['id'])
+            ->assertJsonPath('data.0.trazabilidad.csg', $csg->codigo)
+            ->assertJsonPath('data.0.trazabilidad.razon_social', 'Agrícola El Maitén SpA')
+            ->assertJsonPath('data.0.trazabilidad.predio', 'Fundo El Maitén')
+            ->assertDontSee('Camino Interior 1500');
     }
 
     public function test_lotes_y_resumen_no_muestran_temporadas_anteriores_ni_operacion_sin_temporada_activa(): void
