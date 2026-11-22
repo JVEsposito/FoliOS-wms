@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\ConfiguracionStockOrigenController;
 use App\Http\Controllers\Api\ExploracionOrigenController;
 use App\Jobs\EjecutarOperacionIntegracion;
 use App\Models\ConexionExterna;
+use App\Models\LecturaStockOrigen;
 use App\Models\OperacionIntegracion;
 use App\Models\User;
 use App\Services\Validacion\ServicioPrecargaValidacionOrigen;
@@ -17,11 +18,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class ServicioOperacionesIntegracion
 {
+    private const PAUSAS_STOCK_MINUTOS = [15, 30, 60];
+
     public static function permiso(string $tipo): string
     {
         return match ($tipo) {
@@ -94,6 +98,9 @@ class ServicioOperacionesIntegracion
             if ($anterior) {
                 return $anterior;
             }
+            if ($tipo === 'stock' && ! $usuario && $fuente !== null) {
+                $this->comprobarPausaStock($fuente);
+            }
             $operacion = OperacionIntegracion::create([
                 'tipo' => $tipo, 'conexion_externa_id' => $conexion->id, 'version_conexion' => $conexion->version,
                 'user_id' => $usuario?->id, 'fuente_hash' => $fuente, 'clave_activa' => $clave,
@@ -104,6 +111,21 @@ class ServicioOperacionesIntegracion
 
             return $operacion;
         }, 3);
+    }
+
+    private function comprobarPausaStock(string $fuente): void
+    {
+        $recientes = OperacionIntegracion::where('tipo', 'stock')->where('fuente_hash', $fuente)
+            ->whereIn('estado', ['correcta', 'fallida'])->whereNotNull('terminada_at')
+            ->latest()->orderByDesc('id')->limit(count(self::PAUSAS_STOCK_MINUTOS))
+            ->get(['estado', 'terminada_at']);
+        $fallos = $recientes->takeUntil(fn (OperacionIntegracion $op) => $op->estado === 'correcta')->count();
+        if ($fallos > 0) {
+            $reanudar = $recientes->first()->terminada_at->addMinutes(self::PAUSAS_STOCK_MINUTOS[$fallos - 1]);
+            if ($reanudar->isFuture()) {
+                throw new DomainException('Lectura programada en pausa tras fallos de origen. Próximo intento a partir de '.$reanudar->toIso8601String().'.');
+            }
+        }
     }
 
     public function aceptada(OperacionIntegracion $operacion): JsonResponse
@@ -214,7 +236,7 @@ class ServicioOperacionesIntegracion
 
     private function terminar(OperacionIntegracion $op, int $codigo, array $contenido): void
     {
-        OperacionIntegracion::whereKey($op->id)->where('estado', 'en_curso')->update([
+        $actualizadas = OperacionIntegracion::whereKey($op->id)->where('estado', 'en_curso')->update([
             'estado' => $codigo < 400 ? 'correcta' : ($codigo === 409 ? 'obsoleta' : 'fallida'),
             'fase' => $codigo < 400 ? 'Consulta finalizada' : 'Consulta no publicada; revisa el resultado',
             'entrada' => null, 'clave_activa' => null, 'terminada_at' => now(),
@@ -222,6 +244,12 @@ class ServicioOperacionesIntegracion
             'resultado' => encrypt(json_encode(['codigo_http' => $codigo, 'contenido' => $contenido], JSON_THROW_ON_ERROR), false),
             'resultado_hasta' => now()->addMinutes(5),
         ]);
+        if ($actualizadas && $codigo >= 400 && $codigo !== 409) {
+            Log::warning('Falló una consulta de integración', [
+                'operacion_id' => $op->id, 'tipo' => $op->tipo, 'conexion_id' => $op->conexion_externa_id,
+                'codigo_http' => $codigo, 'causa' => $contenido['causa'] ?? null,
+            ]);
+        }
     }
 
     public function exigirVigente(?string $id): void
@@ -233,18 +261,30 @@ class ServicioOperacionesIntegracion
 
     public function interrumpir(string $id): void
     {
-        OperacionIntegracion::whereKey($id)->whereIn('estado', ['en_cola', 'en_curso'])->update([
+        $actualizadas = OperacionIntegracion::whereKey($id)->whereIn('estado', ['en_cola', 'en_curso'])->update([
             'estado' => 'fallida', 'fase' => 'Proceso interrumpido. Solicita otra consulta.', 'entrada' => null,
             'resultado' => null, 'resultado_hasta' => null, 'clave_activa' => null, 'terminada_at' => now(),
         ]);
+        if ($actualizadas) {
+            Log::warning('El worker interrumpió una consulta de integración', ['operacion_id' => $id]);
+        }
     }
 
     public function limpiar(): void
     {
-        OperacionIntegracion::whereIn('estado', ['en_cola', 'en_curso'])->where('updated_at', '<', now()->subMinutes(15))
+        $ahora = now();
+        $vencidas = OperacionIntegracion::whereIn('estado', ['en_cola', 'en_curso'])->where('updated_at', '<', $ahora->copy()->subMinutes(15))
             ->update(['estado' => 'fallida', 'fase' => 'La consulta no terminó. Revisa el proceso de integración.',
-                'entrada' => null, 'resultado' => null, 'clave_activa' => null, 'terminada_at' => now()]);
-        OperacionIntegracion::where('resultado_hasta', '<=', now())->update(['resultado' => null]);
-        OperacionIntegracion::whereNotIn('estado', ['en_cola', 'en_curso'])->where('created_at', '<', now()->subDays(7))->delete();
+                'entrada' => null, 'resultado' => null, 'resultado_hasta' => null, 'clave_activa' => null, 'terminada_at' => $ahora]);
+        if ($vencidas) {
+            Log::warning('Vencieron consultas de integración sin terminar', ['cantidad' => $vencidas]);
+        }
+
+        LecturaStockOrigen::where('estado', 'en_curso')
+            ->whereIn('operacion_integracion_id', OperacionIntegracion::where('estado', 'fallida')->select('id'))
+            ->update(['estado' => 'fallida', 'causa' => 'operacion_interrumpida',
+                'mensaje' => 'La lectura se interrumpió. Se conserva la última copia válida.', 'terminada_at' => $ahora]);
+        OperacionIntegracion::where('resultado_hasta', '<=', $ahora)->update(['resultado' => null, 'resultado_hasta' => null]);
+        OperacionIntegracion::whereNotIn('estado', ['en_cola', 'en_curso'])->where('created_at', '<', $ahora->copy()->subDays(7))->delete();
     }
 }

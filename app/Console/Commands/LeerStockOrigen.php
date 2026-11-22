@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\Integraciones\ServicioLecturaStockOrigen;
 use App\Services\Integraciones\ServicioOperacionesIntegracion;
+use DomainException;
 use Illuminate\Console\Command;
 
 class LeerStockOrigen extends Command
@@ -15,14 +16,12 @@ class LeerStockOrigen extends Command
     public function handle(ServicioLecturaStockOrigen $servicio): int
     {
         if (! $this->option('sin-cola')) {
-            $config = $servicio->configuracion();
-            if (! $config['habilitada'] || ! $config['conexion']) {
-                $this->line('Lectura del stock de origen sin configurar o deshabilitada.');
-
-                return self::SUCCESS;
+            try {
+                $op = app(ServicioOperacionesIntegracion::class)->solicitarStock();
+                $this->info("Lectura {$op->id}: {$op->estado}. La ejecuta el proceso de integración.");
+            } catch (DomainException $error) {
+                $this->line($error->getMessage());
             }
-            $op = app(ServicioOperacionesIntegracion::class)->solicitarStock();
-            $this->info("Lectura {$op->id}: {$op->estado}. La ejecuta el proceso de integración.");
 
             return self::SUCCESS;
         }
