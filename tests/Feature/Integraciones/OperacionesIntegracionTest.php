@@ -6,6 +6,7 @@ use App\Enums\RolUsuario;
 use App\Jobs\EjecutarOperacionIntegracion;
 use App\Models\ConexionExterna;
 use App\Models\ConfiguracionOrigen;
+use App\Models\LecturaStockOrigen;
 use App\Models\OperacionIntegracion;
 use App\Models\PalletStockOrigen;
 use App\Models\User;
@@ -13,6 +14,7 @@ use App\Services\Integraciones\ConectorMySqlLectura;
 use App\Services\Integraciones\ServicioOperacionesIntegracion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use PDOException;
 use Tests\TestCase;
 
@@ -109,8 +111,15 @@ class OperacionesIntegracionTest extends TestCase
         $this->actingAs($this->usuario, 'sanctum');
         $this->travel(6)->minutes();
         $this->getJson('/api/integraciones/operaciones/'.$op->id)->assertOk()->assertJsonPath('operacion.respuesta.codigo_http', 410);
-        app(ServicioOperacionesIntegracion::class)->limpiar();
-        $this->assertNull($op->fresh()->getRawOriginal('resultado'));
+        $servicio = app(ServicioOperacionesIntegracion::class);
+        $servicio->limpiar();
+        $limpiada = $op->fresh();
+        $this->assertNull($limpiada->getRawOriginal('resultado'));
+        $this->assertNull($limpiada->resultado_hasta);
+        $this->travel(1)->minutes();
+        $servicio->limpiar();
+        $this->assertEquals($limpiada->updated_at, $op->fresh()->updated_at);
+        $this->getJson('/api/integraciones/operaciones/'.$op->id)->assertOk()->assertJsonPath('operacion.respuesta.codigo_http', 410);
     }
 
     public function test_la_prueba_de_conexion_espera_al_worker(): void
@@ -242,6 +251,89 @@ class OperacionesIntegracionTest extends TestCase
         $this->assertNull($op->fresh()->entrada);
         $this->ejecutar($op);
         $this->assertSame(0, $this->consultas);
+    }
+
+    public function test_scheduler_espacia_los_fallos_repetidos_y_retoma_la_frecuencia_tras_recuperarse(): void
+    {
+        $this->travelTo(now()->startOfMinute());
+        $this->durante = fn () => throw new PDOException('Fuente caída', 2013);
+        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+
+        foreach ([15, 30, 60, 60] as $intento => $minutos) {
+            $op = $this->ejecutar(OperacionIntegracion::where('estado', 'en_cola')->sole());
+            $this->assertSame('fallida', $op->estado);
+            $this->travel($minutos - 5)->minutes();
+            $this->artisan('integraciones:leer-stock-origen')->expectsOutputToContain('Lectura programada en pausa')->assertSuccessful();
+            $this->assertDatabaseCount('jobs', $intento + 1);
+            $this->assertSame($intento + 1, $this->consultas);
+
+            $this->travel(5)->minutes();
+            $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        }
+
+        $this->durante = null;
+        $this->assertSame('correcta', $this->ejecutar(OperacionIntegracion::where('estado', 'en_cola')->sole())->estado);
+        $this->travel(5)->minutes();
+        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $this->assertDatabaseCount('jobs', 6);
+    }
+
+    public function test_stock_manual_puede_recuperar_una_fuente_en_pausa_y_registra_la_causa_sin_datos_privados(): void
+    {
+        $this->travelTo(now()->startOfMinute());
+        $this->durante = fn () => throw new PDOException('SECRETO_FIXTURE servidor_privado', 2013);
+        Log::spy();
+        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $fallida = $this->ejecutar(OperacionIntegracion::sole());
+        $this->ejecutar($fallida);
+        Log::shouldHaveReceived('warning')->with('Falló una consulta de integración', [
+            'operacion_id' => $fallida->id, 'tipo' => 'stock', 'conexion_id' => $this->conexion->id,
+            'codigo_http' => 422, 'causa' => 'servidor_inaccesible',
+        ])->once();
+
+        $this->travel(5)->minutes();
+        $this->artisan('integraciones:leer-stock-origen')->expectsOutputToContain('Lectura programada en pausa')->assertSuccessful();
+        $this->durante = null;
+        $respuesta = $this->postJson('/api/validacion/pendientes-origen/leer', [], ['Prefer' => 'respond-async'])->assertStatus(202);
+        $manual = OperacionIntegracion::findOrFail($respuesta->json('operacion.id'));
+        $this->assertSame('correcta', $this->ejecutar($manual)->estado);
+        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $this->assertDatabaseCount('jobs', 3);
+    }
+
+    public function test_una_configuracion_nueva_puede_leerse_aunque_la_anterior_este_en_pausa(): void
+    {
+        $this->travelTo(now()->startOfMinute());
+        $this->durante = fn () => throw new PDOException('Fuente caída', 2013);
+        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $fallida = $this->ejecutar(OperacionIntegracion::sole());
+        $this->travel(5)->minutes();
+        $this->conexion->update(['version' => 2]);
+
+        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $nueva = OperacionIntegracion::where('estado', 'en_cola')->sole();
+        $this->assertNotSame($fallida->fuente_hash, $nueva->fuente_hash);
+        $this->assertSame(2, $nueva->version_conexion);
+        $this->assertDatabaseCount('jobs', 2);
+    }
+
+    public function test_limpiar_cierra_una_lectura_interrumpida_y_descarta_una_respuesta_tardia(): void
+    {
+        $this->artisan('integraciones:leer-stock-origen')->assertSuccessful();
+        $op = OperacionIntegracion::sole();
+        $this->durante = function (): void {
+            $this->assertSame('en_curso', LecturaStockOrigen::sole()->estado);
+            $this->travel(16)->minutes();
+            $this->artisan('integraciones:limpiar-operaciones')->assertSuccessful();
+        };
+        $this->assertSame('fallida', $this->ejecutar($op)->estado);
+        $lectura = LecturaStockOrigen::sole();
+        $this->assertSame('fallida', $lectura->estado);
+        $this->assertSame('operacion_interrumpida', $lectura->causa);
+        $this->assertNotNull($lectura->terminada_at);
+        $this->assertDatabaseCount('pallets_stock_origen', 0);
+        $this->artisan('integraciones:leer-stock-origen')->expectsOutputToContain('Lectura programada en pausa')->assertSuccessful();
+        $this->assertDatabaseCount('jobs', 1);
     }
 
     public function test_mapeo_no_se_guarda_hasta_ejecutar_job_y_disponibilidad_null_se_conserva(): void

@@ -14,7 +14,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\instal
 
 Las tareas usan S4U, sin almacenar una contraseña, y pueden correr sin sesión iniciada. La cuenta necesita permiso para ejecutar PHP, acceder al proyecto y escribir en `storage`, `bootstrap/cache` y la base de datos local. Si la base de datos está en **otro equipo** y requiere credenciales de red de Windows, configure el principal de la tarea con `LogonType Password` y una cuenta apropiada; S4U no ofrece credenciales de red. No use SYSTEM por defecto: podría dejar archivos que Apache no pueda modificar.
 
-La tarea **FoliOS Worker** arranca al iniciar Windows y tiene un disparador cada cinco minutos. Su script vuelve a ejecutar `queue:work` cinco segundos después de una salida normal o de un fallo. `MultipleInstances=IgnoreNew` evita que los disparadores acumulen instancias. Las salidas y reinicios se anotan en `storage\logs\worker-servicio.log`; las excepciones de los trabajos van al log de Laravel. La tarea **FoliOS Scheduler** ejecuta `artisan schedule:run` cada minuto, también con `IgnoreNew`. Ambas tienen tiempo de ejecución ilimitado y reintentos al fallar.
+La tarea **FoliOS Worker** arranca al iniciar Windows y tiene un disparador cada cinco minutos. El script reinicia `queue:work` en cinco segundos tras un proceso que duró al menos un minuto. Si las salidas se producen antes del minuto, espera 5, 15 y 45 segundos. Ante una cuarta salida breve consecutiva, devuelve un error y el Programador de tareas gestiona el siguiente arranque. `MultipleInstances=IgnoreNew` evita que los disparadores acumulen instancias. Los códigos de salida, duraciones y pausas quedan en `storage\logs\worker-servicio.log`. Las excepciones de los trabajos van al log de Laravel. La tarea **FoliOS Scheduler** ejecuta `artisan schedule:run` cada minuto, también con `IgnoreNew`. Ambas tienen tiempo de ejecución ilimitado y reintentos al fallar.
 
 ## Verificar
 
@@ -35,7 +35,7 @@ php artisan optimize:clear
 php artisan queue:restart
 ```
 
-El worker sale ordenadamente y el bucle del script lo relanza con el código nuevo. Si cambia la ubicación del proyecto o PHP, vuelva a ejecutar el instalador con los parámetros actualizados. Mientras la tarea esté instalada, no hace falta abrir `queue:work` en una terminal; hacerlo deja un worker adicional fuera del control de la tarea.
+El worker sale ordenadamente y el script lo relanza con el código nuevo. Para cargar un cambio en el propio script de arranque, reinicie la tarea una vez en una ventana operativa. Si cambia la ubicación del proyecto o PHP, vuelva a ejecutar el instalador con los parámetros actualizados. Una sola tarea debe atender la cola general.
 
 ## Problemas y prueba manual
 

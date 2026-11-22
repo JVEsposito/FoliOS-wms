@@ -45,18 +45,23 @@ redirect_stderr=true
 stdout_logfile=/var/log/folios-integraciones.log
 ```
 
-En Windows, crear otro servicio con el mismo comando y directorio de FoliOS, usando el
-PHP que tiene `pdo_mysql`; configurar reinicio tras salida/fallo. Laravel aplica el
-timeout del worker mediante `pcntl` en Linux. Windows requiere supervisión del proceso
-para consultas/controladores que no respeten límites; verificar el watchdog del servicio
-en ese servidor. El conector intenta limitar cada SELECT en MySQL (MAX_EXECUTION_TIME)
-y MariaDB (max_statement_time); servidores antiguos pueden no admitirlos.
+En Windows, usar una tarea independiente con el PHP que tiene `pdo_mysql`. Con el
+Programador de tareas, la acción puede ejecutar `powershell.exe` con
+`-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<FoliOS>\scripts\windows\iniciar-worker.ps1" -Php "<PHP>\php.exe" -Integraciones`.
+Configure un disparador periódico y `MultipleInstances=IgnoreNew`, como en la cola
+general. Los reinicios y sus pausas se registran en `storage/logs/worker-integraciones.log`.
+Laravel aplica el timeout del worker mediante `pcntl` en Linux. El conector intenta
+limitar cada SELECT en MySQL (MAX_EXECUTION_TIME) y MariaDB (max_statement_time).
+Para detectar un PHP que sigue vivo pero bloqueado en Windows se requiere un watchdog
+del servicio; las pausas del script se aplican cuando PHP termina.
 
 Después de actualizar código, reiniciar este proceso con el supervisor/servicio.
 Sin el proceso, el estado queda **en cola**, visible en pantalla; no se ejecuta una
-consulta lenta como sustitución dentro de HTTP. `retry_after=300` supera el timeout180.
-No hay reintento automático de una consulta: el usuario puede solicitar otra después
-de un fallo. Para diagnóstico manual existe `integraciones:leer-stock-origen --sin-cola`.
+consulta lenta como sustitución dentro de HTTP. `retry_after=300` supera el timeout de
+180 s. Cada job se ejecuta una vez. La lectura programada de stock espera 15, 30 y
+hasta 60 minutos después de fallos consecutivos de la misma configuración. Una lectura
+correcta cierra la racha. «Leer ahora» permite reintentar cuando vuelve el origen.
+Para diagnóstico manual existe `integraciones:leer-stock-origen --sin-cola`.
 
 ## Integridad, duplicados y privacidad
 
@@ -73,7 +78,9 @@ de un fallo. Para diagnóstico manual existe `integraciones:leer-stock-origen --
   El resultado deja de estar disponible al cumplirse cinco minutos; la limpieza del
   scheduler borra su contenido. Los metadatos duran siete días. Conservar APP_KEY.
 - Cada minuto se vencen operaciones sin terminar durante quince minutos; un proceso
-  que responda después no puede publicar. La limpieza requiere el scheduler operativo.
+  que responda después no puede publicar. El scheduler también cierra las lecturas
+  de stock vinculadas a operaciones interrumpidas. Los fallos se registran por UUID
+  y causa cuando está disponible, sin credenciales ni SQL de origen.
 - El endpoint de estado exige sesión y permiso; las muestras solo las ve su solicitante.
   El stock y su estado pueden consultarse con permiso de validaciones.
 

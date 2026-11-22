@@ -170,7 +170,9 @@ class ServicioLecturaStockOrigen
                 throw new LecturaStockOrigenFallida('sin_filas', 'La fuente no devolvió filas con los filtros configurados; se conserva la lectura anterior.');
             }
             $this->mapeo->validarFilas($filas);
+            $totalFilas = count($filas);
             $pallets = $this->agrupar($filas);
+            unset($filas);
             if ($numeroPallet !== null && array_diff(array_keys($pallets), [$numeroPallet]) !== []) {
                 throw new DomainException('Packing devolvió otro folio. No se aplicaron esos datos.');
             }
@@ -179,10 +181,10 @@ class ServicioLecturaStockOrigen
                     throw new DomainException('La suma de cajas o kilos de un pallet supera el máximo admitido. Revise las columnas asignadas.');
                 }
             }
-            DB::transaction(function () use ($pallets, $config, $lectura, $filas): void {
+            DB::transaction(function () use ($pallets, $config, $lectura, $totalFilas): void {
                 $resultado = $this->guardar($pallets, $config['bodega'], $lectura);
                 $lectura->update([
-                    'estado' => 'correcta', 'filas' => count($filas), 'pallets' => count($pallets),
+                    'estado' => 'correcta', 'filas' => $totalFilas, 'pallets' => count($pallets),
                     ...$resultado, 'terminada_at' => now(),
                 ]);
             }, 3);
@@ -195,7 +197,7 @@ class ServicioLecturaStockOrigen
             if ($causa === 'tabla_inexistente') {
                 $mensaje = "No existe la tabla o vista {$config['tabla']} en la base de origen. Revisa ".($config['perfil'] ? 'el mapeo en Conexiones externas.' : 'WMS_STOCK_ORIGEN_TABLA.');
             }
-            $lectura->update([
+            LecturaStockOrigen::whereKey($lectura->id)->where('estado', 'en_curso')->update([
                 'estado' => 'fallida',
                 'causa' => $causa,
                 'mensaje' => mb_substr($mensaje, 0, 255),
@@ -354,7 +356,7 @@ class ServicioLecturaStockOrigen
                 ->where('bodega', $bodega)
                 ->when($lectura->numero_pallet !== null, fn ($q) => $q->where('numero_pallet', $lectura->numero_pallet))
                 ->where('presente', true)
-                ->whereNotIn('numero_pallet', array_keys($pallets))
+                ->where(fn ($query) => $query->whereNull('lectura_stock_origen_id')->orWhere('lectura_stock_origen_id', '!=', $lectura->id))
                 ->update(['presente' => false, 'ausente_desde' => $ahora, 'updated_at' => $ahora]);
 
             return ['nuevos' => $nuevos, 'modificados' => $modificados, 'retirados' => $retirados];
