@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\EjecutarAuditoriaIntegridadOperacional;
 use App\Models\AuditoriaIntegridadOperacional;
 use App\Models\HallazgoIntegridadOperacional;
+use App\Services\Cargas\ServicioUbicacionesDespachadas;
 use App\Services\IntegridadOperacional\ServicioAuditoriaIntegridadOperacional;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -135,6 +136,21 @@ class IntegridadOperacionalController extends Controller
         return response()->json([
             'message' => 'Auditoría programada. El panel se actualizará cuando finalice.',
         ], 202);
+    }
+
+    public function previsualizarPurga(ServicioUbicacionesDespachadas $servicio): JsonResponse
+    {
+        return response()->json($servicio->previsualizar(), headers: ['Cache-Control' => 'private, no-store']);
+    }
+
+    public function purgarDespachados(Request $request, ServicioUbicacionesDespachadas $servicio): JsonResponse
+    {
+        $datos = $request->validate([
+            'confirmacion' => ['required', 'accepted'],
+            'revision' => ['required', 'string', 'size:64', 'regex:/\A[0-9a-f]+\z/'],
+        ]);
+
+        return response()->json(['purgadas' => $servicio->purgar($request->user(), $datos['revision'])]);
     }
 
     /**

@@ -199,6 +199,10 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('can:consultar-integridad-operacional');
     Route::post('/administracion/integridad-operacional/auditar', [IntegridadOperacionalController::class, 'auditar'])
         ->middleware('can:ejecutar-integridad-operacional');
+    Route::middleware('can:ejecutar-integridad-operacional')->prefix('administracion/integridad-operacional')->group(function (): void {
+        Route::get('/purgar-despachados', [IntegridadOperacionalController::class, 'previsualizarPurga']);
+        Route::post('/purgar-despachados', [IntegridadOperacionalController::class, 'purgarDespachados']);
+    });
     Route::get('/administracion/planificador/salud', SaludPlanificadorController::class)
         ->middleware('can:consultar-integridad-operacional');
 

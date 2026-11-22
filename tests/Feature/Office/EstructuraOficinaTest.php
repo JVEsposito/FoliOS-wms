@@ -10,6 +10,16 @@ use Tests\TestCase;
 
 class EstructuraOficinaTest extends TestCase
 {
+    public function test_salud_operacional_exporta_el_control_de_purga(): void
+    {
+        $html = $this->get('/oficina/administracion/integridad-operacional')->assertOk()
+            ->assertSee('id="integrityPurgeDispatched"', false)->getContent();
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/integridad-operacional.html'), $html);
+        }
+    }
+
     public function test_validacion_abre_la_jornada_vigente_en_hora_de_planta(): void
     {
         config(['app.operational_timezone' => 'America/Santiago']);

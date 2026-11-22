@@ -30,7 +30,7 @@
                     <div>
                         <p class="eyebrow">CONTROL TRANSVERSAL</p>
                         <h1>Salud operacional</h1>
-                        <p>Detecta contradicciones entre folios, procesos, ubicaciones y reservas sin modificar la operación.</p>
+                        <p>Detecta contradicciones entre folios, procesos, ubicaciones y reservas.</p>
                     </div>
                     <div class="integrity-heading__actions">
                         <div>
@@ -44,8 +44,9 @@
                 </header>
 
                 <section class="integrity-notice" role="note">
-                    <strong>Solo diagnóstico</strong>
-                    <span>Esta capa registra hallazgos y resoluciones. No corrige, elimina ni regulariza datos operacionales.</span>
+                    <strong>Auditoría y correcciones</strong>
+                    <span>La auditoría registra hallazgos. La purga confirmada libera ubicaciones en cámara y conserva el historial de despacho.</span>
+                    <button class="secondary-button is-hidden" id="integrityPurgeDispatched" type="button">Purgar pallets despachados</button>
                 </section>
 
                 <section class="integrity-metrics" aria-label="Resumen de integridad operacional" data-folios-metrics>

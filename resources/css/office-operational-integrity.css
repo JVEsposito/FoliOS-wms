@@ -69,6 +69,11 @@
     font-size: .82rem;
 }
 
+.integrity-notice button {
+    margin-inline-start: auto;
+    min-height: 42px;
+}
+
 .integrity-metrics {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -326,5 +331,9 @@
     .integrity-notice {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .integrity-notice button {
+        margin-inline-start: 0;
     }
 }

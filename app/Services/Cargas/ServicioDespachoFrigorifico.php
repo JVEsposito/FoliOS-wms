@@ -621,7 +621,6 @@ class ServicioDespachoFrigorifico
             $asignaciones = CargaFolio::query()
                 ->where('carga_id', $cargaBloqueada->id)
                 ->whereHas('reservaActiva')
-                ->with('folio')
                 ->orderBy('folio_id')
                 ->lockForUpdate()
                 ->get();
@@ -631,6 +630,12 @@ class ServicioDespachoFrigorifico
                     fn (CargaFolio $asignacion): bool => ! $asignacion->estado->fueraDeCamara(),
                 )) {
                 throw new DomainException('La carga aún posee folios pendientes fuera del andén.');
+            }
+
+            $folios = Folio::whereKey($asignaciones->pluck('folio_id')->all())
+                ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            foreach ($asignaciones as $asignacion) {
+                $asignacion->setRelation('folio', $folios[$asignacion->folio_id]);
             }
 
             $sinCargar = $asignaciones
@@ -697,7 +702,9 @@ class ServicioDespachoFrigorifico
                 );
             }
 
-            app(ServicioExistenciasSag::class)->sincronizar($asignaciones->pluck('folio_id')->all(), 'despacho', $cargaBloqueada->codigo);
+            $folioIds = $asignaciones->pluck('folio_id')->all();
+            app(ServicioUbicacionesDespachadas::class)->liberarEnCierre($folioIds);
+            app(ServicioExistenciasSag::class)->sincronizar($folioIds, 'despacho', $cargaBloqueada->codigo);
 
             $cargaBloqueada->update([
                 'estado' => EstadoCarga::Cerrada,
