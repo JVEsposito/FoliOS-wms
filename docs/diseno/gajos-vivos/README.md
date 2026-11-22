@@ -5,6 +5,7 @@ Gajos vivos es el formato visual de **todo FoliOS**: las 82 oficinas, la tablet 
 **Estado:**
 - **Origen:** la propuesta salió de un chat en claude.ai el 20-11-2026, sobre la vista previa `FoliOS-Gajos.html` del rediseño FoliOS v2 ([../folios-v2/README.md](../folios-v2/README.md)).
 - **Brecha con lo implementado:** los PR #707 y #710 aplicaron parte del rediseño, pero según L.K.S. **se quedaron cortos respecto de esta propuesta**. Este documento es la referencia para cerrar esa brecha: cada pantalla de `main` se compara con lo que se describe aquí.
+- **Informe de brecha de Oficina:** [BRECHA-OFICINA.md](BRECHA-OFICINA.md), pantalla por pantalla contra `main` (22-11-2026).
 - **Material de referencia:** las [capturas](capturas/) y las [maquetas](referencia/) muestran la idea. Lo que manda es este texto.
 
 ## Lo importante
