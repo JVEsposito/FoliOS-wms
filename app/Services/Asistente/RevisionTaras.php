@@ -190,7 +190,8 @@ class RevisionTaras
 
     private function netoPorToteLote(LoteMateriaPrima $lote): ?float
     {
-        $envase = mb_strtolower((string) $lote->envase_primario);
+        $primario = $lote->envase_primario;
+        $envase = mb_strtolower($primario instanceof \BackedEnum ? (string) $primario->value : (string) $primario);
         $cantidad = (int) $lote->cantidad_envases_primarios;
         if (! str_contains($envase, 'tote') || $cantidad <= 0 || $lote->kilos_netos_confirmados === null) {
             return null;

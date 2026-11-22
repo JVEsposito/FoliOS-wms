@@ -231,9 +231,13 @@ class AlcanceOperacionalUsuario
         );
     }
 
+    /**
+     * Configurar el asistente es solo para administradores: un perfil con el módulo no
+     * basta, porque con perfil los módulos son la autoridad y el rol se ignoraría.
+     */
     public function puedeAdministrarAsistente(User $usuario): bool
     {
-        return $this->rolActivoEnModulo(
+        return $usuario->rol === RolUsuario::Administrador && $this->rolActivoEnModulo(
             $usuario,
             [RolUsuario::Administrador],
             CatalogoModulosAcceso::OFICINA_ASISTENTE_CONFIGURACION,
