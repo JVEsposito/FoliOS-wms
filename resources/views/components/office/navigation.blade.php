@@ -286,6 +286,8 @@
     </dialog>
     <span class="estiba-office-sr" data-profile-status role="status" aria-live="polite"></span>
 
+    <x-folios.asistente :area="$office === 'operacion-ahora' ? 'operacion' : $domain" />
+
     <div class="office-navigation-legacy" hidden aria-hidden="true">
         <a id="officeManagementNav" href="/oficina/gerencia" tabindex="-1"></a>
         <a id="officeRomanaNav" href="/oficina/romana" tabindex="-1"></a>

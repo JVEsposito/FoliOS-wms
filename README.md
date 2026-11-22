@@ -198,6 +198,7 @@ Ocultar una acción en la interfaz nunca reemplaza la autorización del backend.
 - [Configuración de cámaras y cargas](docs/configuracion-camaras-y-preparacion-cargas.md)
 - [Control ambiental horario](docs/CONTROL_AMBIENTAL_HORARIO.md)
 - [Segmentación operacional por área](docs/segmentacion-operacional-por-area.md)
+- [Asistente de Oficina](docs/ASISTENTE_OFICINA.md)
 - [Validación de pallets/PT](docs/MODULO_VALIDACION_PALLETS.md)
 - [Prefrío](docs/MODULO_PREFRIO.md)
 - [Romana](docs/MODULO_ROMANA.md)
