@@ -5,6 +5,9 @@ Fuente de verdad del rediseño de interfaz aprobado el 13-10-2026. Todo PR de la
 `design/estiba.tokens.json`. Si una lámina y este documento difieren, **manda este
 documento**; si un parche de la serie y este documento difieren, **manda el parche**.
 
+La propuesta posterior sobre esta base, **Gajos vivos** (20-11-2026), está en
+[`../gajos-vivos/README.md`](../gajos-vivos/README.md).
+
 - Logo: el oficial, sin cambios (`public/brand/folios/*`, `<x-folios-logo>`).
 - Oficina: clara, lenguaje de **etiqueta**. Modo oscuro opcional con la paleta de campo.
 - Tablet (horizontal, 1280 × 800) y PDA (vertical, 360 × 740): **siempre oscuras**.
