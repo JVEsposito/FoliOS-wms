@@ -13,6 +13,10 @@ class CatalogoModulosAcceso
 
     public const OFICINA_ATRIBUTOS_PT = 'administracion.atributos-pt';
 
+    public const OFICINA_ASISTENTE = 'administracion.asistente';
+
+    public const OFICINA_ASISTENTE_CONFIGURACION = 'administracion.asistente-configuracion';
+
     public const OFICINA_CONTRAPARTE_SAG = 'frigorifico.contraparte-sag';
 
     public const OFICINA_LOTES_RETENIDOS_SAG = 'frigorifico.lotes-retenidos-sag';
@@ -160,6 +164,8 @@ class CatalogoModulosAcceso
                     $this->modulo('administracion.camaras', 'Configuración de cámaras', 'Creación y estructura física de cámaras.'),
                     $this->modulo(self::OFICINA_INTEGRIDAD_OPERACIONAL, 'Salud operacional', 'Auditoría de contradicciones entre folios, procesos, ubicaciones y reservas.'),
                     $this->modulo(self::OFICINA_ATRIBUTOS_PT, 'Cambio de atributos PT', 'Corregir producto, cajas, CSG y estado de prefrío de un folio PT no despachado, con motivo y auditoría.'),
+                    $this->modulo(self::OFICINA_ASISTENTE, 'Asistente', 'Preguntas en español sobre tiempos, kilos, cajas, taras y consumos, con los mismos permisos de cada oficina.'),
+                    $this->modulo(self::OFICINA_ASISTENTE_CONFIGURACION, 'Configuración del asistente', 'Rangos de tara, margen de revisión y registro de preguntas sin respuesta.'),
                 ],
             ],
             [

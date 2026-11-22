@@ -214,6 +214,32 @@ class AlcanceOperacionalUsuario
         );
     }
 
+    /**
+     * El asistente se habilita por perfil para cualquier rol interno; las cuentas de
+     * clientes del portal nunca lo tienen.
+     */
+    public function puedeUsarAsistente(User $usuario): bool
+    {
+        if ($usuario->rol === RolUsuario::Cliente) {
+            return false;
+        }
+
+        return $this->rolActivoEnModulo(
+            $usuario,
+            array_values(array_filter(RolUsuario::cases(), fn (RolUsuario $rol): bool => $rol !== RolUsuario::Cliente)),
+            CatalogoModulosAcceso::OFICINA_ASISTENTE,
+        );
+    }
+
+    public function puedeAdministrarAsistente(User $usuario): bool
+    {
+        return $this->rolActivoEnModulo(
+            $usuario,
+            [RolUsuario::Administrador],
+            CatalogoModulosAcceso::OFICINA_ASISTENTE_CONFIGURACION,
+        );
+    }
+
     public function puedeConsultarIntegridadOperacional(User $usuario): bool
     {
         return $this->rolActivoEnModulo(
@@ -1663,6 +1689,8 @@ class AlcanceOperacionalUsuario
             'puede_supervisar_prefrio' => $this->puedeSupervisarPrefrio($usuario),
             'puede_administrar_tuneles_prefrio' => $this->puedeAdministrarTunelesPrefrio($usuario),
             'puede_consultar_panel_gerencial' => $this->puedeConsultarPanelGerencial($usuario),
+            'puede_usar_asistente' => $this->puedeUsarAsistente($usuario),
+            'puede_administrar_asistente' => $this->puedeAdministrarAsistente($usuario),
             'puede_consultar_romana' => $this->puedeConsultarRomana($usuario),
             'puede_auditar_defectos_recepcion_mp' => $this->puedeAuditarDefectosRecepcionMp($usuario),
             'puede_operar_romana' => $this->puedeOperarRomana($usuario),
