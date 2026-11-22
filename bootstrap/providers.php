@@ -6,6 +6,7 @@ use App\Gestion\GestionServiceProvider;
 use App\Providers\AdministracionUsuarioServiceProvider;
 use App\Providers\AnulacionValidacionPalletServiceProvider;
 use App\Providers\AppServiceProvider;
+use App\Providers\AsistenteServiceProvider;
 use App\Providers\BinRetornoPackingServiceProvider;
 use App\Providers\CustodiaDistribuidaMaterialesServiceProvider;
 use App\Providers\RepaletizajeServiceProvider;
@@ -23,4 +24,5 @@ return [
     FinanzasServiceProvider::class,
     ComexServiceProvider::class,
     RrhhServiceProvider::class,
+    AsistenteServiceProvider::class,
 ];
