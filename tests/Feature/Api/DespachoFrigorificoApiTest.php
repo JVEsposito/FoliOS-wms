@@ -184,6 +184,7 @@ class DespachoFrigorificoApiTest extends TestCase
         );
         $asignacion = $carga->asignacionesActuales()->firstOrFail();
         $operacionRetiro = (string) Str::uuid();
+        $ubicacionAnterior = $folio->ubicacionActual->getAttributes();
         // Recepción REPA antigua que debe cerrarse al salir el pallet hacia el andén.
         $planRepa = app(ServicioPlanesOperacionales::class)->crear(
             $folio->temporada, TipoPlanOperacional::RecepcionRepaletizaje, 'Retiro REPA pendiente', $contexto['despachador'],
@@ -250,6 +251,10 @@ class DespachoFrigorificoApiTest extends TestCase
 
         $documentos = [...$payloadCierre['datos_embarque'], 'numero_guia' => '000512'];
 
+        // Reproduce una ubicación residual en un folio que el despacho ya tiene en andén.
+        DB::table('ubicaciones_actuales')->insert([...$ubicacionAnterior, 'id' => (string) Str::uuid()]);
+        $versionAntesDelCierre = $contexto['camara']->fresh()->version_plano;
+
         $this->conToken($contexto['tokenOficina'])
             ->postJson($rutaCierre, $payloadCierre)
             ->assertOk()
@@ -275,6 +280,9 @@ class DespachoFrigorificoApiTest extends TestCase
             'activo' => false,
         ]);
         $this->assertDatabaseMissing('reservas_carga_folio', ['folio_id' => $folio->id]);
+        $this->assertDatabaseMissing('ubicaciones_actuales', ['folio_id' => $folio->id]);
+        $this->assertSame($versionAntesDelCierre + 1, $contexto['camara']->fresh()->version_plano);
+        $this->assertSame(1, $folio->movimientos()->where('tipo_movimiento', 'retiro')->count());
         $this->assertSame('cancelada', $retiroRepa->refresh()->estado->value);
         $this->assertSame('cancelada', $retiroRepa->maniobraOperacional->refresh()->estado->value);
         $this->assertStringContainsString('andén o camión', $retiroRepa->motivo_cancelacion);

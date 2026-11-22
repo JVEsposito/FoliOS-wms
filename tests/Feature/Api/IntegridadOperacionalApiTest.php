@@ -22,6 +22,7 @@ use App\Models\ProcesoPrefrio;
 use App\Models\ProcesoPrefrioFolio;
 use App\Models\Temporada;
 use App\Models\TunelPrefrio;
+use App\Models\UbicacionActual;
 use App\Models\User;
 use App\Services\Autorizacion\CatalogoModulosAcceso;
 use App\Services\IntegridadOperacional\ServicioAuditoriaIntegridadOperacional;
@@ -207,11 +208,55 @@ class IntegridadOperacionalApiTest extends TestCase
 
         $this->postJson('/api/administracion/integridad-operacional/auditar')
             ->assertForbidden();
+        $this->getJson('/api/administracion/integridad-operacional/purgar-despachados')->assertForbidden();
+        $this->postJson('/api/administracion/integridad-operacional/purgar-despachados')->assertForbidden();
 
         $this->get('/oficina/administracion/integridad-operacional')
             ->assertOk()
             ->assertSee('Salud operacional')
-            ->assertSee('Solo diagnóstico');
+            ->assertSee('Purgar pallets despachados');
+    }
+
+    public function test_purga_confirmada_solo_libera_despachados_y_la_auditoria_resuelve_su_hallazgo(): void
+    {
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador, 'activo' => true]);
+        $this->actingAs($administrador, 'sanctum');
+        [$despachado, $camara] = $this->ubicacionInconsistente();
+        $ubicacion = $despachado->ubicacionActual;
+        $activo = $this->folio('PAL-EN-CAMARA', TipoBulto::Pallet, EstadoOperacionalFolio::Disponible, true,
+            CondicionTermicaFolio::PrefrioAprobado, HabilitacionAlmacenamientoFolio::Habilitado);
+        DB::table('ubicaciones_actuales')->insert([
+            ...$ubicacion->getAttributes(), 'id' => (string) Str::uuid(), 'folio_id' => $activo->id,
+        ]);
+        $auditoria = app(ServicioAuditoriaIntegridadOperacional::class);
+        $auditoria->ejecutar(OrigenAuditoriaIntegridadOperacional::Manual, $administrador);
+        $ruta = '/api/administracion/integridad-operacional/purgar-despachados';
+        $revision = $this->getJson($ruta)->assertOk()->assertJsonPath('cantidad', 1)
+            ->assertJsonPath('folios.0', $despachado->numero_folio)->json('revision');
+
+        $this->postJson($ruta, ['confirmacion' => false, 'revision' => $revision])
+            ->assertUnprocessable()->assertJsonValidationErrors('confirmacion');
+        $this->assertDatabaseHas('ubicaciones_actuales', ['id' => $ubicacion->id]);
+
+        // Un retorno entre la vista previa y la confirmación invalida la autorización.
+        $despachado->update(['activo' => true, 'estado_operacional' => EstadoOperacionalFolio::Disponible]);
+        $this->postJson($ruta, ['confirmacion' => true, 'revision' => $revision])->assertConflict();
+        $this->assertDatabaseHas('ubicaciones_actuales', ['id' => $ubicacion->id]);
+        $this->assertSame(0, $camara->fresh()->version_plano);
+        $despachado->update(['activo' => false, 'estado_operacional' => EstadoOperacionalFolio::Despachado]);
+
+        $this->postJson($ruta, ['confirmacion' => true, 'revision' => $revision])
+            ->assertOk()->assertJsonPath('purgadas', 1);
+        $this->postJson($ruta, ['confirmacion' => true, 'revision' => $revision])->assertConflict();
+        $this->getJson($ruta)->assertOk()->assertJsonPath('cantidad', 0);
+        $this->assertDatabaseMissing('ubicaciones_actuales', ['folio_id' => $despachado->id]);
+        $this->assertDatabaseHas('ubicaciones_actuales', ['folio_id' => $activo->id]);
+        $this->assertDatabaseHas('folios', ['id' => $despachado->id, 'estado_operacional' => 'despachado', 'activo' => false]);
+        $this->assertSame(1, $camara->fresh()->version_plano);
+        $this->assertDatabaseHas('cambios_transiciones_operacionales', [
+            'modelo_tipo' => UbicacionActual::class, 'modelo_id' => $ubicacion->id, 'tipo' => 'eliminacion',
+        ]);
+        $this->assertSame(1, $auditoria->ejecutar(OrigenAuditoriaIntegridadOperacional::Manual, $administrador)->hallazgos_resueltos);
     }
 
     public function test_administracion_programa_la_auditoria_manual_en_la_cola(): void

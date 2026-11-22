@@ -7,6 +7,7 @@ const byId = (id) => document.getElementById(id);
 const elements = {
     app: byId('integrityApp'),
     run: byId('integrityRunAudit'),
+    purge: byId('integrityPurgeDispatched'),
     reload: byId('integrityReload'),
     lastAudit: byId('integrityLastAudit'),
     lastAuditDetail: byId('integrityLastAuditDetail'),
@@ -71,8 +72,8 @@ function capabilities() {
 }
 
 function can(permission) {
-    return capabilities()[permission] === true
-        || state.identity?.rol === 'administrador';
+    const granted = capabilities()[permission];
+    return granted === true || (granted === undefined && state.identity?.rol === 'administrador');
 }
 
 function escapeHtml(value) {
@@ -206,6 +207,7 @@ function showApp() {
         'is-hidden',
         !can('puede_ejecutar_integridad_operacional'),
     );
+    elements.purge.classList.toggle('is-hidden', !can('puede_ejecutar_integridad_operacional'));
 
     const logout = byId('officeLogoutButton');
     if (logout) {
@@ -392,6 +394,36 @@ async function runAudit() {
     }
 }
 
+async function purgeDispatched() {
+    if (!can('puede_ejecutar_integridad_operacional') || elements.purge.disabled) return;
+    const path = '/api/administracion/integridad-operacional/purgar-despachados';
+    elements.purge.disabled = true;
+    elements.error.textContent = '';
+    try {
+        const { data: preview } = await api(path);
+        if (!preview.cantidad) {
+            toast('No hay ubicaciones pendientes de pallets despachados.');
+            return;
+        }
+        const etiqueta = preview.folios.length < preview.cantidad ? 'Primeros folios' : 'Folios';
+        if (!window.confirm(`Se liberarán ${preview.cantidad} ubicaciones en cámara. ${etiqueta}: ${preview.folios.join(', ')}. El historial de despacho se conservará. ¿Confirmas que estos pallets ya salieron de planta?`)) return;
+
+        const { data } = await api(path, {
+            method: 'POST',
+            body: JSON.stringify({ confirmacion: true, revision: preview.revision }),
+        });
+        toast(`Ubicaciones liberadas: ${data.purgadas}. Los hallazgos se actualizarán en la próxima auditoría.`);
+    } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+            toast(error.message, true);
+        } else {
+            handleApiError(error);
+        }
+    } finally {
+        elements.purge.disabled = false;
+    }
+}
+
 elements.filters.addEventListener('submit', (event) => {
     event.preventDefault();
     state.page = 1;
@@ -404,6 +436,7 @@ elements.clearFilters.addEventListener('click', () => {
 });
 elements.reload.addEventListener('click', () => void load());
 elements.run.addEventListener('click', () => void runAudit());
+elements.purge.addEventListener('click', () => void purgeDispatched());
 elements.previous.addEventListener('click', () => {
     if (state.page <= 1) return;
     state.page -= 1;
