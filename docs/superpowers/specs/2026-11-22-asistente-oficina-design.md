@@ -24,7 +24,7 @@ La lista es del usuario: «tiempos de todo, kilos, cajas, repas, saldos... forma
 | Cajas | Por folio, carga, cliente y especie; cajas por CSG dentro del pallet | Folios, cargas |
 | Repas | Repaletizajes con su genealogía de folios | Módulo de repaletizajes |
 | Saldos | Saldos vigentes, dónde están y cuántas cajas tienen | Folios y ubicaciones |
-| Formatos | Cajas y kilos por formato de caja o embalaje de PT | Validación PT. **Supuesto por confirmar:** el diseño entiende «formato» como formato de caja o embalaje. |
+| Formatos | Cajas y kilos por formato de embalaje de PT | Validación PT. El usuario confirmó que «formato» significa formato de embalaje. |
 | Consumos | Consumo de materiales por OT y contra el estándar, con sus diferencias | Consumos por OT y estándares de Materiales |
 | Revisión de tara y destare | «Revisa las taras de hoy», «¿cómo viene el CSG 12345?» | Ver la sección siguiente |
 
@@ -39,7 +39,7 @@ Usa los mismos criterios con los que el usuario revisa hoy: «miro el promedio p
 
 **Rangos configurables.** Los rangos se guardan en Administración, por especie y por envase, y los edita un usuario autorizado. El primer valor es 8,2 a 9,5 kg para tote. Ningún umbral vive en la interfaz ni en el código.
 
-**Margen de las esponjas.** El usuario no lo definió. El diseño propone calcularlo desde la historia: se marca lo que se aleja más de lo habitual, por ejemplo dos desviaciones estándar. El valor queda configurable igual que el rango.
+**Margen de las esponjas.** Se calcula desde la historia, como confirmó el usuario: se marca lo que se aleja más de lo habitual, por ejemplo dos desviaciones estándar. El valor queda configurable igual que el rango.
 
 ## Objetivos
 
@@ -221,5 +221,4 @@ Indica en qué modo respondió («Sin IA» o «Haiku») y, cuando no entendió, 
 
 ## Decisiones abiertas
 
-- **«Formatos»:** confirmar que se refiere al formato de caja o embalaje de PT.
-- **Margen de esponjas:** el diseño propone calcularlo desde la historia; falta que el usuario lo confirme.
+Ninguna. El 22-11-2026 el usuario confirmó que «formatos» es el formato de embalaje y que el margen de las esponjas se calcula desde la historia.
