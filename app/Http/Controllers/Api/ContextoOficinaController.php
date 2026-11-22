@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\NotificacionOperacional;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Autorizacion\CatalogoTemasOficina;
+use App\Services\Jornadas\CalendarioOperativo;
 use App\Services\Notificaciones\ServicioNotificacionesOperacionales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\JsonResponse;
@@ -21,12 +22,14 @@ class ContextoOficinaController extends Controller
         ServicioTemporadaActiva $temporadas,
         ServicioNotificacionesOperacionales $notificaciones,
         CatalogoTemasOficina $temas,
+        CalendarioOperativo $calendario,
     ): JsonResponse {
         abort_unless($alcance->puedeAccederOficina($request->user()), 403);
         $temporada = $temporadas->buscar();
 
         return response()->json(['data' => [
             'planta' => config('oficina.planta') ?: null,
+            ...($request->boolean('jornada') ? ['jornada' => $calendario->clasificar(now())] : []),
             ...$temas->preferencias($request->user()),
             'temporada' => $temporada ? [
                 'id' => $temporada->id,

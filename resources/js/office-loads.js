@@ -4,7 +4,7 @@ import { createUuid as operationId } from './shared/uuid.js';
 import { showOfficeToast } from './office-toast.js';
 import { loadReceptionDependencies } from './shared/load-reception-dependencies.js';
 import { availableInstructionSlots, groupedLoadFolios, instructionLabel, selectedInstruction } from './shared/load-instructions.js';
-import { palletCells } from './shared/folios-display.js';
+import { officeCode, officePlate, officeStatus, palletCells } from './shared/folios-display.js';
 
 const byId = (id) => document.getElementById(id);
 
@@ -167,6 +167,19 @@ const statusLabels = {
     retornada: 'Retornada a planta',
     retorno_parcial: 'Retorno parcial',
     cancelada: 'Cancelada',
+};
+
+const loadStates = {
+    borrador: 'pendiente', pendiente: 'pendiente', en_preparacion: 'en-curso',
+    despacho_parcial: 'en-curso', en_separacion: 'en-curso', separada: 'listo',
+    separacion_completa: 'listo', despachada: 'en-curso', cerrada: 'listo',
+    retornada: 'atencion', retorno_parcial: 'atencion', cancelada: 'bloqueado',
+};
+
+const palletStates = {
+    pendiente: 'pendiente', con_incidencia: 'atencion', en_anden: 'en-curso',
+    cargado: 'listo', despachado: 'listo', descartado: 'bloqueado',
+    reemplazado: 'listo', retornado: 'atencion',
 };
 
 const incidentTypeLabels = {
@@ -498,8 +511,8 @@ function remainingFolioSlots(load = state.selected) {
     return availableInstructionSlots(load, state.selectedInstructionId);
 }
 
-function statusClass(status) {
-    return String(status || 'draft').replaceAll('_', '-');
+function loadStatus(load) {
+    return officeStatus(statusLabels[load.estado] || statusText(load.estado), loadStates[load.estado], escapeHtml);
 }
 
 function priorityClass(priority) {
@@ -563,9 +576,9 @@ function renderCatalog() {
         return `
             <button class="load-card${selected ? ' is-selected' : ''}" data-load-id="${escapeHtml(load.id)}" type="button">
                 <div class="load-card__line load-card__line--main">
-                    <strong class="load-card__code">${escapeHtml(load.codigo)}</strong>
+                    <span class="load-card__code folios-codigo">${officeCode(load.codigo, escapeHtml, 3)}</span>
                     <span class="load-card__external">${escapeHtml(loadReferenceText(load))}</span>
-                    <span class="status-badge status-badge--${statusClass(load.estado)}">${escapeHtml(statusLabels[load.estado] || statusText(load.estado))}</span>
+                    ${loadStatus(load)}
                 </div>
                 <div class="load-card__line load-card__line--detail">
                     <span class="load-card__distribution">${escapeHtml(distributionText(load))}</span>
@@ -729,12 +742,12 @@ function startNew() {
     populateDockOptions();
     elements.headerError.textContent = '';
     elements.editorEyebrow.textContent = 'NUEVA ORDEN';
+    elements.editorTitle.classList.remove('folios-codigo');
     elements.editorTitle.textContent = 'Nuevo borrador';
     elements.editorDescription.textContent = 'Crea el encabezado y luego incorpora los folios.';
     elements.externalOrderLabel.textContent = 'Número de orden externa';
     elements.externalOrderHelp.textContent = 'Referencia informada por el cliente.';
-    elements.statusBadge.className = 'status-badge status-badge--draft';
-    elements.statusBadge.textContent = 'Sin guardar';
+    elements.statusBadge.innerHTML = officeStatus('Sin guardar', 'pendiente', escapeHtml);
     elements.priorityBadge.classList.add('is-hidden');
     elements.saveText.textContent = 'Crear borrador';
     setHeaderDisabled(false);
@@ -887,9 +900,9 @@ function renderFolios(load) {
                                 : 'Por ubicar · pendiente de cámaras';
         return `
             <tr>
-                <td><strong>${escapeHtml(folio.numero_folio)}</strong><small>${escapeHtml(folio.estado_operacional || '—')}</small></td>
+                <td><span class="folios-codigo">${officeCode(folio.numero_folio, escapeHtml)}</span><small>${escapeHtml(statusText(folio.estado_operacional || '—'))}</small></td>
                 <td>${escapeHtml(statusText(folio.tipo_bulto || '—'))}</td>
-                <td><span class="folio-state folio-state--${statusClass(folio.estado_carga)}">${escapeHtml(statusText(folio.estado_carga || 'pendiente'))}</span></td>
+                <td>${officeStatus(statusText(folio.estado_carga || 'pendiente'), palletStates[folio.estado_carga], escapeHtml)}</td>
                 <td><span class="location-label">${escapeHtml(location)}</span></td>
                 <td>${escapeHtml(formatDate(folio.asignado_at))}</td>
                 <td class="folio-action-cell">
@@ -998,7 +1011,7 @@ function renderTruckPresence(load) {
     if (!presence) return;
 
     const dock = presence.anden?.nombre || presence.anden?.codigo || 'andén';
-    elements.truckDockTitle.textContent = `${presence.patente} · ${dock}`;
+    elements.truckDockTitle.innerHTML = `${officePlate(presence.patente, escapeHtml)} · ${escapeHtml(dock)}`;
     elements.truckDockDetail.textContent = [
         `Llegada ${formatDate(presence.ingresada_at)}`,
         presence.conductor ? `conductor ${presence.conductor}` : null,
@@ -1020,7 +1033,8 @@ function renderSelected(load) {
 
     const editable = canEdit(load);
     elements.editorEyebrow.textContent = load.estado === 'borrador' ? 'ORDEN EN PREPARACIÓN' : 'ORDEN DE CARGA';
-    elements.editorTitle.textContent = load.codigo;
+    elements.editorTitle.classList.add('folios-codigo');
+    elements.editorTitle.innerHTML = officeCode(load.codigo, escapeHtml, 3);
     let sag = document.getElementById('loadSagAlerts');
     if (!sag) { sag = document.createElement('div'); sag.id = 'loadSagAlerts'; elements.editorTitle.parentElement.append(sag); }
     sag.innerHTML = sagLotAlertsHtml(load.alertas_sag || []);
@@ -1029,8 +1043,7 @@ function renderSelected(load) {
     elements.editorDescription.textContent = linkedShipment
         ? `Embarque interno ${load.embarque.codigo} · ${linkedExternalNumbers.length ? `N.º externo ${linkedExternalNumbers.join(' / ')}` : 'sin N.º externo informado'}`
         : (load.numero_orden_externa ? `N.º externo ${load.numero_orden_externa}` : 'Sin número externo asociado.');
-    elements.statusBadge.className = `status-badge status-badge--${statusClass(load.estado)}`;
-    elements.statusBadge.textContent = statusLabels[load.estado] || statusText(load.estado);
+    elements.statusBadge.innerHTML = loadStatus(load);
     elements.priorityBadge.className = `priority-badge priority-badge--${priorityClass(load.prioridad)}`;
     elements.priorityBadge.textContent = priorityLabels[load.prioridad] || statusText(load.prioridad);
     elements.version.textContent = `#${load.version}`;

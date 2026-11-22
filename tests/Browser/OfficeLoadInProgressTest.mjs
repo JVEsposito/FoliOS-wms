@@ -16,10 +16,12 @@ test('completa una carga en despacho parcial con los pallets que faltaban', asyn
         // La pantalla de cargas es un espacio de trabajo de escritorio (mínimo 1050 px).
         for (const width of [1440, 1100]) {
             const context = await browser.newContext({ viewport: { width, height: 1000 } });
-            await context.addInitScript(() => {
+            const theme = width === 1440 ? 'light-professional' : 'dark-industrial';
+            await context.addInitScript((theme) => {
                 localStorage.setItem('estiba_wms_office_token', 'fixture');
                 localStorage.setItem('estiba_wms_office_identity', JSON.stringify({ nombre: 'Despacho', rol: 'despachador', puede_consultar_cargas: true, puede_consultar_catalogo_cargas: true, puede_gestionar_cargas: true }));
-            });
+                localStorage.setItem('estiba_wms_office_theme', theme);
+            }, theme);
             const writes = [], errors = [];
             const group = { id: 'instr-1', orden: 1, numero_externo: 'EFC0000011', booking: null, recibidor: null, pallets_programados: 4, cajas_programadas: null, pallets_asignados: 2, pallets_pendientes: 2, progreso: { en_anden: 1, cargados: 0 } };
             const folio = (numero, estado) => ({ id: numero, numero_folio: numero, estado_carga: estado, tipo_bulto: 'pallet', estado_operacional: 'disponible', instructivo_embarque_id: 'instr-1', asignado_at: '2026-11-13T00:58:00Z' });
@@ -43,7 +45,10 @@ test('completa una carga en despacho parcial con los pallets que faltaban', asyn
                 if (path === '/api/cargas') return route.fulfill({ json: { data: [load, closed] } });
                 if (path === '/api/cargas/load') return route.fulfill({ json: { data: load } });
                 if (path === '/api/cargas/closed') return route.fulfill({ json: { data: closed } });
-                if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { temporada: null, planta: 'Fixture', avisos_cierre: [], avisos_materiales: [] } } });
+                if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: {
+                    temporada: null, planta: 'Fixture', jornada: { fecha_jornada: '2026-11-22', turno_operativo: 'A' },
+                    avisos_cierre: [], avisos_materiales: [],
+                } } });
                 return route.fulfill({ json: { data: [] } });
             });
             const page = await context.newPage();
@@ -51,6 +56,20 @@ test('completa una carga en despacho parcial con los pallets que faltaban', asyn
             await page.goto('http://localhost/oficina/frigorifico/despacho/cargas');
             await page.locator('[data-load-id="load"]').click();
             await page.locator('#folioAddSection:not(.is-hidden)').waitFor();
+            await page.locator('[data-office-workday]').filter({ hasText: '22-11-2026 · Turno A' }).waitFor();
+            assert.equal(await page.locator('html').getAttribute('data-office-theme'), theme);
+            assert.equal(await page.locator('#loadEditorTitle strong').textContent(), '036');
+            assert.equal(await page.locator('#loadStatusBadge [data-estado]').getAttribute('data-estado'), 'en-curso');
+            const contrast = await page.locator('#loadTotalFolios').evaluate(value => {
+                const luminance = color => color.match(/\d+/g).slice(0, 3).map(Number).map(channel => {
+                    const n = channel / 255;
+                    return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4;
+                }).reduce((sum, channel, i) => sum + channel * [.2126, .7152, .0722][i], 0);
+                const bg = luminance(getComputedStyle(value.closest('article')).backgroundColor);
+                const fg = luminance(getComputedStyle(value).color);
+                return (Math.max(bg, fg) + .05) / (Math.min(bg, fg) + .05);
+            });
+            assert.ok(contrast >= 4.5, `Contraste del indicador en ${theme}: ${contrast}`);
             assert.equal(await page.locator('#folioAddTitle').textContent(), 'Completar la orden');
             assert.match(await page.locator('#folioAddHelp').textContent(), /vuelve a despacho parcial/);
             assert.match(await page.locator('#loadCommandDescription').textContent(), /Faltan 2 pallets por asignar/);

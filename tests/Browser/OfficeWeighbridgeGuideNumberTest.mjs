@@ -54,6 +54,10 @@ async function abrir(browser, width, rol) {
     await page.locator('#officeLoading').waitFor({ state: 'hidden' });
     await page.locator('tr.rec-row[data-reception-id="recepcion"]').click();
     await page.locator('#detailTitle').filter({ hasText: 'REC-2611-0060' }).waitFor();
+    assert.equal(await page.locator('#detailTitle strong').textContent(), '0060');
+    assert.equal(await page.locator('#detailSubtitle [data-estado]').getAttribute('data-estado'), 'listo');
+    assert.equal(await page.locator('.rec-row .folios-patente').textContent(), 'ABCD12');
+    assert.equal(await page.locator('#receptionDetail').evaluate(detail => getComputedStyle(detail).position), 'fixed');
     return { context, page, state };
 }
 

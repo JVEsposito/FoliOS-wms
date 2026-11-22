@@ -50,17 +50,7 @@ body {
 .weighbridge-panel-heading p:last-child { margin: 6px 0 0; color: var(--muted); }
 .weighbridge-heading__actions { flex: 0 0 auto; }
 
-.weighbridge-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 13px; margin-bottom: 16px; }
-.weighbridge-kpis article { position: relative; min-height: 135px; overflow: hidden; border: 1px solid var(--line); border-radius: 15px; background: linear-gradient(145deg, rgba(13, 34, 45, .98), rgba(7, 22, 30, .98)); padding: 18px; }
-.weighbridge-kpis article::before { position: absolute; inset: 0 0 auto; height: 3px; background: var(--weighbridge-blue); content: ''; }
-.weighbridge-kpis article:nth-child(2)::before { background: var(--weighbridge-gold); }
-.weighbridge-kpis article:nth-child(3)::before { background: #d99054; }
-.weighbridge-kpis article:nth-child(4)::before { background: var(--green); }
-.weighbridge-kpis article:nth-child(5)::before { background: var(--cyan); }
-.weighbridge-kpis span { color: var(--muted); font-size: .65rem; font-weight: 900; letter-spacing: .08em; }
-.weighbridge-kpis strong { display: block; margin: 14px 0 6px; font-size: 2.25rem; line-height: 1; }
-.weighbridge-kpis small { color: var(--muted); font-size: .68rem; }
-.weighbridge-kpi--weight strong { color: var(--cyan-light); font-size: 1.7rem; }
+.weighbridge-workspace .folios-indicadores { margin-block-end: 16px; }
 
 .weighbridge-list-panel { overflow: hidden; }
 .weighbridge-panel-heading { align-items: flex-end; padding: 18px 20px; border-bottom: 1px solid var(--line); }
@@ -200,7 +190,6 @@ body {
 .tare-count-note small { display: block; margin-top: 7px; color: var(--muted); font-size: .62rem; }
 
 @media (max-width: 1280px) {
-    .weighbridge-kpis { grid-template-columns: repeat(3, 1fr); }
     .weighbridge-filters { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
     .weighbridge-filters button { grid-column: span 1; }
     .reception-detail__grid { grid-template-columns: repeat(4, 1fr); }
@@ -209,7 +198,6 @@ body {
 @media (max-width: 850px) {
     .weighbridge-workspace { min-width: 960px; }
     .weighbridge-form-grid { grid-template-columns: repeat(2, 1fr); }
-    .weighbridge-kpis { grid-template-columns: repeat(2, 1fr); }
 }
 .container-lines{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:10px;border:1px solid var(--border);border-radius:12px;padding:12px}.container-lines legend{padding:0 6px;color:var(--muted);font-size:11px;font-weight:900}.container-lines label span{display:block;margin-bottom:6px}.container-lines small{grid-column:1/-1;color:var(--muted)}
 .container-entry-line { display: grid; align-content: start; gap: 8px; min-width: 0; }
@@ -223,12 +211,6 @@ body {
 .office-app .weighbridge-heading { flex-wrap: wrap; }
 .office-app .weighbridge-heading > div:first-child { flex: 1 1 460px; min-width: 0; }
 .office-app .weighbridge-heading__actions { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; }
-.office-app .weighbridge-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important; }
-
-.office-app .weighbridge-kpis > article.has-attention { background: var(--seal-bg) !important; }
-.office-app .weighbridge-kpis > article.has-attention > strong { color: var(--seal) !important; }
-.office-app .weighbridge-kpis .kpi-unit { color: var(--text-subtle); font-size: .56em; font-stretch: 100%; font-weight: 700; }
-
 .office-app .weighbridge-list-panel > .weighbridge-panel-heading {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr);
@@ -283,7 +265,7 @@ body {
 .office-app .weighbridge-table tbody tr.rec-track.is-selected > td:first-child { box-shadow: inset 3px 0 var(--area-ink); }
 
 .office-app .weighbridge-table .rec-k { display: block; margin-bottom: 3px; color: var(--text-subtle); font-size: .75rem; font-weight: 500; }
-.office-app .weighbridge-table tr.rec-row strong { display: block; color: var(--text-strong); font-size: .9375rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.office-app .weighbridge-table tr.rec-row strong:not(.folios-codigo > strong) { display: block; color: var(--text-strong); font-size: .9375rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
 .office-app .weighbridge-table tr.rec-row small { display: block; margin-top: 2px; color: var(--text-subtle); font-size: .8125rem; line-height: 1.35; }
 .office-app .weighbridge-table .rec-code { font-family: var(--font-mono) !important; font-size: 1.0625rem !important; letter-spacing: -.03em; white-space: nowrap; }
 .office-app .weighbridge-table .rec-mono { font-family: var(--font-mono); letter-spacing: -.03em; }
@@ -313,7 +295,7 @@ body {
 .rec-step::before { flex: 0 0 auto; content: ""; }
 .rec-step--done { background: var(--success-bg); color: var(--success-text); }
 .rec-step--done::before { width: 9px; height: 5px; margin-top: -3px; border-bottom: 2px solid currentColor; border-left: 2px solid currentColor; transform: rotate(-45deg); }
-.rec-step--now { background: var(--corporate-card); box-shadow: inset 0 0 0 1.5px var(--area-ink); color: var(--area-text); }
+.rec-step--now { background: var(--corporate-card); box-shadow: inset 0 0 0 1.5px var(--primary); color: var(--primary); }
 .rec-step--now::before { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .rec-step--next { background: var(--surface-muted); color: var(--text-subtle); }
 .rec-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -325,13 +307,15 @@ body {
 /* Con el expediente abierto, el listado cede ancho: filtros en dos filas. */
 body.has-reception-drawer .office-app .weighbridge-filters { grid-template-columns: minmax(180px, 2fr) repeat(2, minmax(132px, 1fr)); }
 
-.weighbridge-traffic { margin-block-end: 16px; }
-.office-app .weighbridge-traffic .weighbridge-kpis { margin: 0; border: 0; overflow: clip; }
-.office-app .weighbridge-traffic .weighbridge-gatehouse:not([hidden]) + .weighbridge-kpis {
-    border-block-start: 1px dashed var(--line);
-    border-start-start-radius: 0;
-    border-start-end-radius: 0;
+@media (max-width: 650px) {
+    .office-app .weighbridge-list-panel .weighbridge-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .weighbridge-filters [name="buscar"] { grid-column: 1 / -1; }
+    .weighbridge-filters :is(input, select) { min-inline-size: 0; }
 }
+
 .weighbridge-gatehouse {
     display: flex;
     flex-wrap: wrap;

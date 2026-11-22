@@ -7,6 +7,7 @@ import { dispatchInspectionPayload } from './office-container-inspection.js';
 import { receptionSteps } from './shared/weighbridge-steps.js';
 import { loadContainerCatalog, containerLabel, calculateNetAllocation } from './office-container-catalog.js';
 import { createOperationalPoller } from './shared/operational-poller';
+import { officeCode, officePlate, officeStatus } from './shared/folios-display.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -118,10 +119,10 @@ function label(value) {
     return labels[value] || String(value || '').replaceAll('_', ' ').replace(/^./, (character) => character.toUpperCase());
 }
 function guideNumbers(reception) { return reception.guias?.length ? reception.guias.map((g) => g.numero_guia_despacho).join(' / ') : reception.numero_guia_despacho; }
-function stateBadge(status) {
-    const style = status === 'cerrado' ? 'closed' : ['en_bascula_salida', 'en_pesaje_envases'].includes(status) ? 'exit' : 'entry';
-    return `<span class="state-badge state-badge--${style}">${escapeHtml(label(status))}</span>`;
-}
+const receptionStates = {
+    en_bascula_ingreso: 'en-curso', en_pesaje_envases: 'en-curso',
+    en_bascula_salida: 'atencion', cerrado: 'listo', anulada: 'bloqueado',
+};
 function receptionStateLabel(reception, status) {
     if (status === 'anulada' && reception.eliminada) return 'Eliminada';
     if (reception.tipo_recepcion !== 'solo_envases') return label(status);
@@ -147,10 +148,11 @@ function formatKpiWeight(value) {
     return `${escapeHtml(number)} <span class="kpi-unit">kg</span>`;
 }
 function receptionStateBadge(reception) {
-    if (reception.tipo_recepcion !== 'solo_envases' || reception.estado === 'anulada') return stateBadge(reception.estado);
-    const contextualLabel = receptionStateLabel(reception, reception.estado);
-    const style = reception.estado === 'cerrado' ? 'closed' : reception.estado === 'en_bascula_salida' ? 'exit' : 'entry';
-    return `<span class="state-badge state-badge--${style}">${escapeHtml(contextualLabel)}</span>`;
+    return officeStatus(receptionStateLabel(reception, reception.estado), receptionStates[reception.estado], escapeHtml);
+}
+function guideCode(reception) {
+    const codes = String(guideNumbers(reception) || '—').split(' / ');
+    return `<span class="folios-codigo">${codes.map(code => officeCode(code, escapeHtml)).join(' / ')}</span>`;
 }
 function setBusy(active, message = 'Procesando…') {
     elements.loadingText.textContent = message;
@@ -341,12 +343,12 @@ function renderList(payload) {
             : reception.pesaje_envases
                 ? `${reception.pesaje_envases.cantidad_pesada} de ${reception.pesaje_envases.cantidad_declarada}`
                 : formatWeight(reception.peso_neto, formatWeight(reception.peso_bruto));
-        const truck = [reception.patente_camion, reception.tipo_camion ? label(reception.tipo_camion).toLowerCase() : null].filter(Boolean).join(', ');
+        const truckType = reception.tipo_camion ? label(reception.tipo_camion).toLowerCase() : '';
         return `
         <tr class="rec-row" data-reception-id="${escapeHtml(reception.id)}" tabindex="0">
-            <td><span class="rec-k">Recepción</span><span class="rec-title-row"><strong class="rec-code">${escapeHtml(reception.numero_recepcion || 'Ingreso abierto')}</strong>${reception.puede_eliminar ? `<button type="button" class="secondary-button rec-delete-button" data-delete-reception-id="${escapeHtml(reception.id)}" aria-label="Eliminar recepción ${escapeHtml(reception.numero_recepcion)}">Eliminar</button>` : ''}</span><small>Ingreso ${escapeHtml(formatTime(reception.ingreso_at))}</small></td>
-            <td><span class="rec-k">Cliente y guía</span><strong>${escapeHtml(reception.cliente.nombre)}</strong><small>Guía <span class="rec-mono">${escapeHtml(guideNumbers(reception))}</span></small></td>
-            <td><span class="rec-k">Transporte y declaración</span><strong>${escapeHtml(truck)}</strong><small>${escapeHtml(envasesLabel(reception))} · ${escapeHtml(reception.nombre_conductor)}</small></td>
+            <td><span class="rec-k">Recepción</span><span class="rec-title-row"><span class="rec-code folios-codigo">${officeCode(reception.numero_recepcion || 'Ingreso abierto', escapeHtml)}</span>${reception.puede_eliminar ? `<button type="button" class="secondary-button rec-delete-button" data-delete-reception-id="${escapeHtml(reception.id)}" aria-label="Eliminar recepción ${escapeHtml(reception.numero_recepcion)}">Eliminar</button>` : ''}</span>${receptionStateBadge(reception)}<small>Ingreso ${escapeHtml(formatTime(reception.ingreso_at))}</small></td>
+            <td><span class="rec-k">Cliente y guía</span><strong>${escapeHtml(reception.cliente.nombre)}</strong><small>Guía ${guideCode(reception)}</small></td>
+            <td><span class="rec-k">Transporte y declaración</span>${officePlate(reception.patente_camion, escapeHtml)} ${escapeHtml(truckType)}<small>${escapeHtml(envasesLabel(reception))} · ${escapeHtml(reception.nombre_conductor)}</small></td>
             <td class="rec-weight"><span class="rec-k">${escapeHtml(weightLabel)}</span><strong class="rec-code">${escapeHtml(weightValue)}</strong></td>
         </tr>
         <tr class="rec-track" data-reception-id="${escapeHtml(reception.id)}"><td colspan="4">${receptionTrack(reception)}</td></tr>`;
@@ -463,7 +465,10 @@ function plantBinsFact(reception) {
 function renderDetail(reception) {
     state.selected = reception;
     elements.detail.classList.remove('is-hidden');
-    elements.detailTitle.textContent = reception.numero_recepcion || `Ingreso · ${reception.patente_camion}`;
+    elements.detailTitle.classList.toggle('folios-codigo', Boolean(reception.numero_recepcion));
+    elements.detailTitle.innerHTML = reception.numero_recepcion
+        ? officeCode(reception.numero_recepcion, escapeHtml)
+        : `Ingreso · ${officePlate(reception.patente_camion, escapeHtml)}`;
     elements.detailSubtitle.innerHTML = `${receptionStateBadge(reception)} · Guía ${escapeHtml(guideNumbers(reception))} · ${escapeHtml(reception.cliente.nombre)}`;
     const weighingKinds = weighingTypes(reception.pesaje_envases);
     const weighingFacts = reception.pesaje_envases ? [

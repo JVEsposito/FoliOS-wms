@@ -31,6 +31,7 @@ function initializeWeighbridgeDrawer() {
     detail.setAttribute('aria-hidden', 'true');
 
     const heading = detail.querySelector('.weighbridge-panel-heading');
+    const perforation = detail.querySelector(':scope > .folios-perforacion');
     const legacyActions = heading?.querySelector('.detail-actions');
     const timelineSection = detailTimeline.closest('section');
     const balanceSection = weightBalance.closest('section');
@@ -89,7 +90,7 @@ function initializeWeighbridgeDrawer() {
         .forEach((button) => footer.append(button));
 
     legacyBottom.remove();
-    heading.after(tabs, content);
+    (perforation || heading).after(tabs, content);
     detail.append(footer);
 
     const backdrop = document.createElement('button');

@@ -143,6 +143,187 @@
 .folios-ticket__stub::before { inset-block-start: -1px; border-block-start: 0; border-radius: 0 0 8px 8px; }
 .folios-ticket__stub::after { inset-block-end: -1px; border-block-end: 0; border-radius: 8px 8px 0 0; }
 
+/* Etiquetas de Gajos vivos. El color del área identifica el talón y el troquel. */
+.folios-gajo--hoja :is(.folios-gajo__leaf:not(.is-area), .folios-gajo__hub) { display: none; }
+
+:where(.folios-etiqueta) { position: relative; }
+
+.office-app .folios-etiqueta {
+    min-inline-size: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--corporate-card);
+}
+
+.folios-etiqueta::after {
+    position: absolute;
+    inset: 0 0 auto auto;
+    inline-size: 16px;
+    block-size: 16px;
+    border-start-end-radius: inherit;
+    background: var(--area-ink);
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+    pointer-events: none;
+    content: "";
+}
+
+.office-app [data-folios-masthead].folios-etiqueta--cabecera {
+    --folios-heading-size: clamp(2rem, 4.3vw, 3.75rem);
+    padding-block-end: 24px;
+    border-radius: 8px;
+    background: var(--corporate-card);
+}
+
+.office-app .folios-etiqueta__corte {
+    position: absolute;
+    inset: auto 0 9px;
+    pointer-events: none;
+}
+
+.office-app .folios-etiqueta__area {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    color: var(--area-text);
+    font: 750 .78rem/1.3 var(--font-sans);
+    letter-spacing: .055em;
+    text-transform: uppercase;
+}
+
+.office-app [data-folios-masthead] .folios-etiqueta__codigo {
+    color: var(--text-subtle);
+    font: 600 .75rem/1.4 var(--font-mono);
+    letter-spacing: .035em;
+}
+
+.folios-perforacion {
+    position: relative;
+    border-block-start: 1px dashed var(--line);
+}
+
+.folios-perforacion::before, .folios-perforacion::after {
+    position: absolute;
+    z-index: 1;
+    inset-block-start: -7px;
+    inline-size: 7px;
+    block-size: 12px;
+    border: 1px solid var(--line);
+    background: var(--corporate-canvas);
+    pointer-events: none;
+    content: "";
+}
+
+.folios-perforacion::before {
+    inset-inline-start: 0;
+    border-inline-start: 0;
+    border-radius: 0 10px 10px 0;
+}
+
+.folios-perforacion::after {
+    inset-inline-end: 0;
+    border-inline-end: 0;
+    border-radius: 10px 0 0 10px;
+}
+
+.office-app .folios-indicadores {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--folios-indicador-min, 158px)), 1fr));
+    gap: 10px;
+}
+
+.folios-ticket--indicador {
+    display: grid;
+    grid-template-columns: var(--folios-ticket-stub-width, clamp(36px, 4vw, 62px)) minmax(0, 1fr);
+}
+
+.folios-ticket--indicador > .folios-ticket__stub {
+    justify-content: space-between;
+    padding-block: 12px;
+}
+
+.folios-ticket--indicador > .folios-ticket__stub span {
+    color: inherit;
+    font: inherit;
+    writing-mode: vertical-rl;
+    rotate: 180deg;
+}
+
+.folios-ticket__contenido {
+    display: grid;
+    align-content: center;
+    gap: 5px;
+    min-inline-size: 0;
+    min-block-size: 85px;
+    padding: 12px 10px 12px 13px;
+}
+
+.folios-ticket__contenido > :is(.folios-ticket__rotulo, small) {
+    color: var(--text-subtle);
+    font-size: .75rem;
+    line-height: 1.25;
+}
+
+.folios-ticket__contenido > .folios-ticket__valor {
+    margin: 0;
+    color: var(--text-strong);
+    font: 800 clamp(1.5rem, 2.4vw, 2.2rem)/1 var(--font-sans);
+    font-stretch: var(--font-masthead-stretch);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.folios-ticket--indicador.has-attention .folios-ticket__valor { color: var(--seal); }
+.folios-ticket__valor .kpi-unit {
+    color: var(--text-subtle);
+    font-size: .55em;
+    font-stretch: 100%;
+    font-weight: 700;
+}
+
+.office-app .folios-codigo, .office-app .folios-patente {
+    color: var(--text-strong);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.office-app .folios-codigo .folios-code__prefix { color: var(--text-subtle); font-weight: 500; }
+.office-app .folios-codigo strong { display: inline; color: var(--text-strong); font-weight: 800; }
+
+.office-app .folios-patente {
+    display: inline-block;
+    padding: 1px 6px;
+    border: 1.5px solid var(--text-subtle);
+    border-radius: 4px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.office-app .folios-estado {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    color: var(--folios-estado-ink, var(--text-subtle));
+    font-size: .8rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.folios-estado[data-estado="listo"] { --folios-estado-ink: var(--success-text); }
+.folios-estado[data-estado="en-curso"] { --folios-estado-ink: var(--primary); }
+.folios-estado[data-estado="atencion"] { --folios-estado-ink: var(--seal); }
+.folios-estado[data-estado="bloqueado"] { --folios-estado-ink: var(--danger-text); }
+
+.folios-estado > [aria-hidden] { flex: none; font-size: .85em; }
+
+.office-app .folios-celdas-resumen { display: grid; gap: 5px; }
+.office-app .folios-celdas-resumen__barra { display: flex; flex-wrap: nowrap; gap: 2px; }
+.office-app .folios-celdas-resumen__barra [data-cell] { inline-size: 0; min-inline-size: 0; }
+
+.office-app [data-office-gajos-vivos] .estiba-office-header {
+    border-block-end: 3px solid var(--area-ink);
+}
+
 .folios-ticket__stub .folios-gajo {
     --gajo-rest: var(--line);
     --gajo-area: var(--gajo-ink);

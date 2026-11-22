@@ -48,23 +48,19 @@
 
         <main class="office-app is-hidden" id="officeApp" data-folios-workspace="expediente">
             
-            <x-office.navigation domain="frigorifico" office="cargas" context="FRIGORÍFICO · PT" icon="▤" />
+            <x-office.navigation domain="frigorifico" office="cargas" context="FRIGORÍFICO · PT" icon="▤" :gajos-vivos="true" />
 
 
             <section class="loads-workspace">
-                <header class="loads-command" data-folios-masthead>
-                    <div>
-                        <p class="eyebrow">Frigorífico · Despacho PT</p>
-                        <h1>Órdenes de carga</h1>
-                    </div>
+                <x-folios.cabecera-etiqueta class="loads-command" area="frigorifico" seccion="Frigorífico · Despacho PT" titulo="Órdenes de carga" codigo="CAR · SEPARACIÓN / CARGUÍO">
                     <div class="catalog-actions">
                         <button class="icon-button" id="reloadLoadsButton" type="button" aria-label="Actualizar órdenes">↻</button>
                         <button class="secondary-button compact-button is-hidden" id="directDispatchButton" type="button" title="Registrar salida directa desde Prefrío">⇥ Prefrío</button>
                         <button class="primary-button compact-button" id="newLoadButton" type="button">+ Nueva</button>
                     </div>
-                </header>
+                </x-folios.cabecera-etiqueta>
 
-                <aside class="load-catalog panel" aria-label="Bandeja de órdenes de carga" data-folios-register>
+                <aside class="load-catalog panel folios-etiqueta" aria-label="Bandeja de órdenes de carga" data-folios-register>
                     <div class="load-filters">
                         <label>
                             <span>Buscar</span>
@@ -94,6 +90,7 @@
                         </label>
                     </div>
 
+                    <div class="folios-perforacion" aria-hidden="true"></div>
                     <div class="load-catalog__status">
                         <div class="load-catalog__summary" id="loadCatalogSummary" role="status" aria-live="polite">0 órdenes</div>
                         <label class="page-size-control">
@@ -109,13 +106,13 @@
                     <div class="pagination" id="loadPagination" aria-label="Paginación de órdenes"></div>
                 </aside>
 
-                <section class="load-editor panel" data-folios-register>
+                <section class="load-editor panel folios-etiqueta" data-folios-register>
                     <div class="load-empty" id="loadEmptyState">
                         <span aria-hidden="true">⇥</span>
                         <p class="eyebrow">OFICINA DEL DESPACHADOR</p>
                         <h1>Selecciona una orden o crea un nuevo borrador.</h1>
                         <p>Los borradores pueden guardarse sin folios. La orden solo será visible para la operación cuando la publiques.</p>
-                        <button class="primary-button" id="emptyNewLoadButton" type="button">Crear primera orden <span>→</span></button>
+                        <button class="secondary-button" id="emptyNewLoadButton" type="button">Crear primera orden <span>→</span></button>
                     </div>
 
                     <div class="is-hidden" id="loadEditorContent">
@@ -124,7 +121,7 @@
                                 <p class="eyebrow" id="loadEditorEyebrow">NUEVA ORDEN</p>
                                 <div class="load-title-row">
                                     <h1 id="loadEditorTitle">Nuevo borrador</h1>
-                                    <span class="status-badge status-badge--draft" id="loadStatusBadge">Sin guardar</span>
+                                    <span id="loadStatusBadge"></span>
                                     <span class="priority-badge is-hidden" id="loadPriorityBadge"></span>
                                 </div>
                                 <p id="loadEditorDescription">Crea el encabezado y luego incorpora los folios.</p>
@@ -135,6 +132,7 @@
                                 <small id="loadUpdatedAt">Sin guardar</small>
                             </div>
                         </header>
+                        <div class="folios-perforacion" aria-hidden="true"></div>
 
                         <form class="load-header-form" id="loadHeaderForm" novalidate>
                             <div class="load-form-grid">
@@ -176,12 +174,12 @@
                         </form>
 
                         <section class="load-operation is-hidden" id="loadOperation">
-                            <div class="load-metrics" data-folios-metrics>
-                                <article><span>FOLIOS ASIGNADOS</span><strong id="loadTotalFolios">0 / 26</strong></article>
-                                <article><span>CÁMARAS INVOLUCRADAS</span><strong id="loadTotalCameras">0</strong></article>
-                                <article><span>CONCENTRACIÓN</span><strong id="loadConcentration">0%</strong></article>
-                                <article><span>EN ANDÉN</span><strong id="loadAtDock">0</strong></article>
-                                <article><span>INCIDENCIAS ABIERTAS</span><strong id="loadIncidentCount">0</strong></article>
+                            <div class="folios-indicadores">
+                                <x-folios.ticket-indicador area="frigorifico" clave="PT" rotulo="Folios asignados" valor-id="loadTotalFolios" valor="0 / 26" />
+                                <x-folios.ticket-indicador area="frigorifico" clave="FR" rotulo="Cámaras" valor-id="loadTotalCameras" />
+                                <x-folios.ticket-indicador area="frigorifico" clave="FR" rotulo="Concentración" valor-id="loadConcentration" valor="0%" />
+                                <x-folios.ticket-indicador area="frigorifico" clave="PT" rotulo="En andén" valor-id="loadAtDock" />
+                                <x-folios.ticket-indicador area="frigorifico" clave="PT" rotulo="Incidencias abiertas" valor-id="loadIncidentCount" />
                             </div>
 
                             <section class="truck-dock-panel is-hidden" id="truckDockPanel" aria-live="polite">
