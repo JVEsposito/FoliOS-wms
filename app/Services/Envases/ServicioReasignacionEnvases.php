@@ -171,7 +171,15 @@ class ServicioReasignacionEnvases
         }
         $recepciones = array_filter([$nuevo->recepcion_romana_id]);
         $despachos = $nuevo->documento_tipo === 'guia_despacho_envases' && $nuevo->documento_id ? [$nuevo->documento_id] : [];
-        $origenes = array_filter([$nuevo->movimiento_origen_id, $nuevo->datos['reversa_de_movimiento_id'] ?? null,
+        // En un despacho, movimiento_origen_id identifica el stock FIFO, no una guía que se modifica.
+        // Las reversas y conciliaciones señalan explícitamente el asiento que sí están modificando.
+        $afectado = match ($nuevo->tipo_movimiento) {
+            TipoMovimientoEnvase::DespachoCliente => null,
+            TipoMovimientoEnvase::ReversionDespacho => $nuevo->datos['reversa_de_movimiento_id'] ?? $nuevo->movimiento_origen_id,
+            TipoMovimientoEnvase::ConciliacionSalida => $nuevo->datos['movimiento_conciliado_id'] ?? $nuevo->movimiento_origen_id,
+            default => $nuevo->movimiento_origen_id,
+        };
+        $origenes = array_filter([$afectado, $nuevo->datos['reversa_de_movimiento_id'] ?? null,
             $nuevo->datos['movimiento_conciliado_id'] ?? null]);
         if ($recepciones === [] && $despachos === [] && $origenes === []) {
             return;
