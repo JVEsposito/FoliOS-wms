@@ -31,37 +31,36 @@
 
         <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
             
-            <x-office.navigation domain="materia-prima" office="romana" context="MATERIA PRIMA" icon="⚖" />
+            <x-office.navigation domain="materia-prima" office="romana" context="MATERIA PRIMA" icon="⚖" :gajos-vivos="true" />
 
 
             <section class="weighbridge-workspace">
-                <header class="weighbridge-heading" data-folios-masthead>
-                    <div><p class="eyebrow">RECEPCIÓN CONTRACTUAL</p><h1>Control de Romana</h1><p>Ingreso cargado, retorno vacío y cierre documental en una sola trazabilidad.</p></div>
+                <x-folios.cabecera-etiqueta class="weighbridge-heading" area="materia-prima" seccion="Materia Prima · Recepciones" titulo="Control de Romana" codigo="REC · INGRESO / DESTARE">
                     <div class="weighbridge-heading__actions">
                         <button class="secondary-button is-hidden" id="tareSettingsButton" type="button">⚖ Configurar taras</button>
                         <button class="secondary-button" id="downloadBlankWeighingFormButton" type="button">↓ Planilla de pesaje en blanco</button>
                         <button class="secondary-button" id="reloadButton" type="button">↻ Actualizar</button>
                         <button class="primary-button" id="newReceptionButton" type="button">+ Registrar ingreso</button>
                     </div>
-                </header>
+                </x-folios.cabecera-etiqueta>
 
-                <section class="folios-ticket weighbridge-traffic" data-ticket-area="materia-prima" aria-label="Resumen de ingresos y pesajes">
+                <section aria-label="Resumen de ingresos y pesajes">
                     <div class="weighbridge-gatehouse" id="romanaGatehouse" aria-live="polite" hidden>
-                        <x-folios.gajo area="materia-prima" :size="26" />
+                        <x-folios.gajo area="materia-prima" :size="20" class="folios-gajo--hoja" />
                         <div><p class="eyebrow">PORTERÍA</p><h2 id="romanaGatehouseCount">Consultando llegadas…</h2><p id="romanaGatehouseStatus"></p></div>
                         <a class="secondary-button" href="/oficina/porteria?romana=1">Ver ingresos y PDF diario →</a>
                         <ul id="romanaGatehouseRecent"></ul>
                     </div>
-                    <div class="weighbridge-kpis" data-folios-metrics>
-                        <article><span>En romana · Ingreso</span><strong id="entryCount">0</strong><small>Pendientes de confirmar ingreso</small></article>
-                        <article><span>Pesaje de envases</span><strong id="containerWeighingCount">0</strong><small>Recepciones con pesaje acumulativo abierto</small></article>
-                        <article class="weighbridge-kpi--attention" data-weighbridge-attention="exit"><span>Pendientes de cierre</span><strong id="exitCount">0</strong><small>Destare o cierre documental pendiente</small></article>
-                        <article><span>Recepciones cerradas</span><strong id="closedCount">0</strong><small>Según los filtros aplicados</small></article>
-                        <article class="weighbridge-kpi--weight"><span>Peso neto recepcionado</span><strong id="netWeight">0 kg</strong><small>Bruto menos tara total documentada</small></article>
+                    <div class="folios-indicadores">
+                        <x-folios.ticket-indicador area="materia-prima" clave="MP" rotulo="En romana · Ingreso" valor-id="entryCount" detalle="Por confirmar" />
+                        <x-folios.ticket-indicador area="materia-prima" clave="MP" rotulo="Pesaje de envases" valor-id="containerWeighingCount" detalle="Recepciones con tandas abiertas" />
+                        <x-folios.ticket-indicador area="materia-prima" clave="MP" rotulo="Pendientes de cierre" valor-id="exitCount" detalle="Destare o cierre documental" data-weighbridge-attention="exit" />
+                        <x-folios.ticket-indicador area="materia-prima" clave="MP" rotulo="Recepciones cerradas" valor-id="closedCount" detalle="Según los filtros aplicados" />
+                        <x-folios.ticket-indicador area="materia-prima" clave="MP" rotulo="Peso neto recepcionado" valor-id="netWeight" valor="0 kg" detalle="Bruto menos tara" />
                     </div>
                 </section>
 
-                <section class="panel weighbridge-list-panel" data-folios-register>
+                <section class="panel weighbridge-list-panel folios-etiqueta" data-folios-register>
                     <div class="weighbridge-panel-heading">
                         <div><p class="eyebrow">TRÁNSITO Y CIERRES</p><h2>Recepciones</h2></div>
                         <form class="weighbridge-filters" id="receptionFilters" data-folios-toolbar>
@@ -73,6 +72,7 @@
                             <button class="secondary-button" type="submit">Filtrar</button>
                         </form>
                     </div>
+                    <div class="folios-perforacion" aria-hidden="true"></div>
                     <div class="weighbridge-table-scroll">
                         <table class="weighbridge-table">
                             <thead><tr><th scope="col">Recepción</th><th scope="col">Cliente y guía</th><th scope="col">Transporte y declaración</th><th scope="col" class="rec-weight">Peso</th></tr></thead>
@@ -82,7 +82,7 @@
                     <div class="weighbridge-pagination"><span id="paginationSummary">0 recepciones</span><div><button id="previousPageButton" type="button">← Anterior</button><button id="nextPageButton" type="button">Siguiente →</button></div></div>
                 </section>
 
-                <section class="panel reception-detail is-hidden" id="receptionDetail">
+                <section class="panel reception-detail folios-etiqueta is-hidden" id="receptionDetail">
                     <div class="weighbridge-panel-heading">
                         <div><p class="eyebrow">EXPEDIENTE DE RECEPCIÓN</p><h2 id="detailTitle">Recepción</h2><p id="detailSubtitle"></p></div>
                         <div class="detail-actions">
@@ -104,6 +104,7 @@
                             <button class="secondary-button" id="closeDetailButton" type="button">Cerrar detalle</button>
                         </div>
                     </div>
+                    <div class="folios-perforacion" aria-hidden="true"></div>
                     <div class="reception-detail__grid" id="detailFacts"></div>
                     <div class="reception-detail__bottom"><section><p class="eyebrow">TRAZABILIDAD</p><h3>Línea de tiempo</h3><div class="weighbridge-timeline" id="detailTimeline"></div></section><section><p class="eyebrow">CONTROL DE PESO</p><h3>Balance del pesaje</h3><div class="weight-balance" id="weightBalance"></div></section></div>
                     <section class="container-weighing-panel is-hidden" id="containerWeighingPanel">

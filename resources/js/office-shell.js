@@ -11,6 +11,7 @@ let contextToken = null;
 let controller = null;
 let generation = 0;
 let initialized = false;
+let contextReadAt = null;
 
 const shell = () => document.querySelector('[data-office-shell]');
 const field = (name) => shell()?.querySelector(`[data-office-${name}]`);
@@ -29,6 +30,13 @@ function contextState(label, detail, tone = 'neutral') {
     if (status) status.dataset.tone = tone;
 }
 
+function contextAge() {
+    if (contextReadAt === null) return 'Sin lectura verificada';
+    const seconds = Math.max(0, Math.floor((Date.now() - contextReadAt) / 1000));
+    const age = seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min`;
+    return `Lectura hace ${age}`;
+}
+
 function syncThemes(themes, personalThemes) {
     if (!Array.isArray(themes)) return;
     try {
@@ -42,19 +50,26 @@ function syncThemes(themes, personalThemes) {
 }
 
 async function loadContext() {
-    if (!shell()) return;
+    const root = shell();
+    if (!root) return;
+    const gajosVivos = root.hasAttribute('data-office-gajos-vivos');
     const currentToken = token();
     if (!currentToken) return;
+    const button = field('context-refresh');
+    if (gajosVivos && !navigator.onLine) {
+        button.disabled = false;
+        contextState('Sin conexión', contextAge(), 'critical');
+        return;
+    }
     controller?.abort();
     controller = new AbortController();
     const requestController = controller;
     const currentGeneration = ++generation;
-    const button = field('context-refresh');
     button.disabled = true;
     contextState('Verificando contexto', 'Consultando temporada y planta…', 'neutral');
     const timeout = setTimeout(() => requestController.abort(), 10000);
     try {
-        const response = await fetch('/api/oficina/contexto', {
+        const response = await fetch(gajosVivos ? '/api/oficina/contexto?jornada=1' : '/api/oficina/contexto', {
             headers: { Accept: 'application/json', Authorization: `Bearer ${currentToken}` },
             cache: 'no-store', signal: requestController.signal,
         });
@@ -68,15 +83,28 @@ async function loadContext() {
         text('plant', data.planta || 'Sin configurar');
         text('season', data.temporada?.codigo || 'Sin temporada activa');
         renderNotices([...(Array.isArray(data.avisos_cierre) ? data.avisos_cierre : []), ...(Array.isArray(data.avisos_materiales) ? data.avisos_materiales : [])]);
-        contextState(
-            'Contexto verificado',
-            `Actualizado ${new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`,
-            'success',
-        );
+        if (gajosVivos) {
+            const date = data.jornada?.fecha_jornada?.split('-').reverse().join('-');
+            const shift = data.jornada?.turno_operativo ? `Turno ${data.jornada.turno_operativo}` : null;
+            text('workday', [date, shift].filter(Boolean).join(' · ') || 'Sin configurar');
+            contextReadAt = Date.now();
+            contextState('En línea', contextAge(), 'success');
+        } else {
+            contextState(
+                'Contexto verificado',
+                `Actualizado ${new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`,
+                'success',
+            );
+        }
     } catch (error) {
         if (currentGeneration !== generation || currentToken !== token()) return;
+        if (gajosVivos && !navigator.onLine) {
+            contextState('Sin conexión', contextAge(), 'critical');
+            return;
+        }
         text('plant', 'Sin verificar');
         text('season', 'Sin verificar');
+        if (gajosVivos) text('workday', 'Sin verificar');
         contextState(
             'Contexto no verificado',
             error.name === 'AbortError' ? 'La consulta tardó demasiado' : error.message,
@@ -129,15 +157,18 @@ export function refreshOfficeShell(identity, hasSession) {
     if (readonly) readonly.hidden = !hasSession || !(identity?.solo_consulta || identity?.capacidades?.solo_consulta);
     const currentToken = hasSession ? token() : null;
     if (!currentToken) {
+        contextReadAt = null;
         contextToken = null;
         generation += 1;
         controller?.abort();
         text('plant', 'Sin consultar');
         text('season', 'Sin consultar');
+        if (shell().hasAttribute('data-office-gajos-vivos')) text('workday', 'Sin consultar');
         renderNotices([]);
         contextState('Contexto sin consultar', 'Inicia sesión para verificarlo', 'neutral');
         field('context-refresh').disabled = true;
     } else if (contextToken !== currentToken) {
+        contextReadAt = null;
         contextToken = currentToken;
         void loadContext();
     }
@@ -217,6 +248,17 @@ export function initializeOfficeShell() {
         const button = event.target.closest('[data-read-notice]');
         if (button) void readNotice(button.dataset.readNotice);
     });
-    window.addEventListener('offline', () => contextState('Sin conexión', 'El contexto puede estar desactualizado', 'critical'));
-    window.addEventListener('online', () => contextState('Conexión recuperada', 'Actualiza para verificar el contexto', 'neutral'));
+    if (root.hasAttribute('data-office-gajos-vivos')) {
+        window.setInterval(() => {
+            if (!document.hidden && field('context-refresh')?.dataset.tone === 'success') text('context-status', contextAge());
+        }, 5000);
+        window.addEventListener('offline', () => {
+            controller?.abort();
+            contextState('Sin conexión', contextAge(), 'critical');
+        });
+        window.addEventListener('online', () => void loadContext());
+    } else {
+        window.addEventListener('offline', () => contextState('Sin conexión', 'El contexto puede estar desactualizado', 'critical'));
+        window.addEventListener('online', () => contextState('Conexión recuperada', 'Actualiza para verificar el contexto', 'neutral'));
+    }
 }

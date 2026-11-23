@@ -12,6 +12,10 @@
 }
 
 .loads-command { grid-column: 1 / -1; }
+.loads-workspace .folios-indicadores {
+    --folios-indicador-min: 136px;
+    --folios-ticket-stub-width: 38px;
+}
 
 .load-catalog {
     min-height: calc(100vh - 104px);
@@ -432,7 +436,6 @@
     justify-content: space-between;
     gap: 24px;
     padding: 24px;
-    border-bottom: 1px solid var(--line);
 }
 
 .load-title-row {
@@ -529,12 +532,6 @@ button:disabled {
     padding: 20px 24px 24px;
 }
 
-.load-metrics {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 10px;
-}
-
 .concentration-panel {
     display: grid;
     grid-template-columns: minmax(250px, .8fr) minmax(420px, 1.2fr);
@@ -577,31 +574,6 @@ button:disabled {
 }
 
 .concentration-cells { min-height: 14px; }
-
-.load-metrics article {
-    display: grid;
-    min-height: 76px;
-    align-content: center;
-    gap: 5px;
-    border: 1px solid var(--line);
-    border-radius: 11px;
-    background: var(--deep);
-    padding: 13px 15px;
-}
-
-.load-metrics span {
-    color: var(--muted);
-    font-size: .61rem;
-    font-weight: 900;
-    letter-spacing: .1em;
-}
-
-.load-metrics strong {
-    overflow: hidden;
-    font-size: 1.05rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 
 .truck-dock-panel {
     display: grid;
@@ -998,12 +970,12 @@ button:disabled {
     background: rgba(22, 201, 194, .025);
 }
 
-.folio-table td:first-child strong,
+.folio-table td:first-child > strong,
 .folio-table td:first-child small {
     display: block;
 }
 
-.folio-table td:first-child strong {
+.folio-table td:first-child > strong {
     color: var(--text);
 }
 
@@ -1594,9 +1566,6 @@ button:disabled {
         grid-template-columns: repeat(2, 1fr);
     }
 
-    .load-metrics {
-        grid-template-columns: repeat(3, 1fr);
-    }
 
     .concentration-panel {
         grid-template-columns: 1fr;
@@ -1642,7 +1611,7 @@ button:disabled {
 
 @media (max-width: 620px) {
     .loads-workspace { padding: 12px; }
-    .load-form-grid, .load-metrics, .available-folios__tools { grid-template-columns: minmax(0, 1fr); }
+    .load-form-grid, .available-folios__tools { grid-template-columns: minmax(0, 1fr); }
     .load-editor__heading, .load-editor__summary { flex-wrap: wrap; }
 }
 

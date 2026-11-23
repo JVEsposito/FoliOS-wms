@@ -5,6 +5,7 @@ namespace Tests\Feature\Office;
 use App\Enums\RolUsuario;
 use App\Models\Temporada;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -50,6 +51,13 @@ class ContextoOficinaTest extends TestCase
         $this->getJson('/api/oficina/contexto')->assertOk()
             ->assertJsonPath('data.planta', 'Planta de prueba')
             ->assertJsonPath('data.temporada.codigo', 'ACTUAL')
+            ->assertJsonMissingPath('data.jornada')
             ->assertHeader('Cache-Control', 'no-store, private');
+
+        config(['app.operational_timezone' => 'America/Santiago']);
+        $this->travelTo(CarbonImmutable::parse('2026-11-22T12:00:00-03:00'));
+        $this->getJson('/api/oficina/contexto?jornada=1')->assertOk()
+            ->assertJsonPath('data.jornada.fecha_jornada', '2026-11-22')
+            ->assertJsonStructure(['data' => ['jornada' => ['turno_operativo']]]);
     }
 }
