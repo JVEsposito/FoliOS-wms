@@ -161,6 +161,19 @@ Cada cifra sale de un conteo que el backend ya calcula o que debe calcular. La i
 | Administración | Alertas de Salud operacional; prefacturas del mes por cerrar; expedientes COMEX con documentos pendientes. |
 | Centro (Operación ahora) | La suma de las hojas que el usuario puede ver. |
 
+El primer corte usa `GET /api/oficina/atencion` para el Inicio FoliOS, el menú de Oficina y el resumen de Operación ahora. El Inicio se abre desde el menú y conserva el destino de acceso configurado por perfil.
+
+| Hoja | Fuentes conectadas |
+| --- | --- |
+| Materia Prima | Ingresos de Portería sin revisar y camiones con fruta por destarar. |
+| Frigorífico | Retenciones generales SAG, discrepancias abiertas y túneles sobre su objetivo vigente. |
+| Materiales | Despachos pendientes o parciales y folios próximos a vencer según el plazo del ítem. |
+| Consultas | Acceso de referencia sin cifra. |
+| Gerencia | Focos de la lectura en caché del Panel gerencial. |
+| Administración | Hallazgos activos de la última auditoría de Salud operacional completada, cuando la ejecución más reciente concluyó correctamente. |
+
+Cada hoja enlaza a sus fuentes habilitadas. El centro muestra el total conocido y avisa si falta una lectura. Las otras fuentes de la propuesta quedan pendientes de definir con sus reglas de operación y permisos.
+
 ## Inventario de pantallas
 
 ### Oficina

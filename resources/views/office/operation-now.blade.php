@@ -40,7 +40,7 @@
                         <span class="operation-now-command__today"><span id="operationDate">—</span> · <span id="operationTimezone">Hora operacional</span></span>
                     </div>
                     <div class="operation-now-command__actions">
-                        <x-estiba.button class="operation-now-refresh" id="operationRefresh" variant="secondary" aria-describedby="operationDataState">Actualizar</x-estiba.button>
+                        <x-estiba.button class="operation-now-refresh" id="operationRefresh" data-attention-refresh variant="secondary" aria-describedby="operationDataState">Actualizar</x-estiba.button>
                     </div>
                     <div class="operation-now-command__state" id="operationDataState" hidden>
                         <strong class="operation-now-live" id="operationLiveSignal" data-tone="neutral">

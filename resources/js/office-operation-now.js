@@ -1169,33 +1169,6 @@ function renderAttentionRows() {
         );
 }
 
-function renderFocus(attention) {
-    const graphic = document.querySelector('[data-focus-open="all"]');
-    graphic.disabled = attention.total === 0;
-    graphic.querySelector('[data-gajo-total]').textContent = number(attention.total);
-    byId('operationFocusTotal').textContent = attention.total === 1
-        ? '1 condición abierta'
-        : `${number(attention.total)} condiciones abiertas`;
-
-    document.querySelectorAll('.operation-now-focus__area').forEach((button) => {
-        const domain = button.dataset.focusOpen;
-        const rows = attention.rows.filter((row) => row.domain === domain);
-        const count = rows.length;
-        const alerts = [...new Set(rows.map((row) => row.condition))];
-        const detail = alerts.slice(0, 2).join(' · ');
-        button.disabled = count === 0;
-        button.querySelector('[data-focus-count]').textContent = count ? number(count) : '—';
-        button.querySelector('[data-focus-detail]').textContent = count ? detail : 'Sin condiciones registradas';
-        graphic.querySelector(`[data-gajo-leaf="${domain}"]`).dataset.active = String(Boolean(count));
-        graphic.querySelector(`[data-gajo-count="${domain}"]`).textContent = count ? number(count) : '';
-        const sidebarCount = document.querySelector(`[data-office-attention-count="${domain}"]`);
-        if (sidebarCount) {
-            sidebarCount.hidden = count === 0;
-            sidebarCount.textContent = number(count);
-        }
-    });
-}
-
 function renderAttention(data) {
     const attention = buildAttention(data, { describeIncident: incidentNote });
     state.attention = attention;
@@ -1220,7 +1193,6 @@ function renderAttention(data) {
     </li>`).join('');
 
     renderAttentionRows();
-    renderFocus(attention);
     renderTabBadges(buildOperationTabBadges(data, attention));
 }
 
@@ -2099,14 +2071,6 @@ const operationTabs = createOperationTabs({
 });
 tabsReady = true;
 
-document.querySelectorAll('[data-focus-open]').forEach((button) => {
-    button.addEventListener('click', () => {
-        state.attentionArea = button.dataset.focusOpen;
-        state.attentionFilter = 'all';
-        renderAttentionRows();
-        operationTabs.activate('atencion', { focus: true });
-    });
-});
 elements.attentionArea.addEventListener('change', () => {
     state.attentionArea = elements.attentionArea.value;
     renderAttentionRows();

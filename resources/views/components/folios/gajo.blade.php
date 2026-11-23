@@ -35,9 +35,11 @@
     @if ($label) role="img" aria-label="{{ $label }}" @else aria-hidden="true" focusable="false" @endif
 >
     @foreach ($leaves as $key => $path)
+        @if ($attention)<g class="folios-gajo" data-area="{{ $key }}">@endif
         <path d="{{ $path }}" @class(['folios-gajo__leaf', 'is-area' => $key === $area]) @if ($attention) data-gajo-leaf="{{ $key }}" @endif />
         @if ($attention)
             <text x="{{ $textPositions[$key][0] }}" y="{{ $textPositions[$key][1] }}" data-gajo-count="{{ $key }}"></text>
+            </g>
         @endif
     @endforeach
     <circle cx="16" cy="16" r="{{ $center ? '4.4' : '2.6' }}" class="folios-gajo__hub" />

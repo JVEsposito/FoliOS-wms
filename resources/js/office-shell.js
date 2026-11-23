@@ -5,6 +5,9 @@ import {
     officeMenuPreference,
 } from './shared/office-preferences.js';
 
+import { createFoliosAttention } from './shared/folios-atencion.js';
+
+let attention;
 const tokenKey = 'estiba_wms_office_token';
 const identityKey = 'estiba_wms_office_identity';
 let contextToken = null;
@@ -141,6 +144,8 @@ export function refreshOfficeShell(identity, hasSession) {
     const readonly = field('readonly');
     if (readonly) readonly.hidden = !hasSession || !(identity?.solo_consulta || identity?.capacidades?.solo_consulta);
     const currentToken = hasSession ? token() : null;
+    attention ??= createFoliosAttention();
+    attention.session(currentToken);
     if (contextToken !== currentToken || !currentToken) {
         contextReadAt = null;
         text('plant', 'Sin consultar');
@@ -229,6 +234,9 @@ export function initializeOfficeShell() {
     new ResizeObserver(size).observe(header);
     size();
     field('context-refresh').addEventListener('click', () => void loadContext());
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('[data-attention-refresh], [data-office-context-refresh]')) attention?.refresh();
+    });
     window.addEventListener('estiba:access-profile-themes-saved', () => void loadContext());
     field('notices')?.addEventListener('click', (event) => {
         const button = event.target.closest('[data-read-notice]');

@@ -92,3 +92,12 @@
         padding: 40px 24px;
     }
 }
+
+.folios-inicio .folios-inicio__attention {
+    padding-inline: clamp(18px, 3vw, 40px);
+}
+
+.folios-inicio__office-link {
+    align-self: start;
+    text-decoration: none;
+}

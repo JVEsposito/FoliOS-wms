@@ -124,6 +124,18 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_inicio_folios_exporta_el_gajo_de_atencion(): void
+    {
+        $html = $this->get('/FoliOS?inicio=1')->assertOk()
+            ->assertSee('data-inicio-panel="inicio" hidden', false)
+            ->assertSee('data-folios-atencion', false)
+            ->getContent();
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/inicio-folios.html'), $html);
+        }
+    }
+
     public function test_control_personal_exporta_resumen_jornadas_y_edicion(): void
     {
         $html = $this->get('/oficina/frigorifico/control-personal')->assertOk()->getContent();

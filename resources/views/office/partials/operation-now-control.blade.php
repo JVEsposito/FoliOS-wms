@@ -1,23 +1,6 @@
 <section class="operation-now-tabpanel" role="tabpanel" id="operationPanel-resumen" aria-labelledby="operationTab-resumen" data-operation-panel="resumen" tabindex="0">
     <div class="operation-now-overview">
-        <section class="folios-ticket operation-now-focus" aria-labelledby="operationFocusTitle">
-            <div class="operation-now-focus__graphic">
-                <button type="button" class="operation-now-focus__all" data-focus-open="all" aria-label="Ver todas las condiciones" disabled>
-                    <x-folios.gajo area="operacion" :size="160" :attention="true" />
-                </button>
-                <small id="operationFocusTotal">Consultando condiciones…</small>
-            </div>
-            <div class="operation-now-focus__detail">
-                <h2 id="operationFocusTitle">Dónde mirar ahora</h2>
-                @foreach ($attentionAreas as $area => $label)
-                    <button type="button" class="operation-now-focus__area" data-focus-open="{{ $area }}" disabled>
-                        <x-folios.gajo :area="$area" :size="20" />
-                        <span><b>{{ $label }}</b><small data-focus-detail>Sin lectura</small></span>
-                        <strong data-focus-count>—</strong>
-                    </button>
-                @endforeach
-            </div>
-        </section>
+        <x-folios.atencion />
         <div class="operation-now-overview__metrics" aria-label="Indicadores de planta">
             @foreach ([
                 ['recepcion-mp', 'materia-prima', 'MP', 'Recepción MP', 'operationOverviewMp', 'operationOverviewMpDetail', 'Camiones con fruta en curso'],

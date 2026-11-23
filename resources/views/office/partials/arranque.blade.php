@@ -8,7 +8,7 @@
       esos estilos: tiene la misma especificidad que el tema base y debe ganarle.
     En /FoliOS ($soloTema) solo se aplica el tema.
 --}}
-<script{!! ($soloTema ?? false) ? ' data-solo-tema' : '' !!}>{!! file_get_contents(resource_path('js/office-arranque.js')) !!}</script>
+<script{!! ($soloTema ?? false) ? ' data-solo-tema' : '' !!}{!! ($temaDeSesion ?? false) ? ' data-tema-de-sesion' : '' !!}>{!! file_get_contents(resource_path('js/office-arranque.js')) !!}</script>
 @unless ($soloTema ?? false)
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
         @vite(['resources/css/office-corporate.css', 'resources/css/office-shell.css', 'resources/css/office-folios.css', 'resources/js/office-navigation.js'])

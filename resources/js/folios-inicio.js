@@ -5,7 +5,7 @@ import {
     OFFICE_TOKEN_KEY,
     officeReturnPath,
 } from './shared/folios-entry.js';
-import { normalizeOfficeTheme, OFFICE_THEME_KEY } from './shared/office-preferences.js';
+import { createFoliosAttention } from './shared/folios-atencion.js';
 
 const byId = (id) => document.getElementById(id);
 const elements = {
@@ -18,7 +18,10 @@ const elements = {
     noOfficesName: byId('foliosSinOficinasNombre'),
 };
 // Oficina pedida sin sesión (/FoliOS?volver=/oficina/...): se retoma al iniciar sesión.
-const returnPath = officeReturnPath(new URLSearchParams(window.location.search).get('volver'));
+const query = new URLSearchParams(window.location.search);
+const returnPath = officeReturnPath(query.get('volver'));
+const showAttention = query.get('inicio') === '1' && !returnPath;
+const attention = createFoliosAttention(elements.root);
 
 function storage(action) {
     try {
@@ -26,13 +29,6 @@ function storage(action) {
     } catch {
         return null;
     }
-}
-
-function applyStoredTheme() {
-    const theme = normalizeOfficeTheme(storage(() => localStorage.getItem(OFFICE_THEME_KEY)));
-    document.documentElement.dataset.officeTheme = theme;
-    document.querySelector('meta[name="color-scheme"]')
-        ?.setAttribute('content', theme === 'dark-industrial' ? 'dark' : 'light');
 }
 
 function show(view) {
@@ -81,6 +77,13 @@ function apply(entry, token) {
     if (entry.clearSession) clearSession();
     if (entry.identity && token) saveSession(token, entry.identity);
 
+    if (entry.view === 'redirect' && showAttention && !entry.identity.es_cliente) {
+        byId('foliosOfficeLink').href = entry.destination;
+        show('inicio');
+        attention.session(token);
+        return;
+    }
+
     if (entry.view === 'redirect') {
         show('cargando');
         window.location.replace(returnPath || entry.destination);
@@ -125,7 +128,14 @@ elements.form.addEventListener('submit', async (event) => {
 
     if (status === 200 && data?.token) {
         elements.form.elements.password.value = '';
-        apply(entryFromResponse(status, data), data.token);
+        const entry = entryFromResponse(status, data);
+        if (showAttention && entry.view === 'redirect' && !entry.identity.es_cliente) {
+            saveSession(data.token, entry.identity);
+            show('cargando');
+            window.location.reload();
+            return;
+        }
+        apply(entry, data.token);
         return;
     }
 
@@ -143,5 +153,4 @@ elements.logout.addEventListener('click', async () => {
     show('acceso');
 });
 
-applyStoredTheme();
 void openSession();

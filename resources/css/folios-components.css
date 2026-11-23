@@ -374,3 +374,120 @@
     border-color: var(--line);
     background: repeating-linear-gradient(-55deg, transparent 0 2px, var(--input-border) 2px 3px);
 }
+
+.folios-atencion {
+    display: grid;
+    grid-template-columns: minmax(112px, .7fr) minmax(0, 1.6fr);
+    align-items: center;
+    gap: 16px;
+    padding: 16px 18px;
+    color: var(--text-strong);
+    background: var(--corporate-card);
+}
+
+.folios-atencion__graphic {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    text-align: center;
+}
+
+.folios-atencion__graphic .folios-gajo--attention {
+    inline-size: min(100%, 160px);
+    block-size: auto;
+}
+
+.folios-atencion__graphic [data-attention-status] {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: .82rem;
+}
+
+.folios-atencion h2 {
+    margin: 0 0 8px;
+    color: var(--text-strong);
+    font: 800 1.55rem/1.05 var(--eui-font-family-condensed);
+    font-stretch: var(--font-condensed-stretch);
+}
+
+.folios-atencion ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.folios-atencion__areas > li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 8px 0;
+    border-block-start: 1px solid var(--line-soft);
+    font-size: .85rem;
+}
+
+.folios-atencion__areas > li[hidden] { display: none; }
+.folios-atencion__areas .folios-gajo { --gajo-area: var(--gajo-ink); }
+
+.folios-atencion [data-attention-label] {
+    color: var(--text-secondary);
+    text-align: end;
+    font-size: .78rem;
+    font-weight: 700;
+}
+
+.folios-atencion [data-attention-sources] li {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2px 8px;
+    margin-block-start: 3px;
+    color: var(--text-secondary);
+    font-size: .78rem;
+}
+
+.folios-atencion a {
+    color: var(--text-strong);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.folios-atencion a:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.folios-gajo--attention {
+    --gajo-area: var(--primary);
+}
+
+.folios-gajo--attention [data-gajo-leaf] {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: .22;
+}
+
+.folios-gajo--attention [data-gajo-leaf][data-state="unknown"] {
+    stroke: var(--gajo-ink);
+    stroke-dasharray: .45 .46;
+}
+
+.folios-gajo--attention [data-gajo-leaf]:is([data-state="clear"], [data-state="reference"]) {
+    fill: color-mix(in srgb, var(--gajo-ink) 14%, var(--corporate-card));
+    stroke: var(--gajo-ink);
+}
+
+.folios-gajo--attention [data-gajo-leaf][data-state="pending"] { fill: var(--gajo-ink); stroke: none; }
+
+.folios-gajo--attention text {
+    fill: var(--on-primary);
+    font: 800 2.35px var(--eui-font-family-mono);
+    dominant-baseline: central;
+    text-anchor: middle;
+}
+
+.folios-gajo--attention [data-gajo-total] { font-size: 3.05px; }
+
+@media (max-width: 650px) {
+    .folios-atencion { grid-template-columns: minmax(0, 1fr); }
+    .folios-atencion__graphic .folios-gajo--attention { inline-size: 116px; }
+}

@@ -452,97 +452,14 @@
     font-variant-numeric: tabular-nums;
 }
 
-.operation-now-focus {
-    display: grid;
-    grid-template-columns: minmax(112px, .84fr) minmax(0, 1.25fr);
-    align-items: center;
-    gap: 14px;
-    padding: 14px 18px;
-}
-
-.operation-now-focus__graphic {
-    display: grid;
-    justify-items: center;
-    gap: 4px;
-    text-align: center;
-}
-
-.operation-now-focus__all {
-    padding: 0;
-    max-inline-size: 100%;
-    border-radius: 50%;
-    cursor: pointer;
-}
-
-.operation-now-focus__all .folios-gajo {
-    inline-size: min(100%, 160px);
-    block-size: auto;
-}
-
-.operation-now-focus__detail h2 {
-    margin: 0 0 8px;
-    color: var(--text-strong);
-    font: 800 1.55rem/1.05 var(--eui-font-family-condensed);
-    font-stretch: var(--font-condensed-stretch);
-}
-
-.operation-now-focus__area {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 7px;
-    inline-size: 100%;
-    padding: 6px 4px;
-    border-block-start: 1px solid var(--line-soft);
-    color: var(--text-strong);
-    text-align: start;
-    font-size: .83rem;
-}
-
-.operation-now-focus__area .folios-gajo {
-    --gajo-rest: var(--line);
-    --gajo-area: var(--gajo-ink);
-    --gajo-hub: var(--corporate-card);
-}
-
-.operation-now-focus__area b,
-.operation-now-focus__area small { display: block; }
-.operation-now-focus__area strong { font: 800 .95rem/1 var(--eui-font-family-mono); }
-.operation-now-focus__area:enabled { cursor: pointer; }
-.operation-now-focus__area:enabled:hover { background: var(--surface-hover); }
-.operation-now-focus :is(button, a):focus-visible,
 .operation-now-overview__ticket:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
-.folios-gajo--attention { --gajo-area: var(--primary); }
-.folios-gajo--attention [data-gajo-leaf="materia-prima"] { --leaf-ink: var(--area-materia-prima-ink); }
-.folios-gajo--attention [data-gajo-leaf="frigorifico"] { --leaf-ink: var(--area-frigorifico-ink); }
-.folios-gajo--attention [data-gajo-leaf="materiales"] { --leaf-ink: var(--area-materiales-ink); }
-.folios-gajo--attention [data-gajo-leaf="consultas"] { --leaf-ink: var(--area-consultas-ink); }
-.folios-gajo--attention [data-gajo-leaf="gerencia"] { --leaf-ink: var(--area-gerencia-ink); }
-.folios-gajo--attention [data-gajo-leaf="administracion"] { --leaf-ink: var(--area-administracion-ink); }
-.folios-gajo--attention [data-gajo-leaf] {
-    fill: color-mix(in srgb, var(--leaf-ink) 9%, var(--corporate-card));
-    stroke: color-mix(in srgb, var(--leaf-ink) 48%, var(--line));
-    stroke-width: .22;
-}
-.folios-gajo--attention [data-gajo-leaf][data-active="true"] { fill: var(--leaf-ink); stroke: none; }
-.folios-gajo--attention text {
-    fill: var(--on-primary);
-    font: 800 2.65px var(--eui-font-family-mono);
-    dominant-baseline: central;
-    text-anchor: middle;
-}
-.folios-gajo--attention [data-gajo-total] { font-size: 3.15px; }
-
 .operation-now-overview__metric small,
-.operation-now-focus small,
 .operation-now-flow-metrics dt,
 .operation-now-flow-caption {
     color: var(--text-secondary);
     font-size: .82rem;
 }
-
-.operation-now-focus small { font-size: .75rem; }
 
 .operation-now-attention__filters {
     display: flex;
@@ -557,8 +474,6 @@
     .operation-now-overview { grid-template-columns: 1fr; }
 }
 @media (max-width: 599px) {
-    .operation-now-focus { grid-template-columns: 1fr; }
-    .operation-now-focus__all .folios-gajo { inline-size: 116px; }
     .operation-now-overview__ticket { grid-template-columns: 31px minmax(0, 1fr); }
     .operation-now-overview__metric { padding-inline: 9px; }
     .operation-now-overview__ticket .folios-ticket__stub { padding-inline: 2px; }
