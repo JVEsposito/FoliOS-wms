@@ -7,11 +7,13 @@ use App\Http\Requests\PreguntaAsistenteRequest;
 use App\Models\ConfiguracionAsistente;
 use App\Models\PreguntaAsistente;
 use App\Models\RangoTaraAsistente;
+use App\Models\User;
 use App\Services\Asistente\CompuertaAsistente;
 use App\Services\Asistente\Haiku\ClienteAnthropic;
 use App\Services\Asistente\Haiku\PresupuestoHaiku;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ServicioAsistente;
+use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -74,6 +76,10 @@ class AsistenteController extends Controller
         $datos = $request->validate([
             'margen_desviaciones' => ['required', 'numeric', 'between:0.5,5'],
             'modo' => ['nullable', Rule::in(ConfiguracionAsistente::MODOS)],
+            'tope_mensual_usd' => ['nullable', 'numeric', 'between:0,200'],
+            'limite_diario_usuario' => ['nullable', 'integer', 'between:1,200'],
+            'usuarios_piloto' => ['nullable', 'array', 'max:20'],
+            'usuarios_piloto.*' => ['integer', 'distinct', Rule::exists('users', 'id')->where('activo', true)],
             'rangos' => ['present', 'array'],
             'rangos.*.tipo_envase' => ['required', 'string', Rule::in(['bins', 'totes'])],
             'rangos.*.especie' => ['nullable', 'string', 'max:100'],
@@ -89,10 +95,18 @@ class AsistenteController extends Controller
         }
 
         DB::transaction(function () use ($datos): void {
-            ConfiguracionAsistente::actual()->update(array_filter([
+            $configuracion = ConfiguracionAsistente::actual();
+            $configuracion->update(array_filter([
                 'margen_desviaciones' => $datos['margen_desviaciones'],
                 'modo' => $datos['modo'] ?? null,
             ], fn ($valor): bool => $valor !== null));
+            // Los topes y el piloto se guardan solo si vienen; un tope vacío vuelve al valor del .env.
+            foreach (['tope_mensual_usd', 'limite_diario_usuario', 'usuarios_piloto'] as $campo) {
+                if (array_key_exists($campo, $datos)) {
+                    $configuracion->{$campo} = $campo === 'usuarios_piloto' ? array_values(array_map('intval', $datos[$campo] ?? [])) : $datos[$campo];
+                }
+            }
+            $configuracion->save();
             foreach ($datos['rangos'] as $rango) {
                 $especie = filled($rango['especie'] ?? null) ? trim($rango['especie']) : null;
                 RangoTaraAsistente::query()->updateOrCreate(
@@ -122,6 +136,7 @@ class AsistenteController extends Controller
                 'texto' => $p->texto,
                 'estado' => $p->estado,
                 'consulta' => $p->consulta,
+                'interprete' => $p->interprete,
                 'usuario' => $p->usuario?->name,
                 'fecha' => $p->created_at?->toIso8601String(),
             ])->values(),
@@ -138,6 +153,26 @@ class AsistenteController extends Controller
         return response()->json(['data' => $compuerta->medir($request->user(), $dias)]);
     }
 
+    /** Consumo de Haiku del mes, por día y por usuario. */
+    public function consumo(): JsonResponse
+    {
+        Gate::authorize('administrar-asistente');
+
+        return response()->json(['data' => $this->presupuesto->resumenMes()]);
+    }
+
+    /** Usuarios activos que pueden usar el asistente: los candidatos al piloto. */
+    public function usuarios(AlcanceOperacionalUsuario $alcance): JsonResponse
+    {
+        Gate::authorize('administrar-asistente');
+        $usuarios = User::query()->where('activo', true)->orderBy('name')->get()
+            ->filter(fn (User $usuario): bool => $alcance->puedeUsarAsistente($usuario))
+            ->map(fn (User $usuario): array => ['id' => $usuario->id, 'nombre' => $usuario->name, 'rol' => $usuario->rol?->value ?? (string) $usuario->rol])
+            ->values();
+
+        return response()->json(['data' => $usuarios]);
+    }
+
     private function serializarConfiguracion(): array
     {
         $configuracion = ConfiguracionAsistente::actual();
@@ -148,8 +183,11 @@ class AsistenteController extends Controller
                 'disponible' => $this->anthropic->disponible(),
                 'modelo' => $this->anthropic->modelo(),
                 'consumo_mes_usd' => $this->presupuesto->consumoMes(),
-                'tope_mensual_usd' => (float) config('asistente.topes.mensual_usd'),
-                'limite_diario_usuario' => (int) config('asistente.topes.diario_usuario'),
+                'tope_mensual_usd' => $configuracion->topeMensual(),
+                'limite_diario_usuario' => $configuracion->limiteDiario(),
+                'tope_mensual_propio' => $configuracion->tope_mensual_usd !== null,
+                'limite_diario_propio' => $configuracion->limite_diario_usuario !== null,
+                'usuarios_piloto' => array_values(array_map('intval', $configuracion->usuarios_piloto ?? [])),
             ],
             'margen_desviaciones' => $configuracion->margen_desviaciones,
             'rangos' => RangoTaraAsistente::query()->orderBy('tipo_envase')->orderBy('especie')->get()

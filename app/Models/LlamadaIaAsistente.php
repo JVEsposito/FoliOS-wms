@@ -6,6 +6,7 @@ use App\Models\Concerns\ImpideEliminacionFisica;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Una llamada del asistente a Haiku. Guarda tokens, costo y qué herramienta eligió,
@@ -30,5 +31,10 @@ class LlamadaIaAsistente extends Model
     protected function casts(): array
     {
         return ['costo_usd' => 'float', 'created_at' => 'datetime'];
+    }
+
+    public function usuario(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

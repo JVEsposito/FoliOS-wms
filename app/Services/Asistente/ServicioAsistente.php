@@ -81,7 +81,7 @@ class ServicioAsistente
                         PresupuestoHaiku::TOPE_MENSUAL => 'Haiku llegó al tope de gasto del mes: respondo sin IA hasta el mes siguiente.',
                         PresupuestoHaiku::LIMITE_DIARIO => 'Llegaste a tu límite diario de preguntas con Haiku: respondo sin IA hasta la próxima jornada.',
                         FallaHaiku::SIN_RED => 'Haiku no está disponible porque no hay conexión: respondo sin IA.',
-                        PresupuestoHaiku::SIN_CLAVE => null,
+                        PresupuestoHaiku::SIN_CLAVE, PresupuestoHaiku::FUERA_DEL_PILOTO => null,
                         default => 'Haiku no respondió bien: respondo sin IA.',
                     };
             }
