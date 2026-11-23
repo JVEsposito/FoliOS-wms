@@ -6,6 +6,7 @@ use App\Enums\EstadoProcesoPrefrio;
 use App\Models\Concerns\ImpideEliminacionFisica;
 use App\Models\Concerns\TemporadaPorColumna;
 use App\Models\Contracts\PerteneceATemporada;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -60,6 +61,22 @@ class ProcesoPrefrio extends Model implements PerteneceATemporada
         return $consulta->where(fn (Builder $proceso): Builder => $proceso
             ->whereIn('estado', EstadoProcesoPrefrio::activos())
             ->orWhereHas('folios', fn (Builder $folios): Builder => $folios->pendienteRetiroParcial()));
+    }
+
+    public function minutosTranscurridos(CarbonImmutable $ahora): ?int
+    {
+        $inicio = $this->iniciado_at?->toImmutable();
+        $corte = $this->pendiente_verificacion_at?->toImmutable() ?? $this->finalizado_at?->toImmutable() ?? $ahora;
+
+        return $inicio ? max(0, (int) floor($inicio->diffInMinutes($corte, false))) : null;
+    }
+
+    public function excedeObjetivo(?int $minutos): bool
+    {
+        return $minutos !== null
+            && $this->duracion_objetivo_minutos !== null
+            && $minutos > $this->duracion_objetivo_minutos
+            && ! $this->estado->esTerminal();
     }
 
     public function eventos(): HasMany

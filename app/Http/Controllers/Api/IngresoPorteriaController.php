@@ -25,7 +25,7 @@ class IngresoPorteriaController extends Controller
         $fecha = $filtros['fecha'] ?? $calendario->fecha();
         $consulta = IngresoPorteria::query();
         if ($request->boolean('pendientes')) {
-            $consulta->whereNull('anulado_at')->whereNull('revisado_at');
+            $consulta->pendientesRevision();
         } else {
             $calendario->filtrar($consulta, 'ingreso_at', $fecha, $fecha);
         }

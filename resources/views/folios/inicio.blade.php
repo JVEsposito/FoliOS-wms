@@ -12,7 +12,7 @@
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
             @vite(['resources/css/office.css', 'resources/css/office-corporate.css', 'resources/css/folios-inicio.css', 'resources/js/folios-inicio.js'])
         @endif
-        @include('office.partials.arranque', ['soloTema' => true])
+        @include('office.partials.arranque', ['soloTema' => true, 'temaDeSesion' => request()->query('inicio') === '1'])
     </head>
     <body>
         <section class="office-access folios-inicio" id="foliosInicio" data-inicio-estado="cargando" aria-labelledby="foliosInicioTitle">
@@ -30,6 +30,11 @@
 
             <div class="office-access__form" data-inicio-panel="cargando" role="status">
                 <div><p class="eyebrow">FOLIOS</p><h2>Abriendo tu inicio…</h2><p>Revisando tu sesión en este equipo.</p></div>
+            </div>
+
+            <div class="office-access__form folios-inicio__attention" data-inicio-panel="inicio" hidden>
+                <x-folios.atencion />
+                <a id="foliosOfficeLink" class="primary-button folios-inicio__office-link" href="/FoliOS">Ir a mi oficina <span aria-hidden="true">→</span></a>
             </div>
 
             <form class="office-access__form" id="foliosLoginForm" data-inicio-panel="acceso" novalidate hidden>

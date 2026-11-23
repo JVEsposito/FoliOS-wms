@@ -770,15 +770,8 @@ class ServicioOperacionAhora
         int $posicionesOcupadas,
     ): array {
         $inicio = $proceso->iniciado_at?->toImmutable();
-        $corte = $proceso->pendiente_verificacion_at?->toImmutable() ?? $proceso->finalizado_at?->toImmutable() ?? $ahora;
-        $transcurridos = $inicio && $corte
-            ? max(0, (int) floor($inicio->diffInMinutes($corte, false)))
-            : null;
+        $transcurridos = $proceso->minutosTranscurridos($ahora);
         $objetivo = $proceso->duracion_objetivo_minutos;
-        $objetivoExcedido = $transcurridos !== null
-            && $objetivo !== null
-            && $transcurridos > $objetivo
-            && ! $proceso->estado->esTerminal();
 
         return [
             'id' => $proceso->id,
@@ -799,7 +792,7 @@ class ServicioOperacionAhora
             'avance_tiempo_objetivo_porcentaje' => $transcurridos !== null && $objetivo !== null
                 ? min(100, $this->porcentaje($transcurridos, $objetivo))
                 : null,
-            'objetivo_excedido' => $objetivoExcedido,
+            'objetivo_excedido' => $proceso->excedeObjetivo($transcurridos),
             'minutos_sobre_objetivo' => $transcurridos !== null && $objetivo !== null
                 ? max(0, $transcurridos - $objetivo)
                 : null,

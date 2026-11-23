@@ -16,7 +16,7 @@ class RomanaPorteriaController extends Controller
     /** Consulta liviana, independiente de la lista de recepciones y del corte de medianoche. */
     public function resumen(): JsonResponse
     {
-        $pendientes = IngresoPorteria::query()->whereNull('anulado_at')->whereNull('revisado_at');
+        $pendientes = IngresoPorteria::pendientesRevision();
 
         return response()->json([
             'pendientes' => (clone $pendientes)->count(),

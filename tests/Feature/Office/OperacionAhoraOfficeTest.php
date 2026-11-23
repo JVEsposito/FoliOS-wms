@@ -237,7 +237,7 @@ class OperacionAhoraOfficeTest extends TestCase
         $this->assertIsString($styles);
         $this->assertStringContainsString('SISTEMA DE GESTIÓN', $view);
         $this->assertStringContainsString('estiba-office-system', $view);
-        $this->assertStringContainsString('aria-label="Operación en tiempo real"', $view);
+        $this->assertStringContainsString('aria-label="Inicio y operación"', $view);
         $this->assertStringContainsString('class="estiba-office-status"', $view);
         $this->assertStringContainsString('data-office-context-status', $view);
         $this->assertStringContainsString('data-office-context-refresh', $view);

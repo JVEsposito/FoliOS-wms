@@ -103,7 +103,7 @@ test('la página de inicio y el menú usan la misma sesión de Oficina', () => {
     assert.match(navigation, /const identityKey = 'estiba_wms_office_identity'/);
     assert.match(page, /request\('\/api\/acceso-oficina', \{ token \}\)/);
     assert.match(page, /window\.location\.replace\(returnPath \|\| entry\.destination\)/);
-    assert.match(page, /officeReturnPath\(new URLSearchParams\(window\.location\.search\)\.get\('volver'\)\)/);
+    assert.match(page, /officeReturnPath\(query\.get\('volver'\)\)/);
 });
 
 test('cerrar sesión desde cualquier oficina vuelve a /FoliOS', () => {

@@ -8,6 +8,14 @@ import { PNG } from 'pngjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const webpMagenta = 'UklGRhwAAABXRUJQVlA4TBAAAAAvB4AAAAcQxS9y/wMR0f8A';
+function luminance(rgb) {
+    const [red, green, blue] = rgb.match(/\d+/g).slice(0, 3).map((channel) => {
+        const value = Number(channel) / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
 const pngMagenta = 'iVBORw0KGgoAAAANSUhEUgAAAAYAAAAGCAIAAABvrngfAAAAFUlEQVQI12P8z3qNARUwMWAAagoBANKnAeZyRjDUAAAAAElFTkSuQmCC';
 
 test('el centro de control conserva la pestaña y pinta las cabeceras de los temas habilitados', async () => {
@@ -20,7 +28,11 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
             'personal-nerv': { nombre: 'NERV', color: '#0c090a', claro: false },
         };
         const preferencias = { temas_oficina: Object.keys(temas), temas_oficina_personales: temas };
-        const identity = { nombre: 'Supervisión', rol: 'consulta', puede_consultar_panel_gerencial: true, modulos_acceso: ['gerencia.panel'], ...preferencias };
+        const identity = {
+            nombre: 'Supervisión', rol: 'consulta', inicio: '/oficina/operacion-ahora',
+            puede_consultar_panel_gerencial: true, puede_consultar_prefrio: true,
+            modulos_acceso: ['gerencia.panel', 'frigorifico.prefrio'], ...preferencias,
+        };
         await context.addInitScript((user) => {
             localStorage.setItem('estiba_wms_office_token', 'fixture');
             localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
@@ -41,9 +53,28 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
             validacion_pt: { procesadas: 25, aprobadas: 24, observadas: 1, rechazadas: 0, conflictos: 1,
                 recientes: [{ folio: '6000000001', linea: 2, turno: 'A', recibido_at: now, resultado: 'conflicto' }] },
         };
+        let attentionRequests = 0;
+        let attentionFails = false;
+        const summaryAttention = {
+            total: 4, parcial: true, areas: {
+                frigorifico: { cantidad: 4, parcial: false, fuentes: [
+                    { etiqueta: 'Lotes con retención general SAG', href: '/oficina/frigorifico/lotes-retenidos-sag', cantidad: 4 },
+                ] },
+                gerencia: { cantidad: 0, parcial: false, fuentes: [
+                    { etiqueta: 'Focos del Panel gerencial', href: '/oficina/gerencia', cantidad: 0 },
+                ] },
+                administracion: { cantidad: null, parcial: false, fuentes: [] },
+                consultas: { referencia: '/oficina/consultas' },
+            },
+        };
         await context.route('http://localhost/**', (route) => {
             const { pathname } = new URL(route.request().url());
             if (pathname === '/oficina/operacion-ahora') return route.fulfill({ path: resolve(root, 'storage/app/ui/oficina/operacion-ahora.html') });
+            if (pathname === '/FoliOS') return route.fulfill({ path: resolve(root, 'storage/app/ui/oficina/inicio-folios.html') });
+            if (pathname === '/api/oficina/atencion') {
+                attentionRequests++;
+                return attentionFails ? route.fulfill({ status: 503 }) : route.fulfill({ json: { data: summaryAttention } });
+            }
             if (pathname.startsWith('/build/')) return route.fulfill({ path: resolve(root, `public${pathname}`) });
             if (pathname === '/api/operacion-ahora') return route.fulfill({ json: { data: snapshot } });
             if (pathname === '/api/operacion-ahora/camareros') return route.fulfill({ json: { data: { generado_at: now, camareros: [] } } });
@@ -65,12 +96,72 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         const summary = page.getByRole('tabpanel', { name: 'Resumen' });
         await summary.getByText('REC-2611-0011').waitFor();
         assert.equal(await summary.locator('#operationOverviewPt').innerText(), '25');
-        assert.equal(await summary.locator('[data-gajo-total]').textContent(), '1');
-        const focusArea = summary.locator('[data-focus-open="frigorifico"]');
-        assert.equal(await focusArea.locator('[data-focus-count]').innerText(), '1');
-        await focusArea.click();
+        await summary.getByText('4 pendientes · Lectura parcial').waitFor();
+        assert.equal(await summary.locator('[data-gajo-total]').textContent(), '4');
+        const focusArea = summary.locator('[data-attention-area="frigorifico"]');
+        assert.equal(await focusArea.locator('[data-attention-label]').innerText(), '4');
+        assert.equal(await focusArea.getByRole('link').getAttribute('href'), '/oficina/frigorifico/lotes-retenidos-sag');
+        assert.equal(await page.locator('[data-office-attention-count="frigorifico"]').innerText(), '4');
+        assert.equal(await summary.locator('[data-attention-area="gerencia"] [data-attention-label]').innerText(), 'Al día');
+        assert.equal(await summary.locator('[data-attention-area="administracion"] [data-attention-label]').innerText(), 'Sin lectura');
+        assert.equal(await summary.locator('[data-attention-area="consultas"] [data-attention-label]').innerText(), 'Referencia');
+        assert.equal(await summary.locator('[data-attention-area="materiales"]').isVisible(), false);
+
+        const selector = page.getByRole('combobox', { name: 'Tema de Oficina' });
+        const palette = () => summary.evaluate((element) => {
+            const panel = element.querySelector('[data-folios-atencion]');
+            const leaf = element.querySelector('[data-gajo-leaf="frigorifico"]');
+            const count = element.querySelector('[data-gajo-count="frigorifico"]');
+            const ink = document.createElement('span');
+            ink.style.color = 'var(--area-frigorifico-ink)';
+            panel.append(ink);
+            const areaColor = getComputedStyle(ink).color;
+            ink.remove();
+            return {
+                surface: getComputedStyle(panel).backgroundColor,
+                fill: getComputedStyle(leaf).fill,
+                color: getComputedStyle(count).fill,
+                areaColor,
+            };
+        });
+        const requestsBeforeThemes = attentionRequests;
+        const colors = {};
+        for (const theme of ['light-professional', 'dark-industrial', 'light-professional', 'dark-industrial']) {
+            await selector.selectOption(theme);
+            await page.waitForFunction(key => document.documentElement.dataset.officeTheme === key, theme);
+            const current = await palette();
+            assert.equal(current.fill, current.areaColor);
+            const [bright, dark] = [luminance(current.fill), luminance(current.color)].sort((a, b) => b - a);
+            assert.ok((bright + 0.05) / (dark + 0.05) >= 4.5, `Contraste de la cifra en ${theme}`);
+            if (colors[theme]) assert.deepEqual(current, colors[theme]);
+            colors[theme] = current;
+        }
+        assert.notEqual(colors['light-professional'].surface, colors['dark-industrial'].surface);
+        assert.notEqual(colors['light-professional'].fill, colors['dark-industrial'].fill);
+        assert.notEqual(colors['light-professional'].color, colors['dark-industrial'].color);
+        assert.equal(attentionRequests, requestsBeforeThemes);
+        assert.equal(await summary.locator('[data-gajo-total]').textContent(), '4');
+
+        const home = await context.newPage();
+        await home.goto('http://localhost/FoliOS?inicio=1');
+        await home.getByText('4 pendientes · Lectura parcial').waitFor();
+        assert.equal(await home.locator('html').getAttribute('data-office-theme'), 'dark-industrial');
+        assert.equal(await home.locator('[data-gajo-total]').textContent(), '4');
+        assert.equal(await home.getByRole('link', { name: 'Ir a mi oficina' }).getAttribute('href'), '/oficina/operacion-ahora');
+        await home.close();
+        await page.bringToFront();
+
+        attentionFails = true;
+        await page.locator('#operationRefresh').click();
+        await summary.getByText('Sin lectura vigente').waitFor();
+        assert.equal(await page.locator('[data-office-attention-count="frigorifico"]').isVisible(), false);
+        attentionFails = false;
+        await page.locator('#operationRefresh').click();
+        await summary.getByText('4 pendientes · Lectura parcial').waitFor();
+
+        await page.getByRole('tab', { name: /Atención/ }).click();
         const attention = page.getByRole('tabpanel', { name: /Atención/ });
-        assert.equal(await attention.getByRole('combobox', { name: 'Filtrar condiciones por área' }).inputValue(), 'frigorifico');
+        await attention.getByRole('combobox', { name: 'Filtrar condiciones por área' }).selectOption('frigorifico');
         await attention.getByText('Retención de lote', { exact: true }).waitFor();
         await page.getByRole('tab', { name: 'Resumen' }).click();
         await summary.getByRole('link', { name: 'Ver recepción MP' }).click();
@@ -92,7 +183,6 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         assert.equal(await page.locator('#operationPtApproved').innerText(), '24');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
 
-        const selector = page.getByRole('combobox', { name: 'Tema de Oficina' });
         const cabecera = page.locator('.operation-now-command__title');
         for (const tema of Object.keys(temas)) {
             await page.setViewportSize({ width: 1440, height: 900 });

@@ -35,7 +35,7 @@
     var storedIdentity = read('estiba_wms_office_identity');
     var identity = null;
     try { identity = JSON.parse(storedIdentity || 'null'); } catch (error) { /* identidad ilegible */ }
-    var themeIdentity = token && !soloTema ? identity : null;
+    var themeIdentity = token && (!soloTema || script.hasAttribute('data-tema-de-sesion')) ? identity : null;
     var administrator = themeIdentity?.rol === 'administrador';
     var themeColors = {
         'light-professional': '#102f43',

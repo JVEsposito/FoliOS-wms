@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\ImpideEliminacionFisica;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -18,6 +19,11 @@ class IngresoPorteria extends Model
     protected function casts(): array
     {
         return ['guias' => 'array', 'cliente_es_otro' => 'boolean', 'cantidad' => 'integer', 'version' => 'integer', 'ingreso_at' => 'datetime', 'revisado_at' => 'datetime', 'anulado_at' => 'datetime'];
+    }
+
+    public function scopePendientesRevision(Builder $consulta): Builder
+    {
+        return $consulta->whereNull('anulado_at')->whereNull('revisado_at');
     }
 
     public function eventos(): HasMany

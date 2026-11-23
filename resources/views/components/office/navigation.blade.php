@@ -188,7 +188,8 @@
 
     <aside class="estiba-office-sidebar" id="officeSidebar" aria-label="Navegación de Oficina">
         @php($operationNowDefinition = collect($offices['gerencia'])->firstWhere('key', 'operacion-ahora'))
-        <nav class="estiba-office-primary" aria-label="Operación en tiempo real">
+        <nav class="estiba-office-primary" aria-label="Inicio y operación">
+            <a class="estiba-office-area" href="/FoliOS?inicio=1"><x-folios.gajo :size="24" /><strong>Inicio FoliOS</strong></a>
             <a @class(['estiba-office-area', 'is-active' => $office === 'operacion-ahora'])
                 data-office-key="operacion-ahora"
                 data-office-domain="gerencia"
@@ -207,9 +208,7 @@
                     href="{{ $definition['href'] }}"
                     @if ($isActiveDomain) aria-current="true" @endif
                 ><x-folios.gajo :area="$domainKey" /><strong>{{ $definition['label'] }}</strong>
-                    @if ($office === 'operacion-ahora')
-                        <small class="estiba-office-attention-count" data-office-attention-count="{{ $domainKey }}" title="Condiciones abiertas" hidden></small>
-                    @endif
+                    <small class="estiba-office-attention-count" data-office-attention-count="{{ $domainKey }}" hidden></small>
                 </a>
                 @if ($isActiveDomain)
                     <nav class="estiba-office-offices" aria-label="Oficinas de {{ $activeDomain['label'] }}">

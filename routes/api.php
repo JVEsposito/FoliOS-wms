@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\AdministracionValidacionController;
 use App\Http\Controllers\Api\AlmacenMaterialController;
 use App\Http\Controllers\Api\AndenController;
 use App\Http\Controllers\Api\ArchivoTemporadaController;
+use App\Http\Controllers\Api\AtencionOficinaController;
 use App\Http\Controllers\Api\BandaOperacionalController;
 use App\Http\Controllers\Api\BloqueoMaterialController;
 use App\Http\Controllers\Api\BodegaMaterialController;
@@ -144,6 +145,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/ingresos/{ingresoPorteria}/revisar', [RomanaPorteriaController::class, 'revisar'])->middleware('can:revisar-porteria');
         Route::post('/ingresos/{ingresoPorteria}/anular', [IngresoPorteriaController::class, 'anular'])->middleware('can:administrar-porteria');
     });
+    Route::get('/oficina/atencion', AtencionOficinaController::class);
     Route::get('/oficina/contexto', ContextoOficinaController::class);
     Route::get('/oficina/tema-personal/{tema}', [ContextoOficinaController::class, 'tema']);
     Route::get('/envases/catalogo', [CatalogoEnvaseController::class, 'catalogo']);
