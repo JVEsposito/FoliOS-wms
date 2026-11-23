@@ -36,7 +36,7 @@ class InterpreteReglasAsistente
 
     /**
      * @return array{consulta: ?ConsultaAsistente, parametros: ParametrosConsulta, confianza: float,
-     *     alternativas: list<ConsultaAsistente>, entidades: array<string, mixed>}
+     *     alternativas: list<ConsultaAsistente>, entidades: array<string, mixed>, motivo: ?string}
      */
     public function interpretar(User $usuario, string $texto): array
     {
@@ -54,7 +54,7 @@ class InterpreteReglasAsistente
             periodoExplicito: $entidades['periodo_explicito'],
         );
         $permitidas = $this->catalogo->disponiblesPara($usuario);
-        $base = ['parametros' => $parametros, 'entidades' => $entidades];
+        $base = ['parametros' => $parametros, 'entidades' => $entidades, 'motivo' => null];
 
         if ($entidades['codigo'] !== null) {
             $expediente = $this->primera($permitidas, 'expediente-por-codigo');
@@ -86,8 +86,12 @@ class InterpreteReglasAsistente
         $confianza = $mejor !== null ? round($puntajes[$mejor], 3) : 0.0;
         $empate = $segundo !== null && $puntajes[$segundo] === $puntajes[$mejor];
 
+        $motivo = null;
         if ($mejor !== null && $puntajes[$mejor] >= self::UMBRAL && ! $empate) {
-            return [...$base, 'consulta' => $permitidas[$mejor], 'confianza' => $confianza, 'alternativas' => []];
+            $motivo = $this->fueraDeAlcance(TextoNormalizado::de($texto), $significativas, $permitidas[$mejor], $parametros);
+            if ($motivo === null) {
+                return [...$base, 'consulta' => $permitidas[$mejor], 'confianza' => $confianza, 'alternativas' => []];
+            }
         }
 
         // Sugerencias solo entre las que comparten alguna palabra: nunca las primeras del catálogo por defecto.
@@ -95,10 +99,37 @@ class InterpreteReglasAsistente
 
         return [
             ...$base,
+            'motivo' => $motivo,
             'consulta' => null,
             'confianza' => $confianza,
             'alternativas' => array_values(array_map(fn (int $i): ConsultaAsistente => $permitidas[$i], array_slice($parecidas, 0, 3))),
         ];
+    }
+
+    /**
+     * Preguntas que la consulta elegida no puede responder con verdad aunque sus palabras
+     * coincidan: la fase A pregunta en vez de dar una cifra parecida.
+     *
+     * @param  list<string>  $significativas
+     */
+    private function fueraDeAlcance(string $texto, array $significativas, ConsultaAsistente $consulta, ParametrosConsulta $parametros): ?string
+    {
+        if (preg_match('/\b(contra|versus|vs|compara|comparar|comparado|comparada|comparados|comparadas)\b|\b(que|cual|cuales) (dia|dias|turno|turnos|semana|semanas|mes|meses|hora|horas)\b/', $texto)) {
+            return 'Todavía no comparo periodos ni agrupo por día o turno. Puedo mostrar cada periodo por separado:';
+        }
+        if (preg_match('/\b(mas|menos) de \d+\b/', $texto)) {
+            return 'Todavía no filtro por «más de» o «menos de». Estas consultas muestran el detalle completo:';
+        }
+        // «¿Cómo viene el CSG…?» nombra un tema pero no la cifra: es una evaluación.
+        if (count($significativas) <= 1 && preg_match('/\bcomo (viene|vienen|va|van|vamos|anda|andan|estuvo|estuvieron)\b/', $texto)) {
+            return 'Esa pregunta pide una evaluación. Elige qué cifra quieres ver:';
+        }
+        if (! in_array('periodo', $consulta->filtros(), true) && ($parametros->temporadaAnterior
+            || ($parametros->periodoExplicito && $parametros->jornadas()[1] < app(PeriodoOperativo::class)->jornada()))) {
+            return 'Esa consulta muestra lo que hay ahora, no lo de otro día. ¿Te sirve alguna de estas?';
+        }
+
+        return null;
     }
 
     /** @param  list<string>  $claves */

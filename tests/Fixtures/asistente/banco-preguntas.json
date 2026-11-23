@@ -1,0 +1,569 @@
+{
+  "descripcion": "Banco de 60 preguntas reales de planta (docs/ASISTENTE_ESTUDIO_HAIKU.md). responde_hoy es la consulta que la fase A debe ejecutar, o null si debe preguntar. Cualquier otra consulta es una respuesta falsa. Valle Alto y el CSG 104512 son ejemplos inventados.",
+  "preguntas": [
+    {
+      "n": 1,
+      "area": "Romana",
+      "pregunta": "¿Cuánto se demoraron los camiones hoy?",
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "tiempos-romana",
+      "objetivo": "tiempos-romana",
+      "responde_hoy": "tiempos-romana"
+    },
+    {
+      "n": 2,
+      "area": "Romana",
+      "pregunta": "¿Qué camiones siguen esperando destare?",
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "tiempos-romana",
+      "objetivo": "tiempos-romana",
+      "responde_hoy": "tiempos-romana"
+    },
+    {
+      "n": 3,
+      "area": "Romana",
+      "pregunta": "¿Cuántos kilos entraron anoche?",
+      "clase": "haiku_aporta",
+      "consulta_objetivo": "kilos-recepciones",
+      "objetivo": "kilos-recepciones",
+      "responde_hoy": "kilos-recepciones",
+      "turno": "B",
+      "periodo_explicito": true
+    },
+    {
+      "n": 4,
+      "area": "Romana",
+      "pregunta": "¿Cuántos kilos de cereza recibimos hoy?",
+      "clase": "falta_filtro",
+      "consulta_objetivo": "kilos-recepciones",
+      "objetivo": "kilos-recepciones",
+      "responde_hoy": "kilos-recepciones",
+      "no_aplicados": [
+        "especie"
+      ]
+    },
+    {
+      "n": 5,
+      "area": "Romana",
+      "pregunta": "Kilos de Valle Alto esta semana",
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "kilos-recepciones",
+      "objetivo": "kilos-recepciones",
+      "responde_hoy": "kilos-recepciones",
+      "filtros": [
+        "cliente"
+      ]
+    },
+    {
+      "n": 6,
+      "area": "Romana",
+      "pregunta": "¿Cuántos kilos lleva el CSG 104512 en la temporada?",
+      "clase": "haiku_aporta",
+      "consulta_objetivo": "kilos-por-csg",
+      "objetivo": "kilos-por-csg",
+      "responde_hoy": "kilos-por-csg",
+      "filtros": [
+        "csg"
+      ],
+      "periodo": "temporada_en_curso"
+    },
+    {
+      "n": 7,
+      "area": "Romana",
+      "pregunta": "Revisa las taras de hoy",
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "revisar-taras",
+      "objetivo": "revisar-taras",
+      "responde_hoy": "revisar-taras"
+    },
+    {
+      "n": 8,
+      "area": "Romana",
+      "pregunta": "¿Cómo viene el CSG 104512?",
+      "clase": "falta_filtro",
+      "consulta_objetivo": "revisar-taras",
+      "objetivo": "revisar-taras con histórico del CSG",
+      "responde_hoy": null
+    },
+    {
+      "n": 9,
+      "area": "Romana",
+      "pregunta": "¿Cuánto da el neto por tote por CSG esta semana?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": "kilos-por-csg",
+      "objetivo": "kilos-por-csg con neto por envase",
+      "responde_hoy": null
+    },
+    {
+      "n": 10,
+      "area": "Romana",
+      "pregunta": "¿Cuántos bins y totes entraron hoy?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "envases recibidos",
+      "responde_hoy": null
+    },
+    {
+      "n": 11,
+      "area": "Romana",
+      "pregunta": "¿Qué recepciones esperan digitación de lote?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "lotes por digitar",
+      "responde_hoy": null
+    },
+    {
+      "n": 12,
+      "area": "Romana",
+      "pregunta": "¿Cuánto demora la Validación MP?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "tiempos de Validación MP",
+      "responde_hoy": null
+    },
+    {
+      "n": 13,
+      "area": "Romana",
+      "pregunta": "¿Cómo estuvo el agua del hidrocooler hoy?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "hidrocooler",
+      "responde_hoy": null
+    },
+    {
+      "n": 14,
+      "area": "Romana",
+      "pregunta": "¿Qué camiones hay en patio ahora?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "camiones en planta (Portería y Romana)",
+      "responde_hoy": null
+    },
+    {
+      "n": 15,
+      "area": "Romana",
+      "pregunta": "¿Cuántos totes llegaron vacíos hoy en Validación MP?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "envases vacíos en Validación MP",
+      "responde_hoy": null
+    },
+    {
+      "n": 16,
+      "area": "Romana",
+      "pregunta": "¿Qué pesajes se corrigieron esta semana?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "correcciones de Romana",
+      "responde_hoy": null
+    },
+    {
+      "n": 17,
+      "area": "Romana",
+      "pregunta": "¿Qué camiones salieron con envases en el destare hoy?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "salidas con envases",
+      "responde_hoy": null
+    },
+    {
+      "n": 18,
+      "area": "Envases",
+      "pregunta": "¿Cuántos bins nos debe el CSG 104512?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "saldo de envases",
+      "responde_hoy": null
+    },
+    {
+      "n": 19,
+      "area": "Envases",
+      "pregunta": "¿Qué pasó con la guía 2588?",
+      "clase": "falta_filtro",
+      "consulta_objetivo": null,
+      "objetivo": "búsqueda por código",
+      "responde_hoy": "expediente-por-codigo",
+      "codigo": "2588"
+    },
+    {
+      "n": 20,
+      "area": "Envases",
+      "pregunta": "¿Qué despachos de envases siguen en borrador?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "despachos de envases",
+      "responde_hoy": null
+    },
+    {
+      "n": 21,
+      "area": "Envases",
+      "pregunta": "¿Qué guías están reasignadas a otro CSG?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "reasignaciones",
+      "responde_hoy": null
+    },
+    {
+      "n": 22,
+      "area": "Envases",
+      "pregunta": "Estado de cuenta de envases de Valle Alto de este mes",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "estado de cuenta de envases",
+      "responde_hoy": null
+    },
+    {
+      "n": 23,
+      "area": "Envases",
+      "pregunta": "¿Cuántos bins arrendados quedan en existencia?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "existencia de envases por propiedad",
+      "responde_hoy": null
+    },
+    {
+      "n": 24,
+      "area": "Proceso",
+      "pregunta": "¿Qué falta por validar?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "pendientes por validar",
+      "responde_hoy": null
+    },
+    {
+      "n": 25,
+      "area": "Proceso",
+      "pregunta": "¿Cuántas cajas se embalaron ayer para Valle Alto?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "cajas por día de proceso",
+      "responde_hoy": null
+    },
+    {
+      "n": 26,
+      "area": "Proceso",
+      "pregunta": "¿Cuántas cajas hay por formato?",
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "formatos-pt",
+      "objetivo": "formatos-pt",
+      "responde_hoy": "formatos-pt"
+    },
+    {
+      "n": 27,
+      "area": "Proceso",
+      "pregunta": "¿Qué lotes entran a proceso en el turno A?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "órdenes de proceso",
+      "responde_hoy": null
+    },
+    {
+      "n": 28,
+      "area": "Proceso",
+      "pregunta": "¿Qué diferencias tiene la cuadratura de hoy?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "cuadraturas",
+      "responde_hoy": null
+    },
+    {
+      "n": 29,
+      "area": "Proceso",
+      "pregunta": "¿Cuántos kilos se procesaron en la línea 3 en el turno B?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "proceso por línea y turno",
+      "responde_hoy": null
+    },
+    {
+      "n": 30,
+      "area": "Proceso",
+      "pregunta": "¿Qué lotes siguen en resguardo sin proceso?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "existencias MP",
+      "responde_hoy": null
+    },
+    {
+      "n": 31,
+      "area": "Proceso",
+      "pregunta": "¿Cuántos folios se validaron hoy?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "validaciones PT del día",
+      "responde_hoy": null
+    },
+    {
+      "n": 32,
+      "area": "Frío",
+      "pregunta": "¿Cuánto demoró el prefrío hoy?",
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "tiempos-prefrio",
+      "objetivo": "tiempos-prefrio",
+      "responde_hoy": "tiempos-prefrio"
+    },
+    {
+      "n": 33,
+      "area": "Frío",
+      "pregunta": "¿Qué túneles van atrasados ahora?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "prefrío en curso",
+      "responde_hoy": null
+    },
+    {
+      "n": 34,
+      "area": "Frío",
+      "pregunta": "¿Qué temperatura tienen los túneles?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "temperaturas",
+      "responde_hoy": null
+    },
+    {
+      "n": 35,
+      "area": "Frío",
+      "pregunta": "¿Cómo viene el punto de rocío?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "punto de rocío",
+      "responde_hoy": null
+    },
+    {
+      "n": 36,
+      "area": "Frío",
+      "pregunta": "¿Cuánta ocupación tienen las cámaras?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "ocupación de cámaras",
+      "responde_hoy": null
+    },
+    {
+      "n": 37,
+      "area": "Frío",
+      "pregunta": "¿Dónde está el folio 1234567?",
+      "clase": "reglas_bastan",
+      "consulta_objetivo": null,
+      "objetivo": "búsqueda por código",
+      "responde_hoy": "expediente-por-codigo",
+      "codigo": "1234567"
+    },
+    {
+      "n": 38,
+      "area": "Frío",
+      "pregunta": "¿Cuántos saldos tiene Valle Alto?",
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "saldos-pt",
+      "objetivo": "saldos-pt",
+      "responde_hoy": "saldos-pt",
+      "filtros": [
+        "cliente"
+      ]
+    },
+    {
+      "n": 39,
+      "area": "Frío",
+      "pregunta": "¿Qué repas se hicieron ayer para Valle Alto?",
+      "clase": "falta_filtro",
+      "consulta_objetivo": "repaletizajes",
+      "objetivo": "repaletizajes",
+      "responde_hoy": "repaletizajes",
+      "no_aplicados": [
+        "cliente"
+      ]
+    },
+    {
+      "n": 40,
+      "area": "Frío",
+      "pregunta": "¿Qué lotes están retenidos por SAG?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "lotes retenidos SAG",
+      "responde_hoy": null
+    },
+    {
+      "n": 41,
+      "area": "Frío",
+      "pregunta": "¿Qué pallets llevan más de 3 días en cámara?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "antigüedad en cámara",
+      "responde_hoy": null
+    },
+    {
+      "n": 42,
+      "area": "Frío",
+      "pregunta": "¿Qué maniobras están pausadas?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "maniobras pausadas",
+      "responde_hoy": null
+    },
+    {
+      "n": 43,
+      "area": "Frío",
+      "pregunta": "¿Qué folios se anularon esta semana?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "anulaciones",
+      "responde_hoy": null
+    },
+    {
+      "n": 44,
+      "area": "Despacho",
+      "pregunta": "¿Cuántos pallets despachamos ayer?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "despachos PT por día",
+      "responde_hoy": null
+    },
+    {
+      "n": 45,
+      "area": "Despacho",
+      "pregunta": "¿Cómo va la carga CAR-000059?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "avance de carga",
+      "responde_hoy": "expediente-por-codigo",
+      "codigo": "CAR-000059"
+    },
+    {
+      "n": 46,
+      "area": "Despacho",
+      "pregunta": "¿Cuánto demoró el carguío de Valle Alto?",
+      "clase": "falta_filtro",
+      "consulta_objetivo": "tiempos-cargas",
+      "objetivo": "tiempos-cargas",
+      "responde_hoy": "tiempos-cargas",
+      "no_aplicados": [
+        "cliente"
+      ]
+    },
+    {
+      "n": 47,
+      "area": "Despacho",
+      "pregunta": "¿Qué cargas están listas para cerrar?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "estado de cargas",
+      "responde_hoy": null
+    },
+    {
+      "n": 48,
+      "area": "Despacho",
+      "pregunta": "¿Qué embarques salen mañana?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "calendario de embarques",
+      "responde_hoy": null
+    },
+    {
+      "n": 49,
+      "area": "Despacho",
+      "pregunta": "¿Qué pallets volvieron de cargas esta semana?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "retornos de carga",
+      "responde_hoy": null
+    },
+    {
+      "n": 50,
+      "area": "Despacho",
+      "pregunta": "¿Cuántas cajas despachamos a Estados Unidos esta temporada?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "despachos PT por destino",
+      "responde_hoy": null
+    },
+    {
+      "n": 51,
+      "area": "Materiales",
+      "pregunta": "¿Cuánto se consumió en las OT de ayer?",
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "consumos-ot",
+      "objetivo": "consumos-ot",
+      "responde_hoy": "consumos-ot"
+    },
+    {
+      "n": 52,
+      "area": "Materiales",
+      "pregunta": "¿Qué ítems están bajo mínimo?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "reposición",
+      "responde_hoy": null
+    },
+    {
+      "n": 53,
+      "area": "Materiales",
+      "pregunta": "¿Qué vence este mes en bodega?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "vencimientos",
+      "responde_hoy": null
+    },
+    {
+      "n": 54,
+      "area": "Materiales",
+      "pregunta": "¿Cuántas cajas de cartón le quedan a Valle Alto?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "existencias de materiales",
+      "responde_hoy": null
+    },
+    {
+      "n": 55,
+      "area": "Materiales",
+      "pregunta": "¿Qué recepciones provisionales de materiales vencen esta semana?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "recepciones provisionales",
+      "responde_hoy": null
+    },
+    {
+      "n": 56,
+      "area": "Gerencia",
+      "pregunta": "Kilos de esta semana contra la pasada",
+      "clase": "haiku_aporta",
+      "consulta_objetivo": "kilos-recepciones",
+      "objetivo": "kilos-recepciones en dos periodos",
+      "responde_hoy": null
+    },
+    {
+      "n": 57,
+      "area": "Gerencia",
+      "pregunta": "¿Cómo vamos contra la temporada pasada?",
+      "clase": "haiku_aporta",
+      "consulta_objetivo": "kilos-recepciones",
+      "objetivo": "kilos-recepciones en dos temporadas",
+      "responde_hoy": null
+    },
+    {
+      "n": 58,
+      "area": "Gerencia",
+      "pregunta": "¿Qué día de la semana entró más fruta?",
+      "clase": "falta_filtro",
+      "consulta_objetivo": "kilos-recepciones",
+      "objetivo": "kilos-recepciones agrupados por día",
+      "responde_hoy": null
+    },
+    {
+      "n": 59,
+      "area": "Frío",
+      "pregunta": "¿Cuántas horas extra hizo el turno B?",
+      "clase": "solo_local",
+      "consulta_objetivo": null,
+      "objetivo": "control de personal",
+      "responde_hoy": null
+    },
+    {
+      "n": 60,
+      "area": "Administración",
+      "pregunta": "¿Cuánto va la prefactura de Valle Alto este mes?",
+      "clase": "solo_local",
+      "consulta_objetivo": null,
+      "objetivo": "prefactura",
+      "responde_hoy": null
+    }
+  ]
+}
