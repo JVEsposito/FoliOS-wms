@@ -58,7 +58,13 @@ El asistente es un gajo flotante en la esquina inferior derecha de cada oficina,
 
 **Cuándo responde:** el intérprete sin IA ignora las palabras vacías y las que ya reconoció como periodo, cliente, CSG, especie o código. Responde solo si una consulta explica al menos el 60 % de las palabras restantes y ninguna otra empata con ella. Las palabras que comparten dos consultas (por ejemplo «cajas» en `formatos-pt`, «kilos» en `kilos-por-csg`) cuentan la mitad para la consulta secundaria.
 
+**Lo que la fase A no responde aunque las palabras coincidan:** comparaciones y agrupaciones («contra la semana pasada», «qué día entró más»), condiciones numéricas («más de 3 días»), evaluaciones sin cifra («¿cómo viene el CSG…?») y una fecha pasada en una consulta de existencia actual. En esos casos dice por qué y ofrece las consultas parecidas.
+
 **Si no entiende la pregunta:** propone hasta tres consultas que comparten alguna palabra con ella, ya completadas con lo que reconoció, y un enlace a la Búsqueda operacional. Si ninguna se parece, lo dice y ofrece solo la búsqueda; nunca propone consultas al azar. Cada pregunta queda registrada para ampliar el catálogo.
+
+## Banco de preguntas
+
+`tests/Fixtures/asistente/banco-preguntas.json` guarda 60 preguntas reales de la planta, por área, con la consulta que debería responderlas y la que la fase A ejecuta hoy (`responde_hoy`, o `null` si debe preguntar). `BancoPreguntasAsistenteTest` corre en CI y exige cero respuestas falsas: ni otra consulta, ni otro periodo, ni un filtro reconocido sin aviso. Al sumar una consulta, se actualiza `responde_hoy` de las preguntas que pasa a responder. Valle Alto y el CSG 104512 son ejemplos inventados.
 
 ## Revisión de tara y destare
 

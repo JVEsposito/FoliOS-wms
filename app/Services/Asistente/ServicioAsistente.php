@@ -49,7 +49,8 @@ class ServicioAsistente
         }
 
         $this->registrar($usuario, $texto, null, $parametros, 'sugerencias', $interpretacion['confianza']);
-        $mensaje = $interpretacion['alternativas'] === []
+        $mensaje = $interpretacion['motivo'] ?? null;
+        $mensaje ??= $interpretacion['alternativas'] === []
             ? 'No tengo una consulta para esa pregunta. Puedes buscarla en FoliOS o ver lo que sé responder.'
             : 'No estoy seguro de qué consulta quieres. ¿Es alguna de estas?';
 
