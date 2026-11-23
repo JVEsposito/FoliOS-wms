@@ -52,7 +52,7 @@ class ExpedientePorCodigo extends ConsultaBase
 
     public function palabrasClave(): array
     {
-        return ['buscar', 'busca', 'expediente', 'codigo', 'donde', 'guia'];
+        return ['buscar', 'busca', 'expediente', 'codigo', 'donde'];
     }
 
     public function puedeEjecutar(User $usuario): bool

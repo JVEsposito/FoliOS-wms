@@ -4,8 +4,13 @@ namespace App\Providers;
 
 use App\Services\Asistente\CatalogoConsultasAsistente;
 use App\Services\Asistente\Consultas\CajasPt;
+use App\Services\Asistente\Consultas\CamionesEnPlanta;
 use App\Services\Asistente\Consultas\ConsumosOt;
+use App\Services\Asistente\Consultas\DespachosEnvasesPendientes;
+use App\Services\Asistente\Consultas\EnvasesRecibidos;
+use App\Services\Asistente\Consultas\EstadoCargas;
 use App\Services\Asistente\Consultas\ExpedientePorCodigo;
+use App\Services\Asistente\Consultas\FoliosDespachados;
 use App\Services\Asistente\Consultas\FormatosPt;
 use App\Services\Asistente\Consultas\KilosPorCsg;
 use App\Services\Asistente\Consultas\KilosRecepciones;
@@ -37,6 +42,11 @@ class AsistenteServiceProvider extends ServiceProvider
         TiemposCargas::class,
         ConsumosOt::class,
         ExpedientePorCodigo::class,
+        CamionesEnPlanta::class,
+        EnvasesRecibidos::class,
+        DespachosEnvasesPendientes::class,
+        EstadoCargas::class,
+        FoliosDespachados::class,
     ];
 
     public function register(): void
