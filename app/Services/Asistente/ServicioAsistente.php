@@ -7,9 +7,12 @@ use App\Models\ConfiguracionAsistente;
 use App\Models\PreguntaAsistente;
 use App\Models\User;
 use App\Services\Asistente\Consultas\ConsultaAsistente;
+use App\Services\Asistente\Haiku\ClienteAnthropic;
 use App\Services\Asistente\Haiku\FallaHaiku;
 use App\Services\Asistente\Haiku\InterpreteHaiku;
 use App\Services\Asistente\Haiku\PresupuestoHaiku;
+use App\Services\Asistente\Haiku\RecomendadorHaiku;
+use DomainException;
 
 /**
  * Responde las preguntas del asistente y deja registro de cada una. Las reglas responden
@@ -31,6 +34,8 @@ class ServicioAsistente
         private readonly CatalogoConsultasAsistente $catalogo,
         private readonly LineaEntendido $entendido,
         private readonly InterpreteHaiku $haiku,
+        private readonly RecomendadorHaiku $recomendador,
+        private readonly ClienteAnthropic $anthropic,
     ) {}
 
     /**
@@ -42,7 +47,13 @@ class ServicioAsistente
         $interpretacion = $this->interprete->interpretar($usuario, $texto);
         $parametros = $interpretacion['parametros'];
         if ($interpretacion['consulta'] !== null) {
-            return $this->responder($usuario, $texto, $interpretacion['consulta'], $parametros, self::MODO, $interpretacion['confianza']);
+            $respuesta = $this->responder($usuario, $texto, $interpretacion['consulta'], $parametros, self::MODO, $interpretacion['confianza']);
+            // Una recomendación nunca llega sola: se pide con el botón bajo la respuesta.
+            if ($respuesta['recomendable'] && preg_match('/\b(recomienda[sn]?|recomendacion(es)?|sugieres|que hago|que harias)\b/', TextoNormalizado::de($texto))) {
+                $respuesta['aviso'] = 'Para una recomendación, usa «Pedir recomendación» bajo esta respuesta.';
+            }
+
+            return $respuesta;
         }
 
         $mensaje = $interpretacion['motivo'] ?? null;
@@ -90,7 +101,7 @@ class ServicioAsistente
         return $this->sugerir($usuario, $texto, $parametros, $interpretacion['alternativas'], $mensaje, self::MODO, $aviso);
     }
 
-    /** @return array{tipo: string, modo: string, consulta: string, entendido: array, resultado: array} */
+    /** @return array{tipo: string, modo: string, consulta: string, parametros: array, entendido: array, resultado: array, recomendable: bool} */
     public function ejecutar(User $usuario, string $clave, ParametrosConsulta $parametros): array
     {
         $consulta = $this->catalogo->buscar($clave);
@@ -98,12 +109,16 @@ class ServicioAsistente
             throw new OperacionNoAutorizada('No tienes acceso a esa consulta del asistente.');
         }
 
+        $resultado = $consulta->ejecutar($usuario, $parametros);
+
         return [
             'tipo' => 'respuesta',
             'modo' => self::MODO,
             'consulta' => $clave,
+            'parametros' => $parametros->toArray(),
             'entendido' => $this->entendido->construir($consulta, $parametros),
-            'resultado' => $consulta->ejecutar($usuario, $parametros)->toArray(),
+            'resultado' => $resultado->toArray(),
+            'recomendable' => $this->recomendable($consulta, $resultado),
         ];
     }
 
@@ -127,11 +142,41 @@ class ServicioAsistente
             'tipo' => 'respuesta',
             'modo' => $modo,
             'consulta' => $consulta->clave(),
+            'parametros' => $parametros->toArray(),
             'entendido' => $this->entendido->construir($consulta, $parametros),
             'resultado' => $resultado->toArray(),
+            'recomendable' => $this->recomendable($consulta, $resultado),
             'sugerencias' => [],
             'busqueda' => '',
         ];
+    }
+
+    /** Se ofrece «Pedir recomendación» solo en modo mixto, con clave y sobre una respuesta con datos. */
+    private function recomendable(ConsultaAsistente $consulta, ResultadoConsulta $resultado): bool
+    {
+        return $consulta->admiteRecomendacion()
+            && $resultado->estado === ResultadoConsulta::RESPONDIDA
+            && $this->anthropic->disponible()
+            && ConfiguracionAsistente::actual()->modo === ConfiguracionAsistente::MODO_MIXTO;
+    }
+
+    /**
+     * Recomendación a pedido sobre una consulta que el usuario ya vio. La consulta se
+     * vuelve a ejecutar con sus permisos; a Haiku solo va ese resultado.
+     *
+     * @return array{estado: string, aviso: string, texto: ?string, basada_en: list<string>, motivo: ?string}
+     */
+    public function recomendar(User $usuario, string $clave, ParametrosConsulta $parametros): array
+    {
+        $consulta = $this->catalogo->buscar($clave);
+        if ($consulta === null || ! $consulta->puedeEjecutar($usuario)) {
+            throw new OperacionNoAutorizada('No tienes acceso a esa consulta del asistente.');
+        }
+        if (ConfiguracionAsistente::actual()->modo !== ConfiguracionAsistente::MODO_MIXTO) {
+            throw new DomainException('Las recomendaciones solo están disponibles con el asistente en modo mixto.');
+        }
+
+        return $this->recomendador->recomendar($usuario, $consulta, $consulta->ejecutar($usuario, $parametros));
     }
 
     /** @param  list<ConsultaAsistente>  $opciones */

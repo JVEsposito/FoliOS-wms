@@ -26,7 +26,7 @@ class LineaEntendido
                 ? 'Temporada anterior · '.$parametros->descripcionPeriodo()
                 : $parametros->descripcionPeriodo();
         } elseif ($consulta->clave() !== 'expediente-por-codigo') {
-            $fichas[] = 'Existencia actual';
+            $fichas[] = 'Ahora';
             if ($parametros->periodoExplicito || $parametros->temporadaAnterior) {
                 $noAplicados[] = 'Muestra lo que hay ahora: no filtra por fecha ni por temporada anterior.';
             }

@@ -4,6 +4,7 @@ namespace App\Services\Asistente\Consultas;
 
 use App\Enums\EstadoProcesoPrefrio;
 use App\Models\ProcesoPrefrio;
+use App\Models\TunelPrefrio;
 use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ResultadoConsulta;
@@ -46,6 +47,18 @@ class PrefrioEnCurso extends ConsultaBase
         return [];
     }
 
+    public function admiteRecomendacion(): bool
+    {
+        return true;
+    }
+
+    public function capacidades(): array
+    {
+        return TunelPrefrio::query()->where('estado_administrativo', 'activo')->orderBy('nombre')->get(['nombre', 'capacidad_posiciones', 'setpoint_habitual', 'estado_tecnico'])
+            ->map(fn (TunelPrefrio $t): array => ['nombre' => "{$t->nombre}: posiciones", 'valor' => (int) $t->capacidad_posiciones])
+            ->all();
+    }
+
     public function puedeEjecutar(User $usuario): bool
     {
         return $this->alcance->puedeConsultarPrefrio($usuario);
@@ -84,7 +97,13 @@ class PrefrioEnCurso extends ConsultaBase
         return new ResultadoConsulta(
             ResultadoConsulta::RESPONDIDA,
             $this->titulo(),
-            sprintf('Hay %d procesos de prefrío en curso; %d pasaron su objetivo.', $filas->count(), $atrasados),
+            sprintf(
+                'Hay %d %s de prefrío en curso; %s.',
+                $filas->count(), $filas->count() === 1 ? 'proceso' : 'procesos',
+                match ($atrasados) {
+                    0 => 'ninguno pasó su objetivo', 1 => '1 pasó su objetivo', default => "{$atrasados} pasaron su objetivo"
+                },
+            ),
             [ResultadoConsulta::cifra('En curso', $filas->count()), ResultadoConsulta::cifra('Pasados del objetivo', $atrasados)],
             [
                 ['clave' => 'tunel', 'titulo' => 'Túnel'],
