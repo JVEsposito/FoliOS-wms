@@ -1,3 +1,4 @@
+import { officeCode, officeStatus } from './shared/folios-display.js';
 import { SAG_LOT_STATES as states } from './shared/sag-lot-alerts.js';
 
 const $ = (id) => document.getElementById(id);
@@ -15,6 +16,25 @@ const url = '/api/sag/lotes-retenidos';
 const date = (value) => value ? new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' }).format(new Date(value)) : '—';
 const labelDestinations = (r) => r.todos_destinos ? 'Todos los destinos' : r.destinos.map((d) => d.nombre).join(' · ') || 'Sin restricciones de destino';
 const partial = 'liberado_con_restricciones';
+const lotGlyphs = { con_observaciones: 'atencion', retenido: 'bloqueado', [partial]: 'atencion', liberado: 'listo' };
+const lotStatus = (record) => officeStatus(states[record.estado] || 'Estado sin informar', lotGlyphs[record.estado], esc);
+const plantDay = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Santiago' });
+
+function daysSince(value, today) {
+    const detected = String(value ?? '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(detected)) return null;
+    const elapsed = (Date.parse(today) - Date.parse(detected)) / 86_400_000;
+    return Number.isFinite(elapsed) ? Math.max(0, elapsed) : null;
+}
+
+function message(text = '') {
+    $('slMessage').textContent = text;
+    $('slMessage').hidden = !text;
+}
+
+function listState(title, detail = '') {
+    return `<tr><td colspan="5"><div class="folios-bandeja__estado"><strong>${title}</strong>${detail ? `<span>${detail}</span>` : ''}</div></td></tr>`;
+}
 
 async function api(path = '', options = {}) {
     const response = await fetch(url + path, { ...options, headers: { Accept: 'application/json', Authorization: `Bearer ${state.token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) } });
@@ -27,15 +47,44 @@ async function api(path = '', options = {}) {
     return data;
 }
 async function run(action) {
-    try { await action(); } catch (e) { $('slError').textContent = e.message; $('slMessage').textContent = e.message; }
+    try { await action(); } catch (e) { $('slError').textContent = e.message; message(e.message); }
 }
 async function list(page = 1) {
     const revision = ++state.listRevision;
     const query = new URLSearchParams(new FormData($('slFilters'))); query.set('page', page);
-    const data = await api(`?${query}`);
-    if (revision !== state.listRevision) return;
-    $('slRows').innerHTML = data.data.map((r) => `<tr><td><strong>${esc(r.numero_lote)}</strong><small>${esc(r.cliente?.nombre)}</small></td><td>${esc(states[r.estado])}<small>${r.definitivo ? 'Resultado definitivo' : 'En seguimiento'}</small></td><td>${esc(labelDestinations(r))}</td><td>${esc(date(r.updated_at))}<small>Versión ${r.version}</small></td><td><button type="button" class="secondary-button" data-open="${esc(r.id)}">Abrir / resolver</button></td></tr>`).join('') || '<tr><td colspan="5">Sin lotes registrados para estos filtros.</td></tr>';
+    const rows = $('slRows');
+    rows.setAttribute('aria-busy', 'true');
+    rows.innerHTML = listState('Consultando lotes…');
+    $('slResults').textContent = '';
     $('slPages').replaceChildren();
+    let data;
+    try {
+        data = await api(`?${query}`);
+    } catch (error) {
+        if (revision !== state.listRevision) return;
+        rows.removeAttribute('aria-busy');
+        rows.innerHTML = listState('Bandeja sin lectura', 'Usa Buscar / actualizar para volver a consultar.');
+        throw error;
+    }
+    if (revision !== state.listRevision) return;
+    rows.removeAttribute('aria-busy');
+    const today = plantDay.format(new Date());
+    const ages = data.data.map((record) => daysSince(record.fecha_deteccion, today));
+    const maxAge = Math.max(1, ...ages);
+    rows.innerHTML = data.data.map((record, index) => {
+        const age = ages[index];
+        const ageDetail = age === null ? '' : `<small>Detectado ${age === 0 ? 'hoy' : `hace ${age} ${age === 1 ? 'día' : 'días'}`}</small>
+            <span class="sl-age" aria-hidden="true"><i style="inline-size:${age / maxAge * 100}%"></i></span>`;
+        return `<tr>
+            <td><span class="folios-code">${officeCode(record.numero_lote, esc, 5)}</span><small>${esc(record.cliente?.nombre)}</small></td>
+            <td>${lotStatus(record)}<small>${record.definitivo ? 'Resultado definitivo' : 'En seguimiento'}</small></td>
+            <td>${esc(labelDestinations(record))}</td>
+            <td>${ageDetail}<small>Actualizado ${esc(date(record.updated_at))} · v${esc(record.version)}</small></td>
+            <td><button type="button" class="secondary-button" data-open="${esc(record.id)}" aria-label="Abrir lote ${esc(record.numero_lote)}">Abrir lote</button></td>
+        </tr>`;
+    }).join('') || listState('Sin lotes para esta búsqueda', 'Los controles registrados aparecerán aquí. Cambia los filtros para ampliar la búsqueda.');
+    const total = data.total ?? data.data.length;
+    $('slResults').textContent = `${total} ${total === 1 ? 'lote' : 'lotes'}`;
     for (const [text, target] of [['Anterior', page - 1], ['Siguiente', page + 1]]) {
         const button = document.createElement('button'); button.className = 'secondary-button'; button.textContent = text;
         button.disabled = target < 1 || target > data.last_page; button.onclick = () => run(() => list(target)); $('slPages').append(button);
@@ -84,8 +133,10 @@ function editor(detail = null) {
     field('resolucion').required = Boolean(r);
     field('estado').querySelector('option[value="liberado"]').disabled = !r;
     field('fecha_deteccion').value = state.catalog.fecha_planta; field('fecha_deteccion').max = state.catalog.fecha_planta;
-    $('slTitle').textContent = r ? `${r.cliente.nombre} · Lote ${r.numero_lote}` : 'Registrar lote de recepción';
-    $('slVersion').textContent = r ? `VERSIÓN ${r.version} · ${r.definitivo ? 'RESULTADO DEFINITIVO' : 'EN SEGUIMIENTO'}` : state.catalog.temporada.nombre;
+    $('slTitle').innerHTML = r ? `Lote <span class="folios-code">${officeCode(r.numero_lote, esc, 5)}</span>` : 'Registrar lote de recepción';
+    $('slClient').textContent = r?.cliente?.nombre || '';
+    $('slVersion').textContent = r ? `VERSIÓN ${r.version} · ${r.definitivo ? 'RESULTADO DEFINITIVO' : 'EN SEGUIMIENTO'}` : '';
+    $('slRecordState').innerHTML = r ? lotStatus(r) : '';
     $('slSave').textContent = r ? 'Guardar resolución / seguimiento' : 'Registrar seguimiento';
     if (r) {
         for (const name of ['cliente_id', 'numero_lote', 'estado', 'observacion', 'referencia_informe', 'instruccion_segregacion']) field(name).value = r[name] || '';
@@ -96,8 +147,22 @@ function editor(detail = null) {
         $('slTotals').textContent = active.length
             ? `${active.length} folios activos · ${active.reduce((n, f) => n + f.cajas_lote, 0)} cajas del lote en planta.`
             : 'Sin cajas del lote en planta.';
-        $('slFolios').innerHTML = detail.folios.map((f) => `<tr><td>${esc(f.folio)}</td><td>${f.cajas_lote} / ${f.cajas_pallet}</td><td>${esc(f.csg)}</td><td>${esc(f.ubicacion || f.estado)}<small>${esc(f.estado)}</small></td><td>${esc(f.carga || 'Sin carga')}</td></tr>`).join('') || '<tr><td colspan="5">Aún no hay folios con cajas de este cliente y lote. Los que ingresen después heredarán el control.</td></tr>';
-        $('slHistory').innerHTML = detail.historial.map((e) => `<article class="sl-history"><strong>Versión ${e.version} · ${esc(e.usuario)} · ${esc(date(e.fecha.replace(' ', 'T') + 'Z'))}</strong><p>${esc(states[e.despues.estado])} · ${esc(labelDestinations(e.despues))}</p><p>${esc(e.despues.resolucion || e.despues.observacion)}</p><small>${e.folios_afectados.length} folios identificados al registrar. ${esc(e.despues.instruccion_segregacion || '')}</small></article>`).join('');
+        $('slFolios').innerHTML = detail.folios.map((f) => `<tr>
+            <td><span class="folios-code">${officeCode(f.folio, esc)}</span></td>
+            <td>${esc(f.cajas_lote)} / ${esc(f.cajas_pallet)}</td>
+            <td><span class="folios-code">${esc(f.csg)}</span></td>
+            <td>${esc(f.ubicacion || f.estado)}<small>${esc(f.estado)}</small></td>
+            <td><span class="folios-code">${f.carga ? officeCode(f.carga, esc, 3) : 'Sin carga'}</span></td>
+        </tr>`).join('') || '<tr><td colspan="5">Aún no hay folios con cajas de este cliente y lote. Los que ingresen después heredarán el control.</td></tr>';
+        $('slHistory').innerHTML = detail.historial.map((event) => `<li class="folios-ticket sl-history">
+            <div class="folios-ticket__stub"><span>v${esc(event.version)}</span></div>
+            <div class="sl-history__body">
+                <small>${esc(date(event.fecha.replace(' ', 'T') + 'Z'))} · ${esc(event.usuario)}</small>
+                <p>${lotStatus(event.despues)} · ${esc(labelDestinations(event.despues))}</p>
+                <p>${esc(event.despues.resolucion || event.despues.observacion)}</p>
+                <small>${esc(event.folios_afectados.length)} folios identificados al registrar. ${esc(event.despues.instruccion_segregacion || '')}</small>
+            </div>
+        </li>`).join('') || '<li>Aún no hay resoluciones registradas.</li>';
     }
     $('slDestinationSearch').value = ''; destinations();
 }
@@ -107,7 +172,7 @@ async function enter() {
         const placeholder = select.options[0].textContent;
         select.innerHTML = `<option value="">${esc(placeholder)}</option>` + state.catalog.clientes.map((c) => `<option value="${esc(c.id)}">${esc(c.codigo)} · ${esc(c.nombre)}</option>`).join('');
     });
-    $('slSeason').textContent = `Temporada activa · ${state.catalog.temporada.nombre}`;
+    $('slNew').disabled = false;
     $('officeAccess').classList.add('is-hidden'); $('officeApp').classList.remove('is-hidden'); await list();
 }
 $('officeLoginForm').addEventListener('submit', async (event) => {
@@ -118,13 +183,32 @@ $('officeLoginForm').addEventListener('submit', async (event) => {
         state.token = data.token; localStorage.setItem('estiba_wms_office_token', state.token); localStorage.setItem('estiba_wms_office_identity', JSON.stringify(data.usuario)); await enter();
     } catch (e) { $('officeLoginError').textContent = e.message; }
 });
-$('slNew').onclick = () => { if (!state.busy) { state.detailRevision++; editor(); } };
-$('slClose').onclick = () => { if (!state.busy) { state.detailRevision++; $('slEditor').classList.add('is-hidden'); } };
-$('slFilters').onsubmit = (e) => { e.preventDefault(); run(() => list()); };
+let detailTrigger = null;
+$('slNew').onclick = () => {
+    if (state.busy) return;
+    state.detailRevision++;
+    detailTrigger = $('slNew');
+    editor();
+    $('slTitle').focus();
+};
+$('slClose').onclick = () => {
+    if (state.busy) return;
+    state.detailRevision++;
+    $('slEditor').classList.add('is-hidden');
+    (detailTrigger?.isConnected ? detailTrigger : $('slNew')).focus();
+};
+$('slFilters').onsubmit = (e) => { e.preventDefault(); message(); run(() => state.catalog ? list() : enter()); };
 $('slRows').onclick = (e) => {
-    const id = e.target.closest('[data-open]')?.dataset.open; if (!id || state.busy) return;
+    const trigger = e.target.closest('[data-open]');
+    if (!trigger || state.busy) return;
     const revision = ++state.detailRevision;
-    run(async () => { const detail = await api(`/${id}`); if (revision === state.detailRevision) editor(detail); });
+    run(async () => {
+        const detail = await api(`/${encodeURIComponent(trigger.dataset.open)}`);
+        if (revision !== state.detailRevision) return;
+        detailTrigger = trigger;
+        editor(detail);
+        $('slTitle').focus();
+    });
 };
 $('slDestinationSearch').oninput = destinations;
 field('definitivo').onchange = () => { field('resolucion').required = Boolean(state.detail) || field('definitivo').checked; };
@@ -168,7 +252,15 @@ form.onsubmit = (e) => {
             const fingerprint = JSON.stringify(data);
             if (state.pending?.fingerprint !== fingerprint) state.pending = { fingerprint, operacion_id: operationId() };
             const detail = await api(r ? `/${r.id}` : '', { method: r ? 'PUT' : 'POST', body: JSON.stringify({ ...data, operacion_id: state.pending.operacion_id }) });
-            editor(detail); await list(); $('slMessage').textContent = 'Seguimiento SAG guardado. Las alertas se actualizan en la operación.';
+            editor(detail);
+            $('slTitle').focus();
+            let feedback = 'Seguimiento SAG guardado. Las alertas se actualizan en la operación.';
+            try {
+                await list();
+            } catch {
+                feedback += ' La bandeja está sin lectura. Puedes actualizarla.';
+            }
+            message(feedback);
         } finally { state.busy = false; $('slSave').disabled = false; }
     });
 };
@@ -179,4 +271,15 @@ document.querySelectorAll('[data-report]').forEach((button) => { button.onclick 
     const object = URL.createObjectURL(await response.blob()); const a = document.createElement('a');
     a.href = object; a.download = `SAG-lote-${r.numero_lote.replace(/[^A-Za-z0-9_-]/g, '-')}-v${r.version}.${button.dataset.report}`; a.click(); setTimeout(() => URL.revokeObjectURL(object), 1000);
 }); });
-if (state.token) run(enter);
+if (state.token) {
+    run(async () => {
+        $('officeAccess').classList.add('is-hidden');
+        $('officeApp').classList.remove('is-hidden');
+        try {
+            await enter();
+        } catch (error) {
+            if (!state.catalog) $('slRows').innerHTML = listState('No fue posible cargar el catálogo SAG');
+            throw error;
+        }
+    });
+}

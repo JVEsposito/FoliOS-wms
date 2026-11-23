@@ -89,7 +89,11 @@ class RetencionesLoteSagApiTest extends TestCase
         $servicio = app(ServicioRetencionesLoteSag::class);
         $this->assertCount(2, $servicio->paraFolios([$folio->id])[$folio->id]);
         $this->assertSame(40, $servicio->paraFolios([$segundo->id])[$segundo->id][0]['cajas_lote']);
+        $this->travel(1)->seconds();
         $this->putJson('/api/sag/lotes-retenidos/'.$a['id'], $this->resolucion($a, ['estado' => 'liberado']))->assertOk();
+        $this->getJson('/api/sag/lotes-retenidos?cliente_id='.$cliente->id)->assertOk()
+            ->assertJsonPath('data.0.id', $b['id'])
+            ->assertJsonPath('data.1.id', $a['id']);
         $this->assertSame($b['id'], $servicio->paraFolios([$folio->id])[$folio->id][0]['id']);
         $this->assertArrayNotHasKey($segundo->id, $servicio->paraFolios([$segundo->id]));
     }

@@ -1,3 +1,4 @@
+import { officeCode, officeStatus } from './shared/folios-display.js';
 import { cameraReferenceLabel } from './shared/camera-display';
 
 const tokenKey = 'estiba_wms_office_token';
@@ -133,14 +134,19 @@ function renderResolution(item) {
 }
 function renderCard(item) {
     const open = item.estado === 'abierta';
-    return `<article class="discrepancy-card discrepancy-card--${open ? 'open' : 'resolved'}">
+    return `<article class="folios-ticket discrepancy-card" data-ticket-area="frigorifico">
         <header class="discrepancy-card__header">
-            <div><small>${escapeHtml(statusText(item.tipo))} · ${escapeHtml(formatDate(item.reportada_at))}</small><h3>${escapeHtml(item.maniobra.titulo)}</h3></div>
-            <span class="discrepancy-status discrepancy-status--${open ? 'open' : 'resolved'}">${escapeHtml(statusText(item.estado))}</span>
+            <div>
+                <small>${escapeHtml(statusText(item.tipo))} · ${escapeHtml(formatDate(item.reportada_at))}</small>
+                <h3>Folio <span class="folios-code">${officeCode(item.folio.numero, escapeHtml)}</span></h3>
+                <p>${escapeHtml(item.maniobra.titulo)}</p>
+            </div>
+            ${officeStatus(statusText(item.estado), open ? 'atencion' : 'listo', escapeHtml)}
         </header>
+        <div class="folios-perforacion" aria-hidden="true"></div>
         <div class="discrepancy-card__grid">
-            <div><span>FOLIO</span><strong>${escapeHtml(item.folio.numero)}</strong><small>${escapeHtml(item.maniobra.plan.titulo)}</small></div>
-            <div><span>PASO ${item.tarea.secuencia ?? '—'}</span><strong>${escapeHtml(statusText(item.tarea.tipo_paso))}</strong><small>${escapeHtml(statusText(item.tarea.estado))}</small></div>
+            <div><span>PLAN</span><strong>${escapeHtml(item.maniobra.plan.titulo)}</strong></div>
+            <div><span>PASO ${escapeHtml(item.tarea.secuencia ?? '—')}</span><strong>${escapeHtml(statusText(item.tarea.tipo_paso))}</strong><small>${escapeHtml(statusText(item.tarea.estado))}</small></div>
             <div><span>ORIGEN</span><strong>${escapeHtml(locationText(item.tarea.origen))}</strong><small>Estado confirmado previo</small></div>
             <div><span>DESTINO</span><strong>${escapeHtml(locationText(item.tarea.destino))}</strong><small>Instrucción cuestionada</small></div>
         </div>
@@ -158,26 +164,41 @@ function render() {
     elements.results.textContent = `${meta.total || 0} ${Number(meta.total) === 1 ? 'registro' : 'registros'}`;
     elements.list.innerHTML = items.length
         ? items.map(renderCard).join('')
-        : '<div class="eui-empty discrepancies-empty"><p class="eui-empty__title">Sin discrepancias para esta selección</p><p class="eui-empty__description">No existen casos que coincidan con los filtros actuales.</p></div>';
+        : '<div class="folios-bandeja__estado"><strong>Sin discrepancias para esta selección</strong><span>Si un camarero reporta una discrepancia, aparecerá aquí cuando coincida con los filtros.</span></div>';
     const current = Number(meta.pagina_actual || 1);
     const last = Number(meta.ultima_pagina || 1);
     elements.page.textContent = `Página ${current} de ${last}`;
     elements.previous.disabled = current <= 1;
     elements.next.disabled = current >= last;
 }
+let listRevision = 0;
+
 async function load() {
+    const revision = ++listRevision;
     setBusy(true);
+    elements.list.setAttribute('aria-busy', 'true');
     elements.error.textContent = '';
     try {
-        state.response = await api(`/api/discrepancias-maniobra?${queryParameters()}`);
+        const response = await api(`/api/discrepancias-maniobra?${queryParameters()}`);
+        if (revision !== listRevision) return;
+        state.response = response;
         render();
     } catch (error) {
+        if (revision !== listRevision) return;
         if (error instanceof ApiError && error.status === 403) {
             window.location.replace('/oficina/accesos');
         } else {
-            elements.error.textContent = error.message;
+            if (!state.response) {
+                elements.list.innerHTML = '<div class="folios-bandeja__estado"><strong>Bandeja sin lectura</strong><span>Pulsa Actualizar para volver a consultar.</span></div>';
+            }
+            elements.error.textContent = state.response ? `${error.message} Se muestra la última lectura disponible.` : error.message;
         }
-    } finally { setBusy(false); }
+    } finally {
+        if (revision === listRevision) {
+            elements.list.removeAttribute('aria-busy');
+            setBusy(false);
+        }
+    }
 }
 async function resolve(form, action) {
     const resolution = String(new FormData(form).get('resolucion') || '').trim();
