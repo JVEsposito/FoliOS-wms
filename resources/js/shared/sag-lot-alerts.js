@@ -34,14 +34,17 @@ function restrictionText(alert) {
     return targets ? 'Despacho restringido a ' + targets : 'Sin restricción de destino';
 }
 
-export function sagLotAlertText(alert) {
-    const estado = alert.estado === 'retenido' && hasDestinationRestrictions(alert)
+function sagLotState(alert) {
+    return alert.estado === 'retenido' && hasDestinationRestrictions(alert)
         ? 'liberado_con_restricciones' : alert.estado;
+}
+
+export function sagLotAlertText(alert, { includeState = true } = {}) {
     return [
         alert.carga && 'Carga ' + alert.carga,
         alert.folio && 'Folio ' + alert.folio,
         'Lote ' + alert.lote,
-        !alert.solo_segregacion && SAG_LOT_STATES[estado],
+        includeState && !alert.solo_segregacion && SAG_LOT_STATES[sagLotState(alert)],
         alert.instructivo_numero && 'Instructivo ' + alert.instructivo_numero,
         !alert.solo_segregacion && restrictionText(alert),
         alert.instruccion_segregacion && 'Segregación indicada · ' + alert.instruccion_segregacion,
@@ -59,16 +62,21 @@ function compactAlerts(alerts) {
     return '<span class="sag-lot-alerts__compact">' + escape([label, ...destinations].join(' · ')) + '</span>';
 }
 
-function alertList(groups) {
+function alertList(groups, stamped) {
     return groups.length ? '<ul>' + groups.map(({ alert, folios }) => {
         const detail = folios.size
             ? '<span class="sag-lot-alerts__folios">' + escape('Folios (' + folios.size + ') · ' + [...folios].join(', ')) + '</span>'
             : '';
-        return '<li>' + escape(sagLotAlertText({ ...alert, folio: null })) + detail + '</li>';
+        const state = sagLotState(alert);
+        const stamp = stamped && !alert.solo_segregacion && SAG_LOT_STATES[state]
+            ? '<strong class="sag-lot-alerts__stamp" data-tone="' + (state === 'retenido' || alert.bloquea_salida ? 'critical' : 'warning')
+                + '">' + escape(SAG_LOT_STATES[state]) + '</strong>'
+            : '';
+        return '<li>' + stamp + escape(sagLotAlertText({ ...alert, folio: null }, { includeState: !stamp })) + detail + '</li>';
     }).join('') + '</ul>' : '';
 }
 
-export function sagLotAlertsHtml(alerts = [], { compact = false } = {}) {
+export function sagLotAlertsHtml(alerts = [], { compact = false, stamped = false } = {}) {
     const active = sagLotOperationalAlerts(alerts);
     if (!active.length) return '';
     if (compact) return compactAlerts(active);
@@ -82,5 +90,5 @@ export function sagLotAlertsHtml(alerts = [], { compact = false } = {}) {
     const ordered = [...groups.values()].sort((a, b) => Number(Boolean(b.alert.bloquea_salida)) - Number(Boolean(a.alert.bloquea_salida)));
 
     return '<div class="sag-lot-alerts" role="alert"><strong>SAG · Control de lotes</strong>'
-        + alertList(ordered) + '</div>';
+        + alertList(ordered, stamped) + '</div>';
 }

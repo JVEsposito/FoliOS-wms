@@ -41,7 +41,7 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         const snapshot = {
             generado_at: now, temporada: { id: 'temp', codigo: 'TEMP-2627', nombre: 'Prueba' },
             jornada: { zona_horaria: 'America/Santiago', turno: 'A' }, sincronizacion: { estado: 'sin_actividad', operaciones_hoy: {} },
-            camaras: [], camareros: [], prefrio: { resumen: { procesos_activos: 0 }, tuneles: [] },
+            camaras: [{ contenido: 'productos', codigo: 'CAM-01', capacidad_operativa: 80, ocupadas: 20 }], camareros: [], prefrio: { resumen: { procesos_activos: 0 }, tuneles: [] },
             incidencias: { resumen: {}, abiertas: [] },
             planificador: { despliegue: { mode_global: 'off' }, salud: { riesgos: {} }, arbitraje: { vigencia: {} } },
             planta: { catalogo: [], elementos: [], conexiones: [], configurado: false },
@@ -96,6 +96,12 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         const summary = page.getByRole('tabpanel', { name: 'Resumen' });
         await summary.getByText('REC-2611-0011').waitFor();
         assert.equal(await summary.locator('#operationOverviewPt').innerText(), '25');
+        assert.equal(await summary.locator('[data-overview-visual="recepcion-mp"] [data-cell="done"]').count(), 1);
+        assert.equal(await summary.locator('[data-overview-visual="despacho"] [data-cell="done"]').count(), 2);
+        assert.equal(await summary.locator('#operationOverviewCold').innerText(), '25 %');
+        assert.equal(await summary.locator('.operation-now-overview__capacity i').evaluate((i) => i.style.inlineSize), '25%');
+        assert.equal(await summary.locator('#operationOverviewReceptionRows .folios-patente').innerText(), 'ABCD12');
+        assert.equal(await page.locator('#operationSagLotAlerts .sag-lot-alerts__stamp').innerText(), 'RETENIDO');
         await summary.getByText('4 pendientes · Lectura parcial').waitFor();
         assert.equal(await summary.locator('[data-gajo-total]').textContent(), '4');
         const focusArea = summary.locator('[data-attention-area="frigorifico"]');

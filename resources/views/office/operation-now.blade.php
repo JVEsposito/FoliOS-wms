@@ -270,12 +270,13 @@
                         <section class="operation-now-panel operation-now-panel--reentry" aria-labelledby="operationReentryTitle">
                             <header class="operation-now-panel__heading">
                                 <div class="operation-now-panel__title">
-                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h13M11 7l5 5-5 5M21 4v16"/></svg>
+                                    <x-folios.gajo area="frigorifico" :size="30" />
                                     <div><h2 id="operationReentryTitle">Reingresos a cámara</h2><span>Pallets que salieron por una carga cancelada, cambiada o retornada</span></div>
                                 </div>
                                 <div class="operation-now-panel__tools"><strong class="operation-now-panel__summary" id="reentryPanelSummary">—</strong></div>
                             </header>
-                            <div class="operation-now-panel__body operation-now-table-scroll">
+                            <div class="operation-now-reentry__empty" id="operationReentryEmpty" hidden></div>
+                            <div class="operation-now-panel__body operation-now-table-scroll" id="operationReentryTable">
                                 <table class="operation-now-table operation-now-table--reentry">
                                     <caption class="office-visually-hidden">Pallets pendientes de volver a una posición de cámara</caption>
                                     <thead><tr><th scope="col">Folio</th><th scope="col">Origen</th><th scope="col">Espera</th><th scope="col">Temperatura</th><th scope="col">Tarea</th></tr></thead>
