@@ -92,6 +92,37 @@ export function renderEntendido(entendido, escape) {
         </div>`;
 }
 
+// Aviso de por qué se respondió sin IA (tope, red, tema sensible). Lo escribe FoliOS.
+export function renderAviso(aviso, escape) {
+    if (!aviso) return '';
+    return `<p class="folios-asistente__aviso" data-tono="atencion"><span aria-hidden="true">◆</span> ${escape(aviso)}</p>`;
+}
+
+// Con Haiku, el pie deja claro que las cifras son de FoliOS, no del modelo.
+export function renderPie(modo, ahora) {
+    if (modo !== 'haiku') return '';
+    const hora = ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `<p class="folios-asistente__pie">Haiku eligió la consulta. Cifras calculadas por FoliOS a las ${hora}.</p>`;
+}
+
+export function renderBotonRecomendacion(indice) {
+    return `<button type="button" class="folios-asistente__recomendar" data-asistente-recomendar="${indice}">Pedir recomendación</button>`;
+}
+
+// La recomendación siempre lleva el aviso fijo de FoliOS, aunque Haiku también lo diga.
+export function renderRecomendacion(datos, escape) {
+    if (datos?.estado !== 'mostrada') {
+        return `<p class="folios-asistente__aviso" data-tono="atencion"><span aria-hidden="true">◆</span> ${escape(datos?.motivo || 'No hay recomendación para esta respuesta.')}</p>`;
+    }
+    const base = (datos.basada_en ?? []).length ? `<p class="folios-asistente__base">Basada en: ${(datos.basada_en ?? []).map((b) => escape(b)).join(', ')}.</p>` : '';
+    return `
+        <section class="folios-asistente__recomendacion" aria-label="Recomendación">
+            <p class="folios-asistente__recomendacion-aviso"><strong>Recomendación.</strong> ${escape(datos.aviso)}</p>
+            <p>${escape(datos.texto)}</p>
+            ${base}
+        </section>`;
+}
+
 const MENSAJE_SUGERENCIAS = 'No estoy seguro de qué consulta quieres. ¿Es alguna de estas?';
 const MENSAJE_SIN_CONSULTA = 'No tengo una consulta para esa pregunta. Puedes buscarla en FoliOS o ver lo que sé responder.';
 

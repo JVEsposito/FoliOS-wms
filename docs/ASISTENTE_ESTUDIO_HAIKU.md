@@ -265,7 +265,7 @@ Supuestos por pregunta: 5.000 tokens de prefijo fijo (sistema y unas 25 herramie
 
 Meta: cero respuestas falsas, es decir, ninguna pregunta respondida con otra consulta, otro periodo o un filtro ignorado. Una sugerencia o una repregunta no cuenta como falla.
 
-1. **Archivo versionado.** `tests/Fixtures/asistente/banco-preguntas.json`, con la pregunta, la consulta esperada, los filtros esperados y la clase.
+1. **Archivo versionado.** `resources/asistente/banco-preguntas.json`, con la pregunta, la consulta esperada, los filtros esperados y la clase.
 2. **Prueba en CI, sin red.** Corre el intérprete por reglas sobre el banco y mide consulta correcta, filtros correctos y respuestas falsas. Falla si aparece una respuesta falsa.
 3. **Haiku en CI, con respuestas grabadas.** Prueban la validación, la traducción de fichas y el armado de la respuesta sin llamar a la API.
 4. **Evaluación con Haiku real, a mano.** `php artisan asistente:evaluar --modo=haiku` corre el banco contra la API e informa las mismas cifras, más tokens y costo reales.

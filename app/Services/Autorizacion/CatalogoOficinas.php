@@ -107,6 +107,7 @@ class CatalogoOficinas
         ['administracion', 'Maestros de temporada', '/oficina/administracion/maestros-temporada', 'administracion.maestros-temporada', ['puede_administrar_catalogos_validacion']],
         ['administracion', 'Configuración de cámaras', '/oficina/administracion/camaras', 'administracion.camaras', ['puede_consultar_configuracion_camaras']],
         ['administracion', 'Salud operacional', '/oficina/administracion/integridad-operacional', 'administracion.integridad-operacional', ['puede_consultar_integridad_operacional']],
+        ['administracion', 'Configuración del asistente', '/oficina/administracion/asistente', 'administracion.asistente-configuracion', ['puede_administrar_asistente']],
         ['administracion', 'Cambio de atributos PT', '/oficina/administracion/atributos-pt', 'administracion.atributos-pt', ['puede_cambiar_atributos_pt']],
         ['administracion', 'Demo comercial', '/oficina/demo', '', ['puede_habilitar_demo']],
         ['administracion', 'Hechos valorizables', '/oficina/finanzas/hechos', 'finanzas.prefactura', ['puede_consultar_finanzas']],

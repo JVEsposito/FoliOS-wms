@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Models\ValidacionMp;
 use App\Models\VariedadValidacion;
 use App\Services\Autorizacion\CatalogoModulosAcceso;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 
 /**
@@ -37,6 +38,13 @@ trait PreparaAsistente
     protected function prepararAsistente(): void
     {
         config(['app.operational_timezone' => 'America/Santiago']);
+        // Las consultas cuentan por jornada (07:00 a 06:59). Con el reloj real, una prueba que
+        // crea datos «hace dos horas» falla si corre entre las 07:00 y las 09:00 de Santiago:
+        // esos datos caen en la jornada anterior. Se fija el mediodía de hoy, salvo que la
+        // prueba ya haya fijado su hora.
+        if (! CarbonImmutable::hasTestNow()) {
+            $this->travelTo(CarbonImmutable::now('America/Santiago')->setTime(12, 0));
+        }
         $this->administrador = User::factory()->create(['rol' => RolUsuario::Administrador, 'activo' => true]);
         $this->temporada = Temporada::query()->where('activa', true)->firstOrFail();
         $this->cliente = Cliente::create(['codigo' => 'ASI', 'nombre' => 'Exportadora Andina', 'activo' => true]);
