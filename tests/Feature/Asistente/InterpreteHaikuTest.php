@@ -121,7 +121,7 @@ class InterpreteHaikuTest extends TestCase
 
     public function test_una_condicion_que_la_consulta_no_cubre_no_se_ejecuta(): void
     {
-        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'envases-recibidos', 'periodo_tipo' => 'jornada', 'desde' => '2026-11-22',
+        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'envases-recibidos', 'vista' => 'recibidos', 'periodo_tipo' => 'jornada', 'desde' => '2026-11-22',
             'pide' => 'totes vacíos que llegaron hoy a Validación MP', 'sin_cubrir' => ['vacíos', 'en Validación MP']]));
 
         $respuesta = $this->preguntar('cuantos totes llegaron vacios hoy en validacion mp')
@@ -130,7 +130,7 @@ class InterpreteHaikuTest extends TestCase
             ->assertJsonPath('data.resultado', null)
             ->assertJsonPath('data.sugerencias.0.clave', 'envases-recibidos');
 
-        $this->assertSame('Lo más cercano que tengo es «Envases recibidos», pero no cubre «vacíos» ni «en Validación MP». ¿Te sirve igual o es alguna de estas?',
+        $this->assertSame('Lo más cercano que tengo es «Envases recibidos · Llegaron con la fruta», pero no cubre «vacíos» ni «en Validación MP». ¿Te sirve igual o es alguna de estas?',
             $respuesta->json('data.mensaje'));
         // El texto de la pregunta no se guarda en el registro de llamadas.
         $llamada = LlamadaIaAsistente::query()->sole();
@@ -163,8 +163,8 @@ class InterpreteHaikuTest extends TestCase
     {
         $casos = [
             'el filtro por cliente' => ['consulta' => 'validaciones-pt', 'periodo_tipo' => 'jornada', 'desde' => '2026-11-19', 'cliente' => 'CLIENTE_1'],
-            'el filtro por especie' => ['consulta' => 'envases-recibidos', 'especie' => 'cereza'],
-            'el detalle por día' => ['consulta' => 'envases-recibidos', 'periodo_tipo' => 'rango', 'desde' => '2026-11-16', 'hasta' => '2026-11-22', 'agrupar_por' => 'jornada'],
+            'el filtro por especie' => ['consulta' => 'envases-recibidos', 'vista' => 'recibidos', 'especie' => 'cereza'],
+            'el detalle por día' => ['consulta' => 'envases-recibidos', 'vista' => 'recibidos', 'periodo_tipo' => 'rango', 'desde' => '2026-11-16', 'hasta' => '2026-11-22', 'agrupar_por' => 'jornada'],
         ];
         $this->haikuRespondeEnOrden(array_map(fn (array $cambio): array => $this->consultar($cambio), array_values($casos)));
 
