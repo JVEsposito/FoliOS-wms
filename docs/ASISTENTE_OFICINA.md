@@ -46,7 +46,7 @@ El asistente es un gajo flotante en la esquina inferior derecha de cada oficina,
 | `expediente-por-codigo` | Lo que la Búsqueda operacional encuentra para un código, más las guías de despacho de envases (`GDE-…` o número de guía) si el usuario ve la cuenta de envases | código | Búsqueda operacional |
 | `camiones-en-planta` | Camiones con su recepción abierta en Romana, con etapa y minutos en planta | cliente (ahora) | Romana |
 | `envases-recibidos` | Bins, totes y otros envases que llegaron con la fruta, por tipo (validado o, si falta, declarado) | periodo, cliente | Romana |
-| `despachos-envases-pendientes` | Guías de despacho de envases en borrador | cliente (ahora) | Cuenta o despacho de envases |
+| `guias-envases` (tema) | Guías de despacho de envases, en tres vistas: `borrador` (por defecto; en borrador, ahora), `confirmadas` (salidas del periodo) y `sin-numero` (confirmadas sin el N° de la guía emitida, ahora) | `borrador` y `sin-numero`: cliente; `confirmadas`: periodo y cliente | Cuenta o despacho de envases |
 | `estado-cargas` | Cargas que todavía no se cierran, con estado y folios asignados | cliente (ahora) | Cargas |
 | `folios-despachados` | Pallets y saldos que salieron en el periodo, por carga, según la salida confirmada | periodo, cliente | Cargas |
 | `prefrio-en-curso` | Procesos de prefrío en curso, con minutos transcurridos y cuánto pasaron su objetivo | ahora | Prefrío |
@@ -72,9 +72,23 @@ El asistente es un gajo flotante en la esquina inferior derecha de cada oficina,
 
 **Si no entiende la pregunta:** propone hasta tres consultas que comparten alguna palabra con ella, ya completadas con lo que reconoció, y un enlace a la Búsqueda operacional. Si ninguna se parece, lo dice y ofrece solo la búsqueda; nunca propone consultas al azar. Cada pregunta queda registrada para ampliar el catálogo.
 
+## Temas y vistas
+
+Una consulta puede ser un **tema** con varias **vistas**. Por ejemplo, «Guías de despacho de envases» tiene las vistas en borrador, confirmadas y sin N° de guía emitida. El diseño completo y las tandas previstas están en [`superpowers/specs/2026-11-23-asistente-consultas-por-tema-design.md`](superpowers/specs/2026-11-23-asistente-consultas-por-tema-design.md).
+
+- **Modelo.** Cada consulta declara sus vistas con `vistas()`. Las consultas que no son temas tienen una sola, `general`, que `ConsultaBase` arma con sus mismos datos. Un tema extiende `ConsultaPorTema`: cada vista trae título, descripción, palabras, filtros, orden y si admite recomendaciones.
+- **Reglas.** Primero eligen el tema, con sus palabras más las palabras sueltas de sus vistas. Después eligen la vista dentro del tema:
+  - una frase de la vista presente en la pregunta («sin confirmar») vale 2;
+  - cada palabra de la pregunta que coincide con una de la vista, 1;
+  - las frases también cuentan para el puntaje del tema;
+  - sin palabras de ninguna vista rige la vista por defecto; si no hay o hay empate, el asistente ofrece las vistas como sugerencias.
+- **Haiku.** `consultar` lleva `vista`, un enum con las vistas visibles más `general`. `general` solo se acepta en un tema de una vista. Cada opción de `pedir_aclaracion` es un par `consulta` y `vista`. FoliOS rechaza una vista que no es del tema o que el usuario no puede ver. Los filtros que se comprueban son los de la vista.
+- **API.** `POST /api/asistente/consultas/{clave}` acepta `vista`. Sin ella rige la vista por defecto; una vista que el tema no tiene responde 422 `regla_de_negocio`. Cada sugerencia lleva su vista en `parametros`, así que el botón ejecuta exactamente lo que ofrece. «Entendí» dice «Tema · Vista».
+- **Permisos.** Una vista exige el permiso de su tema y puede exigir uno mayor (`puedeVer()`). Solo las vistas visibles llegan a las reglas, a Haiku y al catálogo.
+
 ## Banco de preguntas
 
-`resources/asistente/banco-preguntas.json` guarda 60 preguntas reales de la planta, por área, con la consulta que debería responderlas y la que la fase A ejecuta hoy (`responde_hoy`, o `null` si debe preguntar). `BancoPreguntasAsistenteTest` corre en CI y exige cero respuestas falsas: ni otra consulta, ni otro periodo, ni un filtro reconocido sin aviso. Al sumar una consulta, se actualiza `responde_hoy` de las preguntas que pasa a responder. Valle Alto y el CSG 104512 son ejemplos inventados.
+`resources/asistente/banco-preguntas.json` guarda preguntas reales de la planta: las 60 originales y las que suma cada tanda de consultas, numeradas sin saltos, por área, con la consulta que debería responderlas y la que la fase A ejecuta hoy (`responde_hoy`, o `null` si debe preguntar). `BancoPreguntasAsistenteTest` corre en CI y exige cero respuestas falsas: ni otra consulta, ni otro periodo, ni un filtro reconocido sin aviso. Al sumar una consulta, se actualiza `responde_hoy` de las preguntas que pasa a responder. En un tema, la pregunta lleva además `vista`, y elegir otra vista del mismo tema también es una respuesta falsa. Cada vista nueva suma al menos dos preguntas que debe responder y una parecida que no. Valle Alto y el CSG 104512 son ejemplos inventados.
 
 ## Compuerta antes de Haiku
 
@@ -176,8 +190,8 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 | Método y ruta | Permiso | Uso |
 | --- | --- | --- |
 | `POST /api/asistente/preguntas` `{texto}` | usar el asistente | Pregunta en texto libre, de 1 a 500 caracteres. Responde `entendido` (`consulta`, `fichas`, `no_aplicados`) y `resultado`, o `sugerencias` con `mensaje` y `busqueda` |
-| `GET /api/asistente/consultas` | usar el asistente | Catálogo de consultas permitidas para el usuario |
-| `POST /api/asistente/consultas/{clave}` | usar el asistente y el permiso de la consulta | Ejecuta una consulta con `desde` y `hasta` (jornadas), `turno` (`A` o `B`), `periodo` (etiqueta), `cliente_id`, `csg_id`, `especie_id`, `codigo` o `temporada_anterior` o `agrupar` (`dia`). Responde con `entendido` y `resultado` |
+| `GET /api/asistente/consultas` | usar el asistente | Catálogo de consultas permitidas para el usuario, cada una con sus `vistas` visibles |
+| `POST /api/asistente/consultas/{clave}` | usar el asistente y el permiso de la consulta | Ejecuta una consulta con `desde` y `hasta` (jornadas), `turno` (`A` o `B`), `periodo` (etiqueta), `cliente_id`, `csg_id`, `especie_id`, `codigo` o `temporada_anterior` o `agrupar` (`dia`), y `vista` en un tema. Responde con `entendido` y `resultado` |
 | `GET` y `PUT /api/asistente/configuracion` | configurar el asistente | Margen (0,5 a 5), rangos de neto por envase y `modo` (`sin_ia` o `mixto`), `tope_mensual_usd`, `limite_diario_usuario` y `usuarios_piloto`; el `GET` informa el consumo de Haiku y los topes vigentes en `ia` |
 | `GET /api/asistente/preguntas?estado=` | configurar el asistente | Registro de preguntas, con `estado` `respondida`, `sin_datos` o `sugerencias` |
 | `GET /api/asistente/compuerta?dias=` | configurar el asistente | El informe de `asistente:compuerta` (1 a 90 días; 7 por defecto) |
@@ -187,7 +201,7 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 
 ## Agregar una consulta
 
-1. Implementar `App\Services\Asistente\Consultas\ConsultaAsistente`. Lo habitual es extender `ConsultaBase`.
+1. Implementar `App\Services\Asistente\Consultas\ConsultaAsistente`. Lo habitual es extender `ConsultaBase`; un tema con vistas extiende `ConsultaPorTema` y declara `vistasDelTema()`, `palabrasDelTema()`, `ejecutarVista()` y, si hay una lectura obvia, `vistaPorDefecto()`.
 2. Exigir en `puedeEjecutar()` el mismo permiso de la oficina de origen.
 3. Si admite recomendaciones, devolver `true` en `admiteRecomendacion()` y las cifras de planta que vienen al caso en `capacidades()`.
 4. Declarar en `filtros()` solo los filtros que la consulta aplica de verdad (`periodo`, `cliente`, `csg`, `especie`, `codigo`, `por_dia`), y en `palabrasSecundarias()` las palabras que comparte con otra consulta.
