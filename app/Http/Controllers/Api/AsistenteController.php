@@ -47,6 +47,7 @@ class AsistenteController extends Controller
             'temporada_anterior' => ['nullable', 'boolean'],
             'turno' => ['nullable', Rule::in(['A', 'B'])],
             'periodo' => ['nullable', 'string', 'max:80'],
+            'agrupar' => ['nullable', Rule::in(['dia'])],
         ]);
 
         return response()->json(['data' => $this->asistente->ejecutar($request->user(), $clave, ParametrosConsulta::desdeArreglo($datos))]);

@@ -70,6 +70,14 @@ class InterpreteReglasAsistenteTest extends TestCase
         $this->assertNull($this->interpretar($texto)['consulta'], $texto);
     }
 
+    public function test_kilos_por_dia_pide_una_fila_por_jornada(): void
+    {
+        $interpretacion = $this->interpretar('kilos recibidos por dia esta semana');
+
+        $this->assertSame('kilos-recepciones', $interpretacion['consulta']?->clave());
+        $this->assertSame('dia', $interpretacion['parametros']->agrupar);
+    }
+
     public function test_palabras_del_nombre_del_cliente_no_cuentan_como_palabras_clave(): void
     {
         // «Andina» no debe empujar ninguna consulta; «cajas» decide.

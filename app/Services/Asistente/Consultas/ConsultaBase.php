@@ -2,6 +2,8 @@
 
 namespace App\Services\Asistente\Consultas;
 
+use App\Models\Cliente;
+use App\Models\EspecieValidacion;
 use App\Models\Temporada;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\PeriodoOperativo;
@@ -9,6 +11,7 @@ use App\Services\Asistente\TemporadasAsistente;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
+use DateTimeInterface;
 
 /**
  * Base común de las consultas: temporada, rango y formato de fechas en la zona operativa.
@@ -59,9 +62,33 @@ abstract class ConsultaBase implements ConsultaAsistente
         return $parametros->turno ? "{$texto} (turno {$parametros->turno})" : $texto;
     }
 
-    protected function hora(?CarbonImmutable $momento): ?string
+    /**
+     * Nombres con que el producto terminado identifica al cliente: el folio guarda la
+     * exportadora como texto, con su código o su nombre. Null si no hay filtro.
+     *
+     * @return list<string>|null
+     */
+    protected function exportadoras(ParametrosConsulta $parametros): ?array
     {
-        return $momento?->setTimezone(config('app.operational_timezone'))->format('d-m-Y H:i');
+        $cliente = $parametros->clienteId ? Cliente::query()->find($parametros->clienteId, ['codigo', 'nombre']) : null;
+        if (! $cliente) {
+            return null;
+        }
+
+        return array_values(array_filter([mb_strtoupper(trim((string) $cliente->codigo)), mb_strtoupper(trim((string) $cliente->nombre))]));
+    }
+
+    /** Nombre de la especie del filtro, en mayúsculas, para comparar con el texto del folio. */
+    protected function especieTexto(ParametrosConsulta $parametros): ?string
+    {
+        $nombre = $parametros->especieId ? EspecieValidacion::query()->whereKey($parametros->especieId)->value('nombre') : null;
+
+        return $nombre === null ? null : mb_strtoupper(trim((string) $nombre));
+    }
+
+    protected function hora(?DateTimeInterface $momento): ?string
+    {
+        return $momento === null ? null : CarbonImmutable::instance($momento)->setTimezone(config('app.operational_timezone'))->format('d-m-Y H:i');
     }
 
     protected static function minutos(float $minutos): int

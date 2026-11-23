@@ -52,6 +52,7 @@ class InterpreteReglasAsistente
             turno: $entidades['turno'],
             etiquetaPeriodo: $entidades['periodo'],
             periodoExplicito: $entidades['periodo_explicito'],
+            agrupar: $entidades['agrupar'],
         );
         $permitidas = $this->catalogo->disponiblesPara($usuario);
         $base = ['parametros' => $parametros, 'entidades' => $entidades, 'motivo' => null];

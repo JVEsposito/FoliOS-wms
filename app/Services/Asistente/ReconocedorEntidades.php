@@ -35,7 +35,7 @@ class ReconocedorEntidades
      * @return array{desde: CarbonImmutable, hasta: CarbonImmutable, turno: ?string, periodo: ?string,
      *     periodo_explicito: bool, cliente_id: ?string, cliente: ?string, csg_id: ?string, csg: ?string,
      *     especie_id: ?string, especie: ?string, codigo: ?string, temporada_anterior: bool,
-     *     palabras: list<string>, consumidas: list<string>}
+     *     agrupar: ?string, palabras: list<string>, consumidas: list<string>}
      */
     public function reconocer(string $texto): array
     {
@@ -50,6 +50,11 @@ class ReconocedorEntidades
         $csg = $activa ? $this->csg($normalizado, $activa->id, $consumidas) : null;
         $especie = $activa ? $this->especie($palabras, $activa->id, $consumidas) : null;
         $codigo = $this->codigo($texto, $normalizado, $consumidas);
+        // «por día», «día a día», «cada día» o «diario» piden una fila por jornada.
+        $agrupar = preg_match('/\b(por (dia|jornada)|dia a dia|cada dia|diari[oa]s?)\b/', $normalizado) ? 'dia' : null;
+        if ($agrupar !== null) {
+            array_push($consumidas, 'jornada', 'diario', 'diaria', 'diarios', 'diarias');
+        }
 
         return [
             ...$periodo,
@@ -61,6 +66,7 @@ class ReconocedorEntidades
             'especie' => $especie?->nombre,
             'codigo' => $codigo,
             'temporada_anterior' => $temporadaAnterior,
+            'agrupar' => $agrupar,
             'palabras' => $palabras,
             'consumidas' => array_values(array_unique($consumidas)),
         ];

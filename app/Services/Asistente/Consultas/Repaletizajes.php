@@ -6,6 +6,7 @@ use App\Models\Repaletizaje;
 use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ResultadoConsulta;
+use Illuminate\Support\Facades\DB;
 
 /** Repaletizajes confirmados en el periodo, con su folio resultante. */
 class Repaletizajes extends ConsultaBase
@@ -35,6 +36,11 @@ class Repaletizajes extends ConsultaBase
         return ['repa', 'repas', 'repaletizaje', 'repaletizajes', 'repaletizado', 'rearmado'];
     }
 
+    public function filtros(): array
+    {
+        return ['periodo', 'cliente'];
+    }
+
     public function puedeEjecutar(User $usuario): bool
     {
         return $this->alcance->puedeConsultarRepaletizajes($usuario);
@@ -42,14 +48,15 @@ class Repaletizajes extends ConsultaBase
 
     public function ejecutar(User $usuario, ParametrosConsulta $parametros): ResultadoConsulta
     {
+        // fecha_operacional es la jornada; un turno se acota además por la hora de confirmación.
+        [$primera, $ultima] = $parametros->jornadas();
         [$desde, $hasta] = $parametros->rango();
-        $zona = config('app.operational_timezone');
+        $exportadoras = $this->exportadoras($parametros);
         $repas = Repaletizaje::query()
             ->whereNotNull('confirmado_at')->whereNull('anulado_at')
-            ->whereBetween('fecha_operacional', [
-                $desde->setTimezone($zona)->toDateString(),
-                $hasta->setTimezone($zona)->subSecond()->toDateString(),
-            ])
+            ->whereBetween('fecha_operacional', [$primera, $ultima])
+            ->when($parametros->turno, fn ($q) => $q->where('confirmado_at', '>=', $desde)->where('confirmado_at', '<', $hasta))
+            ->when($exportadoras !== null, fn ($q) => $q->whereHas('folioResultante', fn ($f) => $f->whereIn(DB::raw('UPPER(TRIM(exportadora))'), $exportadoras)))
             ->with('folioResultante:id,numero_folio')
             ->orderByDesc('confirmado_at')
             ->get(['id', 'folio_resultante_id', 'cantidad_resultante', 'fecha_operacional', 'confirmado_at']);

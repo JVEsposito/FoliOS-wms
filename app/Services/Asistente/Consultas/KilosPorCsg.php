@@ -46,7 +46,7 @@ class KilosPorCsg extends ConsultaBase
 
     public function filtros(): array
     {
-        return ['periodo', 'cliente', 'csg'];
+        return ['periodo', 'cliente', 'csg', 'especie'];
     }
 
     public function puedeEjecutar(User $usuario): bool
@@ -67,6 +67,7 @@ class KilosPorCsg extends ConsultaBase
             ->where('recepciones_romana.ingreso_at', '>=', $desde)->where('recepciones_romana.ingreso_at', '<', $hasta)
             ->when($parametros->clienteId, fn ($q, $id) => $q->where('lotes_materia_prima.cliente_id', $id))
             ->when($parametros->csgId, fn ($q, $id) => $q->where('lotes_materia_prima.csg_validacion_id', $id))
+            ->when($parametros->especieId, fn ($q, $id) => $q->where('lotes_materia_prima.especie_validacion_id', $id))
             ->groupBy('lotes_materia_prima.csg_snapshot')
             ->selectRaw('lotes_materia_prima.csg_snapshot as csg, count(*) as lotes, sum(lotes_materia_prima.kilos_netos_confirmados) as kilos')
             ->orderByDesc('kilos')

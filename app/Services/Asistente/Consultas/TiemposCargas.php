@@ -6,6 +6,7 @@ use App\Models\Carga;
 use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ResultadoConsulta;
+use Illuminate\Support\Facades\DB;
 
 /** Duración de las cargas cerradas en el periodo, desde su publicación hasta el cierre. */
 class TiemposCargas extends ConsultaBase
@@ -35,6 +36,11 @@ class TiemposCargas extends ConsultaBase
         return ['carga', 'cargas', 'despacho', 'despachos', 'anden', 'carguio', 'embarque', 'tiempo', 'tiempos', 'demora'];
     }
 
+    public function filtros(): array
+    {
+        return ['periodo', 'cliente'];
+    }
+
     public function puedeEjecutar(User $usuario): bool
     {
         return $this->alcance->puedeConsultarCargas($usuario);
@@ -44,10 +50,13 @@ class TiemposCargas extends ConsultaBase
     {
         $temporada = $this->temporada($parametros);
         [$desde, $hasta] = $parametros->rango();
+        $exportadoras = $this->exportadoras($parametros);
         $cargas = $temporada === null ? collect() : Carga::query()
             ->where('temporada_id', $temporada->id)
             ->whereNotNull('publicada_at')
             ->where('cerrada_at', '>=', $desde)->where('cerrada_at', '<', $hasta)
+            // Una carga es del cliente si lleva al menos un folio de su exportadora.
+            ->when($exportadoras !== null, fn ($q) => $q->whereHas('asignacionesHistoricas.folio', fn ($f) => $f->whereIn(DB::raw('UPPER(TRIM(exportadora))'), $exportadoras)))
             ->get(['id', 'codigo', 'publicada_at', 'cerrada_at']);
 
         if ($cargas->isEmpty()) {

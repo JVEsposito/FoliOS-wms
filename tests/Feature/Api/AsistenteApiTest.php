@@ -94,9 +94,9 @@ class AsistenteApiTest extends TestCase
     public function test_filtro_que_la_consulta_no_aplica_se_informa(): void
     {
         $entendido = $this->actingAs($this->administrador, 'sanctum')
-            ->postJson('/api/asistente/preguntas', ['texto' => 'repaletizajes de ayer de exportadora andina'])
+            ->postJson('/api/asistente/preguntas', ['texto' => 'tiempos de prefrio de ayer de exportadora andina'])
             ->assertOk()
-            ->assertJsonPath('data.consulta', 'repaletizajes')
+            ->assertJsonPath('data.consulta', 'tiempos-prefrio')
             ->json('data.entendido');
 
         $this->assertNotContains('Exportadora Andina', $entendido['fichas']);

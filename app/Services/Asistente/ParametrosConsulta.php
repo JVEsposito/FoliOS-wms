@@ -22,6 +22,7 @@ final readonly class ParametrosConsulta
         public ?string $turno = null,
         public ?string $etiquetaPeriodo = null,
         public bool $periodoExplicito = false,
+        public ?string $agrupar = null,
     ) {}
 
     /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
@@ -85,6 +86,7 @@ final readonly class ParametrosConsulta
             turno: $turno,
             etiquetaPeriodo: isset($datos['periodo']) && is_string($datos['periodo']) ? mb_substr($datos['periodo'], 0, 80) : null,
             periodoExplicito: $desde !== null || (bool) ($datos['temporada_anterior'] ?? false),
+            agrupar: ($datos['agrupar'] ?? null) === 'dia' ? 'dia' : null,
         );
     }
 
@@ -103,6 +105,7 @@ final readonly class ParametrosConsulta
             'especie_id' => $this->especieId,
             'codigo' => $this->codigo,
             'temporada_anterior' => $this->temporadaAnterior ?: null,
+            'agrupar' => $this->agrupar,
         ], fn ($valor): bool => $valor !== null);
     }
 }

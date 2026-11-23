@@ -31,7 +31,8 @@ interface ConsultaAsistente
     public function palabrasSecundarias(): array;
 
     /**
-     * Filtros que la consulta aplica de verdad: periodo, cliente, csg, especie o codigo.
+     * Filtros que la consulta aplica de verdad: periodo, cliente, csg, especie, codigo o
+     * por_dia (una fila por jornada).
      * Un filtro reconocido que no está aquí se informa en «Entendí», nunca se ignora en silencio.
      *
      * @return list<string>

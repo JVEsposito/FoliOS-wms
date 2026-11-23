@@ -38,9 +38,10 @@
       "consulta_objetivo": "kilos-recepciones",
       "objetivo": "kilos-recepciones",
       "responde_hoy": "kilos-recepciones",
-      "no_aplicados": [
+      "filtros": [
         "especie"
-      ]
+      ],
+      "clase_resuelta": "PR 3"
     },
     {
       "n": 5,
@@ -368,9 +369,10 @@
       "consulta_objetivo": "repaletizajes",
       "objetivo": "repaletizajes",
       "responde_hoy": "repaletizajes",
-      "no_aplicados": [
+      "filtros": [
         "cliente"
-      ]
+      ],
+      "clase_resuelta": "PR 3"
     },
     {
       "n": 40,
@@ -435,9 +437,10 @@
       "consulta_objetivo": "tiempos-cargas",
       "objetivo": "tiempos-cargas",
       "responde_hoy": "tiempos-cargas",
-      "no_aplicados": [
+      "filtros": [
         "cliente"
-      ]
+      ],
+      "clase_resuelta": "PR 3"
     },
     {
       "n": 47,
