@@ -135,6 +135,37 @@ class CoberturaHaikuTest extends TestCase
         }
     }
 
+    public function test_conserva_la_vista_confirmadas_y_su_periodo_reconocido(): void
+    {
+        $pregunta = 'Guías de envases confirmadas ayer';
+        $entrada = [...$this->entrada($pregunta, 'guias-envases'), 'vista' => 'confirmadas'];
+        Http::fake(['*' => Http::response($this->respuesta('consultar', $entrada))]);
+
+        $resultado = app(InterpreteHaiku::class)->interpretar($this->administrador, $pregunta,
+            app(ReconocedorEntidades::class)->reconocer($pregunta));
+
+        $this->assertSame(InterpreteHaiku::CONSULTA, $resultado['tipo']);
+        $this->assertSame('confirmadas', $resultado['vista']->clave);
+        $this->assertSame('confirmadas', $resultado['parametros']->vista);
+        $this->assertSame(['2026-11-22', '2026-11-22'], $resultado['parametros']->jornadas());
+    }
+
+    public function test_una_vista_sin_periodo_no_ignora_el_dia_que_haiku_omite(): void
+    {
+        $pregunta = 'Guías de envases en borrador ayer';
+        $entrada = [...$this->entrada($pregunta, 'guias-envases'), 'vista' => 'borrador',
+            'periodo_tipo' => 'actual', 'desde' => '', 'hasta' => ''];
+        Http::fake(['*' => Http::response($this->respuesta('consultar', $entrada))]);
+
+        $resultado = app(InterpreteHaiku::class)->interpretar($this->administrador, $pregunta,
+            app(ReconocedorEntidades::class)->reconocer($pregunta));
+
+        $this->assertSame(InterpreteHaiku::PARCIAL, $resultado['tipo']);
+        $this->assertSame('borrador', $resultado['vista']->clave);
+        $this->assertNull($resultado['parametros']);
+        $this->assertStringContainsString('periodo solicitado', implode(' ', $resultado['sin_cubrir']));
+    }
+
     public function test_la_api_no_ejecuta_la_consulta_incorrecta_y_ofrece_aclarar(): void
     {
         $pregunta = '¿Qué falta por validar?';
@@ -226,7 +257,7 @@ class CoberturaHaikuTest extends TestCase
         $explicito = $entidades['periodo_explicito'];
 
         return [
-            'pide' => '', 'consulta' => $consulta, 'sin_cubrir' => [],
+            'pide' => '', 'consulta' => $consulta, 'vista' => 'general', 'sin_cubrir' => [],
             'periodo_tipo' => $explicito ? ($entidades['turno'] ? 'turno' : 'rango') : 'actual',
             'desde' => $explicito ? $periodo->jornada($entidades['desde']) : '',
             'hasta' => $explicito ? $periodo->jornada($entidades['hasta']->subSecond()) : '',

@@ -15,6 +15,7 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: 16px;
+    padding: 14px 18px;
 }
 
 .pending-heading h1 {
@@ -43,6 +44,8 @@
     line-height: 1.5;
 }
 
+.pending-source:empty { display: none; }
+
 .pending-source small {
     display: block;
     margin-top: 2px;
@@ -59,48 +62,6 @@
     background: var(--danger-bg);
 }
 
-.pending-kpis {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 10px;
-}
-
-.pending-kpis article {
-    padding: 14px;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--panel);
-}
-
-.pending-kpis span {
-    display: block;
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 800;
-}
-
-.pending-kpis strong {
-    display: block;
-    margin-top: 6px;
-    font-size: 26px;
-}
-
-.pending-kpis small {
-    color: var(--muted);
-}
-
-.pending-kpi--ok strong {
-    color: var(--success-text);
-}
-
-.pending-kpi--attention strong {
-    color: var(--warning-text);
-}
-
-.pending-kpi--critical strong {
-    color: var(--danger-text);
-}
-
 .pending-search input {
     width: 100%;
     max-width: 520px;
@@ -111,9 +72,8 @@
     padding: 10px 12px;
 }
 
-.pending-panel {
-    padding: 16px;
-}
+.pending-panel-note { margin: 0; color: var(--text-secondary); font-size: .85rem; }
+.pending-empty-cell { color: var(--text-secondary); text-align: center; }
 
 .pending-panel__heading {
     display: flex;
@@ -189,17 +149,9 @@
     font-weight: 800;
 }
 
-.pending-chip--saldo,
-.pending-chip--observado {
+.pending-chip--saldo {
     border-color: var(--amber);
     color: var(--warning-text);
-}
-
-.pending-chip--rechazado,
-.pending-chip--conflicto,
-.pending-chip--anulado {
-    border-color: var(--danger-text);
-    color: var(--danger-text);
 }
 
 .pending-table td .pending-warning {
@@ -231,6 +183,26 @@
 .pending-composition__head {
     grid-template-columns: auto minmax(0, 1fr) auto;
 }
+.pending-composition__head em { grid-column: 3; }
+.pending-box-track, .pending-age-track {
+    display: block;
+    grid-column: 1 / -1;
+    block-size: 5px;
+    inline-size: min(100%, 205px);
+    background: var(--line-soft);
+}
+.pending-box-track i, .pending-age-track i {
+    display: block;
+    block-size: 100%;
+    background: var(--text-secondary);
+}
+.pending-box-track i {
+    background: repeating-linear-gradient(to right,
+        var(--text-secondary) 0 max(0px, calc(var(--box-step) - var(--box-gap))),
+        transparent max(0px, calc(var(--box-step) - var(--box-gap))) var(--box-step));
+}
+.pending-age-track { inline-size: min(100%, 92px); margin-block-start: 5px; }
+
 
 .pending-composition__head span {
     overflow: hidden;
@@ -337,12 +309,6 @@
     overflow-wrap: anywhere;
 }
 
-@media (max-width: 1200px) {
-    .pending-kpis {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-}
-
 @media (max-width: 720px) {
     .pending-workspace {
         padding: 10px;
@@ -352,10 +318,6 @@
     .pending-panel__heading {
         align-items: flex-start;
         flex-direction: column;
-    }
-
-    .pending-kpis {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .pending-differences li {
@@ -422,13 +384,21 @@
     background: var(--overlay);
 }
 .reconciliation-dialog { padding: 18px; }
+.reconciliation-dialog .folios-perforacion { margin-block: 10px; }
+.reconciliation-dialog .folios-estado { color: var(--folios-estado-ink, var(--text-secondary)); }
+.reconciliation-dialog .folios-estado > span { margin-inline-end: .25em; }
 .reconciliation-dialog form {
     display: grid;
     gap: 12px;
     margin: 20px 0;
 }
 .reconciliation-dialog form label { display: grid; gap: 6px; }
-.reconciliation-event { border-top: 1px solid var(--line); padding: 12px 0; }
+#reconciliationHistory { display: grid; gap: 8px; }
+.reconciliation-event { display: grid; grid-template-columns: minmax(4.5rem, 7rem) minmax(0, 1fr); }
+.reconciliation-event .folios-ticket__stub { justify-content: start; padding: 10px 7px; }
+.reconciliation-event time { line-height: 1.4; }
+.reconciliation-event__body { min-inline-size: 0; padding: 10px 12px; overflow-wrap: anywhere; }
+.reconciliation-event__body p { margin-block: 4px; }
 @media (max-width: 600px) {
     .reconciliation-filters label { min-width: 0; flex: 1 1 140px; }
     .reconciliation-dialog { padding: 10px; }

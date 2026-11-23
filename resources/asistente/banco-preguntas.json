@@ -1,5 +1,5 @@
 {
-  "descripcion": "Banco de 60 preguntas reales de planta (docs/ASISTENTE_ESTUDIO_HAIKU.md). responde_hoy es la consulta que la fase A debe ejecutar, o null si debe preguntar. Cualquier otra consulta es una respuesta falsa. Valle Alto y el CSG 104512 son ejemplos inventados.",
+  "descripcion": "Banco de preguntas reales de planta (60 originales y las que suma cada tanda) (docs/ASISTENTE_ESTUDIO_HAIKU.md). responde_hoy es la consulta que la fase A debe ejecutar, o null si debe preguntar; vista, cuando está, es la vista del tema que debe elegir. Cualquier otra consulta es una respuesta falsa. Valle Alto y el CSG 104512 son ejemplos inventados.",
   "preguntas": [
     {
       "n": 1,
@@ -193,10 +193,11 @@
       "area": "Envases",
       "pregunta": "¿Qué despachos de envases siguen en borrador?",
       "clase": "falta_consulta",
-      "consulta_objetivo": "despachos-envases-pendientes",
+      "consulta_objetivo": "guias-envases",
       "objetivo": "despachos de envases",
-      "responde_hoy": "despachos-envases-pendientes",
-      "clase_resuelta": "PR 4 tanda 1"
+      "responde_hoy": "guias-envases",
+      "clase_resuelta": "PR 4 tanda 1",
+      "vista": "borrador"
     },
     {
       "n": 21,
@@ -573,6 +574,58 @@
       "clase": "solo_local",
       "consulta_objetivo": null,
       "objetivo": "prefactura",
+      "responde_hoy": null
+    },
+    {
+      "n": 61,
+      "area": "Envases",
+      "clase": "reglas_bastan",
+      "clase_resuelta": "temas y vistas",
+      "pregunta": "¿Qué guías de envases se confirmaron ayer?",
+      "consulta_objetivo": "guias-envases",
+      "objetivo": "guías confirmadas",
+      "responde_hoy": "guias-envases",
+      "vista": "confirmadas",
+      "periodo_explicito": true
+    },
+    {
+      "n": 62,
+      "area": "Envases",
+      "clase": "reglas_bastan",
+      "clase_resuelta": "temas y vistas",
+      "pregunta": "¿Qué guías de envases faltan por confirmar?",
+      "consulta_objetivo": "guias-envases",
+      "objetivo": "guías en borrador",
+      "responde_hoy": "guias-envases",
+      "vista": "borrador"
+    },
+    {
+      "n": 63,
+      "area": "Envases",
+      "clase": "reglas_bastan",
+      "clase_resuelta": "temas y vistas",
+      "pregunta": "¿Qué guías confirmadas no tienen número de guía emitida?",
+      "consulta_objetivo": "guias-envases",
+      "objetivo": "guías sin N° emitido",
+      "responde_hoy": "guias-envases",
+      "vista": "sin-numero"
+    },
+    {
+      "n": 64,
+      "area": "Envases",
+      "pregunta": "¿Qué guías de envases se anularon esta semana?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "guías anuladas",
+      "responde_hoy": null
+    },
+    {
+      "n": 65,
+      "area": "Despacho",
+      "pregunta": "¿Cuántas salidas hubo hoy?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "salidas ambiguas (fruta o envases)",
       "responde_hoy": null
     }
   ]

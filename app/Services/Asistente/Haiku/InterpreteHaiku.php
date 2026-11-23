@@ -6,6 +6,8 @@ use App\Models\LlamadaIaAsistente;
 use App\Models\User;
 use App\Services\Asistente\CatalogoConsultasAsistente;
 use App\Services\Asistente\Consultas\ConsultaAsistente;
+use App\Services\Asistente\Consultas\VistaConsulta;
+use App\Services\Asistente\OpcionConsulta;
 use App\Services\Asistente\ParametrosConsulta;
 
 /**
@@ -48,11 +50,11 @@ class InterpreteHaiku
     /**
      * @param  array<string, mixed>  $entidades  lo que reconocieron las reglas
      * @return array{tipo: string, consulta: ?ConsultaAsistente, parametros: ?ParametrosConsulta,
-     *     opciones: list<ConsultaAsistente>, motivo: ?string, sin_cubrir: list<string>, pide: ?string, llamada: ?LlamadaIaAsistente}
+     *     vista: ?VistaConsulta, opciones: list<OpcionConsulta>, motivo: ?string, sin_cubrir: list<string>, pide: ?string, llamada: ?LlamadaIaAsistente}
      */
     public function interpretar(User $usuario, string $texto, array $entidades): array
     {
-        $vacio = ['consulta' => null, 'parametros' => null, 'opciones' => [], 'motivo' => null, 'sin_cubrir' => [], 'pide' => null, 'llamada' => null];
+        $vacio = ['consulta' => null, 'vista' => null, 'parametros' => null, 'opciones' => [], 'motivo' => null, 'sin_cubrir' => [], 'pide' => null, 'llamada' => null];
         if ($this->sensible->esSensible($texto)) {
             return [...$vacio, 'tipo' => self::SENSIBLE, 'motivo' => self::SENSIBLE];
         }
@@ -63,7 +65,7 @@ class InterpreteHaiku
         }
 
         $preparada = $this->fichas->preparar($texto, $entidades);
-        $definicion = $this->herramientas->definir($permitidas);
+        $definicion = $this->herramientas->definir($usuario, $permitidas);
         $inicio = hrtime(true);
         try {
             $respuesta = $this->cliente->mensajes([
@@ -89,11 +91,11 @@ class InterpreteHaiku
 
         if ($herramienta === HerramientasHaiku::CONSULTAR) {
             $pide = $this->condicion($entrada['pide'] ?? '', $preparada['fichas'], 200) ?: null;
-            $validada = $this->validador->validar($entrada, $permitidas, $preparada['fichas'], $preparada['texto'], $entidades);
+            $validada = $this->validador->validar($entrada, $permitidas, $preparada['fichas'], $usuario, $preparada['texto'], $entidades);
             if (is_string($validada)) {
                 $elegida = collect($permitidas)->first(fn (ConsultaAsistente $c): bool => $c->clave() === ($entrada['consulta'] ?? null));
 
-                return [...$vacio, 'tipo' => self::INVALIDA, 'motivo' => $validada, 'opciones' => $elegida ? [$elegida] : [], 'pide' => $pide,
+                return [...$vacio, 'tipo' => self::INVALIDA, 'motivo' => $validada, 'opciones' => $elegida ? [new OpcionConsulta($elegida)] : [], 'pide' => $pide,
                     'llamada' => $registrar(LlamadaIaAsistente::OK, $entrada['consulta'] ?? null, 'rechazada: '.$validada)];
             }
 
@@ -109,20 +111,25 @@ class InterpreteHaiku
             }
             if ($sinCubrir !== []) {
                 // El registro guarda cuántas condiciones faltaron, nunca el texto de la pregunta.
-                return [...$vacio, 'tipo' => self::PARCIAL, 'consulta' => $validada['consulta'], 'opciones' => [$validada['consulta']],
+                return [...$vacio, 'tipo' => self::PARCIAL, 'consulta' => $validada['consulta'], 'vista' => $validada['vista'],
+                    'opciones' => [new OpcionConsulta($validada['consulta'], $validada['vista'])],
                     'sin_cubrir' => $sinCubrir, 'pide' => $pide,
                     'llamada' => $registrar(LlamadaIaAsistente::OK, $validada['consulta']->clave(), 'parcial: '.count($sinCubrir).' sin cubrir')];
             }
 
-            return [...$vacio, 'tipo' => self::CONSULTA, 'consulta' => $validada['consulta'], 'parametros' => $validada['parametros'], 'pide' => $pide,
+            return [...$vacio, 'tipo' => self::CONSULTA, 'consulta' => $validada['consulta'], 'vista' => $validada['vista'], 'parametros' => $validada['parametros'], 'pide' => $pide,
                 'llamada' => $registrar(LlamadaIaAsistente::OK, $validada['consulta']->clave())];
         }
         if ($herramienta === HerramientasHaiku::ACLARAR) {
-            $claves = array_column(array_filter((array) ($entrada['opciones'] ?? []), 'is_array'), 'consulta');
-            $opciones = array_values(array_filter($permitidas, fn (ConsultaAsistente $c): bool => in_array($c->clave(), $claves, true)));
-            usort($opciones, fn ($a, $b): int => array_search($a->clave(), $claves, true) <=> array_search($b->clave(), $claves, true));
+            $opciones = [];
+            foreach (array_filter((array) ($entrada['opciones'] ?? []), 'is_array') as $par) {
+                $opcion = $this->opcion($usuario, $permitidas, $par);
+                if ($opcion !== null) {
+                    $opciones[$opcion->clave()] = $opcion;
+                }
+            }
 
-            return [...$vacio, 'tipo' => self::ACLARACION, 'opciones' => array_slice($opciones, 0, 4), 'llamada' => $registrar(LlamadaIaAsistente::OK)];
+            return [...$vacio, 'tipo' => self::ACLARACION, 'opciones' => array_slice(array_values($opciones), 0, 4), 'llamada' => $registrar(LlamadaIaAsistente::OK)];
         }
         if ($herramienta === HerramientasHaiku::SIN_CONSULTA) {
             $motivo = (string) ($entrada['motivo'] ?? 'dato_no_disponible');
@@ -133,6 +140,26 @@ class InterpreteHaiku
         $llamada = $registrar(LlamadaIaAsistente::ERROR, detalle: 'respuesta sin herramienta');
 
         return [...$vacio, 'tipo' => self::NO_DISPONIBLE, 'motivo' => FallaHaiku::RESPUESTA, 'llamada' => $llamada];
+    }
+
+    /**
+     * Un par tema y vista de una aclaración, o null si el tema no está en el catálogo del
+     * usuario, la vista no es del tema o el usuario no la puede ver.
+     *
+     * @param  list<ConsultaAsistente>  $permitidas
+     * @param  array<string, mixed>  $par
+     */
+    private function opcion(User $usuario, array $permitidas, array $par): ?OpcionConsulta
+    {
+        $consulta = collect($permitidas)->first(fn (ConsultaAsistente $c): bool => $c->clave() === ($par['consulta'] ?? null));
+        if ($consulta === null) {
+            return null;
+        }
+        $clave = (string) ($par['vista'] ?? VistaConsulta::GENERAL);
+        // En una aclaración, «general» en un tema de varias vistas ofrece su vista por defecto.
+        $vista = $consulta->vista($clave === VistaConsulta::GENERAL && count($consulta->vistas()) > 1 ? null : $clave);
+
+        return $vista !== null && $consulta->puedeVer($usuario, $vista) ? new OpcionConsulta($consulta, $vista) : null;
     }
 
     /**

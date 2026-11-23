@@ -23,7 +23,15 @@ final readonly class ParametrosConsulta
         public ?string $etiquetaPeriodo = null,
         public bool $periodoExplicito = false,
         public ?string $agrupar = null,
+        public ?string $vista = null,
     ) {}
+
+    /** Los mismos parámetros con otra vista del tema. */
+    public function conVista(?string $vista): self
+    {
+        return new self($this->desde, $this->hasta, $this->clienteId, $this->csgId, $this->especieId, $this->codigo,
+            $this->temporadaAnterior, $this->turno, $this->etiquetaPeriodo, $this->periodoExplicito, $this->agrupar, $vista);
+    }
 
     /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
     public function rango(): array
@@ -87,6 +95,7 @@ final readonly class ParametrosConsulta
             etiquetaPeriodo: isset($datos['periodo']) && is_string($datos['periodo']) ? mb_substr($datos['periodo'], 0, 80) : null,
             periodoExplicito: $desde !== null || (bool) ($datos['temporada_anterior'] ?? false),
             agrupar: ($datos['agrupar'] ?? null) === 'dia' ? 'dia' : null,
+            vista: is_string($datos['vista'] ?? null) && preg_match('/^[a-z0-9-]{1,40}$/', $datos['vista']) ? $datos['vista'] : null,
         );
     }
 
@@ -106,6 +115,7 @@ final readonly class ParametrosConsulta
             'codigo' => $this->codigo,
             'temporada_anterior' => $this->temporadaAnterior ?: null,
             'agrupar' => $this->agrupar,
+            'vista' => $this->vista,
         ], fn ($valor): bool => $valor !== null);
     }
 }

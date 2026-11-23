@@ -1,3 +1,4 @@
+import { officeCode, officeStatus, palletCells } from './shared/folios-display.js';
 import { showOfficeToast } from './office-toast.js';
 import { createUuid } from './shared/uuid.js';
 
@@ -13,6 +14,7 @@ const state = {
     catalogs: { bloques: [], paises: [], tipos_aprobacion: [], tipos_lote: [] },
     options: {},
     lots: [],
+    lotsLoaded: false,
     eligibleFolios: [],
     selectedFolioIds: new Set(),
     selectedDestinationValues: new Set(),
@@ -214,30 +216,46 @@ function destinationPills(destinations) {
     return (destinations || []).map((destination) => `<span class="sag-pill">${escapeHtml(destination.codigo)} · ${escapeHtml(destination.nombre)}</span>`).join('') || '—';
 }
 
-function statePill(status) {
-    const modifier = ['finalizado'].includes(status) ? 'active' : (status === 'cancelado' ? 'danger' : 'warning');
-    return `<span class="sag-pill sag-pill--${modifier}">${escapeHtml(humanize(status))}</span>`;
-}
+const inspectionGlyphs = {
+    preparacion: 'pendiente', en_inspeccion: 'en-curso', resultado_parcial: 'atencion',
+    finalizado: 'listo', cancelado: 'bloqueado', pendiente: 'pendiente', resuelto: 'listo',
+};
+const inspectionState = (status) => officeStatus(humanize(status), inspectionGlyphs[status], escapeHtml);
+const lotTables = [
+    ['recentLotsBody', 'Los lotes de inspección aparecerán aquí al registrarlos.'],
+    ['activeLotsBody', 'No hay lotes en preparación o inspección.'],
+    ['historyLotsBody', 'Los lotes finalizados o cancelados aparecerán aquí.'],
+];
+const emptyLots = (text) => `<tr><td colspan="7"><div class="folios-bandeja__estado">${text}</div></td></tr>`;
 
 function actionSelect(lot) {
     const options = [`<option value="">Seleccionar acción</option>`, `<option value="view">Ver detalle</option>`];
     if (canManage() && lot.estado === 'preparacion') options.push('<option value="start">Iniciar inspección</option>');
     if (canManage() && ['en_inspeccion', 'resultado_parcial'].includes(lot.estado)) options.push('<option value="finish">Finalizar lote</option>');
     if (canManage() && !['finalizado', 'cancelado'].includes(lot.estado)) options.push('<option value="cancel">Cancelar lote</option>');
-    return `<select class="lot-action" data-lot-id="${lot.id}" aria-label="Acciones de ${escapeHtml(lot.codigo)}">${options.join('')}</select>`;
+    return `<select class="lot-action" data-lot-id="${escapeHtml(lot.id)}" aria-label="Acciones de ${escapeHtml(lot.codigo)}">${options.join('')}</select>`;
 }
 
 function lotRow(lot, dateField = 'creado_at') {
-    return `<tr><td><strong>${escapeHtml(lot.codigo)}</strong><br><small>SAG: ${escapeHtml(lot.numero_inspeccion_sag || 'Sin número')}</small><br><small>${escapeHtml(lot.referencia_correo || 'Sin referencia')}</small></td><td>${escapeHtml(humanize(lot.tipo))}</td><td>${statePill(lot.estado)}</td><td>${escapeHtml(lot.cantidad_folios)}</td><td>${destinationPills(lot.destinos)}</td><td>${dateTime(lot[dateField] || lot.creado_at)}${lot.creado_por ? `<br><small>${escapeHtml(lot.creado_por)}</small>` : ''}</td><td>${actionSelect(lot)}</td></tr>`;
+    return `<tr>
+        <td><b class="folios-code">${officeCode(lot.codigo, escapeHtml)}</b><br><small>SAG: ${escapeHtml(lot.numero_inspeccion_sag || 'Sin número')}</small>
+            ${lot.referencia_correo ? `<br><small>${escapeHtml(lot.referencia_correo)}</small>` : ''}</td>
+        <td>${escapeHtml(humanize(lot.tipo))}</td>
+        <td>${inspectionState(lot.estado)}</td>
+        <td class="folios-code">${escapeHtml(lot.cantidad_folios)}</td>
+        <td>${destinationPills(lot.destinos)}</td>
+        <td>${dateTime(lot[dateField])}${lot.creado_por ? `<br><small>${escapeHtml(lot.creado_por)}</small>` : ''}</td>
+        <td>${actionSelect(lot)}</td>
+    </tr>`;
 }
 
 function renderLots() {
     const active = state.lots.filter((lot) => !['finalizado', 'cancelado'].includes(lot.estado));
     const history = state.lots.filter((lot) => ['finalizado', 'cancelado'].includes(lot.estado));
-    const empty = '<tr><td colspan="7" class="empty-cell">No hay registros para mostrar.</td></tr>';
-    document.getElementById('recentLotsBody').innerHTML = state.lots.slice(0, 8).map((lot) => lotRow(lot)).join('') || empty;
-    document.getElementById('activeLotsBody').innerHTML = active.map((lot) => lotRow(lot)).join('') || empty;
-    document.getElementById('historyLotsBody').innerHTML = history.map((lot) => lotRow(lot, 'finalizado_at')).join('') || empty;
+    const lists = [state.lots.slice(0, 8), active, history];
+    lotTables.forEach(([id, empty], index) => {
+        document.getElementById(id).innerHTML = lists[index].map(lot => lotRow(lot, index === 2 ? 'finalizado_at' : 'creado_at')).join('') || emptyLots(empty);
+    });
 }
 
 function dateTime(value) {
@@ -262,7 +280,13 @@ const WORKSPACE_SOURCES = [
     } },
     { path: '/inspeccion-sag/lotes?per_page=100', label: 'los lotes', render(lots) {
         state.lots = lots?.data || [];
+        state.lotsLoaded = true;
         renderLots();
+    }, onError() {
+        if (state.lotsLoaded) return;
+        lotTables.forEach(([id]) => {
+            document.getElementById(id).innerHTML = emptyLots('Lotes sin lectura. Usa «Actualizar» para reintentar.');
+        });
     } },
 ];
 let workspaceVersion = 0;
@@ -306,6 +330,7 @@ async function loadWorkspace() {
             value = await withTimeout(source.path);
         } catch (error) {
             if (version !== workspaceVersion) return;
+            source.onError?.();
             failures[index] = { label: source.label, message: error?.message || 'Error desconocido.' };
             renderLoadErrors(failures.filter(Boolean));
             return;
@@ -426,33 +451,47 @@ async function createLot(event) {
         state.selectedFolioIds.clear();
         state.selectedDestinationValues.clear();
         renderDestinationOptions();
-        await openLot(lot.id);
+        await openLot(lot.id, true);
         selectPanel(lot.estado === 'finalizado' ? 'historial' : 'activos');
         toast(`${lot.codigo} creado correctamente.`);
     } catch (error) { elements.builderError.textContent = error.message; toast(error.message, true); }
 }
 
 function selectPanel(panel) {
-    document.querySelectorAll('[data-sag-panel]').forEach((button) => button.classList.toggle('is-active', button.dataset.sagPanel === panel));
+    document.querySelectorAll('[data-sag-panel]').forEach((button) => {
+        const active = button.dataset.sagPanel === panel;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', String(active));
+    });
     document.querySelectorAll('[data-sag-section]').forEach((section) => section.classList.toggle('is-hidden', section.dataset.sagSection !== panel));
 }
 
-async function openLot(id) {
+let detailVersion = 0;
+
+async function openLot(id, focus = false) {
+    const version = ++detailVersion;
     elements.detailError.textContent = '';
-    state.selectedLot = await api(`/inspeccion-sag/lotes/${id}`);
-    const lot = state.selectedLot;
+    const lot = await api(`/inspeccion-sag/lotes/${encodeURIComponent(id)}`);
+    if (version !== detailVersion) return;
+    state.selectedLot = lot;
     const link = document.getElementById('sagDocumentLink');
     link.classList.toggle('is-hidden', lot.tipo !== 'cambio_mercado' || capabilities().puede_consultar_contraparte_sag !== true);
     link.href = `/oficina/frigorifico/contraparte-sag?lote=${encodeURIComponent(lot.id)}`;
-    document.getElementById('sagDetailTitle').textContent = `${lot.codigo} · ${humanize(lot.tipo)}`;
-    document.getElementById('sagDetailSubtitle').textContent = `${humanize(lot.estado)} · ${lot.cantidad_folios} pallets · SAG ${lot.numero_inspeccion_sag || 'sin número'} · creado ${dateTime(lot.creado_at)}`;
+    const title = document.getElementById('sagDetailTitle');
+    title.innerHTML = officeCode(lot.codigo, escapeHtml);
+    document.getElementById('sagDetailType').textContent = humanize(lot.tipo);
+    document.getElementById('sagDetailStatus').innerHTML = inspectionState(lot.estado);
+    document.getElementById('sagDetailSubtitle').textContent = `${lot.cantidad_folios} pallets · SAG ${lot.numero_inspeccion_sag || 'sin número'} · creado ${dateTime(lot.creado_at)}`;
     document.getElementById('sagDetailDestinations').innerHTML = destinationPills(lot.destinos);
     renderPreparation(lot);
     renderDetailActions(lot);
     renderLotMembershipControls(lot);
     renderResults(lot);
     elements.detail.classList.remove('is-hidden');
-    elements.detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (focus) {
+        title.focus({ preventScroll: true });
+        elements.detail.scrollIntoView({ block: 'start' });
+    }
 }
 
 function preparationSector(sector) {
@@ -471,7 +510,7 @@ function renderPreparation(lot) {
     if (!visible) { box.innerHTML = ''; return; }
     const target = capacity.pallets_objetivo ?? lot.cantidad_folios;
     box.innerHTML = capacity.capacidad_estado === 'reservada'
-        ? `<strong>Sector SAG reservado</strong><span>${preparationSector(capacity.sector)}</span><span>${capacity.pallets_preparados ?? 0} de ${target} ${target === 1 ? 'pallet' : 'pallets'} en su posición. Los traslados pendientes se publican a los camareros; los pallets en prefrío, al aprobarse su proceso.</span>`
+        ? `<strong>Sector SAG reservado</strong><span>${preparationSector(capacity.sector)}</span><span>${capacity.pallets_preparados ?? 0} de ${target} ${target === 1 ? 'pallet' : 'pallets'} en su posición. Los traslados pendientes se publican a los camareros; los pallets en prefrío, al aprobarse su proceso.</span>${palletCells(target, capacity.pallets_preparados ?? 0)}`
         : `<strong>Sector SAG pendiente: no se publican traslados</strong><span>${escapeHtml(capacity.motivo_capacidad_pendiente || 'Aún no hay espacio reservado para este lote.')}</span><span>Se vuelve a intentar cada minuto. Libera espacio en las bandas de inspección o ajusta los pallets del lote.</span>`;
 }
 
@@ -491,9 +530,9 @@ function renderResults(lot) {
     const approvalOptions = state.catalogs.tipos_aprobacion.map((type) => `<option value="${type.value}">${escapeHtml(type.value)} · ${escapeHtml(type.label)}</option>`).join('');
     document.getElementById('sagResultList').innerHTML = lot.folios.map((entry) => `<article class="sag-result-card">
         <div class="sag-result-card__heading">
-            <div><strong>${escapeHtml(entry.folio.numero)}</strong><p>${escapeHtml(entry.folio.cliente || '—')} · ${escapeHtml(entry.folio.especie || '—')} · ${escapeHtml(entry.folio.variedad || '—')}</p><p>${formatBoxes(entry.folio.cantidad_cajas)} cajas · CSG ${escapeHtml(entry.folio.csg || '—')}</p><div>${folioLocation(entry.folio)}</div><p>Condición térmica: ${escapeHtml(humanize(entry.folio.condicion_termica) || '—')}</p></div>
+            <div><b class="folios-code">${officeCode(entry.folio.numero, escapeHtml)}</b><p>${escapeHtml(entry.folio.cliente || '—')} · ${escapeHtml(entry.folio.especie || '—')} · ${escapeHtml(entry.folio.variedad || '—')}</p><p>${formatBoxes(entry.folio.cantidad_cajas)} cajas · CSG ${escapeHtml(entry.folio.csg || '—')}</p><div>${folioLocation(entry.folio)}</div><p>Condición térmica: ${escapeHtml(humanize(entry.folio.condicion_termica) || '—')}</p></div>
             ${canManage() && lot.estado === 'preparacion' ? `<button class="secondary-button" type="button" data-remove-sag-folio="${escapeHtml(entry.folio.id)}" ${state.editingLot || lot.folios.length < 2 ? 'disabled' : ''}>Quitar del lote</button>` : ''}
-            <span class="sag-pill ${entry.estado === 'resuelto' ? 'sag-pill--active' : 'sag-pill--warning'}">${escapeHtml(humanize(entry.estado))}</span>
+            ${inspectionState(entry.estado)}
         </div>
         <div class="sag-result-grid">${entry.resultados.map((result) => {
             const approvalDisabled = fixedApproval || !editable || result.resultado !== 'aprobado';
@@ -523,9 +562,9 @@ function renderResults(lot) {
 
 async function executeLotAction(id, action) {
     if (!action) return;
-    if (action === 'view') { await openLot(id); return; }
     if (action === 'cancel' && !window.confirm('¿Cancelar este lote? Las aprobaciones ya emitidas se conservarán.')) return;
     try {
+        if (action === 'view') { await openLot(id, true); return; }
         await api(`/inspeccion-sag/lotes/${id}/${action === 'start' ? 'iniciar' : action === 'finish' ? 'finalizar' : 'cancelar'}`, { method: 'POST' });
         await loadWorkspace();
         await openLot(id);
@@ -578,11 +617,12 @@ async function saveResult(button) {
     if (decision === 'pendiente') { elements.detailError.textContent = 'Selecciona un resultado definitivo o salida sin resolución.'; return; }
     if (decision === 'aprobado' && !approval) { elements.detailError.textContent = 'Selecciona AO, AU o AF para aprobar.'; return; }
     try {
-        await api(`/inspeccion-sag/lotes/${state.selectedLot.id}/resultados/${row.dataset.resultId}/resolver`, {
+        const id = state.selectedLot.id;
+        await api(`/inspeccion-sag/lotes/${id}/resultados/${row.dataset.resultId}/resolver`, {
             method: 'POST', body: JSON.stringify({ resultado: decision, tipo_aprobacion: decision === 'aprobado' ? approval : null }),
         });
         await loadWorkspace();
-        await openLot(state.selectedLot.id);
+        if (state.selectedLot?.id === id) await openLot(id);
         toast('Resultado de inspección guardado.');
     } catch (error) { elements.detailError.textContent = error.message; toast(error.message, true); }
 }
@@ -631,7 +671,12 @@ document.addEventListener('change', async (event) => {
 });
 document.getElementById('sagResultList').addEventListener('click', (event) => { const button = event.target.closest('[data-save-result]'); if (button) saveResult(button); });
 elements.detailActions.addEventListener('change', async () => { const action = elements.detailActions.value; elements.detailActions.value = ''; await executeLotAction(state.selectedLot.id, action); });
-document.getElementById('closeSagDetailButton').addEventListener('click', () => elements.detail.classList.add('is-hidden'));
+document.getElementById('closeSagDetailButton').addEventListener('click', () => {
+    detailVersion++;
+    state.selectedLot = null;
+    elements.detail.classList.add('is-hidden');
+    document.querySelector('[data-sag-panel].is-active')?.focus();
+});
 document.getElementById('reloadSagButton').addEventListener('click', () => {
     loadWorkspace().catch((error) => renderLoadErrors([{ label: 'la pantalla', message: error.message }]));
 });

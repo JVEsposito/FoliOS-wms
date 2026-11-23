@@ -9,5 +9,6 @@
         <span class="folios-ticket__rotulo">{{ $rotulo }}</span>
         <strong class="folios-ticket__valor" id="{{ $valorId }}">{{ $valor }}</strong>
         @if ($detalle)<small>{{ $detalle }}</small>@endif
+        {{ $slot }}
     </div>
 </article>

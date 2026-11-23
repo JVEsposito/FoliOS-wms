@@ -69,6 +69,38 @@ for (const width of [1280, 390]) test(`la composición por CSG, lote y proceso s
         assert.match(await page.locator('#pendingBody tr').first().innerText(), /Saldo[\s\S]*Observado\s+cantidad cajas incorrecta/);
         assert.match(await page.locator('#pendingBody tr').last().innerText(), /Sin intento/);
         assert.equal(await page.locator('#pendingBody tr:first-child td').count(), 6);
+        assert.equal(await page.locator('#pendingBody tr:first-child [data-estado="atencion"]').count(), 1);
+        assert.equal(await page.locator('#pendingBody tr:last-child .pending-number strong').innerText(), '0170');
+        assert.equal(await page.locator('#pendingBody .pending-age-track').count(), 2);
+        assert.deepEqual(await groups.first().locator('[data-boxes]').evaluateAll(cells => cells.map(cell => Number(cell.dataset.boxes))), [72, 24, 48]);
+        assert.ok(Math.abs(await groups.first().locator('[data-boxes="72"]').evaluate(el => parseFloat(el.style.inlineSize)) - 72 / 168 * 100) < .001);
+
+        if (width === 1280) {
+            const theme = page.getByRole('combobox', { name: 'Tema de Oficina' });
+            const colors = new Map();
+            for (const key of ['light-professional', 'dark-industrial', 'light-professional', 'dark-industrial']) {
+                await theme.selectOption(key);
+                await page.waitForFunction(expected => document.documentElement.dataset.officeTheme === expected, key);
+                const palette = await page.locator('#pending-validation-panel-pending').evaluate(panel => {
+                    const status = panel.querySelector('.folios-estado[data-estado="atencion"]');
+                    const background = getComputedStyle(status.closest('td')).backgroundColor;
+                    const ink = getComputedStyle(status).color;
+                    const luminance = (color) => color.match(/\d+/g).slice(0, 3).map(channel => {
+                        const n = Number(channel) / 255;
+                        return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4;
+                    }).reduce((sum, n, i) => sum + n * [.2126, .7152, .0722][i], 0);
+                    const bg = luminance(background);
+                    const fg = luminance(ink);
+                    const boxes = getComputedStyle(panel.querySelector('[data-boxes="72"]')).backgroundImage;
+                    return { surface: getComputedStyle(panel).backgroundColor, ink, boxes, contrast: (Math.max(bg, fg) + .05) / (Math.min(bg, fg) + .05) };
+                });
+                assert.ok(palette.contrast >= 4.5, key);
+                if (colors.has(key)) assert.deepEqual(palette, colors.get(key));
+                colors.set(key, palette);
+            }
+            assert.notEqual(colors.get('light-professional').surface, colors.get('dark-industrial').surface);
+            assert.notEqual(colors.get('light-professional').boxes, colors.get('dark-industrial').boxes);
+        }
 
         await page.locator('#pendingSearch').fill('Observado');
         assert.deepEqual(await page.locator('#pendingBody .pending-number').allTextContents(), [previousShift.numero]);

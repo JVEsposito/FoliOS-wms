@@ -8,7 +8,7 @@ use App\Models\EspecieValidacion;
 use App\Services\Asistente\Consultas\ConsultaAsistente;
 
 /**
- * La línea «Entendí» de cada respuesta: qué consulta se ejecutó, con qué periodo y qué
+ * La línea «Entendí» de cada respuesta: qué consulta (y vista) se ejecutó, con qué periodo y qué
  * filtros. Un filtro reconocido que la consulta no aplica se dice aquí, para que nadie
  * lea una cifra como filtrada cuando no lo está.
  */
@@ -17,7 +17,8 @@ class LineaEntendido
     /** @return array{consulta: string, fichas: list<string>, no_aplicados: list<string>} */
     public function construir(ConsultaAsistente $consulta, ParametrosConsulta $parametros): array
     {
-        $filtros = $consulta->filtros();
+        $vista = $consulta->vista($parametros->vista);
+        $filtros = $vista?->filtros ?? $consulta->filtros();
         $fichas = [];
         $noAplicados = [];
 
@@ -65,6 +66,6 @@ class LineaEntendido
             $fichas[] = 'Código '.$parametros->codigo;
         }
 
-        return ['consulta' => $consulta->titulo(), 'fichas' => $fichas, 'no_aplicados' => $noAplicados];
+        return ['consulta' => (new OpcionConsulta($consulta, $vista))->titulo(), 'fichas' => $fichas, 'no_aplicados' => $noAplicados];
     }
 }

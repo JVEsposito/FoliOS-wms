@@ -99,7 +99,8 @@ test('cuadraturas muestra cuatro diferencias, filtra y conserva el mismo envío 
         assert.equal(await page.locator('#reconciliationManagement textarea').isDisabled(), true);
         await page.locator('#reconciliationClose').click(); assert.equal(await page.locator('#reconciliationDialog').evaluate((e) => e.open), true);
         await page.locator('#reconciliationRetry').click();
-        await page.waitForFunction(() => document.querySelector('#reconciliationTitle').textContent.includes('En revisión'));
+        await page.locator('#reconciliationRecordState [data-estado="en-curso"]').waitFor();
+        assert.equal(await page.locator('#reconciliationTitle .folios-code strong').textContent(), '0123');
         assert.equal(writes.length, 2); assert.deepEqual(writes[0], writes[1]); assert.ok(writes[0].operacion_id);
         assert.equal(await page.locator('#reconciliationHistory article').count(), 1);
         assert.equal(await page.locator('#reconciliationPending').isVisible(), false);

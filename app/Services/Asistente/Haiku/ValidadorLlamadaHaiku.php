@@ -3,7 +3,9 @@
 namespace App\Services\Asistente\Haiku;
 
 use App\Models\EspecieValidacion;
+use App\Models\User;
 use App\Services\Asistente\Consultas\ConsultaAsistente;
+use App\Services\Asistente\Consultas\VistaConsulta;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\PeriodoOperativo;
 use App\Services\Asistente\TemporadasAsistente;
@@ -15,7 +17,7 @@ use App\Services\Temporadas\ServicioTemporadaActiva;
  * existentes, especie de la temporada, fechas válidas y periodo coherente. Si algo no
  * calza, no se ejecuta: el asistente repregunta.
  *
- * Además informa qué filtros pedidos no admite la consulta elegida (un cliente en una
+ * Además informa qué filtros pedidos no admite la vista elegida (un cliente en una
  * consulta sin cliente, otro día en una existencia): ejecutarla los ignoraría en
  * silencio, así que el asistente ofrece la consulta y dice qué no cubre.
  */
@@ -36,9 +38,9 @@ class ValidadorLlamadaHaiku
      * @param  list<ConsultaAsistente>  $permitidas
      * @param  array<string, array{tipo: string, id: string, etiqueta: string}>  $fichas
      * @param  array<string, mixed>  $entidades  periodo y filtros que FoliOS reconoció en la pregunta
-     * @return array{consulta: ConsultaAsistente, parametros: ParametrosConsulta, sin_cubrir: list<string>, incompatibilidad: ?string}|string la llamada validada o el motivo del rechazo
+     * @return array{consulta: ConsultaAsistente, vista: VistaConsulta, parametros: ParametrosConsulta, sin_cubrir: list<string>, incompatibilidad: ?string}|string la llamada validada o el motivo del rechazo
      */
-    public function validar(array $entrada, array $permitidas, array $fichas, string $pregunta, array $entidades): array|string
+    public function validar(array $entrada, array $permitidas, array $fichas, User $usuario, string $pregunta, array $entidades): array|string
     {
         $consulta = null;
         foreach ($permitidas as $permitida) {
@@ -48,6 +50,15 @@ class ValidadorLlamadaHaiku
         }
         if ($consulta === null) {
             return 'la consulta elegida no está en tu catálogo';
+        }
+        // «general» solo vale en un tema de una vista; en uno de varias, la vista hay que elegirla.
+        $clave = (string) ($entrada['vista'] ?? VistaConsulta::GENERAL);
+        $vista = $clave === VistaConsulta::GENERAL && count($consulta->vistas()) > 1 ? null : $consulta->vista($clave);
+        if ($vista === null) {
+            return 'la vista elegida no es de esa consulta';
+        }
+        if (! $consulta->puedeVer($usuario, $vista)) {
+            return 'no tienes acceso a esa vista';
         }
 
         $cliente = $this->ficha($entrada['cliente'] ?? '', 'cliente', $fichas);
@@ -75,11 +86,12 @@ class ValidadorLlamadaHaiku
             etiquetaPeriodo: $periodo['etiqueta'],
             periodoExplicito: $periodo['explicito'],
             agrupar: ($entrada['agrupar_por'] ?? 'nada') === 'jornada' ? 'dia' : null,
+            vista: $vista->clave,
         );
 
-        return ['consulta' => $consulta, 'parametros' => $parametros,
-            'sin_cubrir' => $this->filtrosSinCubrir($consulta, $parametros),
-            'incompatibilidad' => $this->cobertura->impedimento($consulta, $pregunta, $parametros, $entidades)];
+        return ['consulta' => $consulta, 'vista' => $vista, 'parametros' => $parametros,
+            'sin_cubrir' => $this->filtrosSinCubrir($vista, $parametros),
+            'incompatibilidad' => $this->cobertura->impedimento($consulta, $vista, $pregunta, $parametros, $entidades)];
     }
 
     /**
@@ -88,9 +100,9 @@ class ValidadorLlamadaHaiku
      *
      * @return list<string>
      */
-    private function filtrosSinCubrir(ConsultaAsistente $consulta, ParametrosConsulta $parametros): array
+    private function filtrosSinCubrir(VistaConsulta $vista, ParametrosConsulta $parametros): array
     {
-        $admite = fn (string $filtro): bool => in_array($filtro, $consulta->filtros(), true);
+        $admite = fn (string $filtro): bool => in_array($filtro, $vista->filtros, true);
         $otroDia = $parametros->temporadaAnterior || ($parametros->periodoExplicito && $parametros->jornadas()[1] < $this->periodo->jornada());
 
         return array_keys(array_filter([

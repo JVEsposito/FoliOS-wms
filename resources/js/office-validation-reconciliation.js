@@ -1,7 +1,10 @@
+import { officeCode, officeStatus } from './shared/folios-display.js';
 import { createUuid } from './shared/uuid.js';
 const $ = (id) => document.getElementById(id);
 const root = '/api/validacion/pendientes-origen/conciliaciones';
 const labels = { pendiente: 'Pendiente de cuadratura', en_revision: 'En revisión', cuadrado: 'Cuadrado', reabierto: 'Reabierto', sin_diferencias: 'Sin diferencias', por_revisar: 'Por revisar' };
+const glyphs = { pendiente: 'pendiente', en_revision: 'en-curso', cuadrado: 'listo', reabierto: 'atencion', sin_diferencias: 'listo', por_revisar: 'atencion' };
+const recordStatus = (state) => officeStatus(labels[state] || state, glyphs[state], escape);
 const contexts = { vigente: 'Validación vigente', validacion_anulada: 'Validación anulada', salida_o_transformacion: 'Salida o transformación posterior', folio_modificado: 'Folio modificado después de validar' };
 // Después de un repaletizaje o una salida se conserva la copia de planta anterior al cambio.
 const plantSource = (c) => c.contexto_actual === 'vigente' ? `Planta: ${date(c.lectura_at)}`
@@ -39,9 +42,14 @@ export async function loadReconciliations(page = 1) {
         $('reconciliationCheck').hidden = !manageable;
         $('reconciliationStatus').textContent = `${r.data.casos.total} conciliaciones con estos filtros. ${r.data.fuente.vigente ? 'Lectura de planta vigente.' : 'Lectura sin vigencia confirmada: revisar antes de cuadrar.'}`;
         if (r.data.fuente.conciliacion_pendiente) $('reconciliationStatus').textContent += ' Hay conciliaciones pendientes: usa Registrar / recomprobar conciliaciones.';
-        $('reconciliationBody').innerHTML = r.data.casos.data.map((c) => `<tr><td><b class="pending-number">${escape(c.numero_folio)}</b><small>${escape(c.validacion_inicial.usuario)} · ${date(c.validado_at)}</small></td><td><strong>${escape(labels[c.estado])}</strong><small>${escape(contexts[c.contexto_actual])}</small>${plantNote(c)}</td><td>${fields(c.comparacion)}</td><td><button type="button" class="secondary-button" data-reconciliation="${escape(c.id)}">Ver seguimiento</button></td></tr>`).join('') || '<tr><td colspan="4">No hay conciliaciones con estos filtros. Una lectura correcta o una recomprobación incorpora las validaciones existentes.</td></tr>';
+        $('reconciliationBody').innerHTML = r.data.casos.data.map((c) => `<tr><td><span class="pending-number folios-code">${officeCode(c.numero_folio, escape)}</span><small>${escape(c.validacion_inicial.usuario)} · ${date(c.validado_at)}</small></td><td>${recordStatus(c.estado)}<small>${escape(contexts[c.contexto_actual])}</small>${plantNote(c)}</td><td>${fields(c.comparacion)}</td><td><button type="button" class="secondary-button" data-reconciliation="${escape(c.id)}">Ver seguimiento</button></td></tr>`).join('') || '<tr><td colspan="4">No hay conciliaciones con estos filtros. Una lectura correcta o una recomprobación incorpora las validaciones existentes.</td></tr>';
         pages('reconciliationPages', r.data.casos, (p) => void loadReconciliations(p));
-    } catch (error) { if (revision === generation) $('reconciliationStatus').textContent = error.message; }
+    } catch (error) {
+        if (revision !== generation) return;
+        $('reconciliationStatus').textContent = error.message;
+        const loading = $('reconciliationBody').querySelector('.pending-empty-cell');
+        if (loading) loading.textContent = 'Cuadraturas sin lectura.';
+    }
 }
 async function open(id, page = 1) {
     if (pending || working) return;
@@ -51,12 +59,13 @@ async function open(id, page = 1) {
         if (revision !== detailGeneration) return;
         if (!r.ok) throw new Error(r.data.message || 'No se pudo abrir la conciliación.');
         current = r.data;
-        $('reconciliationTitle').textContent = `${current.numero_folio} · ${labels[current.estado]}`;
+        $('reconciliationTitle').innerHTML = `Folio <span class="folios-code">${officeCode(current.numero_folio, escape)}</span>`;
+        $('reconciliationRecordState').innerHTML = recordStatus(current.estado);
         $('reconciliationDetailNotice').textContent = '';
         $('reconciliationDetail').innerHTML = `<p>${escape(contexts[current.contexto_actual])} · ${escape(plantSource(current))}</p>${current.contexto_actual === 'vigente' && !current.comprobacion_vigente ? '<p class="pending-warning">Esta comparación requiere revisión o una lectura vigente.</p>' : ''}${fields(current.comparacion)}<details><summary>Respaldo inicial conservado</summary><p>${current.captura === 'registro_servidor' ? 'Copia disponible al registrar en el servidor' : 'Primera comparación posterior a la validación'} · ${escape(current.validacion_inicial.usuario)} · validado ${date(current.validado_at)}</p><p>Planta inicial: ${date(current.planta_inicial?.leida_at)}</p>${original(current)}</details>`;
         $('reconciliationManagement').hidden = !manageable || !current.gestion_habilitada;
         if (page === 1) $('reconciliationManagement').reset();
-        $('reconciliationHistory').innerHTML = current.historial.data.map((e) => `<article class="reconciliation-event"><strong>${escape(({ captura: 'Respaldo inicial', comprobacion: 'Comprobación', correccion_validacion: 'Validación corregida con autorización', revisar: 'Tomado en revisión', gestionada: 'Corrección informada en planta', ajuste_regla: 'Comparación restituida a la copia validada' })[e.tipo] || e.tipo)} · ${date(e.created_at)}</strong><p>${escape(e.usuario_nombre || 'Comprobación del sistema')}</p><p>${escape(e.comentario || '')} ${escape(e.referencia || '')}</p>${e.datos.despues?.comparacion ? `<details><summary>Valores comprobados en este evento</summary>${fields(e.datos.despues.comparacion)}<p>Lectura: ${date(e.datos.lectura_at)}</p></details>` : ''}</article>`).join('');
+        $('reconciliationHistory').innerHTML = current.historial.data.map((e) => `<article class="reconciliation-event folios-ticket" data-ticket-area="frigorifico"><div class="folios-ticket__stub"><time datetime="${escape(e.created_at)}">${date(e.created_at)}</time></div><div class="reconciliation-event__body"><strong>${escape(({ captura: 'Respaldo inicial', comprobacion: 'Comprobación', correccion_validacion: 'Validación corregida con autorización', revisar: 'Tomado en revisión', gestionada: 'Corrección informada en planta', ajuste_regla: 'Comparación restituida a la copia validada' })[e.tipo] || e.tipo)}</strong><p>${escape(e.usuario_nombre || 'Comprobación del sistema')}</p><p>${escape(e.comentario || '')} ${escape(e.referencia || '')}</p>${e.datos.despues?.comparacion ? `<details><summary>Valores comprobados en este evento</summary>${fields(e.datos.despues.comparacion)}<p>Lectura: ${date(e.datos.lectura_at)}</p></details>` : ''}</div></article>`).join('');
         pages('reconciliationHistoryPages', current.historial, (p) => void open(id, p));
         if (!$('reconciliationDialog').open) $('reconciliationDialog').showModal();
     } catch (error) { notice(error.message, true); }

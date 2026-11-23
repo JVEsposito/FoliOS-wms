@@ -3,6 +3,7 @@
 namespace App\Services\Asistente\Haiku;
 
 use App\Services\Asistente\Consultas\ConsultaAsistente;
+use App\Services\Asistente\Consultas\VistaConsulta;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\PeriodoOperativo;
 use App\Services\Asistente\TextoNormalizado;
@@ -27,10 +28,10 @@ class CoberturaConsultaHaiku
     }
 
     /** @param array<string, mixed> $entidades reconocidas por FoliOS antes de llamar a Haiku */
-    public function impedimento(ConsultaAsistente $consulta, string $pregunta, ParametrosConsulta $parametros, array $entidades): ?string
+    public function impedimento(ConsultaAsistente $consulta, VistaConsulta $vista, string $pregunta, ParametrosConsulta $parametros, array $entidades): ?string
     {
         $texto = TextoNormalizado::de($pregunta);
-        $filtros = $consulta->filtros();
+        $filtros = $vista->filtros;
         foreach (['cliente' => 'clienteId', 'csg' => 'csgId', 'especie' => 'especieId'] as $filtro => $campo) {
             $reconocido = $entidades[$filtro.'_id'] ?? null;
             if (($parametros->$campo !== null || $reconocido !== null) && ! in_array($filtro, $filtros, true)) {

@@ -14,10 +14,12 @@ use Tests\Concerns\PreparaAsistente;
 use Tests\TestCase;
 
 /**
- * Banco de 60 preguntas reales de la planta (resources/asistente/banco-preguntas.json).
+ * Banco de preguntas reales de la planta (resources/asistente/banco-preguntas.json): las 60
+ * originales y las que suma cada tanda de consultas.
  * La regla es una sola: ninguna respuesta falsa. El intérprete ejecuta la consulta que el
  * banco espera hoy, o pregunta; nunca otra consulta, otro periodo ni un filtro callado.
- * Al sumar una consulta nueva, se actualiza responde_hoy en el banco.
+ * Al sumar una consulta nueva, se actualiza responde_hoy en el banco. En un tema con vistas,
+ * elegir otra vista también es una respuesta falsa.
  */
 class BancoPreguntasAsistenteTest extends TestCase
 {
@@ -53,16 +55,23 @@ class BancoPreguntasAsistenteTest extends TestCase
         return $casos;
     }
 
-    public function test_el_banco_tiene_60_preguntas_numeradas_y_consultas_que_existen(): void
+    public function test_el_banco_tiene_al_menos_60_preguntas_numeradas_y_consultas_y_vistas_que_existen(): void
     {
         $banco = json_decode((string) file_get_contents(self::BANCO), true, flags: JSON_THROW_ON_ERROR)['preguntas'];
-        $claves = array_map(fn ($consulta) => $consulta->clave(), app(CatalogoConsultasAsistente::class)->todas());
+        $catalogo = app(CatalogoConsultasAsistente::class);
 
-        $this->assertCount(60, $banco);
-        $this->assertSame(range(1, 60), array_column($banco, 'n'));
+        $this->assertGreaterThanOrEqual(60, count($banco));
+        $this->assertSame(range(1, count($banco)), array_column($banco, 'n'));
         foreach ($banco as $pregunta) {
-            if ($pregunta['responde_hoy'] !== null) {
-                $this->assertContains($pregunta['responde_hoy'], $claves, "Pregunta {$pregunta['n']}");
+            if ($pregunta['responde_hoy'] === null) {
+                $this->assertArrayNotHasKey('vista', $pregunta, "Pregunta {$pregunta['n']}");
+
+                continue;
+            }
+            $consulta = $catalogo->buscar($pregunta['responde_hoy']);
+            $this->assertNotNull($consulta, "Pregunta {$pregunta['n']}");
+            if (isset($pregunta['vista'])) {
+                $this->assertContains($pregunta['vista'], array_map(fn ($v) => $v->clave, $consulta->vistas()), "Pregunta {$pregunta['n']}");
             }
         }
     }
@@ -81,6 +90,9 @@ class BancoPreguntasAsistenteTest extends TestCase
         }
 
         $parametros = $interpretacion['parametros'];
+        if (isset($caso['vista'])) {
+            $this->assertSame($caso['vista'], $parametros->vista, "{$mensaje}: vista");
+        }
         $entendido = app(LineaEntendido::class)->construir($consulta, $parametros);
         if (array_key_exists('turno', $caso)) {
             $this->assertSame($caso['turno'], $parametros->turno, $mensaje);
