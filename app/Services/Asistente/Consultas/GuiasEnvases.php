@@ -63,7 +63,7 @@ class GuiasEnvases extends ConsultaPorTema
             new VistaConsulta('borrador', 'En borrador', 'Guías de despacho de envases en borrador, armadas pero sin salida confirmada, con su cliente y patente.',
                 ['borrador', 'borradores', 'pendiente', 'pendientes', 'por confirmar', 'sin confirmar', 'faltan por confirmar', 'falta confirmar'], ['cliente']),
             new VistaConsulta('confirmadas', 'Confirmadas', 'Guías de despacho de envases confirmadas en el periodo, por su hora de salida.',
-                ['confirmada', 'confirmadas', 'confirmaron', 'confirmo', 'salida', 'salidas'], ['periodo', 'cliente']),
+                ['confirmada', 'confirmadas', 'confirmaron', 'confirmo'], ['periodo', 'cliente']),
             new VistaConsulta('sin-numero', 'Sin N° de guía emitida', 'Guías ya confirmadas que todavía no tienen registrado el N° de la guía emitida.',
                 ['numero', 'numeros', 'emitida', 'emitidas', 'registrar', 'sin numero'], ['cliente']),
         ];

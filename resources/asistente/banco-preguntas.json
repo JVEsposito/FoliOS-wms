@@ -618,6 +618,15 @@
       "consulta_objetivo": null,
       "objetivo": "guías anuladas",
       "responde_hoy": null
+    },
+    {
+      "n": 65,
+      "area": "Despacho",
+      "pregunta": "¿Cuántas salidas hubo hoy?",
+      "clase": "falta_consulta",
+      "consulta_objetivo": null,
+      "objetivo": "salidas ambiguas (fruta o envases)",
+      "responde_hoy": null
     }
   ]
 }
