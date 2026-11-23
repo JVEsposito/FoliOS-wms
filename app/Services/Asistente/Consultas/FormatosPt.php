@@ -26,7 +26,12 @@ class FormatosPt extends ConsultaProductoTerminado
 
     public function palabrasClave(): array
     {
-        return ['formato', 'formatos', 'embalaje', 'embalajes', 'envase', 'envases'];
+        return ['formato', 'formatos', 'embalaje', 'embalajes'];
+    }
+
+    public function palabrasSecundarias(): array
+    {
+        return ['cajas', 'caja', 'envase', 'envases'];
     }
 
     public function ejecutar(User $usuario, ParametrosConsulta $parametros): ResultadoConsulta

@@ -9,8 +9,9 @@ use App\Services\Asistente\Consultas\ConsultaAsistente;
 
 /**
  * Responde las preguntas del asistente (fase A: sin IA) y deja registro de cada una.
- * Si no entiende, propone consultas ya completadas con lo reconocido y la búsqueda
- * operacional; nunca termina en blanco.
+ * Cada respuesta trae la línea «Entendí» con la consulta, el periodo y los filtros.
+ * Si no entiende, propone solo consultas parecidas ya completadas con lo reconocido,
+ * más la búsqueda operacional; si ninguna se parece, lo dice en vez de inventar.
  */
 class ServicioAsistente
 {
@@ -19,11 +20,12 @@ class ServicioAsistente
     public function __construct(
         private readonly InterpreteReglasAsistente $interprete,
         private readonly CatalogoConsultasAsistente $catalogo,
+        private readonly LineaEntendido $entendido,
     ) {}
 
     /**
-     * @return array{tipo: string, modo: string, resultado: ?array, consulta: ?string,
-     *     sugerencias: list<array{clave: string, titulo: string, descripcion: string, parametros: array}>, busqueda: string}
+     * @return array{tipo: string, modo: string, resultado: ?array, consulta: ?string, entendido?: array,
+     *     sugerencias: list<array{clave: string, titulo: string, descripcion: string, parametros: array}>, busqueda: string, mensaje?: string}
      */
     public function preguntar(User $usuario, string $texto): array
     {
@@ -39,6 +41,7 @@ class ServicioAsistente
                 'tipo' => 'respuesta',
                 'modo' => self::MODO,
                 'consulta' => $consulta->clave(),
+                'entendido' => $this->entendido->construir($consulta, $parametros),
                 'resultado' => $resultado->toArray(),
                 'sugerencias' => [],
                 'busqueda' => '',
@@ -46,9 +49,13 @@ class ServicioAsistente
         }
 
         $this->registrar($usuario, $texto, null, $parametros, 'sugerencias', $interpretacion['confianza']);
+        $mensaje = $interpretacion['alternativas'] === []
+            ? 'No tengo una consulta para esa pregunta. Puedes buscarla en FoliOS o ver lo que sé responder.'
+            : 'No estoy seguro de qué consulta quieres. ¿Es alguna de estas?';
 
         return [
             'tipo' => 'sugerencias',
+            'mensaje' => $mensaje,
             'modo' => self::MODO,
             'consulta' => null,
             'resultado' => null,
@@ -62,14 +69,21 @@ class ServicioAsistente
         ];
     }
 
-    public function ejecutar(User $usuario, string $clave, ParametrosConsulta $parametros): ResultadoConsulta
+    /** @return array{tipo: string, modo: string, consulta: string, entendido: array, resultado: array} */
+    public function ejecutar(User $usuario, string $clave, ParametrosConsulta $parametros): array
     {
         $consulta = $this->catalogo->buscar($clave);
         if ($consulta === null || ! $consulta->puedeEjecutar($usuario)) {
             throw new OperacionNoAutorizada('No tienes acceso a esa consulta del asistente.');
         }
 
-        return $consulta->ejecutar($usuario, $parametros);
+        return [
+            'tipo' => 'respuesta',
+            'modo' => self::MODO,
+            'consulta' => $clave,
+            'entendido' => $this->entendido->construir($consulta, $parametros),
+            'resultado' => $consulta->ejecutar($usuario, $parametros)->toArray(),
+        ];
     }
 
     /** @return list<array{clave: string, titulo: string, descripcion: string, dominio: string}> */

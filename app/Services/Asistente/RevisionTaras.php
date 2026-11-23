@@ -156,8 +156,7 @@ class RevisionTaras
             return [];
         }
 
-        $anterior = Temporada::query()->where('id', '!=', $temporada->id)
-            ->where('created_at', '<', $temporada->created_at)->latest('created_at')->value('id');
+        $anterior = app(TemporadasAsistente::class)->anterior($temporada)?->id;
         $codigos = $lotes->map(fn (array $par): ?string => $par[1]->csg_snapshot)->filter()->unique()->values();
         $historia = LoteMateriaPrima::query()
             ->whereIn('temporada_id', array_filter([$temporada->id, $anterior]))

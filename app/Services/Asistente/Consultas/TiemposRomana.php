@@ -35,6 +35,11 @@ class TiemposRomana extends ConsultaBase
         return 'materia-prima';
     }
 
+    public function filtros(): array
+    {
+        return ['periodo', 'cliente'];
+    }
+
     public function palabrasClave(): array
     {
         return ['tiempo', 'tiempos', 'demora', 'demoro', 'planta', 'destare', 'espera', 'esperando', 'romana', 'camion', 'camiones', 'minutos', 'horas'];

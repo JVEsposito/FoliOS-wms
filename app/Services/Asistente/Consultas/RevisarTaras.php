@@ -47,6 +47,11 @@ class RevisarTaras extends ConsultaBase
         return 'materia-prima';
     }
 
+    public function filtros(): array
+    {
+        return ['periodo', 'cliente'];
+    }
+
     public function palabrasClave(): array
     {
         return ['tara', 'taras', 'destare', 'destares', 'destara', 'revisa', 'revisar', 'revision', 'error', 'errores', 'raro', 'raros', 'sospechoso', 'esponja', 'esponjas', 'tote', 'totes', 'promedio'];

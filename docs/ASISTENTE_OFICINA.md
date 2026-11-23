@@ -32,24 +32,33 @@ El asistente es un gajo flotante en la esquina inferior derecha de cada oficina,
 
 ## Qué responde
 
-| Consulta (clave) | Responde | Permiso (oficina de origen) |
-| --- | --- | --- |
-| `tiempos-romana` | Tiempo en planta por camión, espera de destare y los 10 más lentos | Romana |
-| `kilos-recepciones` | Kilos brutos, tara y netos de las recepciones cerradas, por cliente | Romana |
-| `kilos-por-csg` | Kilos netos por CSG según los lotes de materia prima | Materia prima |
-| `revisar-taras` | Posibles errores de tara o destare (ver abajo) | Romana |
-| `cajas-pt` | Cajas y folios en existencia por cliente y especie | Existencias PT |
-| `formatos-pt` | Cajas en existencia por formato de embalaje | Existencias PT |
-| `saldos-pt` | Saldos vigentes con cajas, cámara y posición | Existencias PT |
-| `repaletizajes` | Repas confirmados en el periodo, con su folio resultante | Repaletizajes |
-| `tiempos-prefrio` | Duración de procesos finalizados contra su objetivo | Prefrío |
-| `tiempos-cargas` | Duración de las cargas, desde la publicación hasta el cierre | Cargas |
-| `consumos-ot` | Consumo y merma por orden de trabajo | Consumos por OT |
-| `expediente-por-codigo` | Lo que la Búsqueda operacional encuentra para un código | Búsqueda operacional |
+| Consulta (clave) | Responde | Filtros que aplica | Permiso (oficina de origen) |
+| --- | --- | --- | --- |
+| `tiempos-romana` | Tiempo en planta por camión, espera de destare y los 10 más lentos | periodo, cliente | Romana |
+| `kilos-recepciones` | Kilos brutos, tara y netos de las recepciones cerradas, por cliente | periodo, cliente | Romana |
+| `kilos-por-csg` | Kilos netos por CSG según los lotes de materia prima | periodo, cliente, CSG | Materia prima |
+| `revisar-taras` | Posibles errores de tara o destare (ver abajo) | periodo, cliente | Romana |
+| `cajas-pt` | Cajas y folios en existencia por cliente y especie | cliente (existencia actual) | Existencias PT |
+| `formatos-pt` | Cajas en existencia por formato de embalaje | cliente (existencia actual) | Existencias PT |
+| `saldos-pt` | Saldos vigentes con cajas, cámara y posición | cliente (existencia actual) | Existencias PT |
+| `repaletizajes` | Repas confirmados en el periodo, con su folio resultante | periodo | Repaletizajes |
+| `tiempos-prefrio` | Duración de procesos finalizados contra su objetivo | periodo | Prefrío |
+| `tiempos-cargas` | Duración de las cargas, desde la publicación hasta el cierre | periodo | Cargas |
+| `consumos-ot` | Consumo y merma por orden de trabajo | periodo, cliente | Consumos por OT |
+| `expediente-por-codigo` | Lo que la Búsqueda operacional encuentra para un código, más las guías de despacho de envases (`GDE-…` o número de guía) si el usuario ve la cuenta de envases | código | Búsqueda operacional |
 
-**Periodo:** por defecto es la jornada de hoy. Se reconocen «hoy», «ayer», «esta semana», «la semana pasada», «este mes», «el mes pasado», una fecha (`22-11` o `22/11/2026`) o un rango de dos fechas. «Temporada pasada» consulta la temporada anterior a la activa.
+**Periodo:** se cuenta en jornadas operativas, de 07:00 a 06:59 del día siguiente en la zona de la planta (la misma regla de `CalendarioOperativo`). A las 03:00, «hoy» sigue siendo la jornada que empezó ayer a las 07:00. Por defecto es la jornada en curso. Se reconocen:
 
-**Si no entiende la pregunta:** propone las tres consultas más parecidas, ya completadas con lo que reconoció, y un enlace a la Búsqueda operacional. Cada pregunta queda registrada para ampliar el catálogo.
+- «hoy», «ayer», «anteayer», «mañana», «pasado mañana», un día de la semana («el jueves», «el domingo pasado»), «esta semana», «la semana pasada», «este mes», «el mes pasado», una fecha (`22-11` o `22/11/2026`) o un rango de dos fechas;
+- turnos de una sola jornada: «turno A», «turno B», «turno noche», «esta mañana» (turno A) y «anoche» (el turno B que terminó; durante el turno B, el que está en curso). Sin regla de turnos configurada, el turno A va de 07:00 a 19:00 y el B de 19:00 a 07:00;
+- «la temporada» o «esta temporada»: desde la primera jornada de la temporada activa hasta hoy;
+- «temporada pasada» o «temporada anterior»: la temporada productiva anterior a la activa, completa si no se nombra otra fecha.
+
+**Línea «Entendí»:** cada respuesta empieza con la consulta que se ejecutó, el periodo y los filtros que se aplicaron, y un botón **Corregir** que devuelve la pregunta al cuadro. Si la pregunta nombra un filtro que la consulta no aplica (por ejemplo un cliente en `repaletizajes`, o una fecha en una consulta de existencia actual), se avisa con ◆: la cifra nunca se presenta como filtrada si no lo está.
+
+**Cuándo responde:** el intérprete sin IA ignora las palabras vacías y las que ya reconoció como periodo, cliente, CSG, especie o código. Responde solo si una consulta explica al menos el 60 % de las palabras restantes y ninguna otra empata con ella. Las palabras que comparten dos consultas (por ejemplo «cajas» en `formatos-pt`, «kilos» en `kilos-por-csg`) cuentan la mitad para la consulta secundaria.
+
+**Si no entiende la pregunta:** propone hasta tres consultas que comparten alguna palabra con ella, ya completadas con lo que reconoció, y un enlace a la Búsqueda operacional. Si ninguna se parece, lo dice y ofrece solo la búsqueda; nunca propone consultas al azar. Cada pregunta queda registrada para ampliar el catálogo.
 
 ## Revisión de tara y destare
 
@@ -68,9 +77,9 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 
 | Método y ruta | Permiso | Uso |
 | --- | --- | --- |
-| `POST /api/asistente/preguntas` `{texto}` | usar el asistente | Pregunta en texto libre, de 1 a 500 caracteres |
+| `POST /api/asistente/preguntas` `{texto}` | usar el asistente | Pregunta en texto libre, de 1 a 500 caracteres. Responde `entendido` (`consulta`, `fichas`, `no_aplicados`) y `resultado`, o `sugerencias` con `mensaje` y `busqueda` |
 | `GET /api/asistente/consultas` | usar el asistente | Catálogo de consultas permitidas para el usuario |
-| `POST /api/asistente/consultas/{clave}` | usar el asistente y el permiso de la consulta | Ejecuta una consulta con `desde`, `hasta`, `cliente_id`, `csg_id`, `especie_id`, `codigo` o `temporada_anterior` |
+| `POST /api/asistente/consultas/{clave}` | usar el asistente y el permiso de la consulta | Ejecuta una consulta con `desde` y `hasta` (jornadas), `turno` (`A` o `B`), `periodo` (etiqueta), `cliente_id`, `csg_id`, `especie_id`, `codigo` o `temporada_anterior`. Responde con `entendido` y `resultado` |
 | `GET` y `PUT /api/asistente/configuracion` | configurar el asistente | Margen (0,5 a 5) y rangos de neto por envase |
 | `GET /api/asistente/preguntas?estado=` | configurar el asistente | Registro de preguntas, con `estado` `respondida`, `sin_datos` o `sugerencias` |
 
@@ -78,8 +87,9 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 
 1. Implementar `App\Services\Asistente\Consultas\ConsultaAsistente`. Lo habitual es extender `ConsultaBase`.
 2. Exigir en `puedeEjecutar()` el mismo permiso de la oficina de origen.
-3. Sumarla a `AsistenteServiceProvider::CONSULTAS`.
-4. Si falta un cálculo, agregarlo en el servicio del dominio, no en la consulta.
+3. Declarar en `filtros()` solo los filtros que la consulta aplica de verdad (`periodo`, `cliente`, `csg`, `especie`, `codigo`), y en `palabrasSecundarias()` las palabras que comparte con otra consulta.
+4. Sumarla a `AsistenteServiceProvider::CONSULTAS`.
+5. Si falta un cálculo, agregarlo en el servicio del dominio, no en la consulta.
 
 ## Datos
 

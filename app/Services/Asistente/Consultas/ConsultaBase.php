@@ -4,6 +4,8 @@ namespace App\Services\Asistente\Consultas;
 
 use App\Models\Temporada;
 use App\Services\Asistente\ParametrosConsulta;
+use App\Services\Asistente\PeriodoOperativo;
+use App\Services\Asistente\TemporadasAsistente;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
@@ -23,7 +25,17 @@ abstract class ConsultaBase implements ConsultaAsistente
         return false;
     }
 
-    /** Temporada activa, o la anterior a ella cuando la pregunta lo pide. */
+    public function palabrasSecundarias(): array
+    {
+        return [];
+    }
+
+    public function filtros(): array
+    {
+        return ['periodo'];
+    }
+
+    /** Temporada activa, o la productiva anterior a ella cuando la pregunta lo pide. */
     protected function temporada(ParametrosConsulta $parametros): ?Temporada
     {
         $activa = $this->temporadas->buscar();
@@ -31,20 +43,20 @@ abstract class ConsultaBase implements ConsultaAsistente
             return $activa;
         }
 
-        return Temporada::query()->where('id', '!=', $activa->id)
-            ->where('created_at', '<', $activa->created_at)
-            ->latest('created_at')->first();
+        return app(TemporadasAsistente::class)->anterior($activa);
     }
 
-    /** Descripción legible del rango consultado, por ejemplo «22-11-2026» o «16-11-2026 al 22-11-2026». */
+    /**
+     * Jornadas consultadas, por ejemplo «22-11-2026», «16-11-2026 al 22-11-2026» o
+     * «21-11-2026 (turno B)». Una jornada va de 07:00 a 06:59 del día siguiente.
+     */
     protected function periodo(ParametrosConsulta $parametros): string
     {
-        [$desde, $hasta] = $parametros->rango();
-        $zona = config('app.operational_timezone');
-        $inicio = $desde->setTimezone($zona)->format('d-m-Y');
-        $fin = $hasta->setTimezone($zona)->subSecond()->format('d-m-Y');
+        [$primera, $ultima] = $parametros->jornadas();
+        $inicio = PeriodoOperativo::fechaLegible($primera);
+        $texto = $primera === $ultima ? $inicio : $inicio.' al '.PeriodoOperativo::fechaLegible($ultima);
 
-        return $inicio === $fin ? $inicio : "{$inicio} al {$fin}";
+        return $parametros->turno ? "{$texto} (turno {$parametros->turno})" : $texto;
     }
 
     protected function hora(?CarbonImmutable $momento): ?string

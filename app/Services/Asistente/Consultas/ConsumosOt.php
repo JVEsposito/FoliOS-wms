@@ -30,6 +30,11 @@ class ConsumosOt extends ConsultaBase
         return 'materiales';
     }
 
+    public function filtros(): array
+    {
+        return ['periodo', 'cliente'];
+    }
+
     public function palabrasClave(): array
     {
         return ['consumo', 'consumos', 'consumido', 'ot', 'orden', 'ordenes', 'merma', 'mermas', 'materiales', 'material', 'estandar'];

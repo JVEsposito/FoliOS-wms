@@ -35,7 +35,17 @@ class KilosRecepciones extends ConsultaBase
 
     public function palabrasClave(): array
     {
-        return ['kilos', 'kg', 'kilo', 'neto', 'netos', 'bruto', 'brutos', 'recepcion', 'recepciones', 'recibido', 'recibidos', 'ingreso', 'peso'];
+        return ['kilos', 'kg', 'kilo', 'neto', 'netos', 'bruto', 'brutos', 'recepcion', 'recepciones', 'recibido', 'recibidos', 'ingreso', 'peso', 'entrada', 'entro', 'entraron', 'llegada', 'llego', 'llegaron'];
+    }
+
+    public function palabrasSecundarias(): array
+    {
+        return ['fruta'];
+    }
+
+    public function filtros(): array
+    {
+        return ['periodo', 'cliente'];
     }
 
     public function puedeEjecutar(User $usuario): bool
