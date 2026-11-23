@@ -39,27 +39,31 @@ class EvaluadorBancoAsistente
     /**
      * Con Haiku se evalúa como en el modo mixto: primero las reglas y, si no están
      * seguras, Haiku. Las llamadas son reales, cuentan en los topes y quedan registradas.
+     * Sin $preguntas se usa el banco de la planta.
      *
+     * @param  list<array<string, mixed>>|null  $preguntas
      * @return array{total: int, correctas: int, preguntas: int, preguntas_de_mas: int, falsas: int,
      *     llamadas_haiku: int, costo_usd: float, tokens_entrada: int, tokens_salida: int,
-     *     detalle: list<array{n: int, pregunta: string, esperada: ?string, elegida: ?string, clase: string, interprete: string, detalle: ?string}>}
+     *     detalle: list<array{n: int, pregunta: string, esperada: ?string, elegida: ?string, vista_elegida: ?string, clase: string, interprete: string, detalle: ?string}>}
      */
-    public function evaluar(User $usuario, bool $conHaiku = false): array
+    public function evaluar(User $usuario, bool $conHaiku = false, ?array $preguntas = null): array
     {
         $detalle = [];
         $llamadas = 0;
         $costo = 0.0;
         $entrada = 0;
         $salida = 0;
-        foreach ($this->preguntas() as $pregunta) {
+        foreach ($preguntas ?? $this->preguntas() as $pregunta) {
             $reglas = $this->interprete->interpretar($usuario, $pregunta['pregunta']);
             $elegida = $reglas['consulta']?->clave();
+            $vista = $elegida !== null ? $reglas['parametros']->vista : null;
             $interprete = 'reglas';
             $explicacion = null;
             if ($elegida === null && $conHaiku) {
                 $haiku = $this->haiku->interpretar($usuario, $pregunta['pregunta'], $reglas['entidades']);
                 $interprete = 'haiku:'.$haiku['tipo'];
                 $elegida = $haiku['tipo'] === InterpreteHaiku::CONSULTA ? $haiku['consulta']->clave() : null;
+                $vista = $haiku['tipo'] === InterpreteHaiku::CONSULTA ? $haiku['vista']?->clave : null;
                 $explicacion = $this->explicar($haiku);
                 if ($haiku['llamada'] !== null) {
                     $llamadas++;
@@ -69,8 +73,10 @@ class EvaluadorBancoAsistente
                 }
             }
             $esperadas = array_values(array_filter([$pregunta['responde_hoy'] ?? null, $pregunta['consulta_objetivo'] ?? null]));
+            // En un tema con vistas, otra vista del mismo tema también es una respuesta falsa.
+            $vistaCorrecta = ! isset($pregunta['vista']) || $pregunta['vista'] === $vista;
             $clase = match (true) {
-                $elegida !== null && in_array($elegida, $esperadas, true) => 'correcta',
+                $elegida !== null && in_array($elegida, $esperadas, true) && $vistaCorrecta => 'correcta',
                 $elegida !== null => 'falsa',
                 ($pregunta['responde_hoy'] ?? null) !== null => 'pregunta_de_mas',
                 default => 'pregunta',
@@ -80,6 +86,7 @@ class EvaluadorBancoAsistente
                 'pregunta' => (string) $pregunta['pregunta'],
                 'esperada' => $pregunta['responde_hoy'] ?? null,
                 'elegida' => $elegida,
+                'vista_elegida' => $vista,
                 'clase' => $clase,
                 'interprete' => $interprete,
                 'detalle' => $explicacion,

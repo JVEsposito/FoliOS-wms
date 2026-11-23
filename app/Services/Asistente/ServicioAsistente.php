@@ -84,7 +84,7 @@ class ServicioAsistente
 
                     return $this->sugerir($usuario, $texto, $parametros, $opciones, sprintf(
                         'Lo más cercano que tengo es «%s», pero no cubre %s. ¿Te sirve igual o es alguna de estas?',
-                        $haiku['consulta']->titulo(), $this->enumerar($haiku['sin_cubrir']),
+                        (new OpcionConsulta($haiku['consulta'], $haiku['vista']))->titulo(), $this->enumerar($haiku['sin_cubrir']),
                     ), self::MODO_HAIKU);
                 case InterpreteHaiku::INVALIDA:
                     $opciones = array_slice($this->unicas([...$haiku['opciones'], ...$interpretacion['alternativas']]), 0, 3);

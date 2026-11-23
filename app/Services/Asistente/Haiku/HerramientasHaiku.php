@@ -3,7 +3,9 @@
 namespace App\Services\Asistente\Haiku;
 
 use App\Models\EspecieValidacion;
+use App\Models\User;
 use App\Services\Asistente\Consultas\ConsultaAsistente;
+use App\Services\Asistente\Consultas\VistaConsulta;
 use App\Services\Asistente\PeriodoOperativo;
 use App\Services\Asistente\TextoNormalizado;
 use App\Services\Temporadas\ServicioTemporadaActiva;
@@ -32,11 +34,12 @@ Reglas:
 1. Llama exactamente una herramienta.
    - `consultar` cuando una consulta del catálogo responde la pregunta tal como está escrita.
    - `pedir_aclaracion` cuando dos a cuatro consultas podrían ser y la pregunta no permite elegir, o cuando la pregunta nombra un cliente, un CSG o un código que no llega como ficha.
-   - `sin_consulta` cuando ninguna consulta la responde: otro tema, comparaciones entre periodos, pronósticos, recomendaciones, rankings o datos que el catálogo no tiene.
+   - `sin_consulta` cuando ninguna consulta la responde: otro tema, comparaciones entre periodos, pronósticos, recomendaciones, rankings que ninguna vista ordenada responde o datos que el catálogo no tiene.
 2. Nunca elijas una consulta que responde otra cosa solo porque se parece. Una repregunta es mejor que una cifra equivocada. Con `consultar`:
    - En `pide`, antes de elegir, escribe en pocas palabras la cifra o lista que pide la pregunta y cada condición que pone: un estado (pendiente, vacío, devuelto, anulado), una etapa o lugar, un destino o mercado, un tipo de envase o material, una agrupación.
    - En `sin_cubrir`, anota con las palabras de la pregunta cada condición que ni la consulta elegida ni sus parámetros cubren. El periodo, el cliente, el CSG y la especie que pusiste en sus parámetros sí están cubiertos.
    - Si `sin_cubrir` no queda vacía, FoliOS no ejecuta la consulta: ofrece la más cercana y dice qué le falta. Nunca dejes fuera una condición para que la consulta calce.
+   - En `vista`, elige la vista del tema que responde la pregunta. `general` solo si el tema no tiene vistas. Una vista con orden responde «los más antiguos» o «los que más».
 3. Los clientes y CSG reconocidos llegan como fichas entre corchetes, por ejemplo [CLIENTE_1] o [CSG_1]. Copia la ficha sin corchetes en su parámetro: CLIENTE_1. No inventes fichas.
 4. Periodo. La planta trabaja por jornadas: una jornada va de 07:00 a 06:59 del día siguiente y se nombra por el día en que empieza. Turno A: 07:00 a 18:59. Turno B: 19:00 a 06:59. «Hoy» es la jornada en curso. «Anoche» es el turno B que terminó esta mañana, o el que está en curso si ya empezó. Las fechas van en AAAA-MM-DD.
    - `actual`: lo que hay ahora (existencias, camiones en planta, cargas abiertas) o la pregunta no nombra periodo; FoliOS usa la jornada en curso.
@@ -57,13 +60,12 @@ TXT;
      * @param  list<ConsultaAsistente>  $consultas  las permitidas al usuario
      * @return array{system: list<array<string, mixed>>, tools: list<array<string, mixed>>}
      */
-    public function definir(array $consultas): array
+    public function definir(User $usuario, array $consultas): array
     {
         $claves = array_map(fn (ConsultaAsistente $c): string => $c->clave(), $consultas);
-        $catalogo = implode("\n", array_map(fn (ConsultaAsistente $c): string => sprintf(
-            '- %s: %s Filtros: %s.',
-            $c->clave(), $c->descripcion(), $c->filtros() === [] ? 'ninguno (lo de ahora)' : implode(', ', $c->filtros()),
-        ), $consultas));
+        $vistas = array_map(fn (ConsultaAsistente $c): array => array_values(array_filter($c->vistas(), fn (VistaConsulta $v): bool => $c->puedeVer($usuario, $v))), $consultas);
+        $catalogo = implode("\n", array_map(fn (ConsultaAsistente $c, array $deLaConsulta): string => $this->lineaCatalogo($c, $deLaConsulta), $consultas, $vistas));
+        $clavesVista = array_values(array_unique([VistaConsulta::GENERAL, ...array_map(fn (VistaConsulta $v): string => $v->clave, array_merge(...$vistas))]));
         $texto = fn (string $descripcion): array => ['type' => 'string', 'description' => $descripcion];
         $enum = fn (array $valores, string $descripcion): array => ['type' => 'string', 'enum' => array_values($valores), 'description' => $descripcion];
 
@@ -71,6 +73,7 @@ TXT;
         $consultar = [
             'pide' => $texto('La cifra o lista que pide la pregunta y cada condición que pone, en pocas palabras.'),
             'consulta' => $enum($claves, 'Clave de la consulta del catálogo.'),
+            'vista' => $enum($clavesVista, 'Vista del tema que responde la pregunta; general solo si el tema no tiene vistas.'),
             'sin_cubrir' => ['type' => 'array', 'items' => ['type' => 'string'],
                 'description' => 'Condiciones de la pregunta que ni la consulta ni sus parámetros cubren, con sus palabras. Vacía solo si la consulta responde todo lo que se pide.'],
             'periodo_tipo' => $enum(['actual', 'jornada', 'turno', 'rango', 'temporada', 'temporada_anterior'], 'Tipo de periodo; ver las reglas del sistema.'),
@@ -82,7 +85,10 @@ TXT;
             'especie' => $enum(['todas', ...$this->especies()], 'Especie nombrada en la pregunta, o todas.'),
             'agrupar_por' => $enum(['nada', 'jornada'], 'jornada solo si se pide el detalle por día.'),
         ];
-        $opcion = ['type' => 'object', 'properties' => ['consulta' => $enum($claves, 'Clave de una consulta posible.')], 'required' => ['consulta'], 'additionalProperties' => false];
+        $opcion = ['type' => 'object', 'properties' => [
+            'consulta' => $enum($claves, 'Clave de una consulta posible.'),
+            'vista' => $enum($clavesVista, 'Vista de ese tema, o general si no tiene vistas.'),
+        ], 'required' => ['consulta', 'vista'], 'additionalProperties' => false];
 
         return [
             'system' => [['type' => 'text', 'text' => self::SISTEMA, 'cache_control' => ['type' => 'ephemeral']]],
@@ -96,6 +102,24 @@ TXT;
                 ]),
             ],
         ];
+    }
+
+    /**
+     * Una línea por consulta; un tema con varias vistas lista cada una con lo que responde,
+     * sus filtros y su orden.
+     *
+     * @param  list<VistaConsulta>  $vistas  las que el usuario puede ver
+     */
+    private function lineaCatalogo(ConsultaAsistente $consulta, array $vistas): string
+    {
+        $filtros = fn (array $f): string => $f === [] ? 'ninguno (lo de ahora)' : implode(', ', $f);
+        if (count($consulta->vistas()) === 1) {
+            return sprintf('- %s: %s Filtros: %s.', $consulta->clave(), $consulta->descripcion(), $filtros($consulta->filtros()));
+        }
+
+        return sprintf("- %s: %s Vistas:\n%s", $consulta->clave(), $consulta->titulo(), implode("\n", array_map(fn (VistaConsulta $v): string => sprintf(
+            '  - %s: %s Filtros: %s.%s', $v->clave, $v->descripcion, $filtros($v->filtros), $v->orden !== null ? " Orden: {$v->orden}." : '',
+        ), $vistas)));
     }
 
     /** Mensaje del usuario: el contexto de fecha va aquí, fuera del prefijo que se guarda en caché. */

@@ -175,9 +175,50 @@ class InterpreteHaikuTest extends TestCase
         }
     }
 
+    public function test_haiku_elige_tema_y_vista(): void
+    {
+        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'guias-envases', 'vista' => 'confirmadas', 'periodo_tipo' => 'jornada', 'desde' => '2026-11-21']));
+
+        $this->preguntar(self::DUDOSA)
+            ->assertJsonPath('data.tipo', 'respuesta')
+            ->assertJsonPath('data.consulta', 'guias-envases')
+            ->assertJsonPath('data.parametros.vista', 'confirmadas')
+            ->assertJsonPath('data.entendido.consulta', 'Guías de despacho de envases · Confirmadas');
+    }
+
+    public function test_general_en_un_tema_con_vistas_no_se_ejecuta(): void
+    {
+        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'guias-envases', 'vista' => 'general']));
+
+        $respuesta = $this->preguntar(self::DUDOSA)->assertJsonPath('data.tipo', 'sugerencias')->assertJsonPath('data.resultado', null);
+
+        $this->assertStringContainsString('la vista elegida no es de esa consulta', $respuesta->json('data.mensaje'));
+    }
+
+    public function test_una_vista_de_otro_tema_no_se_ejecuta(): void
+    {
+        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'kilos-recepciones', 'vista' => 'borrador']));
+
+        $respuesta = $this->preguntar(self::DUDOSA)->assertJsonPath('data.tipo', 'sugerencias')->assertJsonPath('data.resultado', null);
+
+        $this->assertStringContainsString('la vista elegida no es de esa consulta', $respuesta->json('data.mensaje'));
+    }
+
+    public function test_la_aclaracion_ofrece_temas_y_vistas(): void
+    {
+        $this->haikuResponde('pedir_aclaracion', ['opciones' => [
+            ['consulta' => 'guias-envases', 'vista' => 'sin-numero'], ['consulta' => 'kilos-recepciones', 'vista' => 'general'], ['consulta' => 'guias-envases', 'vista' => 'anuladas'],
+        ]]);
+
+        $sugerencias = $this->preguntar(self::DUDOSA)->assertJsonPath('data.tipo', 'sugerencias')->json('data.sugerencias');
+
+        $this->assertSame(['Guías de despacho de envases · Sin N° de guía emitida', 'Kilos recibidos'], array_column($sugerencias, 'titulo'));
+        $this->assertSame('sin-numero', $sugerencias[0]['parametros']['vista']);
+    }
+
     public function test_la_aclaracion_ofrece_las_opciones_de_haiku(): void
     {
-        $this->haikuResponde('pedir_aclaracion', ['opciones' => [['consulta' => 'envases-recibidos'], ['consulta' => 'kilos-recepciones'], ['consulta' => 'no-existe']]]);
+        $this->haikuResponde('pedir_aclaracion', ['opciones' => [['consulta' => 'envases-recibidos', 'vista' => 'general'], ['consulta' => 'kilos-recepciones', 'vista' => 'general'], ['consulta' => 'no-existe', 'vista' => 'general']]]);
 
         $respuesta = $this->preguntar(self::DUDOSA)->assertJsonPath('data.tipo', 'sugerencias')->assertJsonPath('data.mensaje', '¿Cuál de estas consultas quieres?');
 
@@ -243,7 +284,7 @@ class InterpreteHaikuTest extends TestCase
     public function test_las_herramientas_cumplen_los_limites_de_la_api(): void
     {
         $permitidas = app(CatalogoConsultasAsistente::class)->disponiblesPara($this->administrador);
-        $definicion = app(HerramientasHaiku::class)->definir($permitidas);
+        $definicion = app(HerramientasHaiku::class)->definir($this->administrador, $permitidas);
 
         $this->assertLessThanOrEqual(20, count($definicion['tools']));
         foreach ($definicion['tools'] as $herramienta) {
@@ -255,7 +296,11 @@ class InterpreteHaikuTest extends TestCase
         $consultar = $definicion['tools'][0]['input_schema']['properties'];
         $this->assertSame(array_map(fn ($c) => $c->clave(), $permitidas), $consultar['consulta']['enum']);
         // Haiku primero escribe qué pide la pregunta y después, junto a la consulta, qué condiciones no cubre.
-        $this->assertSame(['pide', 'consulta', 'sin_cubrir'], array_slice(array_keys($consultar), 0, 3));
+        $this->assertSame(['pide', 'consulta', 'vista', 'sin_cubrir'], array_slice(array_keys($consultar), 0, 4));
+        foreach (['general', 'borrador', 'confirmadas', 'sin-numero'] as $vista) {
+            $this->assertContains($vista, $consultar['vista']['enum']);
+        }
+        $this->assertSame(['consulta', 'vista'], $definicion['tools'][1]['input_schema']['properties']['opciones']['items']['required']);
         $this->assertSame(['type' => 'array', 'items' => ['type' => 'string']], array_intersect_key($consultar['sin_cubrir'], ['type' => 1, 'items' => 1]));
         $this->assertStringNotContainsString('Exportadora Andina', json_encode($definicion, JSON_UNESCAPED_UNICODE));
         $this->assertSame(['type' => 'ephemeral'], $definicion['system'][0]['cache_control']);
@@ -284,6 +329,19 @@ class InterpreteHaikuTest extends TestCase
         $this->assertSame(0, $informe['falsas']);
         $this->assertSame($informe['preguntas'] + $informe['preguntas_de_mas'], $informe['llamadas_haiku'] + 2, 'Las dos preguntas sensibles no salen.');
         $this->assertGreaterThan(0, $informe['costo_usd']);
+    }
+
+    public function test_el_evaluador_exige_la_vista_del_banco(): void
+    {
+        $banco = [
+            ['n' => 1, 'pregunta' => 'guías gde', 'responde_hoy' => 'guias-envases', 'vista' => 'confirmadas'],
+            ['n' => 2, 'pregunta' => 'guías gde', 'responde_hoy' => 'guias-envases', 'vista' => 'borrador'],
+        ];
+
+        $informe = app(EvaluadorBancoAsistente::class)->evaluar($this->administrador, preguntas: $banco);
+
+        $this->assertSame(['falsa', 'correcta'], array_column($informe['detalle'], 'clase'));
+        $this->assertSame(['borrador', 'borrador'], array_column($informe['detalle'], 'vista_elegida'));
     }
 
     public function test_evaluar_cuenta_una_condicion_sin_cubrir_como_pregunta_y_la_muestra(): void
@@ -335,7 +393,7 @@ class InterpreteHaikuTest extends TestCase
     /** @param  array<string, mixed>  $entrada */
     private function consultar(array $entrada): array
     {
-        return [...['pide' => '', 'sin_cubrir' => [], 'periodo_tipo' => 'actual', 'desde' => '', 'hasta' => '', 'turno' => 'ninguno', 'cliente' => '', 'csg' => '',
+        return [...['pide' => '', 'vista' => 'general', 'sin_cubrir' => [], 'periodo_tipo' => 'actual', 'desde' => '', 'hasta' => '', 'turno' => 'ninguno', 'cliente' => '', 'csg' => '',
             'especie' => 'todas', 'agrupar_por' => 'nada'], ...$entrada];
     }
 
