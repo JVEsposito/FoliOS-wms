@@ -7,6 +7,7 @@ use App\Http\Requests\PreguntaAsistenteRequest;
 use App\Models\ConfiguracionAsistente;
 use App\Models\PreguntaAsistente;
 use App\Models\RangoTaraAsistente;
+use App\Services\Asistente\CompuertaAsistente;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ServicioAsistente;
 use Illuminate\Http\JsonResponse;
@@ -111,6 +112,15 @@ class AsistenteController extends Controller
             ])->values(),
             'meta' => ['pagina' => $preguntas->currentPage(), 'paginas' => $preguntas->lastPage(), 'total' => $preguntas->total()],
         ]);
+    }
+
+    /** Compuerta de la fase B: registro real y banco, con la decisión de conectar o no Haiku. */
+    public function compuerta(Request $request, CompuertaAsistente $compuerta): JsonResponse
+    {
+        Gate::authorize('administrar-asistente');
+        $dias = (int) ($request->validate(['dias' => ['nullable', 'integer', 'between:1,90']])['dias'] ?? 7);
+
+        return response()->json(['data' => $compuerta->medir($request->user(), $dias)]);
     }
 
     private function serializarConfiguracion(): array

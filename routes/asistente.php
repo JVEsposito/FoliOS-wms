@@ -12,4 +12,5 @@ Route::middleware(['auth:sanctum', 'throttle:30,1'])->prefix('asistente')->group
     Route::get('/configuracion', [AsistenteController::class, 'configuracion']);
     Route::put('/configuracion', [AsistenteController::class, 'actualizarConfiguracion']);
     Route::get('/preguntas', [AsistenteController::class, 'preguntas']);
+    Route::get('/compuerta', [AsistenteController::class, 'compuerta']);
 });
