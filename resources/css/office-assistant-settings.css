@@ -1,0 +1,51 @@
+/* Configuración del asistente. Usa los paneles, campos y botones de office.css. */
+.assistant-settings__shell { display: grid; gap: 16px; padding: clamp(16px, 2vw, 28px); }
+.assistant-settings__heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.assistant-settings__heading h1 { margin: 4px 0; }
+.assistant-settings__heading p:not(.eyebrow) { margin: 0; color: var(--muted); max-inline-size: 70ch; }
+.assistant-settings__actions { display: flex; gap: 8px; }
+.assistant-settings__error { margin: 0; padding: 10px 14px; border: 1px solid var(--red); border-radius: 10px; }
+
+.assistant-settings__metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.assistant-settings__metrics article { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.assistant-settings__metrics span { color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .06em; }
+.assistant-settings__metrics strong { font-size: 1.35rem; }
+.assistant-settings__metrics small { color: var(--muted); font-size: .75rem; }
+.assistant-settings__bar { block-size: 6px; border-radius: 999px; background: var(--soft); overflow: hidden; }
+.assistant-settings__bar i { display: block; block-size: 100%; inline-size: 0; background: var(--cyan); }
+
+.assistant-settings__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.assistant-settings__panel { display: grid; align-content: start; gap: 12px; padding: 16px; }
+.assistant-settings__panel--wide { grid-column: 1 / -1; }
+.assistant-settings__panel h2 { margin: 0; font-size: 1.1rem; }
+.assistant-settings__hint { margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.45; }
+
+.assistant-settings__modes { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.assistant-settings__modes label,
+.assistant-settings__pilot label { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.assistant-settings__modes span,
+.assistant-settings__pilot span { display: grid; gap: 2px; }
+.assistant-settings__modes small,
+.assistant-settings__pilot small { color: var(--muted); font-size: .75rem; }
+.assistant-settings__modes input:disabled + span { opacity: .55; }
+.assistant-settings__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.assistant-settings__pilot { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.assistant-settings__filter { min-inline-size: 220px; }
+
+.assistant-settings__decision { margin: 0; padding: 10px 12px; border-inline-start: 4px solid var(--cyan); border-radius: 6px; background: var(--soft); }
+.assistant-settings__decision[data-decision="corregir_reglas"] { border-color: var(--red); }
+.assistant-settings__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin: 0; }
+.assistant-settings__facts div { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.assistant-settings__facts dt { color: var(--muted); font-size: .72rem; }
+.assistant-settings__facts dd { margin: 2px 0 0; font-weight: 800; }
+.assistant-settings__list { margin: 0; padding-inline-start: 18px; display: grid; gap: 4px; font-size: .82rem; }
+
+.assistant-settings__table { inline-size: 100%; border-collapse: collapse; font-size: .82rem; }
+.assistant-settings__table th { text-align: start; color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .04em; padding: 6px 8px; border-block-end: 1px solid var(--line); }
+.assistant-settings__table td { padding: 7px 8px; border-block-end: 1px solid var(--line); vertical-align: top; }
+.assistant-settings__table input[type="number"] { inline-size: 6.5em; min-height: 34px; }
+.assistant-settings__table small { color: var(--cyan); font-weight: 800; }
+
+@media (max-width: 980px) {
+    .assistant-settings__grid, .assistant-settings__fields { grid-template-columns: 1fr; }
+}

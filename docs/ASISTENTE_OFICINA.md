@@ -10,7 +10,7 @@ Diseño aprobado: [`superpowers/specs/2026-11-22-asistente-oficina-design.md`](s
 
 **Fase B: modo mixto con Haiku (ver abajo).** Las reglas responden lo que entienden con certeza; el resto va a Claude Haiku 5.5 como intérprete. Haiku solo elige una consulta del catálogo: FoliOS la valida, calcula las cifras y escribe la respuesta. Se activa solo si la compuerta lo justifica y el servidor tiene `ANTHROPIC_API_KEY`.
 
-**Pendiente:** la pantalla de configuración con consumo y piloto (PR 7) y las recomendaciones a pedido (PR 8).
+**Pendiente:** las recomendaciones a pedido (PR 8) y comparar dos periodos (`comparar_con`).
 
 El plan de la fase B, con el banco de 60 preguntas reales, el diseño de Haiku como intérprete, los topes decididos (US$20 al mes, 50 a 60 preguntas por usuario al día) y las recomendaciones a pedido, está en [`ASISTENTE_ESTUDIO_HAIKU.md`](ASISTENTE_ESTUDIO_HAIKU.md).
 
@@ -25,7 +25,7 @@ El asistente es un gajo flotante en la esquina inferior derecha de cada oficina,
 ## Quién lo usa
 
 - **Usar el asistente:** el módulo **Asistente** (`administracion.asistente`) se habilita por perfil de acceso. El rol `cliente` nunca lo tiene, aunque el perfil incluya el módulo.
-- **Configurarlo:** el módulo **Configuración del asistente** (`administracion.asistente-configuracion`) es solo para el rol administrador. Permite ajustar los rangos de tara y el margen de revisión, y ver el registro de preguntas.
+- **Configurarlo:** el módulo **Configuración del asistente** (`administracion.asistente-configuracion`) es solo para el rol administrador. Su pantalla está en **Administración → Configuración del asistente** (`/oficina/administracion/asistente`).
 - **Qué responde a cada usuario:** cada consulta exige el mismo permiso que su oficina de origen. Una persona sin acceso a Materiales no recibe consumos, ni como respuesta ni como sugerencia. El backend lo valida en cada llamada.
 
 ## Qué responde
@@ -92,6 +92,24 @@ Haiku se conecta solo si las preguntas reales lo justifican (ver `docs/ASISTENTE
 
 Las preguntas de usuarios inactivos no se reinterpretan, y se revisan como máximo las 2.000 más recientes.
 
+## Pantalla de configuración
+
+En `/oficina/administracion/asistente`, solo para quien administra el asistente:
+
+- **Modo:** sin IA o mixto con Haiku. El mixto queda deshabilitado si el servidor no tiene `ANTHROPIC_API_KEY`.
+- **Topes:** tope de gasto del mes (hasta US$200) y preguntas a Haiku por usuario y jornada (1 a 200). Vacíos, rigen `ASISTENTE_TOPE_MENSUAL_USD` y `ASISTENTE_TOPE_DIARIO_USUARIO`.
+- **Piloto:** hasta 20 usuarios con Haiku; la propuesta es de 3 a 5 durante dos semanas. Sin marcas, Haiku queda para todos los que usan el asistente. Fuera del piloto, el asistente responde sin IA y sin aviso.
+- **Consumo:** gasto y llamadas del mes contra el tope, con el detalle por usuario.
+- **Compuerta:** el botón «Medir 7 días» muestra la decisión de `asistente:compuerta` y las preguntas reales que siguen sin consulta.
+- **Revisión de taras:** margen y rangos de neto por envase.
+- **Registro:** las preguntas recientes, filtradas por estado, con su consulta y si la interpretó Haiku.
+
+**Piloto propuesto.**
+1. Elegir de 3 a 5 usuarios de áreas distintas.
+2. Pasar a modo mixto.
+3. Revisar cada semana el registro y el consumo.
+4. Al cierre de las dos semanas, sumar al banco las preguntas que siguen sin consulta y decidir con la compuerta si Haiku se abre a todos.
+
 ## Modo mixto con Haiku
 
 **Enrutamiento.** Toda pregunta pasa primero por las reglas. Si eligen una consulta con certeza, Haiku no se llama. Si no, y el modo es `mixto`:
@@ -141,9 +159,11 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 | `POST /api/asistente/preguntas` `{texto}` | usar el asistente | Pregunta en texto libre, de 1 a 500 caracteres. Responde `entendido` (`consulta`, `fichas`, `no_aplicados`) y `resultado`, o `sugerencias` con `mensaje` y `busqueda` |
 | `GET /api/asistente/consultas` | usar el asistente | Catálogo de consultas permitidas para el usuario |
 | `POST /api/asistente/consultas/{clave}` | usar el asistente y el permiso de la consulta | Ejecuta una consulta con `desde` y `hasta` (jornadas), `turno` (`A` o `B`), `periodo` (etiqueta), `cliente_id`, `csg_id`, `especie_id`, `codigo` o `temporada_anterior` o `agrupar` (`dia`). Responde con `entendido` y `resultado` |
-| `GET` y `PUT /api/asistente/configuracion` | configurar el asistente | Margen (0,5 a 5), rangos de neto por envase y `modo` (`sin_ia` o `mixto`); el `GET` informa el consumo de Haiku en `ia` |
+| `GET` y `PUT /api/asistente/configuracion` | configurar el asistente | Margen (0,5 a 5), rangos de neto por envase y `modo` (`sin_ia` o `mixto`), `tope_mensual_usd`, `limite_diario_usuario` y `usuarios_piloto`; el `GET` informa el consumo de Haiku y los topes vigentes en `ia` |
 | `GET /api/asistente/preguntas?estado=` | configurar el asistente | Registro de preguntas, con `estado` `respondida`, `sin_datos` o `sugerencias` |
 | `GET /api/asistente/compuerta?dias=` | configurar el asistente | El informe de `asistente:compuerta` (1 a 90 días; 7 por defecto) |
+| `GET /api/asistente/consumo` | configurar el asistente | Gasto y llamadas a Haiku del mes, por día y por usuario |
+| `GET /api/asistente/usuarios` | configurar el asistente | Usuarios activos que pueden usar el asistente: los candidatos al piloto |
 
 ## Agregar una consulta
 
@@ -159,5 +179,5 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 | --- | --- |
 | `asistente_preguntas` | Registro de cada pregunta. No se borra. |
 | `asistente_rangos_tara` | Rangos de neto por envase y especie |
-| `asistente_configuracion` | Una sola fila, con el margen y el modo (`sin_ia` o `mixto`) |
+| `asistente_configuracion` | Una sola fila, con el margen, el modo (`sin_ia` o `mixto`), los topes propios y los usuarios del piloto |
 | `asistente_llamadas_ia` | Una fila por llamada a Haiku: tokens, costo, herramienta y resultado. No se borra. |
