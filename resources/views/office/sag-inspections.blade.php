@@ -33,30 +33,29 @@
             <x-office.navigation domain="frigorifico" office="inspeccion-sag" context="FRIGORÍFICO · PT" icon="SAG" />
 
             <section class="sag-workspace">
-                <header class="panel sag-heading" data-folios-masthead>
-                    <div>
-                        <p class="eyebrow">CONTROL FITOSANITARIO</p>
-                        <h1>Inspección SAG</h1>
-                        <p>SI significa sin resolución SAG activa. AO, AU y AF se conservan y los destinos aprobados se acumulan.</p>
+                <x-folios.cabecera-etiqueta area="frigorifico" seccion="Frigorífico · SAG"
+                    titulo="Inspección SAG" codigo="SAG · CONTROL FITOSANITARIO" class="sag-heading"
+                    descripcion="Consulta lotes, resultados por pallet y mercados autorizados.">
+                    <div class="sag-heading__actions">
+                        <a class="secondary-button" href="/oficina/frigorifico/contraparte-sag">Contraparte SAG</a>
+                        <button class="secondary-button" id="reloadSagButton" type="button">↻ Actualizar</button>
                     </div>
-                    <a class="secondary-button" href="/oficina/frigorifico/contraparte-sag">Contraparte SAG</a>
-                    <button class="secondary-button" id="reloadSagButton" type="button">↻ Actualizar</button>
-                </header>
+                </x-folios.cabecera-etiqueta>
 
                 <div class="sag-load-error" id="sagLoadError" role="alert" hidden></div>
 
-                <section class="sag-metrics" aria-label="Resumen SAG" data-folios-metrics>
-                    <article><span>LOTES ACTIVOS</span><strong id="activeLotsMetric">0</strong></article>
-                    <article><span>PALLETS EN INSPECCIÓN</span><strong id="activePalletsMetric">0</strong></article>
-                    <article><span>FINALIZADOS HOY</span><strong id="finishedTodayMetric">0</strong></article>
-                    <article><span>APROBACIONES HOY</span><strong id="approvalsTodayMetric">0</strong></article>
+                <section class="sag-metrics folios-indicadores" aria-label="Resumen SAG">
+                    <x-folios.ticket-indicador area="frigorifico" clave="SAG" rotulo="Lotes activos" valor-id="activeLotsMetric" valor="—" />
+                    <x-folios.ticket-indicador area="frigorifico" clave="SAG" rotulo="Pallets en inspección" valor-id="activePalletsMetric" valor="—" />
+                    <x-folios.ticket-indicador area="frigorifico" clave="SAG" rotulo="Finalizados hoy" valor-id="finishedTodayMetric" valor="—" />
+                    <x-folios.ticket-indicador area="frigorifico" clave="SAG" rotulo="Aprobaciones hoy" valor-id="approvalsTodayMetric" valor="—" />
                 </section>
 
                 <nav class="sag-switcher" aria-label="Secciones de Inspección SAG">
-                    <button class="is-active" data-sag-panel="resumen" type="button">Resumen</button>
-                    <button data-sag-panel="nueva" type="button">Nueva inspección</button>
-                    <button data-sag-panel="activos" type="button">Lotes activos</button>
-                    <button data-sag-panel="historial" type="button">Historial</button>
+                    <button class="is-active" data-sag-panel="resumen" aria-pressed="true" type="button">Resumen</button>
+                    <button data-sag-panel="nueva" aria-pressed="false" type="button">Nueva inspección</button>
+                    <button data-sag-panel="activos" aria-pressed="false" type="button">Lotes activos</button>
+                    <button data-sag-panel="historial" aria-pressed="false" type="button">Historial</button>
                 </nav>
 
                 <section class="sag-panel" data-sag-section="resumen" data-folios-register>
@@ -65,7 +64,14 @@
                         <article class="panel sag-rule-card"><p class="eyebrow">REGLA DE MERCADO</p><h2>Las aprobaciones se acumulan</h2><p>Segregar, rechazar o salir sin resolución no revoca mercados anteriores. En cambio de mercado, el destino aprobado se agrega al pallet.</p></article>
                         <article class="panel sag-rule-card"><p class="eyebrow">EXCEPCIÓN UE</p><h2>País individual o bloque completo</h2><p>Seleccionar UE cubre transversalmente a sus 27 miembros y guarda una fotografía histórica de esa composición.</p></article>
                     </div>
-                    <div class="panel sag-table-panel"><div class="sag-panel-heading"><div><p class="eyebrow">OPERACIÓN ACTUAL</p><h2>Últimos lotes</h2></div></div><div class="table-scroll"><table><thead><tr><th>Lote</th><th>Tipo</th><th>Estado</th><th>Pallets</th><th>Destinos</th><th>Creación</th><th>Acción</th></tr></thead><tbody id="recentLotsBody"></tbody></table></div></div>
+                    <x-folios.bandeja area="frigorifico" titulo="Últimos lotes" id="recentLotsBodyTitle">
+                        <div class="table-scroll" role="region" aria-label="Últimos lotes" tabindex="0">
+                            <table>
+                                <thead><tr><th scope="col">Lote</th><th scope="col">Tipo</th><th scope="col">Estado</th><th scope="col">Pallets</th><th scope="col">Destinos</th><th scope="col">Creación</th><th scope="col">Acción</th></tr></thead>
+                                <tbody id="recentLotsBody"><tr><td colspan="7" class="empty-cell">Cargando lotes…</td></tr></tbody>
+                            </table>
+                        </div>
+                    </x-folios.bandeja>
                 </section>
 
                 <section class="sag-panel is-hidden" data-sag-section="nueva" data-folios-register>
@@ -108,15 +114,30 @@
                 </section>
 
                 <section class="sag-panel is-hidden" data-sag-section="activos" data-folios-register>
-                    <div class="panel sag-table-panel"><div class="sag-panel-heading"><div><p class="eyebrow">SEGUIMIENTO</p><h2>Lotes activos</h2></div></div><div class="table-scroll"><table><thead><tr><th>Lote</th><th>Tipo</th><th>Estado</th><th>Pallets</th><th>Destinos</th><th>Responsable</th><th>Acción</th></tr></thead><tbody id="activeLotsBody"></tbody></table></div></div>
+                    <x-folios.bandeja area="frigorifico" titulo="Lotes activos" id="activeLotsBodyTitle">
+                        <div class="table-scroll" role="region" aria-label="Lotes activos" tabindex="0">
+                            <table>
+                                <thead><tr><th scope="col">Lote</th><th scope="col">Tipo</th><th scope="col">Estado</th><th scope="col">Pallets</th><th scope="col">Destinos</th><th scope="col">Creación</th><th scope="col">Acción</th></tr></thead>
+                                <tbody id="activeLotsBody"><tr><td colspan="7" class="empty-cell">Cargando lotes…</td></tr></tbody>
+                            </table>
+                        </div>
+                    </x-folios.bandeja>
                 </section>
 
                 <section class="sag-panel is-hidden" data-sag-section="historial" data-folios-register>
-                    <div class="panel sag-table-panel"><div class="sag-panel-heading"><div><p class="eyebrow">TRAZABILIDAD</p><h2>Historial de inspecciones</h2></div></div><div class="table-scroll"><table><thead><tr><th>Lote</th><th>Tipo</th><th>Estado</th><th>Pallets</th><th>Destinos</th><th>Finalización</th><th>Acción</th></tr></thead><tbody id="historyLotsBody"></tbody></table></div></div>
+                    <x-folios.bandeja area="frigorifico" titulo="Historial de inspecciones" id="historyLotsBodyTitle">
+                        <div class="table-scroll" role="region" aria-label="Historial de inspecciones" tabindex="0">
+                            <table>
+                                <thead><tr><th scope="col">Lote</th><th scope="col">Tipo</th><th scope="col">Estado</th><th scope="col">Pallets</th><th scope="col">Destinos</th><th scope="col">Finalización</th><th scope="col">Acción</th></tr></thead>
+                                <tbody id="historyLotsBody"><tr><td colspan="7" class="empty-cell">Cargando lotes…</td></tr></tbody>
+                            </table>
+                        </div>
+                    </x-folios.bandeja>
                 </section>
 
-                <section class="panel sag-detail is-hidden" id="sagLotDetail">
-                    <div class="sag-panel-heading"><div><p class="eyebrow">DETALLE DEL LOTE</p><h2 id="sagDetailTitle">Lote</h2><p id="sagDetailSubtitle"></p></div><div class="sag-detail-actions"><select id="detailActionSelect" aria-label="Acciones del lote"><option value="">Seleccionar acción</option></select><a class="secondary-button is-hidden" id="sagDocumentLink">Formulario cambio de mercado</a><button class="secondary-button" id="closeSagDetailButton" type="button">Cerrar</button></div></div>
+                <section class="folios-ticket sag-detail is-hidden" id="sagLotDetail" data-ticket-area="frigorifico" aria-labelledby="sagDetailTitle">
+                    <header class="sag-panel-heading"><div><p class="eyebrow" id="sagDetailType"></p><h2 class="folios-code" id="sagDetailTitle" tabindex="-1">Lote</h2><p id="sagDetailSubtitle"></p></div><div class="sag-detail-actions"><div id="sagDetailStatus"></div><select id="detailActionSelect" aria-label="Acciones del lote"><option value="">Seleccionar acción</option></select><a class="secondary-button is-hidden" id="sagDocumentLink">Formulario cambio de mercado</a><button class="secondary-button" id="closeSagDetailButton" type="button">Cerrar</button></div></header>
+                    <div class="folios-perforacion" aria-hidden="true"></div>
                     <div class="sag-detail-destinations" id="sagDetailDestinations"></div>
                     <div class="sag-preparation is-hidden" id="sagDetailPreparation" role="status"></div>
                     <form class="sag-direct-search is-hidden" id="editSagLotFoliosForm">

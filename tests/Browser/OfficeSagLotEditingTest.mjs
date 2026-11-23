@@ -69,6 +69,9 @@ for (const width of [1366, 390]) test(`SAG muestra contexto y permite agregar y 
         await page.locator('[data-sag-panel="resumen"]').click();
         await page.locator('#recentLotsBody .lot-action').selectOption('view');
         await page.locator('#editSagLotFoliosForm').waitFor();
+        assert.equal(await page.locator('#sagDetailTitle strong').innerText(), '0001');
+        assert.equal(await page.locator('#sagDetailStatus [data-estado="pendiente"]').count(), 1);
+        assert.equal(await page.locator('#sagResultList .folios-code strong').innerText(), '2818');
         assert.match(await page.locator('#sagResultList').innerText(), /120 cajas · CSG 89868 · 152223/);
         assert.equal(await page.locator('[data-remove-sag-folio="p1"]').isDisabled(), true);
         const pending = await page.locator('#sagDetailPreparation').innerText();
@@ -81,6 +84,24 @@ for (const width of [1366, 390]) test(`SAG muestra contexto y permite agregar y 
         assert.match(reserved, /Sector SAG reservado/);
         assert.match(reserved, /CAM-09 · B15 · P01 a P12 \(8 pallets, 4 de separación\) · B16 · P01 a P05 \(3 pallets, 2 de separación\)/);
         assert.match(reserved, /1 de 2 pallets en su posición/);
+        assert.equal(await page.locator('#sagDetailPreparation [data-cell="done"]').count(), 1);
+        assert.equal(await page.locator('#sagDetailPreparation [data-cell="pending"]').count(), 1);
+        if (width === 1366) {
+            const theme = page.getByRole('combobox', { name: 'Tema de Oficina' });
+            const colors = new Map();
+            for (const key of ['light-professional', 'dark-industrial', 'light-professional', 'dark-industrial']) {
+                await theme.selectOption(key);
+                await page.waitForFunction(expected => document.documentElement.dataset.officeTheme === expected, key);
+                const palette = await page.locator('#sagLotDetail').evaluate(detail => [
+                    getComputedStyle(detail).backgroundColor,
+                    getComputedStyle(detail.querySelector('.folios-estado')).color,
+                    getComputedStyle(detail.querySelector('[data-cell="done"]')).backgroundColor,
+                ]);
+                if (colors.has(key)) assert.deepEqual(palette, colors.get(key));
+                colors.set(key, palette);
+            }
+            assert.notDeepEqual(colors.get('light-professional'), colors.get('dark-industrial'));
+        }
         assert.equal(await page.locator('#sagDetailPreparation.sag-preparation--pending').count(), 0);
         if (process.env.FOLIOS_UI_CAPTURE_DIR) await page.locator('#sagLotDetail').screenshot({ path: resolve(process.env.FOLIOS_UI_CAPTURE_DIR, `sag-lote-${width}.png`) });
         await page.locator('[data-remove-sag-folio="p1"]').click();
@@ -91,6 +112,7 @@ for (const width of [1366, 390]) test(`SAG muestra contexto y permite agregar y 
         await page.waitForFunction(() => document.querySelector('#editSagLotFoliosForm').classList.contains('is-hidden'));
         assert.equal(await page.locator('[data-remove-sag-folio]').count(), 0);
         assert.equal(await page.locator('#sagDetailPreparation').isVisible(), false);
+        assert.equal(await page.locator('#sagDetailStatus [data-estado="en-curso"]').count(), 1);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, JSON.stringify(await page.evaluate(() => ({ viewport: innerWidth, scroll: document.documentElement.scrollWidth, offset: scrollX, overflows: [...document.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > innerWidth).map((el) => [el.tagName, el.id || el.className, Math.round(el.getBoundingClientRect().right)]).slice(-15) }))));
         assert.deepEqual(errors, []);
         await context.close();
