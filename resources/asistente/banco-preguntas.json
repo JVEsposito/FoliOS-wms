@@ -193,9 +193,9 @@
       "area": "Envases",
       "pregunta": "¿Qué despachos de envases siguen en borrador?",
       "clase": "falta_consulta",
-      "consulta_objetivo": "despachos-envases-pendientes",
+      "consulta_objetivo": "guias-envases",
       "objetivo": "despachos de envases",
-      "responde_hoy": "despachos-envases-pendientes",
+      "responde_hoy": "guias-envases",
       "clase_resuelta": "PR 4 tanda 1"
     },
     {
