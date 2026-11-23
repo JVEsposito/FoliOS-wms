@@ -76,7 +76,23 @@ El asistente es un gajo flotante en la esquina inferior derecha de cada oficina,
 
 ## Banco de preguntas
 
-`tests/Fixtures/asistente/banco-preguntas.json` guarda 60 preguntas reales de la planta, por área, con la consulta que debería responderlas y la que la fase A ejecuta hoy (`responde_hoy`, o `null` si debe preguntar). `BancoPreguntasAsistenteTest` corre en CI y exige cero respuestas falsas: ni otra consulta, ni otro periodo, ni un filtro reconocido sin aviso. Al sumar una consulta, se actualiza `responde_hoy` de las preguntas que pasa a responder. Valle Alto y el CSG 104512 son ejemplos inventados.
+`resources/asistente/banco-preguntas.json` guarda 60 preguntas reales de la planta, por área, con la consulta que debería responderlas y la que la fase A ejecuta hoy (`responde_hoy`, o `null` si debe preguntar). `BancoPreguntasAsistenteTest` corre en CI y exige cero respuestas falsas: ni otra consulta, ni otro periodo, ni un filtro reconocido sin aviso. Al sumar una consulta, se actualiza `responde_hoy` de las preguntas que pasa a responder. Valle Alto y el CSG 104512 son ejemplos inventados.
+
+## Compuerta antes de Haiku
+
+Haiku se conecta solo si las preguntas reales lo justifican (ver `docs/ASISTENTE_ESTUDIO_HAIKU.md`). Dos comandos de solo lectura lo miden; ninguno ejecuta consultas ni registra preguntas:
+
+- `php artisan asistente:evaluar` corre el intérprete sobre el banco con los permisos de un administrador activo (o de `--usuario=correo`). Clasifica cada pregunta como correcta, pregunta, pregunta de más o falsa, y termina con código 1 si hay alguna falsa. Con los datos reales de la planta solo compara la consulta elegida; los periodos y filtros los revisa la prueba de CI.
+- `php artisan asistente:compuerta --dias=7` mide el registro de esos días de dos formas: como quedó registrado y reinterpretado con las reglas de hoy, porque una pregunta que antes terminó en sugerencias puede tener ya su consulta. Lista las preguntas reales que siguen sin consulta, para sumarlas al banco, y entrega una decisión.
+
+| Decisión | Cuándo |
+| --- | --- |
+| `corregir_reglas` | El banco tiene alguna respuesta falsa |
+| `datos_insuficientes` | Hay menos de 50 preguntas en el periodo |
+| `conectar_haiku` | Más del 15 % de las preguntas reales, reinterpretadas, sigue sin consulta |
+| `seguir_sin_ia` | El 15 % o menos sigue sin consulta: conviene sumar consultas antes que Haiku |
+
+Las preguntas de usuarios inactivos no se reinterpretan, y se revisan como máximo las 2.000 más recientes.
 
 ## Revisión de tara y destare
 
@@ -100,6 +116,7 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 | `POST /api/asistente/consultas/{clave}` | usar el asistente y el permiso de la consulta | Ejecuta una consulta con `desde` y `hasta` (jornadas), `turno` (`A` o `B`), `periodo` (etiqueta), `cliente_id`, `csg_id`, `especie_id`, `codigo` o `temporada_anterior` o `agrupar` (`dia`). Responde con `entendido` y `resultado` |
 | `GET` y `PUT /api/asistente/configuracion` | configurar el asistente | Margen (0,5 a 5) y rangos de neto por envase |
 | `GET /api/asistente/preguntas?estado=` | configurar el asistente | Registro de preguntas, con `estado` `respondida`, `sin_datos` o `sugerencias` |
+| `GET /api/asistente/compuerta?dias=` | configurar el asistente | El informe de `asistente:compuerta` (1 a 90 días; 7 por defecto) |
 
 ## Agregar una consulta
 
