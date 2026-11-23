@@ -293,9 +293,10 @@
       "area": "Proceso",
       "pregunta": "¿Cuántos folios se validaron hoy?",
       "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "consulta_objetivo": "validaciones-pt",
       "objetivo": "validaciones PT del día",
-      "responde_hoy": null
+      "responde_hoy": "validaciones-pt",
+      "clase_resuelta": "PR 4 tanda 2"
     },
     {
       "n": 32,
@@ -311,9 +312,10 @@
       "area": "Frío",
       "pregunta": "¿Qué túneles van atrasados ahora?",
       "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "consulta_objetivo": "prefrio-en-curso",
       "objetivo": "prefrío en curso",
-      "responde_hoy": null
+      "responde_hoy": "prefrio-en-curso",
+      "clase_resuelta": "PR 4 tanda 2"
     },
     {
       "n": 34,
@@ -409,9 +411,10 @@
       "area": "Frío",
       "pregunta": "¿Qué folios se anularon esta semana?",
       "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "consulta_objetivo": "anulaciones-validacion",
       "objetivo": "anulaciones",
-      "responde_hoy": null
+      "responde_hoy": "anulaciones-validacion",
+      "clase_resuelta": "PR 4 tanda 2"
     },
     {
       "n": 44,
