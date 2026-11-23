@@ -56,9 +56,9 @@ test('FoliOS v2: la capa transversal se carga al final y con fuentes autoalojada
     assert.ok(pkg.dependencies['@fontsource-variable/azeret-mono']);
 });
 
-test('FoliOS v2: cada área del gajo tiene su regla de activación y su gajo', () => {
+test('Gajos vivos: cada área activa su paleta, sin fondo decorativo en la cabecera', () => {
     for (const area of ['materia-prima', 'frigorifico', 'materiales', 'consultas', 'gerencia', 'administracion', 'operacion']) {
-        const rule = folios.match(new RegExp(`\\{\\n    --area-ink: var\\(--area-${area}-ink\\);[^}]*--area-gajo: url\\("data:image\\/svg\\+xml,[^"]+"\\);\\n\\}`));
-        assert.ok(rule, `Falta la regla de ${area}`);
+        assert.ok(folios.includes(`--area-ink: var(--area-${area}-ink);`), `Falta la regla de ${area}`);
     }
+    assert.doesNotMatch(folios + read('resources/css/estiba-ui.css'), /--area-gajo/);
 });

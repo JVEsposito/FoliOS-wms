@@ -116,8 +116,6 @@
     font: 500 .75rem/1.4 var(--eui-font-family-mono);
     text-transform: uppercase;
 }
-.operation-now-command__meta > span { white-space: nowrap; }
-.operation-now-command__meta > span + span::before { margin-inline-end: 9px; content: "·"; }
 
 .operation-now-command__state {
     grid-area: state;

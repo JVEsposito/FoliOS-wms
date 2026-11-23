@@ -49,12 +49,8 @@
         <main class="office-app management-app is-hidden" id="officeApp" data-folios-workspace="analisis">
             <x-office.navigation domain="gerencia" office="panel" context="ADMINISTRACIÓN & GERENCIA" icon="◆" />
 
-            <section class="management-heading folios-ticket" data-folios-masthead>
-                <div>
-                    <p class="eyebrow">RESUMEN DE LA OPERACIÓN</p>
-                    <h1>Panel gerencial</h1>
-                    <p>Capacidad, recepciones, materia prima y envases de la temporada en una lectura clara.</p>
-                </div>
+            <x-folios.cabecera-etiqueta class="management-heading" area="gerencia" seccion="Gerencia · Resumen de la operación"
+                titulo="Panel gerencial" codigo="GE · INDICADORES DE TEMPORADA">
                 <div class="management-refresh">
                     <label class="management-season">
                         <span>TEMPORADA DEL PANEL</span>
@@ -70,7 +66,7 @@
                     </div>
                     <button class="refresh-button folios-action" id="refreshDashboardButton" type="button"><span aria-hidden="true">↻</span> Actualizar ahora</button>
                 </div>
-            </section>
+            </x-folios.cabecera-etiqueta>
 
             <section class="management-kpis" aria-label="Indicadores principales" data-folios-metrics>
                 <article class="management-kpi management-kpi--romana">

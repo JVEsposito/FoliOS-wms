@@ -197,6 +197,14 @@
     letter-spacing: .035em;
 }
 
+.office-app .folios-etiqueta__descripcion {
+    max-inline-size: 65ch;
+    margin: 6px 0 0;
+    color: var(--text-secondary);
+    font-size: .9rem;
+    line-height: 1.35;
+}
+
 .folios-perforacion {
     position: relative;
     border-block-start: 1px dashed var(--line);
@@ -320,9 +328,6 @@
 .office-app .folios-celdas-resumen__barra { display: flex; flex-wrap: nowrap; gap: 2px; }
 .office-app .folios-celdas-resumen__barra [data-cell] { inline-size: 0; min-inline-size: 0; }
 
-.office-app [data-office-gajos-vivos] .estiba-office-header {
-    border-block-end: 3px solid var(--area-ink);
-}
 
 .folios-ticket__stub .folios-gajo {
     --gajo-rest: var(--line);

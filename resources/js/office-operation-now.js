@@ -62,7 +62,6 @@ const elements = {
     connectionDetail: byId('operationConnectionDetail'),
     liveSignal: byId('operationLiveSignal'),
     liveText: byId('operationLiveText'),
-    season: byId('operationSeason'),
     updatedAt: byId('operationUpdatedAt'),
     date: byId('operationDate'),
     timeMinutes: byId('operationTimeMinutes'),
@@ -468,23 +467,19 @@ function startClock() {
 function renderHeader(data) {
     const generated = new Date(data.generado_at);
     state.clockOffsetMs = Number.isNaN(generated.getTime()) ? 0 : generated.getTime() - Date.now();
-    elements.season.textContent = data.temporada
-        ? `${data.temporada.codigo} · ${data.temporada.nombre}`
-        : 'Sin temporada activa';
     elements.updatedAt.textContent = `Última lectura: ${dateTime(data.generado_at)}`;
     const day = data.jornada?.fecha ? String(data.jornada.fecha).split('-').reverse().join('-') : '';
     const shift = data.jornada?.turno ? `Turno ${humanize(data.jornada.turno)}` : '';
-    const workday = document.querySelector('[data-office-workday]');
-    if (workday) workday.textContent = [day, shift].filter(Boolean).join(' · ') || 'Sin configurar';
     elements.workday.textContent = day || '—';
-    elements.shift.textContent = shift || 'Turno sin configurar';
+    elements.shift.textContent = shift ? ` · ${shift}` : '';
+    elements.shift.hidden = !shift;
 
     const start = Date.parse(data.jornada?.inicio);
     const end = Date.parse(data.jornada?.fin);
     elements.workdayHours.hidden = !(end > start);
     if (!elements.workdayHours.hidden) {
         const hora = new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: data.jornada.zona_horaria });
-        elements.workdayHours.textContent = `Jornada ${hora.format(start)}–${hora.format(end - 60_000)}`;
+        elements.workdayHours.textContent = `${hora.format(start)}–${hora.format(end - 60_000)}`;
     }
 
     const status = data.sincronizacion?.estado || 'sin_actividad';

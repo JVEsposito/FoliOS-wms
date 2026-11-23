@@ -13,7 +13,6 @@ class Navigation extends Component
         public string $office,
         public string $context = 'OPERACIÓN DE OFICINA',
         public string $icon = '◆',
-        public bool $gajosVivos = false,
     ) {}
 
     public function render(): View|Closure|string

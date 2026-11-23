@@ -47,9 +47,6 @@
     background: var(--area-tint, var(--eui-area-operacion-tint)); color: var(--area-text, var(--eui-area-operacion-text));
     font: var(--eui-font-weight-bold) .8125rem/1 var(--eui-font-family-sans); letter-spacing: .02em; white-space: nowrap;
 }
-.estiba-ui .eui-heading__eyebrow::before {
-    content: ""; flex: 0 0 16px; width: 16px; height: 16px; background: var(--area-gajo, none) center / 16px 16px no-repeat;
-}
 .estiba-ui .eui-heading__title {
     margin: 0; color: var(--eui-color-text); font-family: var(--eui-font-family-sans); font-size: clamp(2.5rem, 3.4vw, 4rem);
     font-stretch: var(--eui-font-stretch-masthead); font-weight: var(--eui-font-weight-black);

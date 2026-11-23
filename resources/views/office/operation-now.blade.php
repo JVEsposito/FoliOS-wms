@@ -19,19 +19,21 @@
     <body>
         @php($attentionAreas = ['materia-prima' => 'Materia Prima', 'frigorifico' => 'Frigorífico', 'materiales' => 'Materiales', 'consultas' => 'Consultas', 'gerencia' => 'Gerencia', 'administracion' => 'Administración'])
         <main class="office-app operation-now-app is-hidden" id="operationNowApp">
-            <x-office.navigation domain="gerencia" office="operacion-ahora" context="CENTRO DE CONTROL" icon="OA" />
+            <x-office.navigation domain="gerencia" office="operacion-ahora" context="CENTRO DE CONTROL" icon="OA">
+                <x-slot:jornada>
+                    <span class="estiba-office-workday">Jornada
+                        <strong><span id="operationWorkday">Sin consultar</span><span id="operationShift" hidden></span></strong>
+                        <small id="operationWorkdayHours" hidden></small>
+                    </span>
+                </x-slot:jornada>
+            </x-office.navigation>
 
             <div class="operation-now estiba-ui" id="officeContent" data-density="compact">
                 <header class="operation-now-command folios-ticket">
                     <div class="operation-now-command__title">
                         <p class="operation-now-eyebrow"><x-folios.gajo area="operacion" :size="17" />Operación ahora · Centro de control</p>
                         <h1>Operación ahora</h1>
-                        <p class="operation-now-command__meta">
-                            <span aria-hidden="true">OPN</span>
-                            <span id="operationWorkday">—</span>
-                            <span id="operationShift">Turno sin configurar</span>
-                            <span id="operationWorkdayHours" hidden></span>
-                        </p>
+                        <p class="operation-now-command__meta">OPN · CONTROL DE PLANTA</p>
                     </div>
                     <div class="operation-now-command__date" aria-label="Fecha y hora operacional">
                         <strong id="operationTime"><span id="operationTimeMinutes">--:--</span><span class="operation-now-command__seconds" id="operationTimeSeconds">:--</span></strong>
@@ -44,7 +46,7 @@
                         <strong class="operation-now-live" id="operationLiveSignal" data-tone="neutral">
                             <i aria-hidden="true"></i><span id="operationLiveText">Sin consultar</span>
                         </strong>
-                        <small><span id="operationUpdatedAt">Última lectura: —</span> · <span id="operationSeason">Temporada sin consultar</span></small>
+                        <small id="operationUpdatedAt">Última lectura: —</small>
                     </div>
                 </header>
 

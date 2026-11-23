@@ -422,6 +422,7 @@ class EstructuraOficinaTest extends TestCase
             }
             $this->assertSame(1, $xpath->query('//*[@data-office-context-refresh]')->length, $path);
             $this->assertSame(1, $xpath->query('//*[@data-office-context-status]')->length, $path);
+            $this->assertSame(1, $xpath->query('//header[@data-office-shell-header]//*[@data-office-workday]')->length, $path);
             $this->assertSame(1, $xpath->query('//*[@data-office-menu]')->length, $path);
             $this->assertSame(1, $xpath->query('//select[@data-office-theme-select]')->length, $path);
             $this->assertSame(0, $xpath->query('//*[@id="officeThemeSelector"]')->length, $path);
