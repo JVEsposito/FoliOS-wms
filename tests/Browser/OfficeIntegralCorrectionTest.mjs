@@ -134,6 +134,134 @@ const conCuenta = {
     },
 };
 
+async function abrirCuentaAcumulativa(browser, { width = 1280, rol = 'administrador', validada = true, disponible = true, conciliada = false } = {}) {
+    const context = await browser.newContext({ viewport: { width, height: 1000 } });
+    const identity = { id: 1, nombre: 'Administración', rol, puede_consultar_romana: true, puede_operar_romana: true, modulos_acceso: ['materia-prima.romana'] };
+    await context.addInitScript((user) => {
+        localStorage.setItem('estiba_wms_office_token', 'fixture');
+        localStorage.setItem('estiba_wms_office_identity', JSON.stringify(user));
+    }, identity);
+    const season = { id: 'temporada', nombre: 'Temporada 2026', codigo: 'TEMP-2627', activa: true };
+    const envases = [{ tipo_envase: 'bins', cantidad_declarada: 2, cantidad_validada: 2, propiedad: 'cliente', tara_unitaria_salida: 40 },
+        { tipo_envase: 'totes', cantidad_declarada: 48, cantidad_validada: 48, propiedad: 'cliente', tara_unitaria_salida: 2 }];
+    const reception = { id: 'recepcion', numero_recepcion: 'REC-2611-0041', temporada: season, cliente: { id: 'cliente', nombre: 'FALCO FRUIT' },
+        tipo_recepcion: 'fruta_pesaje_envases', estado: 'cerrado', estado_validacion_mp: validada ? 'validada' : 'pendiente', version: 7,
+        numero_guia_despacho: '127', guias: [{ id: 'g1', numero_guia_despacho: '127', envases: [{ tipo_envase: 'bins', cantidad: 2 }, { tipo_envase: 'totes', cantidad: 48 }] }],
+        envases, eventos: [], salida_envases: [], inspecciones_envases: [], peso_bruto: 700, peso_tara: 176, peso_neto: 524,
+        ingreso_at: '2026-11-09T12:00:00Z', lecturas_pesaje_envases: [],
+        pesaje_envases: { tipo_envase: 'bins', cantidad_declarada: 50, cantidad_pesada: 50, cantidad_pendiente: 0,
+            tipos: [{ tipo_envase: 'bins', cantidad_declarada: 2, cantidad_pesada: 2, peso_neto: 0 },
+                { tipo_envase: 'totes', cantidad_declarada: 48, cantidad_pesada: 48, peso_neto: 524, peso_neto_por_envase: 10.917 }] } };
+    const base = { ...conCuenta, numero_recepcion: reception.numero_recepcion, tipo_recepcion: reception.tipo_recepcion,
+        guias: reception.guias, envases, cantidades_editables: false,
+        cuenta_envases: { ...conCuenta.cuenta_envases, disponible,
+            motivo_no_disponible: disponible ? null : 'La recepción tiene una reasignación vigente.',
+            tipos: envases.map((e) => ({ tipo_envase: e.tipo_envase, recibidos_cuenta: e.cantidad_validada, recibidos_registro: e.cantidad_validada,
+                entregados_cuenta: 0, entregados_registro: 0 })),
+            entregados_editables: !conciliada, salida_conciliada: conciliada } };
+    const writes = []; const errors = [];
+    await context.route('http://localhost/**', async (route) => {
+        const request = route.request(); const path = new URL(request.url()).pathname;
+        if (path === '/oficina/romana') return route.fulfill({ body: html, contentType: 'text/html' });
+        if (path.startsWith('/build/') || path.startsWith('/brand/')) {
+            try { return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' })[extname(path)] || 'application/octet-stream' }); }
+            catch { return route.fulfill({ status: 404, body: '' }); }
+        }
+        if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
+        if (path === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Prueba', temporada: season } } });
+        if (path === '/api/envases/catalogo') return route.fulfill({ json: { data: types } });
+        if (path === '/api/romana/porteria/resumen') return route.fulfill({ json: { data: { pendientes: 0, recientes: [] } } });
+        if (path === '/api/romana/catalogos') return route.fulfill({ json: { temporadas: [season], clientes: [reception.cliente], especies: [], tipos_envase: types, tipos_servicio: [], tipos_recepcion: [], conceptos_envases: [] } });
+        if (path === '/api/romana/recepciones/recepcion/correccion-integral' && request.method() === 'GET') return route.fulfill({ json: { data: base } });
+        if (path === '/api/romana/recepciones/recepcion/ajuste-cuenta-envases' && request.method() === 'PUT') {
+            writes.push(request.postDataJSON());
+            return writes.length === 1
+                ? route.fulfill({ status: 503, json: { message: 'Respuesta temporal: reintenta el ajuste.' } })
+                : route.fulfill({ json: { data: { ...reception, version: 8 } } });
+        }
+        if (path === '/api/romana/recepciones') return route.fulfill({ json: { data: [reception], resumen: {}, meta: { pagina_actual: 1, ultima_pagina: 1, total: 1 } } });
+        if (path === '/api/romana/recepciones/recepcion') return route.fulfill({ json: { data: reception } });
+        assert.equal(request.method(), 'GET', `Escritura inesperada: ${path}`);
+        return route.fulfill({ json: {} });
+    });
+    const page = await context.newPage(); page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto('http://localhost/oficina/romana');
+    await page.locator('#officeLoading').waitFor({ state: 'hidden' });
+    await page.locator('tr.rec-row[data-reception-id="recepcion"]').click();
+    return { page, context, writes, errors };
+}
+
+test('el acceso directo del acumulativo abre solo la cuenta, conserva el intento y permite volver a la corrección completa', async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
+    try {
+        for (const width of [390, 1280]) {
+            const { page, context, writes, errors } = await abrirCuentaAcumulativa(browser, { width });
+            await page.locator('#containerAccountCorrectionButton').click();
+            const dialog = page.locator('#integralCorrectionDialog');
+            await dialog.locator('[data-cuenta-recibidos="bins"]').waitFor();
+            assert.equal(await dialog.getAttribute('aria-label'), 'Corregir cuenta de envases');
+            assert.match(await dialog.innerText(), /FALCO FRUIT/);
+            assert.match(await dialog.innerText(), /Guías: 127/);
+            assert.match(await dialog.innerText(), /CSG-2 · Agrícola Dos/);
+            assert.equal(await dialog.locator('[name="integral_modo"], [data-numero], [data-segmento], [name="peso_tara"]').count(), 0);
+            // El motivo es obligatorio: no se envía nada si está vacío.
+            await dialog.locator('button[type="submit"]').click();
+            assert.equal(writes.length, 0);
+            await dialog.locator('[data-cuenta-recibidos="bins"]').fill('3');
+            await dialog.locator('#integralAddType').selectOption('esponjas');
+            assert.equal(await dialog.locator('[data-cuenta-recibidos="bins"]').inputValue(), '3');
+            await dialog.locator('[data-cuenta-recibidos="esponjas"]').fill('2');
+            await dialog.locator('[name="productor_csg"]').selectOption('CSG-2');
+            await dialog.locator('[name="motivo_correccion"]').fill('Cuenta de envases revisada con la guía y el productor.');
+            assert.match(await dialog.locator('#integralPreview').innerText(), /Efecto en el saldo del cliente/);
+            await dialog.locator('button[type="submit"]').click();
+            await dialog.locator('#integralError').filter({ hasText: 'Respuesta temporal' }).waitFor();
+            await dialog.locator('button[type="submit"]').click();
+            await page.waitForFunction(() => !document.getElementById('integralCorrectionDialog').open);
+            assert.equal(writes.length, 2);
+            assert.deepEqual(writes[0], writes[1]);
+            assert.equal(writes[0].productor_csg, 'CSG-2');
+            assert.equal(writes[0].envases.find((e) => e.tipo_envase === 'bins').recibidos, 3);
+            assert.equal(writes[0].envases.find((e) => e.tipo_envase === 'esponjas').recibidos, 2);
+            for (const campo of ['guias', 'segmentos', 'destare', 'propiedades']) assert.equal(campo in writes[0], false);
+            await page.locator('#integralCorrectionButton').click();
+            await dialog.locator('[name="integral_modo"][value="completa"]').waitFor();
+            assert.equal(await dialog.locator('[name="integral_modo"][value="completa"]').isChecked(), true);
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+            assert.deepEqual(errors, []);
+            await context.close();
+        }
+    } finally { await browser.close(); }
+});
+
+test('el acceso directo respeta permisos, validación, bloqueos y salidas conciliadas', async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
+    try {
+        for (const options of [{ rol: 'operador_romana' }, { validada: false }, { disponible: false }, { conciliada: true }]) {
+            const { page, context, writes, errors } = await abrirCuentaAcumulativa(browser, options);
+            const button = page.locator('#containerAccountCorrectionButton');
+            if (options.rol || options.validada === false) {
+                assert.equal(await button.isVisible(), false);
+            } else {
+                await button.click();
+                const dialog = page.locator('#integralCorrectionDialog');
+                if (options.disponible === false) {
+                    await page.getByText('La recepción tiene una reasignación vigente.', { exact: true }).waitFor();
+                    assert.equal(await dialog.evaluate((el) => el.open), false);
+                } else {
+                    await dialog.locator('[data-cuenta-entregados="bins"]').waitFor();
+                    assert.equal(await dialog.locator('[data-cuenta-entregados="bins"]').isDisabled(), true);
+                    assert.equal(await dialog.locator('[data-cuenta-recibidos="bins"]').isEnabled(), true);
+                    assert.match(await dialog.innerText(), /La salida está conciliada con un despacho/);
+                }
+            }
+            assert.deepEqual(writes, []);
+            assert.deepEqual(errors, []);
+            await context.close();
+        }
+    } finally { await browser.close(); }
+});
+
 test('Administración ajusta solo la cuenta de envases cuando el lote ya tiene entregas', async () => {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     try {

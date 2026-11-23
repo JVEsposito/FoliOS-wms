@@ -536,8 +536,10 @@ function renderDetail(reception) {
     // Administración corrige el número de la guía en cualquier etapa: solo el número, sin tocar envases ni kilos.
     byId('guideNumberButton').classList.toggle('is-hidden', state.identity?.rol !== 'administrador'
         || reception.estado === 'anulada' || Boolean(reception.eliminada) || !(reception.guias || []).length);
-    byId('integralCorrectionButton').classList.toggle('is-hidden', state.identity?.rol !== 'administrador'
-        || reception.estado_validacion_mp !== 'validada' || reception.estado === 'anulada' || Boolean(reception.eliminada));
+    const canCorrectValidatedReception = state.identity?.rol === 'administrador'
+        && reception.estado_validacion_mp === 'validada' && reception.estado !== 'anulada' && !reception.eliminada;
+    byId('integralCorrectionButton').classList.toggle('is-hidden', !canCorrectValidatedReception);
+    byId('containerAccountCorrectionButton').classList.toggle('is-hidden', !canCorrectValidatedReception);
     elements.editReception.textContent = canCorrect ? 'Corregir recepción' : 'Editar ingreso';
     elements.editReception.classList.toggle('is-hidden', (!canOperate || !reception.puede_editar) && !canCorrect);
     elements.confirmEntry.classList.toggle('is-hidden', !canOperate || !reception.puede_confirmar_ingreso);
@@ -768,11 +770,13 @@ function registeredLater(reception) {
     if (!reception.registrado_at || !reception.ingreso_at) return false;
     return Math.abs(new Date(reception.registrado_at) - new Date(reception.ingreso_at)) > 10 * 60 * 1000;
 }
-byId('integralCorrectionButton').addEventListener('click', async () => {
+async function openReceptionCorrection(options = {}) {
     if (!state.selected) return;
     setBusy(true, 'Preparando la corrección…');
-    try { await integralCorrection.open(state.selected); } catch (error) { toast(error.message, true); } finally { setBusy(false); }
-});
+    try { await integralCorrection.open(state.selected, options); } catch (error) { toast(error.message, true); } finally { setBusy(false); }
+}
+byId('integralCorrectionButton').addEventListener('click', () => openReceptionCorrection());
+byId('containerAccountCorrectionButton').addEventListener('click', () => openReceptionCorrection({ soloCuenta: true }));
 
 function configureAdministrativeCorrection(enabled) {
     const closedCorrection = enabled

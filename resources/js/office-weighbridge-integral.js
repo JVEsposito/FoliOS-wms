@@ -11,6 +11,7 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
     let attempt = null;
     let tipos = [];
     let mode = 'completa';
+    let soloCuenta = false;
     // Lo digitado en «Solo cuenta de envases»: valores correctos por envase y lado, y el CSG de la diferencia.
     let cuenta = { valores: {}, productor: '', entregadosA: null };
 
@@ -171,7 +172,7 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
 
     function modeField() {
         const account = estado.cuenta_envases;
-        if (!account) return '';
+        if (!account || soloCuenta) return '';
         return `<fieldset class="integral-mode"><legend>Qué corregir</legend>
             <label class="integral-mode__option"><input type="radio" name="integral_modo" value="completa" ${mode === 'completa' ? 'checked' : ''}>
                 <span><strong>Recepción completa</strong><small>Guías, conteo, propiedad, destare, lotes y kilos.</small></span></label>
@@ -195,6 +196,11 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
 
     function accountBody() {
         const account = estado.cuenta_envases;
+        const acumulativo = estado.tipo_recepcion === 'fruta_pesaje_envases';
+        const productores = (account.productores || []).map((p) => `CSG ${p.codigo}${p.nombre ? ` · ${p.nombre}` : ''}`).join('; ');
+        const contexto = `<p class="integral-help"><strong>Cliente:</strong> ${esc(estado.cliente_nombre || 'Sin cliente informado')}
+            · <strong>Guías:</strong> ${esc(estado.guias.map((g) => g.numero_guia_despacho).join(' · ') || 'Sin guía informada')}
+            ${productores ? `<br><strong>Productores:</strong> ${esc(productores)}` : ''}</p>`;
         // Camión con varios CSG: a qué productor se entregaron los envases de la salida, sin tocar cantidades.
         const entregadosA = account.elige_productor_entregados
             ? `<label class="field integral-producer"><span>CSG que recibió los entregados</span><select name="productor_entregados_csg">
@@ -212,10 +218,10 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
             ? `<section><h3>Ajustes anteriores</h3><ul class="integral-lots">${account.ajustes.map((a) => `<li><strong>${esc(a.nombre)} · ${esc(a.lado)} ${a.registro} → ${a.correcto}</strong> (${signed(a.diferencia)})
                 · ${esc(day(a.registrado_at))}${a.usuario ? ` · ${esc(a.usuario)}` : ''}${a.vigente ? '' : ' · <em>reemplazado</em>'}<small>Motivo: ${esc(a.motivo)}</small></li>`).join('')}</ul></section>`
             : '';
-        return `<p class="integral-help">Registrado es lo que dejó la recepción (Validación MP y destare). Indica lo correcto: queda un solo ajuste por envase,
+        return `${contexto}<p class="integral-help">Registrado es lo que dejó la recepción (${acumulativo ? 'Validación MP y pesaje acumulativo' : 'Validación MP y destare'}). Indica lo correcto: queda un solo ajuste por envase,
                 con la fecha de la recepción, y el estado de cuenta lo muestra en su propia línea con el motivo.</p>
             <section><h3>Recibidos</h3>${accountTable('recibidos')}${productor}</section>
-            <section><h3>Entregados en el destare</h3>${entregados}</section>
+            <section><h3>${acumulativo ? 'Entregados' : 'Entregados en el destare'}</h3>${entregados}</section>
             ${addTypeField()}
             ${historial}
             <section><h3>Resultado</h3><div id="integralPreview" aria-live="polite"></div></section>`;
@@ -225,7 +231,7 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
         const account = mode === 'cuenta';
         dialog.innerHTML = `<form class="weighbridge-dialog__shell integral-shell" id="integralForm" novalidate>
             <header class="weighbridge-dialog__heading"><div><p class="eyebrow">CORRECCIÓN ADMINISTRATIVA · RECEPCIÓN VALIDADA</p>
-                <h2>Corregir ${esc(estado.numero_recepcion)}</h2>
+                <h2>${soloCuenta ? 'Corregir cuenta de envases · ' : 'Corregir '}${esc(estado.numero_recepcion)}</h2>
                 <p>${account
                     ? 'Ajusta solo la cuenta corriente de envases del cliente. Guías, lo declarado, Validación MP, lotes, destare y kilos quedan como están.'
                     : 'Registra los valores correctos. La cuenta corriente conserva lo original y agrega el ajuste enlazado; los lotes recalculan sus kilos con el destare.'}</p></div>
@@ -349,18 +355,24 @@ export function createIntegralCorrection({ dialog, api, escapeHtml: esc, operati
     });
 
     return {
-        async open(reception) {
+        async open(reception, options = {}) {
             const respuesta = await api(`/api/romana/recepciones/${reception.id}/correccion-integral`);
             const base = respuesta.data;
+            soloCuenta = options.soloCuenta === true;
+            if (soloCuenta && !base.cuenta_envases?.disponible) {
+                throw new Error(base.cuenta_envases?.motivo_no_disponible || 'La cuenta de envases no está disponible para esta recepción.');
+            }
             estado = { ...structuredClone(base), original: base, motivo: '',
+                cliente_nombre: reception.cliente?.nombre || '',
                 envases_validados: base.envases.map((e) => ({ tipo_envase: e.tipo_envase, cantidad: e.cantidad_validada })),
                 propiedades: Object.fromEntries(base.envases.map((e) => [e.tipo_envase, e.propiedad])),
                 taras: Object.fromEntries(base.envases.map((e) => [e.tipo_envase, e.tara_unitaria_salida ?? ''])) };
             tipos = [...new Set([...base.envases.map((e) => e.tipo_envase), ...base.guias.flatMap((g) => g.envases.map((e) => e.tipo_envase)),
                 ...(base.cuenta_envases?.tipos || []).map((t) => t.tipo_envase)])];
             attempt = null;
-            mode = 'completa';
+            mode = soloCuenta ? 'cuenta' : 'completa';
             cuenta = { valores: {}, productor: '', entregadosA: null };
+            dialog.setAttribute('aria-label', soloCuenta ? 'Corregir cuenta de envases' : 'Corregir recepción validada');
             render();
             dialog.showModal();
         },
