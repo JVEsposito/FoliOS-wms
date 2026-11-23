@@ -5,6 +5,7 @@ namespace App\Services\Asistente\Consultas;
 use App\Models\Cliente;
 use App\Models\EspecieValidacion;
 use App\Models\Temporada;
+use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\PeriodoOperativo;
 use App\Services\Asistente\TemporadasAsistente;
@@ -46,6 +47,41 @@ abstract class ConsultaBase implements ConsultaAsistente
     public function capacidades(): array
     {
         return [];
+    }
+
+    /** Una consulta que no es tema: una sola vista, `general`, con sus mismos datos. */
+    public function vistas(): array
+    {
+        return [new VistaConsulta(
+            VistaConsulta::GENERAL, $this->titulo(), $this->descripcion(), $this->palabrasClave(), $this->filtros(), null, $this->admiteRecomendacion(),
+        )];
+    }
+
+    public function vistaPorDefecto(): ?string
+    {
+        return VistaConsulta::GENERAL;
+    }
+
+    public function vista(?string $clave): ?VistaConsulta
+    {
+        $vistas = $this->vistas();
+        if ($clave === VistaConsulta::GENERAL && count($vistas) === 1) {
+            return $vistas[0];
+        }
+        $clave ??= $this->vistaPorDefecto();
+
+        foreach ($vistas as $vista) {
+            if ($vista->clave === $clave) {
+                return $vista;
+            }
+        }
+
+        return null;
+    }
+
+    public function puedeVer(User $usuario, VistaConsulta $vista): bool
+    {
+        return $this->puedeEjecutar($usuario);
     }
 
     /** Temporada activa, o la productiva anterior a ella cuando la pregunta lo pide. */
