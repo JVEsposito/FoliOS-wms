@@ -119,17 +119,18 @@ En `/oficina/administracion/asistente`, solo para quien administra el asistente:
 3. **Fichas:** los clientes y CSG reconocidos se cambian por `[CLIENTE_1]` y `[CSG_1]` antes de enviar. Un nombre que el reconocedor no conoce sale tal como se escribió. Los códigos nunca llegan a Haiku: las reglas los resuelven antes.
 4. **Llamada:** una sola, a `claude-haiku-5-5`, con `tool_choice: any` y tres herramientas estrictas.
 5. **Validación local:** consulta del catálogo del usuario, fichas de la pregunta, especie de la temporada, fechas reales, no futuras y de hasta 400 jornadas, y turno solo con una jornada. Si algo no calza, no se ejecuta nada: el asistente repregunta.
-6. **Respuesta:** la arma FoliOS con la línea «Entendí», como en el modo sin IA, con la insignia **Haiku** y el pie «Cifras calculadas por FoliOS».
+6. **Cobertura:** la consulta se ejecuta solo si cubre toda la pregunta. No la cubre si Haiku anota condiciones en `sin_cubrir` (un estado como «pendiente» o «vacíos», un destino, un material, una agrupación) o si pide un filtro que la consulta no tiene: un cliente, CSG, especie o detalle por día que la consulta no admite, u otro día en una existencia, con la misma regla que el modo sin IA. Entonces el asistente responde «Lo más cercano que tengo es «Envases recibidos», pero no cubre «vacíos». ¿Te sirve igual o es alguna de estas?» y la ofrece sin ejecutarla. El registro guarda solo cuántas condiciones faltaron (`parcial: 2 sin cubrir`), nunca su texto.
+7. **Respuesta:** la arma FoliOS con la línea «Entendí», como en el modo sin IA, con la insignia **Haiku** y el pie «Cifras calculadas por FoliOS».
 
 **Herramientas.** La API admite hasta 20 herramientas estrictas y 24 parámetros opcionales por pedido, así que no hay una herramienta por consulta:
 
 | Herramienta | Uso | Parámetros |
 | --- | --- | --- |
-| `consultar` | Ejecutar una consulta del catálogo | `consulta` (enum con las claves que el usuario puede ver), `periodo_tipo` (`actual`, `jornada`, `turno`, `rango`, `temporada`, `temporada_anterior`), `desde`, `hasta`, `turno`, `cliente` (ficha), `csg` (ficha), `especie` (enum de la temporada), `agrupar_por` |
+| `consultar` | Ejecutar una consulta del catálogo | `pide` (la cifra o lista y cada condición de la pregunta, escrito antes de elegir), `consulta` (enum con las claves que el usuario puede ver), `sin_cubrir` (condiciones que la consulta no cubre, con las palabras de la pregunta), `periodo_tipo` (`actual`, `jornada`, `turno`, `rango`, `temporada`, `temporada_anterior`), `desde`, `hasta`, `turno`, `cliente` (ficha), `csg` (ficha), `especie` (enum de la temporada), `agrupar_por` |
 | `pedir_aclaracion` | Ofrecer de 2 a 4 consultas | `opciones` |
 | `sin_consulta` | Ninguna consulta responde | `motivo`: otro tema, comparación, pronóstico, recomendación o dato no disponible |
 
-Todos los parámetros son obligatorios, con valores neutros (`""`, `todas`, `ninguno`, `nada`). La descripción del catálogo va en `consultar` y ningún nombre de cliente va en un esquema, porque los esquemas estrictos se guardan hasta 24 horas. El prompt de sistema es fijo y queda en caché; la fecha, la jornada y el turno van en el mensaje del usuario para no romper la caché.
+Todos los parámetros son obligatorios, con valores neutros (`""`, `[]`, `todas`, `ninguno`, `nada`). El orden de `consultar` importa: Haiku escribe primero `pide`, luego elige la consulta y recién entonces revisa qué le falta. La descripción del catálogo va en `consultar` y ningún nombre de cliente va en un esquema, porque los esquemas estrictos se guardan hasta 24 horas. El prompt de sistema es fijo y queda en caché; la fecha, la jornada y el turno van en el mensaje del usuario para no romper la caché.
 
 **Cuando Haiku no está disponible.** Sin red, con un error de la API o con una respuesta sin herramienta, la llamada queda registrada como `error` y el asistente responde con las reglas y lo avisa.
 
@@ -137,7 +138,9 @@ Todos los parámetros son obligatorios, con valores neutros (`""`, `todas`, `nin
 
 **Configuración.** `ANTHROPIC_API_KEY` va solo en el `.env` del servidor. El modo se cambia con `PUT /api/asistente/configuracion` (`modo`: `sin_ia` o `mixto`); `mixto` se rechaza si falta la clave. `GET /api/asistente/configuracion` informa en `ia` si hay clave, el modelo, el consumo del mes y los topes.
 
-**Evaluación con Haiku real.** `php artisan asistente:evaluar --modo=haiku` corre el banco como el modo mixto, con llamadas reales que cuentan en los topes, e informa llamadas, tokens y costo. Las pruebas de CI usan respuestas grabadas y nunca llaman a la API.
+**Evaluación con Haiku real.** `php artisan asistente:evaluar --modo=haiku` corre el banco como el modo mixto, con llamadas reales que cuentan en los topes, e informa llamadas, tokens y costo. Agrega la columna **Detalle**: lo que Haiku entendió que se pide (`pide`), la consulta que no cubrió todo y qué le faltó, o el motivo del rechazo. Las preguntas del banco son de ejemplo, así que el detalle sí se muestra; en el uso real ese texto no se guarda. Las pruebas de CI usan respuestas grabadas y nunca llaman a la API.
+
+La primera evaluación real (23-11-2026) dio 8 falsas de 38 llamadas: Haiku eligió consultas parecidas dejando fuera una condición (totes «vacíos», lo que «falta por validar», pallets que «volvieron de cargas», cajas «a Estados Unidos», cajas «de cartón», cajas «embaladas ayer» en una existencia). La comprobación de cobertura responde a eso. El modo mixto se activa solo con una evaluación sin falsas.
 
 ## Recomendaciones a pedido
 

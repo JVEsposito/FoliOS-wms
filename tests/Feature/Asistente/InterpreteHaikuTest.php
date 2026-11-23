@@ -103,10 +103,12 @@ class InterpreteHaikuTest extends TestCase
 
     public function test_fechas_imposibles_o_futuras_no_se_ejecutan(): void
     {
-        foreach ([['desde' => '2026-02-31'], ['desde' => '2026-12-24'], ['periodo_tipo' => 'turno', 'desde' => '2026-11-21', 'turno' => 'ninguno']] as $cambio) {
-            $this->haikuResponde('consultar', $this->consultar(['consulta' => 'kilos-recepciones', 'periodo_tipo' => 'jornada', ...$cambio]));
+        $cambios = [['desde' => '2026-02-31'], ['desde' => '2026-12-24'], ['periodo_tipo' => 'turno', 'desde' => '2026-11-21', 'turno' => 'ninguno']];
+        // En secuencia: con un Http::fake por vuelta, solo regiría el primero.
+        $this->haikuRespondeEnOrden(array_map(fn (array $cambio): array => $this->consultar(['consulta' => 'kilos-recepciones', 'periodo_tipo' => 'jornada', ...$cambio]), $cambios));
 
-            $this->preguntar(self::DUDOSA)->assertJsonPath('data.tipo', 'sugerencias');
+        foreach (['el periodo no trae una fecha válida', 'el periodo es futuro', 'falta el turno'] as $motivo) {
+            $this->assertStringContainsString($motivo, $this->preguntar(self::DUDOSA)->assertJsonPath('data.tipo', 'sugerencias')->json('data.mensaje'));
         }
     }
 
@@ -115,6 +117,62 @@ class InterpreteHaikuTest extends TestCase
         $this->haikuResponde('consultar', $this->consultar(['consulta' => 'sueldos-del-personal']));
 
         $this->preguntar(self::DUDOSA)->assertJsonPath('data.tipo', 'sugerencias')->assertJsonPath('data.resultado', null);
+    }
+
+    public function test_una_condicion_que_la_consulta_no_cubre_no_se_ejecuta(): void
+    {
+        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'envases-recibidos', 'periodo_tipo' => 'jornada', 'desde' => '2026-11-22',
+            'pide' => 'totes vacíos que llegaron hoy a Validación MP', 'sin_cubrir' => ['vacíos', 'en Validación MP']]));
+
+        $respuesta = $this->preguntar('cuantos totes llegaron vacios hoy en validacion mp')
+            ->assertJsonPath('data.tipo', 'sugerencias')
+            ->assertJsonPath('data.modo', 'haiku')
+            ->assertJsonPath('data.resultado', null)
+            ->assertJsonPath('data.sugerencias.0.clave', 'envases-recibidos');
+
+        $this->assertSame('Lo más cercano que tengo es «Envases recibidos», pero no cubre «vacíos» ni «en Validación MP». ¿Te sirve igual o es alguna de estas?',
+            $respuesta->json('data.mensaje'));
+        // El texto de la pregunta no se guarda en el registro de llamadas.
+        $llamada = LlamadaIaAsistente::query()->sole();
+        $this->assertSame('envases-recibidos', $llamada->consulta);
+        $this->assertStringNotContainsString('vacíos', (string) $llamada->detalle);
+    }
+
+    public function test_las_fichas_sin_cubrir_se_muestran_con_su_nombre(): void
+    {
+        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'kilos-recepciones', 'periodo_tipo' => 'jornada', 'desde' => '2026-11-19',
+            'sin_cubrir' => ['contra la fruta de CLIENTE_1']]));
+
+        $mensaje = $this->preguntar(self::DUDOSA)->json('data.mensaje');
+
+        $this->assertStringContainsString('«contra la fruta de Exportadora Andina»', $mensaje);
+        $this->assertStringNotContainsString('CLIENTE_1', $mensaje);
+    }
+
+    public function test_una_existencia_no_responde_por_otro_dia(): void
+    {
+        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'cajas-pt', 'periodo_tipo' => 'jornada', 'desde' => '2026-11-21', 'cliente' => 'CLIENTE_1']));
+
+        $respuesta = $this->preguntar(self::DUDOSA)->assertJsonPath('data.tipo', 'sugerencias')->assertJsonPath('data.resultado', null);
+
+        $this->assertStringContainsString('no cubre lo de otro día (muestra lo que hay ahora)', $respuesta->json('data.mensaje'));
+        $this->assertSame('cajas-pt', $respuesta->json('data.sugerencias.0.clave'));
+    }
+
+    public function test_un_filtro_que_la_consulta_no_tiene_no_se_ejecuta(): void
+    {
+        $casos = [
+            'el filtro por cliente' => ['consulta' => 'validaciones-pt', 'periodo_tipo' => 'jornada', 'desde' => '2026-11-19', 'cliente' => 'CLIENTE_1'],
+            'el filtro por especie' => ['consulta' => 'envases-recibidos', 'especie' => 'cereza'],
+            'el detalle por día' => ['consulta' => 'envases-recibidos', 'periodo_tipo' => 'rango', 'desde' => '2026-11-16', 'hasta' => '2026-11-22', 'agrupar_por' => 'jornada'],
+        ];
+        $this->haikuRespondeEnOrden(array_map(fn (array $cambio): array => $this->consultar($cambio), array_values($casos)));
+
+        foreach (array_keys($casos) as $falta) {
+            $respuesta = $this->preguntar(self::DUDOSA)->assertJsonPath('data.tipo', 'sugerencias')->assertJsonPath('data.resultado', null);
+
+            $this->assertStringContainsString("no cubre {$falta}.", $respuesta->json('data.mensaje'));
+        }
     }
 
     public function test_la_aclaracion_ofrece_las_opciones_de_haiku(): void
@@ -194,10 +252,11 @@ class InterpreteHaikuTest extends TestCase
             // Sin parámetros opcionales: la API admite 24 por pedido entre todas las herramientas estrictas.
             $this->assertSame(array_keys($herramienta['input_schema']['properties']), $herramienta['input_schema']['required']);
         }
-        $this->assertSame(
-            array_map(fn ($c) => $c->clave(), $permitidas),
-            $definicion['tools'][0]['input_schema']['properties']['consulta']['enum'],
-        );
+        $consultar = $definicion['tools'][0]['input_schema']['properties'];
+        $this->assertSame(array_map(fn ($c) => $c->clave(), $permitidas), $consultar['consulta']['enum']);
+        // Haiku primero escribe qué pide la pregunta y después, junto a la consulta, qué condiciones no cubre.
+        $this->assertSame(['pide', 'consulta', 'sin_cubrir'], array_slice(array_keys($consultar), 0, 3));
+        $this->assertSame(['type' => 'array', 'items' => ['type' => 'string']], array_intersect_key($consultar['sin_cubrir'], ['type' => 1, 'items' => 1]));
         $this->assertStringNotContainsString('Exportadora Andina', json_encode($definicion, JSON_UNESCAPED_UNICODE));
         $this->assertSame(['type' => 'ephemeral'], $definicion['system'][0]['cache_control']);
     }
@@ -227,6 +286,19 @@ class InterpreteHaikuTest extends TestCase
         $this->assertGreaterThan(0, $informe['costo_usd']);
     }
 
+    public function test_evaluar_cuenta_una_condicion_sin_cubrir_como_pregunta_y_la_muestra(): void
+    {
+        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'validaciones-pt', 'pide' => 'folios pendientes de validar', 'sin_cubrir' => ['falta por validar']]));
+
+        $informe = app(EvaluadorBancoAsistente::class)->evaluar($this->administrador, conHaiku: true);
+
+        $this->assertSame(0, $informe['falsas']);
+        $pendientes = collect($informe['detalle'])->firstWhere('n', 24);
+        $this->assertSame('haiku:parcial', $pendientes['interprete']);
+        $this->assertSame('pregunta', $pendientes['clase']);
+        $this->assertSame('validaciones-pt · sin cubrir: falta por validar', $pendientes['detalle']);
+    }
+
     private function preguntar(string $texto)
     {
         return $this->actingAs($this->administrador, 'sanctum')->postJson('/api/asistente/preguntas', ['texto' => $texto])->assertOk();
@@ -242,10 +314,29 @@ class InterpreteHaikuTest extends TestCase
         ])]);
     }
 
-    /** @param  array<string, string>  $entrada */
+    /**
+     * Una respuesta de `consultar` grabada por cada pregunta, en orden.
+     *
+     * @param  list<array<string, mixed>>  $entradas
+     */
+    private function haikuRespondeEnOrden(array $entradas): void
+    {
+        $secuencia = Http::sequence();
+        foreach ($entradas as $i => $entrada) {
+            $secuencia->push([
+                'id' => "msg_prueba_{$i}", 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-haiku-5-5', 'stop_reason' => 'tool_use',
+                'content' => [['type' => 'tool_use', 'id' => "toolu_prueba_{$i}", 'name' => 'consultar', 'input' => $entrada]],
+                'usage' => ['input_tokens' => 150, 'output_tokens' => 60, 'cache_read_input_tokens' => 4800, 'cache_creation_input_tokens' => 0],
+            ]);
+        }
+        Http::fake(['*' => $secuencia]);
+    }
+
+    /** @param  array<string, mixed>  $entrada */
     private function consultar(array $entrada): array
     {
-        return [...['periodo_tipo' => 'actual', 'desde' => '', 'hasta' => '', 'turno' => 'ninguno', 'cliente' => '', 'csg' => '', 'especie' => 'todas', 'agrupar_por' => 'nada'], ...$entrada];
+        return [...['pide' => '', 'sin_cubrir' => [], 'periodo_tipo' => 'actual', 'desde' => '', 'hasta' => '', 'turno' => 'ninguno', 'cliente' => '', 'csg' => '',
+            'especie' => 'todas', 'agrupar_por' => 'nada'], ...$entrada];
     }
 
     private function llamadaPrevia(float $costo): void

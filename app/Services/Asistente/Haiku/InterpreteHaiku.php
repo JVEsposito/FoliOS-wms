@@ -23,6 +23,14 @@ class InterpreteHaiku
 
     public const INVALIDA = 'invalida';
 
+    /** La consulta más cercana no cubre toda la pregunta: se ofrece sin ejecutarla. */
+    public const PARCIAL = 'parcial';
+
+    /** Condiciones sin cubrir que se muestran, como máximo, y largo de cada una. */
+    private const MAXIMO_SIN_CUBRIR = 4;
+
+    private const LARGO_CONDICION = 60;
+
     public const NO_DISPONIBLE = 'no_disponible';
 
     public const SENSIBLE = 'sensible';
@@ -40,11 +48,11 @@ class InterpreteHaiku
     /**
      * @param  array<string, mixed>  $entidades  lo que reconocieron las reglas
      * @return array{tipo: string, consulta: ?ConsultaAsistente, parametros: ?ParametrosConsulta,
-     *     opciones: list<ConsultaAsistente>, motivo: ?string, llamada: ?LlamadaIaAsistente}
+     *     opciones: list<ConsultaAsistente>, motivo: ?string, sin_cubrir: list<string>, pide: ?string, llamada: ?LlamadaIaAsistente}
      */
     public function interpretar(User $usuario, string $texto, array $entidades): array
     {
-        $vacio = ['consulta' => null, 'parametros' => null, 'opciones' => [], 'motivo' => null, 'llamada' => null];
+        $vacio = ['consulta' => null, 'parametros' => null, 'opciones' => [], 'motivo' => null, 'sin_cubrir' => [], 'pide' => null, 'llamada' => null];
         if ($this->sensible->esSensible($texto)) {
             return [...$vacio, 'tipo' => self::SENSIBLE, 'motivo' => self::SENSIBLE];
         }
@@ -80,15 +88,29 @@ class InterpreteHaiku
             ->registrar($usuario, $estado, $uso, $this->ms($inicio), $herramienta ?: null, $consulta, $detalle);
 
         if ($herramienta === HerramientasHaiku::CONSULTAR) {
+            $pide = $this->condicion($entrada['pide'] ?? '', $preparada['fichas'], 200) ?: null;
             $validada = $this->validador->validar($entrada, $permitidas, $preparada['fichas']);
             if (is_string($validada)) {
                 $elegida = collect($permitidas)->first(fn (ConsultaAsistente $c): bool => $c->clave() === ($entrada['consulta'] ?? null));
 
-                return [...$vacio, 'tipo' => self::INVALIDA, 'motivo' => $validada, 'opciones' => $elegida ? [$elegida] : [],
+                return [...$vacio, 'tipo' => self::INVALIDA, 'motivo' => $validada, 'opciones' => $elegida ? [$elegida] : [], 'pide' => $pide,
                     'llamada' => $registrar(LlamadaIaAsistente::OK, $entrada['consulta'] ?? null, 'rechazada: '.$validada)];
             }
 
-            return [...$vacio, 'tipo' => self::CONSULTA, ...$validada, 'llamada' => $registrar(LlamadaIaAsistente::OK, $validada['consulta']->clave())];
+            // Lo que Haiku dice que falta va entre comillas, con las palabras del usuario; lo que FoliOS detectó, tal cual.
+            $sinCubrir = array_values(array_unique([
+                ...array_map(fn (string $c): string => "«{$c}»", $this->sinCubrir($entrada['sin_cubrir'] ?? [], $preparada['fichas'])),
+                ...$validada['sin_cubrir'],
+            ]));
+            if ($sinCubrir !== []) {
+                // El registro guarda cuántas condiciones faltaron, nunca el texto de la pregunta.
+                return [...$vacio, 'tipo' => self::PARCIAL, 'consulta' => $validada['consulta'], 'opciones' => [$validada['consulta']],
+                    'sin_cubrir' => $sinCubrir, 'pide' => $pide,
+                    'llamada' => $registrar(LlamadaIaAsistente::OK, $validada['consulta']->clave(), 'parcial: '.count($sinCubrir).' sin cubrir')];
+            }
+
+            return [...$vacio, 'tipo' => self::CONSULTA, 'consulta' => $validada['consulta'], 'parametros' => $validada['parametros'], 'pide' => $pide,
+                'llamada' => $registrar(LlamadaIaAsistente::OK, $validada['consulta']->clave())];
         }
         if ($herramienta === HerramientasHaiku::ACLARAR) {
             $claves = array_column(array_filter((array) ($entrada['opciones'] ?? []), 'is_array'), 'consulta');
@@ -106,6 +128,28 @@ class InterpreteHaiku
         $llamada = $registrar(LlamadaIaAsistente::ERROR, detalle: 'respuesta sin herramienta');
 
         return [...$vacio, 'tipo' => self::NO_DISPONIBLE, 'motivo' => FallaHaiku::RESPUESTA, 'llamada' => $llamada];
+    }
+
+    /**
+     * Condiciones que Haiku dejó sin cubrir, limpias y con las fichas vueltas a su nombre.
+     *
+     * @param  array<string, array{tipo: string, id: string, etiqueta: string}>  $fichas
+     * @return list<string>
+     */
+    private function sinCubrir(mixed $valor, array $fichas): array
+    {
+        $condiciones = array_map(fn (mixed $c): string => $this->condicion($c, $fichas, self::LARGO_CONDICION), is_array($valor) ? $valor : []);
+
+        return array_slice(array_values(array_unique(array_filter($condiciones, fn (string $c): bool => $c !== ''))), 0, self::MAXIMO_SIN_CUBRIR);
+    }
+
+    /** @param  array<string, array{tipo: string, id: string, etiqueta: string}>  $fichas */
+    private function condicion(mixed $valor, array $fichas, int $largo): string
+    {
+        $texto = trim(preg_replace('/\s+/u', ' ', is_string($valor) ? $valor : '') ?? '', " «»\"'.,;:");
+        $texto = preg_replace_callback('/\[?\b((?:CLIENTE|CSG)_\d+)\b\]?/', fn (array $m): string => $fichas[$m[1]]['etiqueta'] ?? $m[0], $texto) ?? $texto;
+
+        return mb_strimwidth($texto, 0, $largo, '…');
     }
 
     private function ms(int|float $inicio): int

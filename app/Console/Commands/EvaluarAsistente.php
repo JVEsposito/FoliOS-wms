@@ -46,8 +46,11 @@ class EvaluarAsistente extends Command
             return $informe['falsas'] > 0 ? self::FAILURE : self::SUCCESS;
         }
 
-        $this->table(['#', 'Pregunta', 'Esperada', 'Elegida', 'Intérprete', 'Resultado'], array_map(fn (array $d): array => [
+        $columnas = ['#', 'Pregunta', 'Esperada', 'Elegida', 'Intérprete', 'Resultado'];
+        // Con Haiku se agrega por qué decidió así: lo que entendió o lo que la consulta no cubrió.
+        $this->table($modo === 'haiku' ? [...$columnas, 'Detalle'] : $columnas, array_map(fn (array $d): array => [
             $d['n'], mb_strimwidth($d['pregunta'], 0, 60, '…'), $d['esperada'] ?? '—', $d['elegida'] ?? '—', $d['interprete'], $d['clase'],
+            ...($modo === 'haiku' ? [mb_strimwidth((string) $d['detalle'], 0, 60, '…')] : []),
         ], $informe['detalle']));
         if ($modo === 'haiku') {
             $this->line(sprintf('Haiku: %d llamadas · %d tokens de entrada · %d de salida · US$ %s.',

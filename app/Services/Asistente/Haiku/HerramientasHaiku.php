@@ -33,7 +33,10 @@ Reglas:
    - `consultar` cuando una consulta del catálogo responde la pregunta tal como está escrita.
    - `pedir_aclaracion` cuando dos a cuatro consultas podrían ser y la pregunta no permite elegir, o cuando la pregunta nombra un cliente, un CSG o un código que no llega como ficha.
    - `sin_consulta` cuando ninguna consulta la responde: otro tema, comparaciones entre periodos, pronósticos, recomendaciones, rankings o datos que el catálogo no tiene.
-2. Nunca elijas una consulta que responde otra cosa solo porque se parece. Una repregunta es mejor que una cifra equivocada.
+2. Nunca elijas una consulta que responde otra cosa solo porque se parece. Una repregunta es mejor que una cifra equivocada. Con `consultar`:
+   - En `pide`, antes de elegir, escribe en pocas palabras la cifra o lista que pide la pregunta y cada condición que pone: un estado (pendiente, vacío, devuelto, anulado), una etapa o lugar, un destino o mercado, un tipo de envase o material, una agrupación.
+   - En `sin_cubrir`, anota con las palabras de la pregunta cada condición que ni la consulta elegida ni sus parámetros cubren. El periodo, el cliente, el CSG y la especie que pusiste en sus parámetros sí están cubiertos.
+   - Si `sin_cubrir` no queda vacía, FoliOS no ejecuta la consulta: ofrece la más cercana y dice qué le falta. Nunca dejes fuera una condición para que la consulta calce.
 3. Los clientes y CSG reconocidos llegan como fichas entre corchetes, por ejemplo [CLIENTE_1] o [CSG_1]. Copia la ficha sin corchetes en su parámetro: CLIENTE_1. No inventes fichas.
 4. Periodo. La planta trabaja por jornadas: una jornada va de 07:00 a 06:59 del día siguiente y se nombra por el día en que empieza. Turno A: 07:00 a 18:59. Turno B: 19:00 a 06:59. «Hoy» es la jornada en curso. «Anoche» es el turno B que terminó esta mañana, o el que está en curso si ya empezó. Las fechas van en AAAA-MM-DD.
    - `actual`: lo que hay ahora (existencias, camiones en planta, cargas abiertas) o la pregunta no nombra periodo; FoliOS usa la jornada en curso.
@@ -64,8 +67,12 @@ TXT;
         $texto = fn (string $descripcion): array => ['type' => 'string', 'description' => $descripcion];
         $enum = fn (array $valores, string $descripcion): array => ['type' => 'string', 'enum' => array_values($valores), 'description' => $descripcion];
 
+        // El orden importa: Haiku escribe primero qué pide la pregunta y, ya elegida la consulta, qué le falta.
         $consultar = [
+            'pide' => $texto('La cifra o lista que pide la pregunta y cada condición que pone, en pocas palabras.'),
             'consulta' => $enum($claves, 'Clave de la consulta del catálogo.'),
+            'sin_cubrir' => ['type' => 'array', 'items' => ['type' => 'string'],
+                'description' => 'Condiciones de la pregunta que ni la consulta ni sus parámetros cubren, con sus palabras. Vacía solo si la consulta responde todo lo que se pide.'],
             'periodo_tipo' => $enum(['actual', 'jornada', 'turno', 'rango', 'temporada', 'temporada_anterior'], 'Tipo de periodo; ver las reglas del sistema.'),
             'desde' => $texto('Primera jornada, AAAA-MM-DD, o vacío.'),
             'hasta' => $texto('Última jornada, AAAA-MM-DD, o vacío.'),
