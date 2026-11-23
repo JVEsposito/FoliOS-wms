@@ -2,7 +2,6 @@
 
 namespace App\Services\Asistente\Consultas;
 
-use App\Models\Cliente;
 use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
@@ -32,7 +31,7 @@ abstract class ConsultaProductoTerminado extends ConsultaBase
     /** La existencia es la de ahora: no filtra por fecha ni por temporada anterior. */
     public function filtros(): array
     {
-        return ['cliente'];
+        return ['cliente', 'especie'];
     }
 
     public function puedeEjecutar(User $usuario): bool
@@ -44,15 +43,14 @@ abstract class ConsultaProductoTerminado extends ConsultaBase
     protected function filas(ParametrosConsulta $parametros): Collection
     {
         $filas = collect($this->existencias->filas(ServicioExistencias::PRODUCTO_TERMINADO)->all());
-        $cliente = $parametros->clienteId ? Cliente::query()->find($parametros->clienteId, ['codigo', 'nombre']) : null;
-        if (! $cliente) {
-            return $filas;
-        }
+        // La existencia identifica al cliente por la exportadora del folio (código o nombre) y la especie por su texto.
+        $aceptados = $this->exportadoras($parametros);
+        $especie = $this->especieTexto($parametros);
 
-        // La existencia identifica al cliente por la exportadora del folio: código o nombre.
-        $aceptados = array_filter([mb_strtoupper(trim((string) $cliente->codigo)), mb_strtoupper(trim((string) $cliente->nombre))]);
-
-        return $filas->filter(fn (array $fila): bool => in_array(mb_strtoupper(trim((string) ($fila['cliente'] ?? ''))), $aceptados, true))->values();
+        return $filas
+            ->when($aceptados !== null, fn (Collection $c) => $c->filter(fn (array $fila): bool => in_array(mb_strtoupper(trim((string) ($fila['cliente'] ?? ''))), $aceptados, true)))
+            ->when($especie !== null, fn (Collection $c) => $c->filter(fn (array $fila): bool => mb_strtoupper(trim((string) ($fila['especie'] ?? ''))) === $especie))
+            ->values();
     }
 
     protected static function cajas(mixed $valor): int

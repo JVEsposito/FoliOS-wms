@@ -35,15 +35,15 @@ El asistente es un gajo flotante en la esquina inferior derecha de cada oficina,
 | Consulta (clave) | Responde | Filtros que aplica | Permiso (oficina de origen) |
 | --- | --- | --- | --- |
 | `tiempos-romana` | Tiempo en planta por camión, espera de destare y los 10 más lentos | periodo, cliente | Romana |
-| `kilos-recepciones` | Kilos brutos, tara y netos de las recepciones cerradas, por cliente | periodo, cliente | Romana |
-| `kilos-por-csg` | Kilos netos por CSG según los lotes de materia prima | periodo, cliente, CSG | Materia prima |
-| `revisar-taras` | Posibles errores de tara o destare (ver abajo) | periodo, cliente | Romana |
-| `cajas-pt` | Cajas y folios en existencia por cliente y especie | cliente (existencia actual) | Existencias PT |
-| `formatos-pt` | Cajas en existencia por formato de embalaje | cliente (existencia actual) | Existencias PT |
-| `saldos-pt` | Saldos vigentes con cajas, cámara y posición | cliente (existencia actual) | Existencias PT |
-| `repaletizajes` | Repas confirmados en el periodo, con su folio resultante | periodo | Repaletizajes |
+| `kilos-recepciones` | Kilos brutos, tara y netos de las recepciones cerradas, por cliente | periodo, cliente, especie, por jornada | Romana |
+| `kilos-por-csg` | Kilos netos por CSG según los lotes de materia prima | periodo, cliente, CSG, especie | Materia prima |
+| `revisar-taras` | Posibles errores de tara o destare (ver abajo) | periodo, cliente, CSG, especie | Romana |
+| `cajas-pt` | Cajas y folios en existencia por cliente y especie | cliente, especie (existencia actual) | Existencias PT |
+| `formatos-pt` | Cajas en existencia por formato de embalaje | cliente, especie (existencia actual) | Existencias PT |
+| `saldos-pt` | Saldos vigentes con cajas, cámara y posición | cliente, especie (existencia actual) | Existencias PT |
+| `repaletizajes` | Repas confirmados en el periodo, con su folio resultante | periodo, cliente | Repaletizajes |
 | `tiempos-prefrio` | Duración de procesos finalizados contra su objetivo | periodo | Prefrío |
-| `tiempos-cargas` | Duración de las cargas, desde la publicación hasta el cierre | periodo | Cargas |
+| `tiempos-cargas` | Duración de las cargas, desde la publicación hasta el cierre | periodo, cliente | Cargas |
 | `consumos-ot` | Consumo y merma por orden de trabajo | periodo, cliente | Consumos por OT |
 | `expediente-por-codigo` | Lo que la Búsqueda operacional encuentra para un código, más las guías de despacho de envases (`GDE-…` o número de guía) si el usuario ve la cuenta de envases | código | Búsqueda operacional |
 
@@ -53,6 +53,10 @@ El asistente es un gajo flotante en la esquina inferior derecha de cada oficina,
 - turnos de una sola jornada: «turno A», «turno B», «turno noche», «esta mañana» (turno A) y «anoche» (el turno B que terminó; durante el turno B, el que está en curso). Sin regla de turnos configurada, el turno A va de 07:00 a 19:00 y el B de 19:00 a 07:00;
 - «la temporada» o «esta temporada»: desde la primera jornada de la temporada activa hasta hoy;
 - «temporada pasada» o «temporada anterior»: la temporada productiva anterior a la activa, completa si no se nombra otra fecha.
+
+**Filtros por cliente en producto terminado:** el folio guarda la exportadora como texto, así que el cliente se reconoce por su código o su nombre. Una carga es del cliente si lleva al menos un folio suyo; un repaletizaje, si su folio resultante es suyo. La especie del producto terminado se compara con el texto de la especie del folio.
+
+**Una fila por jornada:** «por día», «día a día», «cada día» o «diario» piden en `kilos-recepciones` una fila por jornada operativa, con la jornada de más kilos en el resumen. En las demás consultas se avisa que no agrupan por día.
 
 **Línea «Entendí»:** cada respuesta empieza con la consulta que se ejecutó, el periodo y los filtros que se aplicaron, y un botón **Corregir** que devuelve la pregunta al cuadro. Si la pregunta nombra un filtro que la consulta no aplica (por ejemplo un cliente en `repaletizajes`, o una fecha en una consulta de existencia actual), se avisa con ◆: la cifra nunca se presenta como filtrada si no lo está.
 
@@ -85,7 +89,7 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 | --- | --- | --- |
 | `POST /api/asistente/preguntas` `{texto}` | usar el asistente | Pregunta en texto libre, de 1 a 500 caracteres. Responde `entendido` (`consulta`, `fichas`, `no_aplicados`) y `resultado`, o `sugerencias` con `mensaje` y `busqueda` |
 | `GET /api/asistente/consultas` | usar el asistente | Catálogo de consultas permitidas para el usuario |
-| `POST /api/asistente/consultas/{clave}` | usar el asistente y el permiso de la consulta | Ejecuta una consulta con `desde` y `hasta` (jornadas), `turno` (`A` o `B`), `periodo` (etiqueta), `cliente_id`, `csg_id`, `especie_id`, `codigo` o `temporada_anterior`. Responde con `entendido` y `resultado` |
+| `POST /api/asistente/consultas/{clave}` | usar el asistente y el permiso de la consulta | Ejecuta una consulta con `desde` y `hasta` (jornadas), `turno` (`A` o `B`), `periodo` (etiqueta), `cliente_id`, `csg_id`, `especie_id`, `codigo` o `temporada_anterior` o `agrupar` (`dia`). Responde con `entendido` y `resultado` |
 | `GET` y `PUT /api/asistente/configuracion` | configurar el asistente | Margen (0,5 a 5) y rangos de neto por envase |
 | `GET /api/asistente/preguntas?estado=` | configurar el asistente | Registro de preguntas, con `estado` `respondida`, `sin_datos` o `sugerencias` |
 
@@ -93,7 +97,7 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 
 1. Implementar `App\Services\Asistente\Consultas\ConsultaAsistente`. Lo habitual es extender `ConsultaBase`.
 2. Exigir en `puedeEjecutar()` el mismo permiso de la oficina de origen.
-3. Declarar en `filtros()` solo los filtros que la consulta aplica de verdad (`periodo`, `cliente`, `csg`, `especie`, `codigo`), y en `palabrasSecundarias()` las palabras que comparte con otra consulta.
+3. Declarar en `filtros()` solo los filtros que la consulta aplica de verdad (`periodo`, `cliente`, `csg`, `especie`, `codigo`, `por_dia`), y en `palabrasSecundarias()` las palabras que comparte con otra consulta.
 4. Sumarla a `AsistenteServiceProvider::CONSULTAS`.
 5. Si falta un cálculo, agregarlo en el servicio del dominio, no en la consulta.
 

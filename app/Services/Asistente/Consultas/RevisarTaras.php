@@ -49,7 +49,7 @@ class RevisarTaras extends ConsultaBase
 
     public function filtros(): array
     {
-        return ['periodo', 'cliente'];
+        return ['periodo', 'cliente', 'csg', 'especie'];
     }
 
     public function palabrasClave(): array
@@ -69,7 +69,7 @@ class RevisarTaras extends ConsultaBase
             return ResultadoConsulta::sinDatos($this->titulo(), 'No hay temporada activa.', '/oficina/romana');
         }
         [$desde, $hasta] = $parametros->rango();
-        $hallazgos = $this->revision->revisar($temporada, $desde, $hasta, $parametros->clienteId);
+        $hallazgos = $this->revision->revisar($temporada, $desde, $hasta, $parametros->clienteId, $parametros->csgId, $parametros->especieId);
 
         if ($hallazgos === []) {
             return new ResultadoConsulta(

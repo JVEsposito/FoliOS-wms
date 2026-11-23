@@ -33,7 +33,7 @@ class RevisionTaras
      * @return list<array{regla: string, recepcion: string, lote: ?string, detalle: string,
      *     valor: float, referencia: string, sentido: string}>
      */
-    public function revisar(Temporada $temporada, CarbonImmutable $desde, CarbonImmutable $hasta, ?string $clienteId = null): array
+    public function revisar(Temporada $temporada, CarbonImmutable $desde, CarbonImmutable $hasta, ?string $clienteId = null, ?string $csgId = null, ?string $especieId = null): array
     {
         $k = ConfiguracionAsistente::actual()->margen_desviaciones;
         $recepciones = RecepcionRomana::query()
@@ -42,6 +42,9 @@ class RevisionTaras
             ->where('estado', EstadoRecepcionRomana::Cerrado->value)
             ->where('ingreso_at', '>=', $desde)->where('ingreso_at', '<', $hasta)
             ->when($clienteId, fn ($q, $id) => $q->where('cliente_id', $id))
+            // El CSG está en los lotes de la recepción, no en la recepción.
+            ->when($csgId, fn ($q, $id) => $q->whereHas('lotesMateriaPrima', fn ($l) => $l->whereNull('anulado_at')->where('csg_validacion_id', $id)))
+            ->when($especieId, fn ($q, $id) => $q->where('especie_validacion_id', $id))
             ->with(['detallesEnvases', 'lotesMateriaPrima' => fn ($q) => $q->whereNull('anulado_at')->with('especie:id,nombre')])
             ->get();
 

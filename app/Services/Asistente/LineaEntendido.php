@@ -54,6 +54,13 @@ class LineaEntendido
                 $noAplicados[] = $avisos[$filtro]($nombre);
             }
         }
+        if ($parametros->agrupar === 'dia') {
+            if (in_array('por_dia', $filtros, true)) {
+                $fichas[] = 'Por jornada';
+            } else {
+                $noAplicados[] = 'No agrupa por día: muestra el total del periodo.';
+            }
+        }
         if ($parametros->codigo !== null && in_array('codigo', $filtros, true)) {
             $fichas[] = 'Código '.$parametros->codigo;
         }
