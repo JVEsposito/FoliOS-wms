@@ -3,6 +3,7 @@
 namespace App\Services\Asistente\Consultas;
 
 use App\Models\ProcesoPrefrio;
+use App\Models\TunelPrefrio;
 use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ResultadoConsulta;
@@ -33,6 +34,18 @@ class TiemposPrefrio extends ConsultaBase
     public function palabrasClave(): array
     {
         return ['prefrio', 'tunel', 'tuneles', 'proceso', 'procesos', 'enfriado', 'enfriamiento', 'objetivo', 'tiempo', 'tiempos', 'demora'];
+    }
+
+    public function admiteRecomendacion(): bool
+    {
+        return true;
+    }
+
+    public function capacidades(): array
+    {
+        return TunelPrefrio::query()->where('estado_administrativo', 'activo')->orderBy('nombre')->get(['nombre', 'capacidad_posiciones', 'setpoint_habitual', 'estado_tecnico'])
+            ->map(fn (TunelPrefrio $t): array => ['nombre' => "{$t->nombre}: posiciones", 'valor' => (int) $t->capacidad_posiciones])
+            ->all();
     }
 
     public function puedeEjecutar(User $usuario): bool

@@ -3,6 +3,7 @@
 namespace App\Services\Asistente\Consultas;
 
 use App\Enums\EstadoCarga;
+use App\Models\Anden;
 use App\Models\Carga;
 use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
@@ -45,6 +46,16 @@ class EstadoCargas extends ConsultaBase
     public function filtros(): array
     {
         return ['cliente'];
+    }
+
+    public function admiteRecomendacion(): bool
+    {
+        return true;
+    }
+
+    public function capacidades(): array
+    {
+        return [['nombre' => 'Andenes activos', 'valor' => Anden::query()->where('activo', true)->count()]];
     }
 
     public function puedeEjecutar(User $usuario): bool

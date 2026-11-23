@@ -38,6 +38,16 @@ abstract class ConsultaBase implements ConsultaAsistente
         return ['periodo'];
     }
 
+    public function admiteRecomendacion(): bool
+    {
+        return false;
+    }
+
+    public function capacidades(): array
+    {
+        return [];
+    }
+
     /** Temporada activa, o la productiva anterior a ella cuando la pregunta lo pide. */
     protected function temporada(ParametrosConsulta $parametros): ?Temporada
     {

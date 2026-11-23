@@ -39,6 +39,17 @@ interface ConsultaAsistente
      */
     public function filtros(): array;
 
+    /** Si se puede pedir una recomendación a Haiku sobre su resultado (fase B, a pedido). */
+    public function admiteRecomendacion(): bool;
+
+    /**
+     * Capacidades de la planta que vienen al caso para recomendar: túneles, andenes,
+     * rangos. Solo cifras y nombres de instalaciones, nunca personas ni clientes.
+     *
+     * @return list<array{nombre: string, valor: int|float|string}>
+     */
+    public function capacidades(): array;
+
     public function puedeEjecutar(User $usuario): bool;
 
     public function ejecutar(User $usuario, ParametrosConsulta $parametros): ResultadoConsulta;

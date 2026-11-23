@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { esquinaMasCercana, glifoEstado, renderAviso, renderEntendido, renderPie, renderResultado, renderSugerencias } from '../../resources/js/shared/asistente-ui.js';
+import { esquinaMasCercana, glifoEstado, renderAviso, renderBotonRecomendacion, renderEntendido, renderPie, renderRecomendacion, renderResultado, renderSugerencias } from '../../resources/js/shared/asistente-ui.js';
 
 const escape = (valor) => String(valor ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -91,4 +91,15 @@ test('el aviso de modo sin IA se escapa y el pie solo aparece con Haiku', () => 
     assert.ok(renderAviso('Tope <del> mes', escape).includes('Tope &lt;del&gt; mes'));
     assert.equal(renderPie('sin_ia', new Date()), '');
     assert.ok(renderPie('haiku', new Date(2026, 10, 23, 9, 5)).includes('Cifras calculadas por FoliOS a las 09:05'));
+});
+
+test('la recomendación siempre muestra el aviso fijo y escapa el texto de Haiku', () => {
+    assert.ok(renderBotonRecomendacion(2).includes('data-asistente-recomendar="2"'));
+    const html = renderRecomendacion({ estado: 'mostrada', aviso: 'Solo es una recomendación de Haiku.', texto: 'Revisa <b>PF-12</b>.', basada_en: ['Minutos'] }, escape);
+    assert.ok(html.includes('<strong>Recomendación.</strong> Solo es una recomendación de Haiku.'));
+    assert.ok(html.includes('Revisa &lt;b&gt;PF-12&lt;/b&gt;.'));
+    assert.ok(html.includes('Basada en: Minutos.'));
+    const rechazada = renderRecomendacion({ estado: 'rechazada', motivo: 'FoliOS no pudo verificar la recomendación.' }, escape);
+    assert.ok(rechazada.includes('FoliOS no pudo verificar'));
+    assert.ok(!rechazada.includes('folios-asistente__recomendacion"'));
 });

@@ -1,4 +1,4 @@
-import { ESQUINAS, esquinaMasCercana, renderAviso, renderEntendido, renderPie, renderResultado, renderSugerencias } from './shared/asistente-ui.js';
+import { ESQUINAS, esquinaMasCercana, renderAviso, renderBotonRecomendacion, renderEntendido, renderPie, renderRecomendacion, renderResultado, renderSugerencias } from './shared/asistente-ui.js';
 
 // Gajo asistente de Oficina (docs/ASISTENTE_OFICINA.md): se muestra solo con la capacidad
 // puede_usar_asistente, se arrastra a cualquier esquina y nunca se abre por su cuenta.
@@ -34,6 +34,7 @@ function iniciarAsistente() {
     const enviar = raiz.querySelector('[data-asistente-enviar]');
     const modo = raiz.querySelector('[data-asistente-modo]');
     let sugerenciasVigentes = [];
+    const recomendables = [];
     let ultimaPregunta = null;
     let ultimoTexto = '';
     let ocupado = false;
@@ -112,8 +113,13 @@ function iniciarAsistente() {
             mostrarDesdePregunta();
             return;
         }
+        let boton = '';
+        if (datos?.recomendable) {
+            recomendables.push({ consulta: datos.consulta, parametros: datos.parametros ?? {} });
+            boton = renderBotonRecomendacion(recomendables.length - 1);
+        }
         agregar(
-            renderAviso(datos?.aviso, escape) + renderEntendido(datos?.entendido, escape) + renderResultado(datos?.resultado, escape) + renderPie(datos?.modo, new Date()),
+            renderAviso(datos?.aviso, escape) + renderEntendido(datos?.entendido, escape) + renderResultado(datos?.resultado, escape) + renderPie(datos?.modo, new Date()) + boton,
             'folios-asistente__respuesta',
         );
         mostrarDesdePregunta();
@@ -149,6 +155,22 @@ function iniciarAsistente() {
             // Corregir: la pregunta vuelve al cuadro para precisar periodo, cliente o consulta.
             texto.value = ultimoTexto;
             texto.focus();
+            return;
+        }
+        const recomendar = evento.target.closest('[data-asistente-recomendar]');
+        if (recomendar && !ocupado) {
+            // Solo a pedido: la recomendación se ancla bajo la respuesta que la originó.
+            const origen = recomendables[Number(recomendar.dataset.asistenteRecomendar)];
+            if (!origen) return;
+            recomendar.disabled = true;
+            recomendar.textContent = 'Pidiendo recomendación…';
+            llamar(`/api/asistente/recomendaciones/${encodeURIComponent(origen.consulta)}`, origen.parametros)
+                .then((datos) => recomendar.replaceWith(document.createRange().createContextualFragment(renderRecomendacion(datos, escape))))
+                .catch((error) => {
+                    recomendar.disabled = false;
+                    recomendar.textContent = 'Pedir recomendación';
+                    recomendar.insertAdjacentHTML('afterend', `<p class="folios-asistente__error" role="alert">${escape(error.message)}</p>`);
+                });
             return;
         }
         const boton = evento.target.closest('[data-asistente-sugerencia]');

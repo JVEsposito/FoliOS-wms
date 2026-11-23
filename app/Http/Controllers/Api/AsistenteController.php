@@ -47,6 +47,20 @@ class AsistenteController extends Controller
     public function ejecutar(Request $request, string $clave): JsonResponse
     {
         Gate::authorize('usar-asistente');
+
+        return response()->json(['data' => $this->asistente->ejecutar($request->user(), $clave, $this->parametros($request))]);
+    }
+
+    /** Recomendación a pedido sobre el resultado de una consulta (solo en modo mixto). */
+    public function recomendar(Request $request, string $clave): JsonResponse
+    {
+        Gate::authorize('usar-asistente');
+
+        return response()->json(['data' => $this->asistente->recomendar($request->user(), $clave, $this->parametros($request))]);
+    }
+
+    private function parametros(Request $request): ParametrosConsulta
+    {
         $datos = $request->validate([
             'desde' => ['nullable', 'date_format:Y-m-d'],
             'hasta' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:desde'],
@@ -60,7 +74,7 @@ class AsistenteController extends Controller
             'agrupar' => ['nullable', Rule::in(['dia'])],
         ]);
 
-        return response()->json(['data' => $this->asistente->ejecutar($request->user(), $clave, ParametrosConsulta::desdeArreglo($datos))]);
+        return ParametrosConsulta::desdeArreglo($datos);
     }
 
     public function configuracion(): JsonResponse
