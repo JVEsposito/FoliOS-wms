@@ -4,6 +4,7 @@ namespace App\Services\Asistente;
 
 use App\Models\User;
 use App\Services\Asistente\Consultas\ConsultaAsistente;
+use App\Services\Asistente\Consultas\VistaConsulta;
 
 /**
  * Intérprete sin IA: reconoce entidades y elige la consulta permitida cuyas palabras
@@ -70,13 +71,17 @@ class InterpreteReglasAsistente
                 && ! in_array($palabra, $entidades['consumidas'], true)
                 && ! preg_match('/^[\d\-\/]+$/', $palabra),
         ));
+        // Texto como palabras separadas por un espacio, para buscar las frases de las vistas.
+        $frases = ' '.implode(' ', TextoNormalizado::palabras($texto)).' ';
         $puntajes = [];
         foreach ($permitidas as $indice => $consulta) {
             $claves = $consulta->palabrasClave();
             $secundarias = $consulta->palabrasSecundarias();
+            $enFrase = $this->palabrasEnFrases($consulta, $frases);
             $aciertos = 0.0;
             foreach ($significativas as $palabra) {
-                $aciertos += $this->coincide($palabra, $claves) ? 1.0 : ($this->coincide($palabra, $secundarias) ? 0.5 : 0.0);
+                $aciertos += in_array($palabra, $enFrase, true) || $this->coincide($palabra, $claves)
+                    ? 1.0 : ($this->coincide($palabra, $secundarias) ? 0.5 : 0.0);
             }
             $puntajes[$indice] = $aciertos / max(1, count($significativas));
         }
@@ -89,9 +94,16 @@ class InterpreteReglasAsistente
 
         $motivo = null;
         if ($mejor !== null && $puntajes[$mejor] >= self::UMBRAL && ! $empate) {
-            $motivo = $this->fueraDeAlcance(TextoNormalizado::de($texto), $significativas, $permitidas[$mejor], $parametros);
+            $tema = $permitidas[$mejor];
+            [$vista, $empatadas] = $this->elegirVista($usuario, $tema, $frases, $significativas);
+            if ($vista === null) {
+                return [...$base, 'consulta' => null, 'confianza' => $confianza,
+                    'motivo' => "«{$tema->titulo()}» tiene varias vistas. ¿Cuál quieres?",
+                    'alternativas' => array_map(fn (VistaConsulta $v): OpcionConsulta => new OpcionConsulta($tema, $v), $empatadas)];
+            }
+            $motivo = $this->fueraDeAlcance(TextoNormalizado::de($texto), $significativas, $vista->filtros, $parametros);
             if ($motivo === null) {
-                return [...$base, 'consulta' => $permitidas[$mejor], 'confianza' => $confianza, 'alternativas' => []];
+                return [...$base, 'parametros' => $parametros->conVista($vista->clave), 'consulta' => $tema, 'confianza' => $confianza, 'alternativas' => []];
             }
         }
 
@@ -112,8 +124,9 @@ class InterpreteReglasAsistente
      * coincidan: la fase A pregunta en vez de dar una cifra parecida.
      *
      * @param  list<string>  $significativas
+     * @param  list<string>  $filtros  los de la vista elegida
      */
-    private function fueraDeAlcance(string $texto, array $significativas, ConsultaAsistente $consulta, ParametrosConsulta $parametros): ?string
+    private function fueraDeAlcance(string $texto, array $significativas, array $filtros, ParametrosConsulta $parametros): ?string
     {
         if (preg_match('/\b(contra|versus|vs|compara|comparar|comparado|comparada|comparados|comparadas)\b|\b(que|cual|cuales) (dia|dias|turno|turnos|semana|semanas|mes|meses|hora|horas)\b/', $texto)) {
             return 'Todavía no comparo periodos ni agrupo por día o turno. Puedo mostrar cada periodo por separado:';
@@ -125,12 +138,64 @@ class InterpreteReglasAsistente
         if (count($significativas) <= 1 && preg_match('/\bcomo (viene|vienen|va|van|vamos|anda|andan|estuvo|estuvieron)\b/', $texto)) {
             return 'Esa pregunta pide una evaluación. Elige qué cifra quieres ver:';
         }
-        if (! in_array('periodo', $consulta->filtros(), true) && ($parametros->temporadaAnterior
+        if (! in_array('periodo', $filtros, true) && ($parametros->temporadaAnterior
             || ($parametros->periodoExplicito && $parametros->jornadas()[1] < app(PeriodoOperativo::class)->jornada()))) {
             return 'Esa consulta muestra lo que hay ahora, no lo de otro día. ¿Te sirve alguna de estas?';
         }
 
         return null;
+    }
+
+    /**
+     * La vista del tema que nombra la pregunta. Una frase de la vista presente en la
+     * pregunta vale 2 y cada palabra de la pregunta que coincide con una de la vista, 1. Sin palabras de ninguna vista
+     * rige la por defecto; si no hay o hay empate, se devuelven las vistas para preguntar.
+     *
+     * @param  list<string>  $significativas
+     * @return array{0: ?VistaConsulta, 1: list<VistaConsulta>}
+     */
+    private function elegirVista(User $usuario, ConsultaAsistente $tema, string $frases, array $significativas): array
+    {
+        $vistas = array_values(array_filter($tema->vistas(), fn (VistaConsulta $v): bool => $tema->puedeVer($usuario, $v)));
+        if (count($vistas) === 1) {
+            return [$vistas[0], []];
+        }
+        // Cada palabra de la pregunta cuenta una vez por vista: «confirmadas» no suma por cada forma de «confirmar».
+        $puntajes = array_map(function (VistaConsulta $vista) use ($frases, $significativas): int {
+            $sueltas = array_values(array_filter($vista->palabras, fn (string $p): bool => ! str_contains($p, ' ')));
+            $enFrase = array_filter($vista->palabras, fn (string $p): bool => str_contains($p, ' ') && str_contains($frases, " {$p} "));
+
+            return 2 * count($enFrase) + count(array_filter($significativas, fn (string $s): bool => $this->coincide($s, $sueltas)));
+        }, $vistas);
+        $mejor = max($puntajes);
+        if ($mejor === 0) {
+            $porDefecto = $tema->vista(null);
+
+            return $porDefecto !== null && in_array($porDefecto, $vistas) ? [$porDefecto, []] : [null, array_slice($vistas, 0, 4)];
+        }
+        $ganadoras = array_values(array_filter($vistas, fn (VistaConsulta $v, int $i): bool => $puntajes[$i] === $mejor, ARRAY_FILTER_USE_BOTH));
+
+        return count($ganadoras) === 1 ? [$ganadoras[0], []] : [null, $ganadoras];
+    }
+
+    /**
+     * Palabras cubiertas por una frase de alguna vista del tema que aparece en la pregunta:
+     * en «guías sin confirmar», «sin» y «confirmar» cuentan para el tema.
+     *
+     * @return list<string>
+     */
+    private function palabrasEnFrases(ConsultaAsistente $consulta, string $frases): array
+    {
+        $cubiertas = [];
+        foreach ($consulta->vistas() as $vista) {
+            foreach ($vista->palabras as $palabra) {
+                if (str_contains($palabra, ' ') && str_contains($frases, " {$palabra} ")) {
+                    array_push($cubiertas, ...explode(' ', $palabra));
+                }
+            }
+        }
+
+        return $cubiertas;
     }
 
     /** @param  list<string>  $claves */

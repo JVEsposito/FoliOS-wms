@@ -13,10 +13,10 @@ use App\Models\CargaFolio;
 use App\Models\Folio;
 use App\Models\GuiaDespachoEnvase;
 use App\Services\Asistente\Consultas\CamionesEnPlanta;
-use App\Services\Asistente\Consultas\DespachosEnvasesPendientes;
 use App\Services\Asistente\Consultas\EnvasesRecibidos;
 use App\Services\Asistente\Consultas\EstadoCargas;
 use App\Services\Asistente\Consultas\FoliosDespachados;
+use App\Services\Asistente\Consultas\GuiasEnvases;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ResultadoConsulta;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -69,7 +69,7 @@ class ConsultasTandaUnoTest extends TestCase
         $this->guia('GDE-2611-0001', 'borrador');
         $this->guia('GDE-2611-0002', 'confirmada');
 
-        $resultado = app(DespachosEnvasesPendientes::class)->ejecutar($this->administrador, new ParametrosConsulta);
+        $resultado = app(GuiasEnvases::class)->ejecutar($this->administrador, (new ParametrosConsulta)->conVista('borrador'));
 
         $this->assertSame(['GDE-2611-0001'], array_column($resultado->filas, 'numero'));
     }
@@ -101,7 +101,7 @@ class ConsultasTandaUnoTest extends TestCase
 
     public function test_sin_datos_lo_dice(): void
     {
-        foreach ([CamionesEnPlanta::class, EnvasesRecibidos::class, DespachosEnvasesPendientes::class, EstadoCargas::class, FoliosDespachados::class] as $clase) {
+        foreach ([CamionesEnPlanta::class, EnvasesRecibidos::class, GuiasEnvases::class, EstadoCargas::class, FoliosDespachados::class] as $clase) {
             $this->assertSame(ResultadoConsulta::SIN_DATOS, app($clase)->ejecutar($this->administrador, new ParametrosConsulta)->estado, $clase);
         }
     }

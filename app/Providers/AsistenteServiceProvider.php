@@ -7,12 +7,12 @@ use App\Services\Asistente\Consultas\AnulacionesValidacion;
 use App\Services\Asistente\Consultas\CajasPt;
 use App\Services\Asistente\Consultas\CamionesEnPlanta;
 use App\Services\Asistente\Consultas\ConsumosOt;
-use App\Services\Asistente\Consultas\DespachosEnvasesPendientes;
 use App\Services\Asistente\Consultas\EnvasesRecibidos;
 use App\Services\Asistente\Consultas\EstadoCargas;
 use App\Services\Asistente\Consultas\ExpedientePorCodigo;
 use App\Services\Asistente\Consultas\FoliosDespachados;
 use App\Services\Asistente\Consultas\FormatosPt;
+use App\Services\Asistente\Consultas\GuiasEnvases;
 use App\Services\Asistente\Consultas\KilosPorCsg;
 use App\Services\Asistente\Consultas\KilosRecepciones;
 use App\Services\Asistente\Consultas\PrefrioEnCurso;
@@ -47,7 +47,7 @@ class AsistenteServiceProvider extends ServiceProvider
         ExpedientePorCodigo::class,
         CamionesEnPlanta::class,
         EnvasesRecibidos::class,
-        DespachosEnvasesPendientes::class,
+        GuiasEnvases::class,
         EstadoCargas::class,
         FoliosDespachados::class,
         PrefrioEnCurso::class,

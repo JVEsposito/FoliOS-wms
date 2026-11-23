@@ -37,9 +37,12 @@ class CompuertaAsistenteTest extends TestCase
     public function test_el_banco_no_tiene_respuestas_falsas_y_responde_lo_esperado(): void
     {
         $informe = app(EvaluadorBancoAsistente::class)->evaluar($this->administrador);
-        $esperadas = count(array_filter(app(EvaluadorBancoAsistente::class)->preguntas(), fn (array $p): bool => $p['responde_hoy'] !== null));
+        $banco = app(EvaluadorBancoAsistente::class)->preguntas();
+        $esperadas = count(array_filter($banco, fn (array $p): bool => $p['responde_hoy'] !== null));
 
-        $this->assertSame(60, $informe['total']);
+        // El banco crece con cada tanda de consultas: 60 originales y las que suma cada una.
+        $this->assertSame(count($banco), $informe['total']);
+        $this->assertGreaterThanOrEqual(60, $informe['total']);
         $this->assertSame(0, $informe['falsas']);
         $this->assertSame(0, $informe['preguntas_de_mas']);
         $this->assertSame($esperadas, $informe['correctas']);

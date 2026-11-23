@@ -50,6 +50,21 @@ interface ConsultaAsistente
      */
     public function capacidades(): array;
 
+    /**
+     * Vistas del tema, nunca vacía. Una consulta que no es tema tiene solo `general`.
+     *
+     * @return list<VistaConsulta>
+     */
+    public function vistas(): array;
+
+    /** Clave de la vista que rige si la pregunta no elige una, o null si hay que preguntar. */
+    public function vistaPorDefecto(): ?string;
+
+    /** La vista pedida; con null, la por defecto; con `general`, la única si hay una sola. Null si no existe. */
+    public function vista(?string $clave): ?VistaConsulta;
+
+    public function puedeVer(User $usuario, VistaConsulta $vista): bool;
+
     public function puedeEjecutar(User $usuario): bool;
 
     public function ejecutar(User $usuario, ParametrosConsulta $parametros): ResultadoConsulta;

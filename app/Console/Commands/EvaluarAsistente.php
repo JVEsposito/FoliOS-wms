@@ -49,7 +49,9 @@ class EvaluarAsistente extends Command
         $columnas = ['#', 'Pregunta', 'Esperada', 'Elegida', 'Intérprete', 'Resultado'];
         // Con Haiku se agrega por qué decidió así: lo que entendió o lo que la consulta no cubrió.
         $this->table($modo === 'haiku' ? [...$columnas, 'Detalle'] : $columnas, array_map(fn (array $d): array => [
-            $d['n'], mb_strimwidth($d['pregunta'], 0, 60, '…'), $d['esperada'] ?? '—', $d['elegida'] ?? '—', $d['interprete'], $d['clase'],
+            $d['n'], mb_strimwidth($d['pregunta'], 0, 60, '…'), $d['esperada'] ?? '—',
+            $d['elegida'] === null ? '—' : $d['elegida'].(in_array($d['vista_elegida'], [null, 'general'], true) ? '' : ' · '.$d['vista_elegida']),
+            $d['interprete'], $d['clase'],
             ...($modo === 'haiku' ? [mb_strimwidth((string) $d['detalle'], 0, 60, '…')] : []),
         ], $informe['detalle']));
         if ($modo === 'haiku') {
