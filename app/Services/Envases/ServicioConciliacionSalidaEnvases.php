@@ -13,6 +13,7 @@ use App\Models\MovimientoEnvase;
 use App\Models\RecepcionRomana;
 use App\Models\User;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Ramsey\Uuid\Uuid;
@@ -20,6 +21,53 @@ use Ramsey\Uuid\Uuid;
 /** Repara dos registros de la misma salida física; nunca borra ni cambia el asiento original. */
 class ServicioConciliacionSalidaEnvases
 {
+    /**
+     * Parejas de guía de despacho de envases y recepción Romana que registraron la misma
+     * salida física y todavía no se concilian, de la más reciente a la más antigua. Con
+     * $manual se cruzan por cliente sin exigir el mismo número de guía.
+     */
+    public function pendientes(string $temporadaId, ?string $clienteId = null, ?string $buscar = null, bool $manual = false): Builder
+    {
+        $numero = app(ServicioGuiaEmitidaEnvases::class)->normalizar($buscar);
+
+        return DB::table('guias_despacho_envases as g')
+            ->join('recepciones_romana as r', function ($join) use ($manual): void {
+                $join->on('r.temporada_id', '=', 'g.temporada_id')->on('r.cliente_id', '=', 'g.cliente_id');
+                if (! $manual) {
+                    $join->on('r.documento_salida_normalizado', '=', 'g.documento_salida_normalizado');
+                }
+            })
+            ->join('clientes as c', 'c.id', '=', 'g.cliente_id')
+            ->where('g.temporada_id', $temporadaId)
+            ->where('g.estado', 'confirmada')->where('r.estado', 'cerrado')
+            ->whereNull('r.eliminada_at')->where('r.documento_salida_normalizado', '!=', '')
+            ->where('g.documento_salida_normalizado', '!=', '')
+            ->when($clienteId, fn ($q, $id) => $q->where('g.cliente_id', $id))
+            // Coincidencia documental con al menos un envase/propiedad cargado en ambos flujos.
+            // El servicio vuelve a comprobar integridad, cantidades y correcciones previas.
+            ->whereExists(fn ($q) => $q->selectRaw('1')->from('movimientos_envases as mr')
+                ->join('movimientos_envases as md', fn ($join) => $join
+                    ->on('md.tipo_envase', '=', 'mr.tipo_envase')->on('md.propiedad', '=', 'mr.propiedad'))
+                ->whereColumn('mr.recepcion_romana_id', 'r.id')->whereColumn('md.documento_id', 'g.id')
+                ->where('mr.tipo_movimiento', TipoMovimientoEnvase::SalidaRecepcionFruta->value)
+                ->where('md.tipo_movimiento', TipoMovimientoEnvase::DespachoCliente->value)
+                ->where('md.documento_tipo', 'guia_despacho_envases')
+                ->where('mr.cantidad', '>', 0)->where('md.cantidad', '>', 0))
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('movimientos_envases as conciliacion')
+                ->whereColumn('conciliacion.documento_id', 'g.id')
+                ->where('conciliacion.tipo_movimiento', TipoMovimientoEnvase::ConciliacionSalida->value))
+            ->when($buscar, fn ($q, $buscar) => $q->where(function ($q) use ($buscar, $numero, $manual): void {
+                $columnas = ['g.numero', 'g.numero_guia_despacho', 'r.numero_recepcion', 'r.numero_guia_despacho', 'r.numero_guia_salida'];
+                foreach ($manual ? $columnas : [...$columnas, 'c.nombre', 'c.codigo'] as $columna) {
+                    $q->orWhere($columna, 'like', '%'.$buscar.'%');
+                }
+                if ($numero) {
+                    $q->orWhere('g.documento_salida_normalizado', $numero)->orWhere('r.documento_salida_normalizado', $numero);
+                }
+            }))
+            ->orderByDesc('r.salida_at')->orderBy('g.id')->orderBy('r.id');
+    }
+
     public function previsualizar(RecepcionRomana $recepcion, GuiaDespachoEnvase $guia, string $conservar, bool $guiasDistintasVerificadas = false): array
     {
         if (! in_array($conservar, ['romana', 'despacho'], true)) {

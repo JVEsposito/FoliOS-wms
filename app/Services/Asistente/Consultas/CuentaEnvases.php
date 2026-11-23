@@ -3,14 +3,19 @@
 namespace App\Services\Asistente\Consultas;
 
 use App\Enums\TipoEnvaseRomana;
+use App\Exceptions\ConflictoOperacion;
 use App\Models\Cliente;
 use App\Models\CsgValidacion;
+use App\Models\GuiaDespachoEnvase;
+use App\Models\RecepcionRomana;
 use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ResultadoConsulta;
 use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Envases\ServicioConciliacionSalidaEnvases;
 use App\Services\Envases\ServicioCuentaCorrienteEnvases;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Cuenta corriente de envases con las mismas cifras que la oficina de Cuenta Envases. Un
@@ -23,10 +28,14 @@ class CuentaEnvases extends ConsultaPorTema
     /** Clientes de un mismo productor que se calculan, como máximo, al preguntar solo por el CSG. */
     private const MAXIMO_CLIENTES = 3;
 
+    /** Parejas por conciliar que se previsualizan, como máximo; el resto se ve en la oficina. */
+    private const MAXIMO_PAREJAS = 20;
+
     public function __construct(
         AlcanceOperacionalUsuario $alcance,
         ServicioTemporadaActiva $temporadas,
         private readonly ServicioCuentaCorrienteEnvases $cuenta,
+        private readonly ServicioConciliacionSalidaEnvases $conciliacion,
     ) {
         parent::__construct($alcance, $temporadas);
     }
@@ -81,6 +90,8 @@ class CuentaEnvases extends ConsultaPorTema
                 ['productor', 'productores', 'por productor', 'por csg'], ['cliente', 'csg']),
             new VistaConsulta('estado-cuenta', 'Estado de cuenta', 'Estado de cuenta de envases de un cliente: saldo inicial, entradas, salidas y saldo final por envase, como el documento.',
                 ['estado de cuenta', 'cartola'], ['periodo', 'cliente']),
+            new VistaConsulta('descuadres', 'Descuadres guía y Romana', 'Salidas de envases registradas dos veces, en una guía de despacho de envases y en el destare de Romana, con la diferencia por envase. Solo para quien ajusta la cuenta.',
+                ['descuadre', 'descuadres', 'diferencia', 'diferencias', 'doble salida', 'conciliar', 'entre guia y romana'], ['cliente']),
         ];
     }
 
@@ -89,8 +100,68 @@ class CuentaEnvases extends ConsultaPorTema
         return match ($vista->clave) {
             'por-productor' => $this->porProductor($parametros),
             'estado-cuenta' => $this->estadoCuenta($parametros),
+            'descuadres' => $this->descuadres($parametros),
             default => $this->saldos($parametros),
         };
+    }
+
+    /** Los descuadres se ajustan en su pantalla, que exige ajustar la cuenta: la vista también. */
+    public function puedeVer(User $usuario, VistaConsulta $vista): bool
+    {
+        return $this->puedeEjecutar($usuario) && ($vista->clave !== 'descuadres' || Gate::forUser($usuario)->allows('ajustar-cuenta-envases'));
+    }
+
+    /**
+     * Parejas de guía y Romana con la misma salida física aún sin conciliar, con la
+     * diferencia que muestra la previsualización de la oficina. Una pareja que la oficina
+     * no puede previsualizar queda como «requiere revisión individual».
+     */
+    private function descuadres(ParametrosConsulta $parametros): ResultadoConsulta
+    {
+        $titulo = 'Descuadres entre guía y Romana';
+        $enlace = '/oficina/envases/cuenta-corriente';
+        $temporada = $this->temporada($parametros);
+        $parejas = $temporada === null ? collect() : $this->conciliacion->pendientes($temporada->id, $parametros->clienteId)
+            ->limit(self::MAXIMO_PAREJAS)
+            ->get(['g.id as guia_id', 'g.numero as despacho', 'r.id as recepcion_id', 'r.numero_recepcion as recepcion', 'c.nombre as cliente']);
+        if ($parejas->isEmpty()) {
+            return ResultadoConsulta::sinDatos($titulo, 'No hay salidas de envases registradas dos veces pendientes de conciliar.', $enlace);
+        }
+        $filas = [];
+        foreach ($parejas as $pareja) {
+            $base = ['despacho' => $pareja->despacho, 'recepcion' => $pareja->recepcion, 'cliente' => $pareja->cliente];
+            try {
+                $plan = $this->conciliacion->previsualizar(RecepcionRomana::findOrFail($pareja->recepcion_id), GuiaDespachoEnvase::findOrFail($pareja->guia_id), 'romana');
+            } catch (ConflictoOperacion) {
+                $filas[] = [...$base, 'envase' => null, 'romana' => null, 'guia' => null, 'diferencia' => null, 'nota' => 'Requiere revisión individual'];
+
+                continue;
+            }
+            foreach ($plan['filas'] as $fila) {
+                [$tipo, $propiedad] = explode('|', $fila['envase_propiedad']);
+                $filas[] = [...$base, 'envase' => TipoEnvaseRomana::from($tipo)->etiqueta().' · '.$propiedad,
+                    'romana' => $fila['romana'], 'guia' => $fila['despacho'], 'diferencia' => $fila['diferencia'], 'nota' => null];
+            }
+        }
+
+        return new ResultadoConsulta(
+            ResultadoConsulta::RESPONDIDA,
+            $titulo,
+            sprintf('%d salidas de envases están registradas en una guía y en Romana, sin conciliar. Diferencia: guía menos Romana.', $parejas->count()),
+            [ResultadoConsulta::cifra('Por conciliar', $parejas->count())],
+            [
+                ['clave' => 'despacho', 'titulo' => 'Despacho', 'tipo' => 'codigo'],
+                ['clave' => 'recepcion', 'titulo' => 'Recepción', 'tipo' => 'codigo'],
+                ['clave' => 'cliente', 'titulo' => 'Cliente'],
+                ['clave' => 'envase', 'titulo' => 'Envase'],
+                ['clave' => 'romana', 'titulo' => 'Romana', 'tipo' => 'numero'],
+                ['clave' => 'guia', 'titulo' => 'Guía', 'tipo' => 'numero'],
+                ['clave' => 'diferencia', 'titulo' => 'Diferencia', 'tipo' => 'numero'],
+                ['clave' => 'nota', 'titulo' => 'Nota'],
+            ],
+            $filas,
+            $enlace,
+        );
     }
 
     private function estadoCuenta(ParametrosConsulta $parametros): ResultadoConsulta
