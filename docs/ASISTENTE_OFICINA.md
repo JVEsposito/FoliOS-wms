@@ -14,6 +14,8 @@ Diseño aprobado: [`superpowers/specs/2026-11-22-asistente-oficina-design.md`](s
 - Filtrado de lo que sale hacia Anthropic: nunca RRHH ni Finanzas, ni nombres.
 - La pantalla de configuración.
 
+El plan de la fase B, con el banco de 60 preguntas reales, el diseño de Haiku como intérprete, los topes decididos (US$20 al mes, 50 a 60 preguntas por usuario al día) y las recomendaciones a pedido, está en [`ASISTENTE_ESTUDIO_HAIKU.md`](ASISTENTE_ESTUDIO_HAIKU.md).
+
 ## Dónde aparece
 
 El asistente es un gajo flotante en la esquina inferior derecha de cada oficina, del color del área abierta.
