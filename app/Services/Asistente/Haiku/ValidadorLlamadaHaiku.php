@@ -14,6 +14,10 @@ use App\Services\Temporadas\ServicioTemporadaActiva;
  * Valida en FoliOS lo que Haiku pidió antes de ejecutar nada: consulta permitida, fichas
  * existentes, especie de la temporada, fechas válidas y periodo coherente. Si algo no
  * calza, no se ejecuta: el asistente repregunta.
+ *
+ * Además informa qué filtros pedidos no admite la consulta elegida (un cliente en una
+ * consulta sin cliente, otro día en una existencia): ejecutarla los ignoraría en
+ * silencio, así que el asistente ofrece la consulta y dice qué no cubre.
  */
 class ValidadorLlamadaHaiku
 {
@@ -30,7 +34,7 @@ class ValidadorLlamadaHaiku
      * @param  array<string, mixed>  $entrada  parámetros de la herramienta consultar
      * @param  list<ConsultaAsistente>  $permitidas
      * @param  array<string, array{tipo: string, id: string, etiqueta: string}>  $fichas
-     * @return array{consulta: ConsultaAsistente, parametros: ParametrosConsulta}|string la llamada validada o el motivo del rechazo
+     * @return array{consulta: ConsultaAsistente, parametros: ParametrosConsulta, sin_cubrir: list<string>}|string la llamada validada o el motivo del rechazo
      */
     public function validar(array $entrada, array $permitidas, array $fichas): array|string
     {
@@ -58,21 +62,40 @@ class ValidadorLlamadaHaiku
             return $periodo;
         }
 
-        return [
-            'consulta' => $consulta,
-            'parametros' => new ParametrosConsulta(
-                desde: $periodo['desde'],
-                hasta: $periodo['hasta'],
-                clienteId: $cliente,
-                csgId: $csg,
-                especieId: $especie,
-                temporadaAnterior: $periodo['temporada_anterior'],
-                turno: $periodo['turno'],
-                etiquetaPeriodo: $periodo['etiqueta'],
-                periodoExplicito: $periodo['explicito'],
-                agrupar: ($entrada['agrupar_por'] ?? 'nada') === 'jornada' ? 'dia' : null,
-            ),
-        ];
+        $parametros = new ParametrosConsulta(
+            desde: $periodo['desde'],
+            hasta: $periodo['hasta'],
+            clienteId: $cliente,
+            csgId: $csg,
+            especieId: $especie,
+            temporadaAnterior: $periodo['temporada_anterior'],
+            turno: $periodo['turno'],
+            etiquetaPeriodo: $periodo['etiqueta'],
+            periodoExplicito: $periodo['explicito'],
+            agrupar: ($entrada['agrupar_por'] ?? 'nada') === 'jornada' ? 'dia' : null,
+        );
+
+        return ['consulta' => $consulta, 'parametros' => $parametros, 'sin_cubrir' => $this->filtrosSinCubrir($consulta, $parametros)];
+    }
+
+    /**
+     * Filtros pedidos que la consulta no admite. El periodo sigue la misma regla que las
+     * reglas del asistente: una existencia muestra lo de ahora, nunca otro día.
+     *
+     * @return list<string>
+     */
+    private function filtrosSinCubrir(ConsultaAsistente $consulta, ParametrosConsulta $parametros): array
+    {
+        $admite = fn (string $filtro): bool => in_array($filtro, $consulta->filtros(), true);
+        $otroDia = $parametros->temporadaAnterior || ($parametros->periodoExplicito && $parametros->jornadas()[1] < $this->periodo->jornada());
+
+        return array_keys(array_filter([
+            'lo de otro día (muestra lo que hay ahora)' => $otroDia && ! $admite('periodo'),
+            'el filtro por cliente' => $parametros->clienteId !== null && ! $admite('cliente'),
+            'el filtro por CSG' => $parametros->csgId !== null && ! $admite('csg'),
+            'el filtro por especie' => $parametros->especieId !== null && ! $admite('especie'),
+            'el detalle por día' => $parametros->agrupar === 'dia' && ! $admite('por_dia'),
+        ]));
     }
 
     /** @return string|null|false el id de la ficha, null si viene vacía o false si no existe */
