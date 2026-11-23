@@ -123,7 +123,7 @@ class CatalogoModulosAcceso
                     $this->modulo('frigorifico.prefrio', 'Prefrío', 'Túneles, procesos y verificaciones de prefrío.'),
                     $this->modulo('frigorifico.control-personal', 'Control de personal', 'Ingresos, salidas y horas extra internas. Solo supervisión de frío y administración.'),
                     $this->modulo('frigorifico.camaras', 'Cámaras PT', 'Plano, movimientos y sesiones de producto terminado.'),
-                    $this->modulo('frigorifico.cargas', 'Despacho', 'Cargas, estatus operativo y calendario de embarques.'),
+                    $this->modulo('frigorifico.cargas', 'Despacho', 'Cargas, despacho nacional, estatus operativo y calendario de embarques.'),
                     $this->modulo(self::OFICINA_CONTROL_DESPACHO, 'Control de despacho (R-24)', 'Planilla POEMP R-24 de consolidación: inspección del camión o contenedor, posición y temperatura de cada pallet.'),
                 ],
             ],

@@ -6,6 +6,7 @@ use App\Enums\TipoBulto;
 use App\Models\CambioAtributosPt;
 use App\Models\Folio;
 use App\Models\Movimiento;
+use App\Models\PartidaNacionalPt;
 use App\Models\ProcesoPrefrioFolio;
 use App\Models\Repaletizaje;
 use App\Models\User;
@@ -76,6 +77,7 @@ class ServicioExpedienteFolio
             ->concat($this->eventosMovimientos($movimientos))
             ->concat($this->eventosRepaletizaje($repaletizajes, $folio))
             ->concat($this->eventosCambiosAtributos($folio))
+            ->concat($this->eventosDespachoNacional($folio))
             ->concat($eliminacion ? [[
                 'tipo' => 'eliminacion',
                 'fecha' => $eliminacion['eliminado_at'],
@@ -163,6 +165,43 @@ class ServicioExpedienteFolio
                 'repaletizajes' => $repaletizajes->count(),
             ],
         ];
+    }
+
+    private function eventosDespachoNacional(Folio $folio): Collection
+    {
+        return PartidaNacionalPt::query()
+            ->where(fn ($q) => $q->where('folio_origen_id', $folio->id)->orWhere('folio_id', $folio->id))
+            ->with(['usuario:id,name', 'despacho.usuario:id,name'])
+            ->get()
+            ->flatMap(function (PartidaNacionalPt $partida): array {
+                $eventos = [[
+                    'tipo' => 'despacho_nacional',
+                    'fecha' => $partida->created_at?->toIso8601String(),
+                    'titulo' => 'Cajas separadas para mercado nacional',
+                    'descripcion' => $partida->motivo,
+                    'meta' => [
+                        'Folio original' => $partida->snapshot['folio_origen'],
+                        'Folio nacional' => $partida->snapshot['folio_nacional'],
+                        'Cajas' => $partida->cajas,
+                        'Responsable' => $partida->usuario?->name,
+                    ],
+                ]];
+                if ($despacho = $partida->despacho) {
+                    $eventos[] = [
+                        'tipo' => 'despacho_nacional',
+                        'fecha' => $despacho->despachado_at->toIso8601String(),
+                        'titulo' => 'Salida a mercado nacional',
+                        'descripcion' => $despacho->destinatario,
+                        'meta' => [
+                            'Guía' => $despacho->guia,
+                            'Cajas' => $partida->cajas,
+                            'Responsable' => $despacho->usuario?->name,
+                        ],
+                    ];
+                }
+
+                return $eventos;
+            });
     }
 
     /** Cambios de atributos hechos por administración, con su motivo. */

@@ -47,6 +47,7 @@ use App\Http\Controllers\Api\DesocupacionCamaraController;
 use App\Http\Controllers\Api\DespachoComercialRetornoController;
 use App\Http\Controllers\Api\DespachoFrigorificoController;
 use App\Http\Controllers\Api\DespachoMaterialController;
+use App\Http\Controllers\Api\DespachoNacionalPtController;
 use App\Http\Controllers\Api\DevolucionEnvasesController;
 use App\Http\Controllers\Api\DirectorioTransporteController;
 use App\Http\Controllers\Api\DisponibilidadCamarerosController;
@@ -870,6 +871,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/cargas/{carga}/tareas', [DespachoFrigorificoController::class, 'tareas']);
         Route::get('/cargas/{carga}/plan-extraccion', [DespachoFrigorificoController::class, 'planExtraccion']);
         Route::get('/andenes', [AndenController::class, 'index']);
+    });
+    Route::prefix('despacho-nacional-pt')->middleware('can:consultar-catalogo-cargas')->group(function (): void {
+        Route::get('/', [DespachoNacionalPtController::class, 'index']);
+        Route::get('/folio', [DespachoNacionalPtController::class, 'folio'])->middleware('can:gestionar-cargas');
+        Route::post('/partidas', [DespachoNacionalPtController::class, 'separar'])->middleware('can:gestionar-cargas');
+        Route::post('/despachos', [DespachoNacionalPtController::class, 'despachar'])->middleware('can:cerrar-despacho-nacional-pt');
     });
     Route::get('/cargas/folios-disponibles', [CargaController::class, 'foliosDisponibles'])
         ->middleware('can:gestionar-cargas');

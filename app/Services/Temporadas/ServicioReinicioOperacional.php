@@ -542,6 +542,8 @@ class ServicioReinicioOperacional
         $eliminados['validaciones_pallet'] = DB::table('validaciones_pallet')
             ->where('temporada_id', $temporada->id)
             ->delete();
+        $eliminados['partidas_nacionales_pt'] = DB::table('partidas_nacionales_pt')->where('temporada_id', $temporada->id)->delete();
+        $eliminados['despachos_nacionales_pt'] = DB::table('despachos_nacionales_pt')->where('temporada_id', $temporada->id)->delete();
         $eliminados['folios'] = DB::table('folios')
             ->where('temporada_id', $temporada->id)
             ->whereIn('tipo_bulto', ['pallet', 'saldo'])

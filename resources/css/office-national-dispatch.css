@@ -1,0 +1,127 @@
+.national-workspace {
+    display: grid;
+    max-width: 1480px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    margin: 0 auto;
+    padding: clamp(12px, 2vw, 28px);
+    color: var(--text-strong);
+}
+
+.national-actions,
+.national-check {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 8px 12px;
+}
+
+.national-workspace label:not(.national-check) {
+    display: grid;
+    gap: 4px;
+    color: var(--text-secondary);
+    font-size: .875rem;
+}
+
+.national-workspace :is(input:not([type="checkbox"]), select, textarea) {
+    inline-size: 100%;
+    min-inline-size: 0;
+    min-block-size: 42px;
+    padding: .55rem .7rem;
+    border: 1px solid var(--line);
+    border-radius: var(--folios-control-shape);
+    font: inherit;
+}
+
+.national-check {
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    color: var(--text-secondary);
+}
+
+.national-workspace input[type="checkbox"] {
+    flex: none;
+    inline-size: 1.1rem;
+    block-size: 1.1rem;
+    accent-color: var(--primary);
+}
+
+.national-form {
+    display: grid;
+    justify-items: start;
+    gap: 12px;
+    margin-block-start: 14px;
+    padding: 14px;
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    border-radius: var(--folios-control-shape);
+}
+
+.national-form > :is(label, fieldset),
+.national-destination { inline-size: 100%; }
+
+.national-form fieldset {
+    min-inline-size: 0;
+    margin: 0;
+    padding: 10px 0 0;
+    border: 0;
+}
+
+.national-form legend,
+.national-form h3 {
+    margin: 0;
+    color: var(--text-strong);
+    font-weight: 740;
+}
+
+.national-form p { margin: 0; }
+
+.national-destination,
+.national-components {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    gap: 10px;
+}
+
+.national-components label {
+    padding: 10px;
+    border: 1px solid var(--line);
+    background: var(--corporate-card);
+    border-radius: var(--folios-control-shape);
+}
+
+.national-table {
+    overflow-x: auto;
+    margin-top: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--folios-control-shape);
+}
+
+.national-table table { width: 100%; }
+.national-table :is(td, th) { vertical-align: top; }
+.national-table :is(.folios-estado, time) { white-space: nowrap; }
+.national-table td small { display: block; color: var(--text-secondary); }
+.national-table .folios-code { overflow-wrap: anywhere; }
+
+.national-table details {
+    margin-block-start: 4px;
+    color: var(--text-secondary);
+    font-size: .83rem;
+}
+
+.national-table summary {
+    color: var(--area-text);
+    cursor: pointer;
+}
+
+.national-table details ul {
+    margin: 6px 0;
+    padding-inline-start: 18px;
+}
+
+.national-pages { margin-block-start: 12px; align-items: center; }
+.national-workspace .national-notice { margin: 0; }
+.national-notice:empty { display: none; }
+.national-notice[data-error="true"], .national-error { color: var(--danger-text); }
+.national-error { margin: 0; overflow-wrap: anywhere; }
+.national-error:not(:empty) { margin-top: 8px; }

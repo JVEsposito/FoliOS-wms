@@ -13,6 +13,7 @@ use App\Models\AutorizacionSagFolio;
 use App\Models\Camara;
 use App\Models\Dispositivo;
 use App\Models\Folio;
+use App\Models\PartidaNacionalPt;
 use App\Models\Repaletizaje;
 use App\Models\RepaletizajeDetalle;
 use App\Models\RepaletizajeResultado;
@@ -41,8 +42,12 @@ class ServicioRepaletizaje
         array $datos,
         User $usuario,
         ?Dispositivo $dispositivo = null,
+        ?string $folioParaNacional = null,
     ): Repaletizaje {
         $payload = $this->normalizar($datos);
+        if ($folioParaNacional !== null) {
+            $payload['folio_para_nacional'] = $folioParaNacional;
+        }
         $hash = $this->hash($payload);
 
         $comando = new ComandoTransicionOperacional(
@@ -572,7 +577,7 @@ class ServicioRepaletizaje
         if (! $temporadaActivaId || $folio->temporada_id !== $temporadaActivaId) {
             throw new ConflictoOperacion('El folio no pertenece a la temporada activa.');
         }
-        $this->validarFolioOperable($folio);
+        $this->validarFolioOperable($folio, isset($payload['folio_para_nacional']));
 
         $cantidadAntes = $this->cantidad($folio);
         if ((int) $origenPayload['cantidad_aportada'] !== $cantidadAntes) {
@@ -663,13 +668,20 @@ class ServicioRepaletizaje
             $fechaProceso,
             $indiceConservado,
             $indiceUbicacion,
+            $payload,
         ): array {
+            $paraNacional = ($payload['folio_para_nacional'] ?? null) === $resultado['numero_folio'];
             $datosExternos = array_merge($snapshotAntes['atributos']['datos_externos'] ?? [], [
                 'cantidad_cajas' => $resultado['cantidad_resultante'],
                 'composicion' => $resultado['composicion'],
                 'repaletizaje_codigo' => $codigo,
                 'genealogia_repaletizaje' => $genealogia,
             ]);
+            if (isset($payload['folio_para_nacional'])) {
+                // El peso total original no corresponde a ninguno de los bultos divididos.
+                // La etiqueta consulta el peso a partir de las cajas de cada componente.
+                unset($datosExternos['kilos_netos']);
+            }
             $this->actualizarResumenComposicion($datosExternos);
             $especificaciones = $this->especificacionesDeComposicion($snapshotAntes['especificaciones'], collect($resultado['composicion']));
             $atributos = [
@@ -677,12 +689,12 @@ class ServicioRepaletizaje
                 'numero_folio' => $resultado['numero_folio'],
                 'tipo_bulto' => TipoBulto::from($resultado['tipo_resultado']),
                 'condicion_sag_id' => $folio->condicion_sag_id,
-                'estado_operacional' => $this->estadoResultado(
+                'estado_operacional' => $paraNacional ? EstadoOperacionalFolio::Bloqueado : $this->estadoResultado(
                     $folio->condicion_termica,
                     $indice === $indiceUbicacion && $folio->ubicacionActual !== null,
                 ),
                 'condicion_termica' => $folio->condicion_termica,
-                'habilitacion_almacenamiento' => $this->habilitacionResultado(
+                'habilitacion_almacenamiento' => $paraNacional ? HabilitacionAlmacenamientoFolio::NoHabilitado : $this->habilitacionResultado(
                     $folio->condicion_termica,
                 ),
                 'fuente_habilitacion_almacenamiento' => $folio->fuente_habilitacion_almacenamiento,
@@ -690,7 +702,7 @@ class ServicioRepaletizaje
                 'habilitado_almacenamiento_por_user_id' => $folio->habilitado_almacenamiento_por_user_id,
                 'fecha_ingreso' => $folio->fecha_ingreso,
                 'fecha_proceso_pt' => $fechaProceso,
-                'activo' => true,
+                'activo' => ! $paraNacional,
                 'variedad' => $especificaciones['variedad'],
                 'calibre' => $especificaciones['calibre'],
                 'marca' => $especificaciones['marca'],
@@ -866,6 +878,11 @@ class ServicioRepaletizaje
                 ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
+
+            if (PartidaNacionalPt::query()->where(fn ($q) => $q->whereIn('folio_id', $folioIds)->orWhereIn('folio_origen_id', $folioIds))
+                ->lockForUpdate()->exists()) {
+                throw new ConflictoOperacion('El repaletizaje tiene cajas comprometidas con mercado nacional.');
+            }
 
             $participacionPosterior = RepaletizajeDetalle::query()
                 ->whereIn('folio_origen_id', $folioIds)
@@ -1049,7 +1066,7 @@ class ServicioRepaletizaje
         }
     }
 
-    private function validarFolioOperable(Folio $folio): void
+    private function validarFolioOperable(Folio $folio, bool $paraNacional = false): void
     {
         if (! $folio->activo || ! in_array($folio->tipo_bulto, [TipoBulto::Pallet, TipoBulto::Saldo], true)) {
             throw new DomainException(
@@ -1064,6 +1081,7 @@ class ServicioRepaletizaje
         if (! in_array($folio->condicion_termica, [
             CondicionTermicaFolio::PendientePrefrio,
             CondicionTermicaFolio::PrefrioAprobado,
+            ...($paraNacional ? [CondicionTermicaFolio::CondicionHeredada] : []),
         ], true)) {
             throw new DomainException(
                 "El folio {$folio->numero_folio} posee un estado térmico transitorio o retenido.",

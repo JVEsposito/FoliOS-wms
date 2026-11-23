@@ -33,6 +33,8 @@ export default defineConfig({
                 'resources/js/office-shift-duties.js',
                 'resources/css/office-loads.css',
                 'resources/js/office-loads.js',
+                'resources/css/office-national-dispatch.css',
+                'resources/js/office-national-dispatch.js',
                 'resources/css/office-load-status.css',
                 'resources/js/office-load-status.js',
                 'resources/css/office-shipment-calendar.css',

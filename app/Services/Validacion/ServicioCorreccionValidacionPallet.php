@@ -10,6 +10,7 @@ use App\Enums\TipoBulto;
 use App\Exceptions\ConflictoOperacion;
 use App\Models\CorreccionValidacionPallet;
 use App\Models\Folio;
+use App\Models\PartidaNacionalPt;
 use App\Models\RepaletizajeDetalle;
 use App\Models\User;
 use App\Models\ValidacionPallet;
@@ -100,6 +101,10 @@ class ServicioCorreccionValidacionPallet
                 $this->aplicarFechas($validacionBloqueada, $folio, $payload, $snapshot);
 
                 return $this->auditar($validacionBloqueada, $folio, $usuario, $datos['operacion_id'], $payloadHash, $payload['motivo_correccion'], $anteriores);
+            }
+
+            if (PartidaNacionalPt::query()->where('folio_origen_id', $folio->id)->lockForUpdate()->exists()) {
+                throw new ConflictoOperacion('El folio tiene cajas separadas para mercado nacional. La corrección de producto podría reponer cajas ya retiradas.');
             }
 
             $temporada = DB::table('temporadas')
