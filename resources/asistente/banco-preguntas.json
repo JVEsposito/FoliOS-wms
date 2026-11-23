@@ -212,10 +212,12 @@
       "n": 22,
       "area": "Envases",
       "pregunta": "Estado de cuenta de envases de Valle Alto de este mes",
-      "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "cuenta-envases",
       "objetivo": "estado de cuenta de envases",
-      "responde_hoy": null
+      "responde_hoy": "cuenta-envases",
+      "vista": "estado-cuenta",
+      "clase_resuelta": "temas y vistas"
     },
     {
       "n": 23,
