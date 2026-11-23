@@ -46,7 +46,7 @@ class EvaluadorBancoAsistente
      * @return array{total: int, correctas: int, preguntas: int, preguntas_de_mas: int, falsas: int,
      *     llamadas_haiku: int, llamadas_exitosas_haiku: int, errores_haiku: int, no_disponibles_haiku: int,
      *     costo_usd: float, tokens_entrada: int, tokens_salida: int,
-     *     detalle: list<array{n: int, pregunta: string, esperada: ?string, elegida: ?string, clase: string, interprete: string}>}
+     *     detalle: list<array{n: int, pregunta: string, esperada: ?string, elegida: ?string, clase: string, interprete: string, detalle: ?string}>}
      */
     public function evaluar(User $usuario, bool $conHaiku = false): array
     {
@@ -62,6 +62,7 @@ class EvaluadorBancoAsistente
             $reglas = $this->interprete->interpretar($usuario, $pregunta['pregunta']);
             $elegida = $reglas['consulta']?->clave();
             $interprete = 'reglas';
+            $explicacion = null;
             if ($elegida === null && $conHaiku) {
                 $haiku = $this->haiku->interpretar($usuario, $pregunta['pregunta'], $reglas['entidades']);
                 $interprete = 'haiku:'.$haiku['tipo'];
@@ -69,6 +70,7 @@ class EvaluadorBancoAsistente
                     $noDisponibles++;
                 }
                 $elegida = $haiku['tipo'] === InterpreteHaiku::CONSULTA ? $haiku['consulta']->clave() : null;
+                $explicacion = $this->explicar($haiku);
                 if ($haiku['llamada'] !== null) {
                     $llamadas++;
                     $haiku['llamada']->estado === LlamadaIaAsistente::OK ? $exitosas++ : $errores++;
@@ -91,6 +93,7 @@ class EvaluadorBancoAsistente
                 'elegida' => $elegida,
                 'clase' => $clase,
                 'interprete' => $interprete,
+                'detalle' => $explicacion,
             ];
         }
         $cuenta = fn (string $clase): int => count(array_filter($detalle, fn (array $d): bool => $d['clase'] === $clase));
@@ -110,5 +113,21 @@ class EvaluadorBancoAsistente
             'tokens_salida' => $salida,
             'detalle' => $detalle,
         ];
+    }
+
+    /**
+     * Por qué Haiku decidió así, para revisar el informe: lo que entendió que se pide, la
+     * consulta que no cubrió todo y qué le faltó, o el motivo del rechazo.
+     *
+     * @param  array<string, mixed>  $haiku
+     */
+    private function explicar(array $haiku): ?string
+    {
+        return match ($haiku['tipo']) {
+            InterpreteHaiku::CONSULTA => $haiku['pide'],
+            InterpreteHaiku::PARCIAL => $haiku['consulta']->clave().' · sin cubrir: '.implode(', ', array_map(fn (string $c): string => trim($c, '«»'), $haiku['sin_cubrir'])),
+            InterpreteHaiku::INVALIDA, InterpreteHaiku::SIN_CONSULTA, InterpreteHaiku::NO_DISPONIBLE => $haiku['motivo'],
+            default => null,
+        };
     }
 }

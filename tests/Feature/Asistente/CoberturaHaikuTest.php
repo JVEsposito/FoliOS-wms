@@ -85,10 +85,11 @@ class CoberturaHaikuTest extends TestCase
 
         $resultado = app(InterpreteHaiku::class)->interpretar($this->administrador, $pregunta, $entidades);
 
-        $this->assertSame(InterpreteHaiku::INVALIDA, $resultado['tipo']);
-        $this->assertNull($resultado['consulta']);
+        $this->assertSame(InterpreteHaiku::PARCIAL, $resultado['tipo']);
+        $this->assertSame($consulta, $resultado['consulta']->clave());
         $this->assertNull($resultado['parametros']);
-        $this->assertStringStartsWith('rechazada:', $resultado['llamada']->detalle);
+        $this->assertNotEmpty($resultado['sin_cubrir']);
+        $this->assertStringStartsWith('parcial:', $resultado['llamada']->detalle);
         Http::assertSentCount(1);
     }
 
@@ -119,11 +120,18 @@ class CoberturaHaikuTest extends TestCase
     public function test_no_permite_que_haiku_quite_un_cliente_o_un_periodo_reconocido(): void
     {
         $pregunta = 'cuánta fruta recibió Exportadora Andina el jueves';
-        foreach ([['cliente' => ''], ['periodo_tipo' => 'actual', 'desde' => '', 'hasta' => '']] as $cambio) {
-            Http::fake(['*' => Http::response($this->respuesta('consultar', [...$this->entrada($pregunta, 'kilos-recepciones'), ...$cambio]))]);
+        $casos = ['cliente' => ['cliente' => ''], 'periodo' => ['periodo_tipo' => 'actual', 'desde' => '', 'hasta' => '']];
+        $secuencia = Http::sequence();
+        foreach ($casos as $cambio) {
+            $secuencia->push($this->respuesta('consultar', [...$this->entrada($pregunta, 'kilos-recepciones'), ...$cambio]));
+        }
+        Http::fake(['*' => $secuencia]);
+        foreach (array_keys($casos) as $campo) {
             $resultado = app(InterpreteHaiku::class)->interpretar($this->administrador, $pregunta,
                 app(ReconocedorEntidades::class)->reconocer($pregunta));
-            $this->assertSame(InterpreteHaiku::INVALIDA, $resultado['tipo']);
+            $this->assertSame(InterpreteHaiku::PARCIAL, $resultado['tipo']);
+            $this->assertNull($resultado['parametros']);
+            $this->assertStringContainsString($campo, implode(' ', $resultado['sin_cubrir']));
         }
     }
 
@@ -160,7 +168,8 @@ class CoberturaHaikuTest extends TestCase
         $informe = app(EvaluadorBancoAsistente::class)->evaluar($this->administrador, conHaiku: true);
 
         $this->assertSame(0, $informe['falsas']);
-        $this->assertSame(8, collect($informe['detalle'])->where('interprete', 'haiku:invalida')->count());
+        $this->assertSame(8, collect($informe['detalle'])->where('interprete', 'haiku:parcial')->count());
+        $this->assertStringContainsString('sin cubrir:', collect($informe['detalle'])->firstWhere('n', 24)['detalle']);
         $this->assertGreaterThan(0, $informe['llamadas_exitosas_haiku']);
         $this->assertSame(0, $informe['errores_haiku']);
     }
@@ -176,6 +185,21 @@ class CoberturaHaikuTest extends TestCase
         $this->assertGreaterThan(0, $informe['errores_haiku']);
         $this->assertSame(0, $informe['llamadas_exitosas_haiku']);
         $this->assertSame(1, $codigo);
+    }
+
+    public function test_una_lista_sin_cubrir_sin_texto_no_desactiva_la_comprobacion_del_servidor(): void
+    {
+        $pregunta = '¿Qué falta por validar?';
+        $entrada = [...$this->entrada($pregunta, 'validaciones-pt'), 'pide' => 'folios pendientes', 'sin_cubrir' => [' ', null]];
+        Http::fake(['*' => Http::response($this->respuesta('consultar', $entrada))]);
+
+        $resultado = app(InterpreteHaiku::class)->interpretar($this->administrador, $pregunta,
+            app(ReconocedorEntidades::class)->reconocer($pregunta));
+
+        $this->assertSame(InterpreteHaiku::PARCIAL, $resultado['tipo']);
+        $this->assertNull($resultado['parametros']);
+        $this->assertNotEmpty($resultado['sin_cubrir']);
+        $this->assertSame('folios pendientes', $resultado['pide']);
     }
 
     public function test_cero_falsas_con_tope_o_limite_diario_tampoco_aprueba(): void
@@ -202,7 +226,8 @@ class CoberturaHaikuTest extends TestCase
         $explicito = $entidades['periodo_explicito'];
 
         return [
-            'consulta' => $consulta, 'periodo_tipo' => $explicito ? ($entidades['turno'] ? 'turno' : 'rango') : 'actual',
+            'pide' => '', 'consulta' => $consulta, 'sin_cubrir' => [],
+            'periodo_tipo' => $explicito ? ($entidades['turno'] ? 'turno' : 'rango') : 'actual',
             'desde' => $explicito ? $periodo->jornada($entidades['desde']) : '',
             'hasta' => $explicito ? $periodo->jornada($entidades['hasta']->subSecond()) : '',
             'turno' => $entidades['turno'] ?? 'ninguno', 'cliente' => $entidades['cliente_id'] ? 'CLIENTE_1' : '',

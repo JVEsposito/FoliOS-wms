@@ -39,3 +39,18 @@ Una recepción de fruta con varias guías se muestra en el estado de cuenta (pan
 guía y tipo de envase**, con lo validado y el productor (CSG) de esa guía. Internamente sigue habiendo un movimiento por
 recepción y tipo. Si lo validado por guía no cuadra con el ingreso vigente (por ejemplo, tras un ajuste manual de
 cuenta), se conserva una sola línea con el resumen de guías.
+
+## Acceso directo a la cuenta de envases
+
+En el expediente de Romana, **Corregir cuenta de envases** abre directamente el ajuste de cuenta,
+también para recepciones con **pesaje acumulativo** ya validadas. Conserva los permisos de administración,
+la temporada activa y los bloqueos por anulación, eliminación o reasignación de envases.
+
+El apartado identifica cliente, recepción, guías y productores/CSG. Por tipo de envase muestra lo registrado,
+lo que hay actualmente en cuenta, la cantidad correcta y la diferencia. Permite agregar un tipo faltante,
+previsualizar el efecto en el saldo y revisar los ajustes anteriores. El motivo es obligatorio; si hay varios
+CSG, se indica a cuál corresponde la diferencia de recibidos. Una salida conciliada sigue corrigiéndose en su despacho.
+
+Este acceso usa el mismo servicio de **Solo cuenta de envases**: deja ajustes trazables con usuario, fecha
+y motivo, sin modificar tandas, conteos validados, guías, lotes, kilos ni existencia física. Reenviar la misma
+operación no duplica el ajuste. La corrección completa continúa disponible en su botón habitual.

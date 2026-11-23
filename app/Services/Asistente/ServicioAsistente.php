@@ -78,6 +78,14 @@ class ServicioAsistente
                         'recomendacion' => 'Por ahora no doy recomendaciones. Puedo mostrarte los datos:',
                         default => self::SIN_CONSULTA,
                     }, self::MODO_HAIKU);
+                case InterpreteHaiku::PARCIAL:
+                    $opciones = collect([...$haiku['opciones'], ...$interpretacion['alternativas']])
+                        ->unique(fn (ConsultaAsistente $c): string => $c->clave())->take(3)->values()->all();
+
+                    return $this->sugerir($usuario, $texto, $parametros, $opciones, sprintf(
+                        'Lo más cercano que tengo es «%s», pero no cubre %s. ¿Te sirve igual o es alguna de estas?',
+                        $haiku['consulta']->titulo(), $this->enumerar($haiku['sin_cubrir']),
+                    ), self::MODO_HAIKU);
                 case InterpreteHaiku::INVALIDA:
                     $opciones = collect([...$haiku['opciones'], ...$interpretacion['alternativas']])
                         ->unique(fn (ConsultaAsistente $c): string => $c->clave())->take(3)->values()->all();
@@ -180,6 +188,18 @@ class ServicioAsistente
     }
 
     /** @param  list<ConsultaAsistente>  $opciones */
+    /**
+     * «A», «A ni B» o «A, B ni C»: va después de «no cubre».
+     *
+     * @param  list<string>  $partes
+     */
+    private function enumerar(array $partes): string
+    {
+        $ultima = array_pop($partes);
+
+        return $partes === [] ? (string) $ultima : implode(', ', $partes).' ni '.$ultima;
+    }
+
     private function sugerir(User $usuario, string $texto, ParametrosConsulta $parametros, array $opciones, string $mensaje, string $modo, ?string $aviso = null): array
     {
         $this->registrar($usuario, $texto, null, $parametros, 'sugerencias', 0.0, $modo === self::MODO_HAIKU ? 'haiku' : 'reglas');
