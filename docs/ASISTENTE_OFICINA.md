@@ -46,6 +46,11 @@ El asistente es un gajo flotante en la esquina inferior derecha de cada oficina,
 | `tiempos-cargas` | Duración de las cargas, desde la publicación hasta el cierre | periodo, cliente | Cargas |
 | `consumos-ot` | Consumo y merma por orden de trabajo | periodo, cliente | Consumos por OT |
 | `expediente-por-codigo` | Lo que la Búsqueda operacional encuentra para un código, más las guías de despacho de envases (`GDE-…` o número de guía) si el usuario ve la cuenta de envases | código | Búsqueda operacional |
+| `camiones-en-planta` | Camiones con su recepción abierta en Romana, con etapa y minutos en planta | cliente (ahora) | Romana |
+| `envases-recibidos` | Bins, totes y otros envases que llegaron con la fruta, por tipo (validado o, si falta, declarado) | periodo, cliente | Romana |
+| `despachos-envases-pendientes` | Guías de despacho de envases en borrador | cliente (ahora) | Cuenta o despacho de envases |
+| `estado-cargas` | Cargas que todavía no se cierran, con estado y folios asignados | cliente (ahora) | Cargas |
+| `folios-despachados` | Pallets y saldos que salieron en el periodo, por carga, según la salida confirmada | periodo, cliente | Cargas |
 
 **Periodo:** se cuenta en jornadas operativas, de 07:00 a 06:59 del día siguiente en la zona de la planta (la misma regla de `CalendarioOperativo`). A las 03:00, «hoy» sigue siendo la jornada que empezó ayer a las 07:00. Por defecto es la jornada en curso. Se reconocen:
 
