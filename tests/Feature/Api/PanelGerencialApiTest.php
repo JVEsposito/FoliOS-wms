@@ -126,6 +126,53 @@ class PanelGerencialApiTest extends TestCase
         $this->assertNotNull($respuesta->json('data.generado_at'));
     }
 
+    public function test_prefrio_conserva_la_posicion_real_y_detiene_el_reloj_en_verificacion(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-23T19:00:00-03:00'));
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $gerencia = User::factory()->create(['rol' => RolUsuario::Consulta]);
+        $folio = Folio::create([
+            'numero_folio' => 'TUNEL-R41',
+            'tipo_bulto' => TipoBulto::Pallet,
+            'estado_operacional' => EstadoOperacionalFolio::PendientePrefrio,
+            'fecha_ingreso' => now(),
+            'activo' => true,
+        ]);
+        $proceso = $this->crearTunel($administrador, $folio);
+        $proceso->folios()->update(['posicion_tunel_prefrio_id' => $proceso->tunel->posiciones()->where('numero', 2)->value('id')]);
+        $proceso->tunel->posiciones()->create(['numero' => 3, 'etiqueta' => 'P3', 'activa' => false]);
+        $proceso->update([
+            'estado' => EstadoProcesoPrefrio::PendienteVerificacion,
+            'iniciado_at' => now()->subHours(10),
+            'pendiente_verificacion_at' => now()->subHours(3),
+            'duracion_objetivo_minutos' => 480,
+        ]);
+
+        $this->actingAs($gerencia, 'sanctum')
+            ->getJson('/api/gerencia/resumen')
+            ->assertOk()
+            ->assertJsonPath('data.prefrio.procesos_atrasados', 0)
+            ->assertJsonPath('data.prefrio.tuneles.0.capacidad', 2)
+            ->assertJsonPath('data.prefrio.tuneles.0.ocupadas', 1)
+            ->assertJsonPath('data.prefrio.tuneles.0.disponibles', 1)
+            ->assertJsonPath('data.prefrio.tuneles.0.posiciones', [
+                ['numero' => 1, 'etiqueta' => 'P1', 'activa' => true, 'ocupada' => false],
+                ['numero' => 2, 'etiqueta' => 'P2', 'activa' => true, 'ocupada' => true],
+                ['numero' => 3, 'etiqueta' => 'P3', 'activa' => false, 'ocupada' => false],
+            ])
+            ->assertJsonPath('data.prefrio.tuneles.0.proceso_activo.transcurridos_minutos', 420)
+            ->assertJsonPath('data.prefrio.tuneles.0.proceso_activo.atrasado', false);
+
+        $proceso->update(['pendiente_verificacion_at' => now()->subHour()]);
+        app(ServicioPanelGerencial::class)->invalidar();
+
+        $this->getJson('/api/gerencia/resumen')
+            ->assertOk()
+            ->assertJsonPath('data.prefrio.procesos_atrasados', 1)
+            ->assertJsonPath('data.prefrio.tuneles.0.proceso_activo.transcurridos_minutos', 540)
+            ->assertJsonPath('data.prefrio.tuneles.0.proceso_activo.atrasado', true);
+    }
+
     public function test_filtra_por_temporada_activa_y_permite_consultar_una_historica(): void
     {
         $gerencia = User::factory()->create(['rol' => RolUsuario::Consulta]);
@@ -663,7 +710,7 @@ class PanelGerencialApiTest extends TestCase
         ]);
     }
 
-    private function crearTunel(User $administrador, Folio $folio): void
+    private function crearTunel(User $administrador, Folio $folio): ProcesoPrefrio
     {
         $tunel = TunelPrefrio::create([
             'codigo' => 'TUN-GE-01',
@@ -700,5 +747,7 @@ class PanelGerencialApiTest extends TestCase
             'cargado_at' => now(),
             'cargado_por_user_id' => $administrador->id,
         ]);
+
+        return $proceso;
     }
 }

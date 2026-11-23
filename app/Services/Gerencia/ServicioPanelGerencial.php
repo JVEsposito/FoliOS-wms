@@ -28,6 +28,7 @@ use App\Models\DespachoMaterial;
 use App\Models\Folio;
 use App\Models\LoteMateriaPrima;
 use App\Models\MovimientoEnvase;
+use App\Models\PosicionTunelPrefrio;
 use App\Models\ProcesoPrefrio;
 use App\Models\RecepcionMaterial;
 use App\Models\RecepcionRomana;
@@ -41,7 +42,7 @@ use App\Services\Verificaciones\ServicioIndicadoresVerificacionMateriales;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\Builder as ConsultaBase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -50,7 +51,7 @@ use Illuminate\Support\Str;
 
 class ServicioPanelGerencial
 {
-    public const CLAVE_CACHE = 'gerencia:panel:resumen:v7';
+    public const CLAVE_CACHE = 'gerencia:panel:resumen:v8';
 
     private const CLAVE_BLOQUEO = 'gerencia:panel:resumen:bloqueo';
 
@@ -898,45 +899,39 @@ class ServicioPanelGerencial
 
     private function prefrio(string $temporadaId): array
     {
-        $estadosActivos = collect(EstadoProcesoPrefrio::cases())
-            ->filter->esActivo()
-            ->map->value
-            ->all();
+        $ahora = CarbonImmutable::now();
+        $estadosActivos = EstadoProcesoPrefrio::activos();
         $tuneles = TunelPrefrio::query()
-            ->withCount([
-                'posiciones as posiciones_activas_count' => fn (Builder $consulta): Builder => $consulta
-                    ->where('activa', true),
-            ])
             ->with([
-                'procesoActivo' => fn (HasOne $consulta): HasOne => $consulta
-                    ->withCount([
-                        'folios as folios_activos_count' => fn (Builder $folios): Builder => $folios->enTunelOperativo()
-                            ->select(DB::raw('count(distinct posicion_tunel_prefrio_id)')),
-                    ]),
+                'posiciones' => fn (HasMany $consulta): HasMany => $consulta
+                    ->select(['id', 'tunel_prefrio_id', 'numero', 'etiqueta', 'activa'])
+                    ->orderBy('numero'),
+                'procesoActivo.folios' => fn (HasMany $consulta): HasMany => $consulta
+                    ->enTunelOperativo()
+                    ->select(['id', 'proceso_prefrio_id', 'posicion_tunel_prefrio_id']),
             ])
             ->orderBy('codigo')
             ->get()
-            ->map(function (TunelPrefrio $tunel) use ($temporadaId): array {
+            ->map(function (TunelPrefrio $tunel) use ($temporadaId, $ahora): array {
                 $operativo = $tunel->estado_administrativo === EstadoAdministrativoTunelPrefrio::Activo
                     && $tunel->estado_tecnico === EstadoTecnicoTunelPrefrio::Operativo;
-                $capacidad = $operativo ? (int) $tunel->posiciones_activas_count : 0;
-                $ocupadas = $operativo
-                    ? min($capacidad, (int) ($tunel->procesoActivo?->folios_activos_count ?? 0))
-                    : 0;
-                $proceso = $tunel->procesoActivo?->temporada_id === $temporadaId
-                    ? $tunel->procesoActivo
-                    : null;
-                $transcurridos = $proceso?->iniciado_at
-                    ? (int) $proceso->iniciado_at->diffInMinutes(now())
-                    : null;
+                $asignadas = $tunel->procesoActivo?->folios->keyBy('posicion_tunel_prefrio_id') ?? collect();
+                $posiciones = $tunel->posiciones->map(fn (PosicionTunelPrefrio $posicion): array => [
+                    'numero' => $posicion->numero,
+                    'etiqueta' => $posicion->etiqueta,
+                    'activa' => $posicion->activa,
+                    'ocupada' => $asignadas->has($posicion->id),
+                ]);
+                $activas = $operativo ? $posiciones->where('activa', true) : collect();
+                $capacidad = $activas->count();
+                $ocupadas = $activas->where('ocupada', true)->count();
+                $otraTemporada = $tunel->procesoActivo !== null && $tunel->procesoActivo->temporada_id !== $temporadaId;
+                $proceso = $otraTemporada ? null : $tunel->procesoActivo;
+                $transcurridos = $proceso?->minutosTranscurridos($ahora);
                 $objetivo = $proceso?->duracion_objetivo_minutos;
-                $atrasado = $transcurridos !== null
-                    && $objetivo
-                    && $transcurridos > $objetivo
-                    && in_array($proceso->estado, [
-                        EstadoProcesoPrefrio::EnProceso,
-                        EstadoProcesoPrefrio::PendienteVerificacion,
-                    ], true);
+                $atrasado = $proceso
+                    && in_array($proceso->estado, [EstadoProcesoPrefrio::EnProceso, EstadoProcesoPrefrio::PendienteVerificacion], true)
+                    && $proceso->excedeObjetivo($transcurridos);
 
                 return [
                     'id' => $tunel->id,
@@ -949,6 +944,8 @@ class ServicioPanelGerencial
                     'ocupadas' => $ocupadas,
                     'disponibles' => max(0, $capacidad - $ocupadas),
                     'ocupacion_porcentaje' => $this->porcentaje($ocupadas, $capacidad),
+                    'posiciones' => $posiciones->all(),
+                    'proceso_otra_temporada' => $otraTemporada,
                     'proceso_activo' => $proceso ? [
                         'codigo' => $proceso->codigo,
                         'estado' => $proceso->estado->value,
@@ -974,7 +971,7 @@ class ServicioPanelGerencial
             ])
             ->whereNotNull('iniciado_at')
             ->whereNotNull('finalizado_at')
-            ->where('finalizado_at', '>=', now()->subDays(7))
+            ->where('finalizado_at', '>=', $ahora->subDays(7))
             ->get(['estado', 'iniciado_at', 'finalizado_at']);
         $duraciones = $completados
             ->map(fn (ProcesoPrefrio $proceso): int => (int) $proceso->iniciado_at->diffInMinutes($proceso->finalizado_at))

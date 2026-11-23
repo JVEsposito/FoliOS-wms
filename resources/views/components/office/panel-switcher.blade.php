@@ -35,7 +35,7 @@
             @endif
             <span>{{ $panel['label'] }}</span>
             @if (!empty($panel['badge_id']))
-                <strong class="office-panel-tab__badge" id="{{ $panel['badge_id'] }}">{{ $panel['badge'] ?? 0 }}</strong>
+                <strong class="office-panel-tab__badge" id="{{ $panel['badge_id'] }}" @if (!empty($panel['badge_hidden'])) hidden @endif>{{ $panel['badge'] ?? 0 }}</strong>
             @endif
         </button>
     @endforeach
