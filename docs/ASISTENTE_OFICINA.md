@@ -6,13 +6,11 @@ Diseño aprobado: [`superpowers/specs/2026-11-22-asistente-oficina-design.md`](s
 
 ## Estado
 
-**Fase A (esta entrega): sin IA.** Un intérprete por reglas reconoce fechas, códigos, clientes, CSG y especies, y elige la consulta del catálogo que mejor cubre la pregunta.
+**Fase A: sin IA.** Un intérprete por reglas reconoce fechas, códigos, clientes, CSG y especies, y elige la consulta del catálogo que mejor cubre la pregunta. Es el modo por defecto (`sin_ia`).
 
-**Fase B (pendiente):**
-- Claude Haiku 5.5 sobre el mismo catálogo, más un modo mixto en el que solo llega a Haiku lo que las reglas no entienden.
-- Topes de gasto.
-- Filtrado de lo que sale hacia Anthropic: nunca RRHH ni Finanzas, ni nombres.
-- La pantalla de configuración.
+**Fase B: modo mixto con Haiku (ver abajo).** Las reglas responden lo que entienden con certeza; el resto va a Claude Haiku 5.5 como intérprete. Haiku solo elige una consulta del catálogo: FoliOS la valida, calcula las cifras y escribe la respuesta. Se activa solo si la compuerta lo justifica y el servidor tiene `ANTHROPIC_API_KEY`.
+
+**Pendiente:** la pantalla de configuración con consumo y piloto (PR 7) y las recomendaciones a pedido (PR 8).
 
 El plan de la fase B, con el banco de 60 preguntas reales, el diseño de Haiku como intérprete, los topes decididos (US$20 al mes, 50 a 60 preguntas por usuario al día) y las recomendaciones a pedido, está en [`ASISTENTE_ESTUDIO_HAIKU.md`](ASISTENTE_ESTUDIO_HAIKU.md).
 
@@ -94,6 +92,35 @@ Haiku se conecta solo si las preguntas reales lo justifican (ver `docs/ASISTENTE
 
 Las preguntas de usuarios inactivos no se reinterpretan, y se revisan como máximo las 2.000 más recientes.
 
+## Modo mixto con Haiku
+
+**Enrutamiento.** Toda pregunta pasa primero por las reglas. Si eligen una consulta con certeza, Haiku no se llama. Si no, y el modo es `mixto`:
+
+1. **Tema sensible:** RRHH, Finanzas, sueldos, pagos, personal, conductores, o el nombre completo de un usuario de FoliOS. La pregunta no sale de la planta; se responde con las reglas y se avisa.
+2. **Topes:** sin clave, con el tope del mes alcanzado (US$20 por defecto, `ASISTENTE_TOPE_MENSUAL_USD`) o con el límite diario del usuario (50 llamadas por jornada, `ASISTENTE_TOPE_DIARIO_USUARIO`), se responde con las reglas y se dice por qué.
+3. **Fichas:** los clientes y CSG reconocidos se cambian por `[CLIENTE_1]` y `[CSG_1]` antes de enviar. Un nombre que el reconocedor no conoce sale tal como se escribió. Los códigos nunca llegan a Haiku: las reglas los resuelven antes.
+4. **Llamada:** una sola, a `claude-haiku-5-5`, con `tool_choice: any` y tres herramientas estrictas.
+5. **Validación local:** consulta del catálogo del usuario, fichas de la pregunta, especie de la temporada, fechas reales, no futuras y de hasta 400 jornadas, y turno solo con una jornada. Si algo no calza, no se ejecuta nada: el asistente repregunta.
+6. **Respuesta:** la arma FoliOS con la línea «Entendí», como en el modo sin IA, con la insignia **Haiku** y el pie «Cifras calculadas por FoliOS».
+
+**Herramientas.** La API admite hasta 20 herramientas estrictas y 24 parámetros opcionales por pedido, así que no hay una herramienta por consulta:
+
+| Herramienta | Uso | Parámetros |
+| --- | --- | --- |
+| `consultar` | Ejecutar una consulta del catálogo | `consulta` (enum con las claves que el usuario puede ver), `periodo_tipo` (`actual`, `jornada`, `turno`, `rango`, `temporada`, `temporada_anterior`), `desde`, `hasta`, `turno`, `cliente` (ficha), `csg` (ficha), `especie` (enum de la temporada), `agrupar_por` |
+| `pedir_aclaracion` | Ofrecer de 2 a 4 consultas | `opciones` |
+| `sin_consulta` | Ninguna consulta responde | `motivo`: otro tema, comparación, pronóstico, recomendación o dato no disponible |
+
+Todos los parámetros son obligatorios, con valores neutros (`""`, `todas`, `ninguno`, `nada`). La descripción del catálogo va en `consultar` y ningún nombre de cliente va en un esquema, porque los esquemas estrictos se guardan hasta 24 horas. El prompt de sistema es fijo y queda en caché; la fecha, la jornada y el turno van en el mensaje del usuario para no romper la caché.
+
+**Cuando Haiku no está disponible.** Sin red, con un error de la API o con una respuesta sin herramienta, la llamada queda registrada como `error` y el asistente responde con las reglas y lo avisa.
+
+**Qué se registra.** Cada llamada queda en `asistente_llamadas_ia`, con modelo, herramienta, consulta, tokens, costo y duración. Nunca se guarda el texto enviado ni los resultados. La pregunta queda en `asistente_preguntas` con `interprete` = `haiku`.
+
+**Configuración.** `ANTHROPIC_API_KEY` va solo en el `.env` del servidor. El modo se cambia con `PUT /api/asistente/configuracion` (`modo`: `sin_ia` o `mixto`); `mixto` se rechaza si falta la clave. `GET /api/asistente/configuracion` informa en `ia` si hay clave, el modelo, el consumo del mes y los topes.
+
+**Evaluación con Haiku real.** `php artisan asistente:evaluar --modo=haiku` corre el banco como el modo mixto, con llamadas reales que cuentan en los topes, e informa llamadas, tokens y costo. Las pruebas de CI usan respuestas grabadas y nunca llaman a la API.
+
 ## Revisión de tara y destare
 
 Usa los criterios con que la planta revisa hoy:
@@ -114,7 +141,7 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 | `POST /api/asistente/preguntas` `{texto}` | usar el asistente | Pregunta en texto libre, de 1 a 500 caracteres. Responde `entendido` (`consulta`, `fichas`, `no_aplicados`) y `resultado`, o `sugerencias` con `mensaje` y `busqueda` |
 | `GET /api/asistente/consultas` | usar el asistente | Catálogo de consultas permitidas para el usuario |
 | `POST /api/asistente/consultas/{clave}` | usar el asistente y el permiso de la consulta | Ejecuta una consulta con `desde` y `hasta` (jornadas), `turno` (`A` o `B`), `periodo` (etiqueta), `cliente_id`, `csg_id`, `especie_id`, `codigo` o `temporada_anterior` o `agrupar` (`dia`). Responde con `entendido` y `resultado` |
-| `GET` y `PUT /api/asistente/configuracion` | configurar el asistente | Margen (0,5 a 5) y rangos de neto por envase |
+| `GET` y `PUT /api/asistente/configuracion` | configurar el asistente | Margen (0,5 a 5), rangos de neto por envase y `modo` (`sin_ia` o `mixto`); el `GET` informa el consumo de Haiku en `ia` |
 | `GET /api/asistente/preguntas?estado=` | configurar el asistente | Registro de preguntas, con `estado` `respondida`, `sin_datos` o `sugerencias` |
 | `GET /api/asistente/compuerta?dias=` | configurar el asistente | El informe de `asistente:compuerta` (1 a 90 días; 7 por defecto) |
 
@@ -132,4 +159,5 @@ Todas las rutas usan `auth:sanctum` y tienen un límite de 30 solicitudes por mi
 | --- | --- |
 | `asistente_preguntas` | Registro de cada pregunta. No se borra. |
 | `asistente_rangos_tara` | Rangos de neto por envase y especie |
-| `asistente_configuracion` | Una sola fila, con el margen y el modo (`sin_ia` en la fase A) |
+| `asistente_configuracion` | Una sola fila, con el margen y el modo (`sin_ia` o `mixto`) |
+| `asistente_llamadas_ia` | Una fila por llamada a Haiku: tokens, costo, herramienta y resultado. No se borra. |

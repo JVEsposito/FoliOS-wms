@@ -17,6 +17,11 @@ class ConfiguracionAsistente extends Model
 
     public const MODO_SIN_IA = 'sin_ia';
 
+    /** Las reglas responden lo que entienden con certeza; el resto va a Haiku. */
+    public const MODO_MIXTO = 'mixto';
+
+    public const MODOS = [self::MODO_SIN_IA, self::MODO_MIXTO];
+
     protected $table = 'asistente_configuracion';
 
     protected function casts(): array
