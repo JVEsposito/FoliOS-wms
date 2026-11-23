@@ -27,26 +27,24 @@
             />
 
             <div class="discrepancies-shell estiba-ui">
-                <x-estiba.heading data-folios-masthead
-                    class="discrepancies-heading"
-                    eyebrow="Supervisión operacional"
-                    title="Discrepancias de maniobras"
-                    description="Revisa el estado físico informado por el camarero y decide si la maniobra puede reanudarse o debe cancelarse."
-                >
+                <x-folios.cabecera-etiqueta area="frigorifico" seccion="Frigorífico · Supervisión"
+                    titulo="Discrepancias de maniobras" codigo="FR · CONTROL DE MANIOBRAS" class="discrepancies-heading"
+                    descripcion="Revisa el reporte físico del camarero y resuelve el paso en disputa.">
                     <button class="eui-button eui-button--secondary" id="discrepanciesReload" type="button">Actualizar</button>
-                </x-estiba.heading>
+                </x-folios.cabecera-etiqueta>
 
                 <x-estiba.alert class="discrepancies-notice" title="El estado físico manda" tone="warning">
                     Reanudar conserva lo ya ejecutado. Cancelar solo está disponible cuando no existe una tarea en proceso ni custodia temporal activa.
                 </x-estiba.alert>
 
-                <section class="discrepancies-metrics" aria-label="Resumen de discrepancias" data-folios-metrics>
-                    <article class="eui-panel"><span>ABIERTAS</span><strong id="openDiscrepanciesCount">0</strong><small>requieren decisión</small></article>
-                    <article class="eui-panel"><span>RESUELTAS</span><strong id="resolvedDiscrepanciesCount">0</strong><small>temporada activa</small></article>
-                    <article class="eui-panel"><span>PALLETS NO ENCONTRADOS</span><strong id="missingPalletsCount">0</strong><small>abiertas · localizar físicamente</small></article>
+                <section class="discrepancies-metrics folios-indicadores" aria-label="Resumen de discrepancias">
+                    <x-folios.ticket-indicador area="frigorifico" clave="FR" rotulo="Abiertas" valor-id="openDiscrepanciesCount" valor="—" detalle="Requieren decisión" />
+                    <x-folios.ticket-indicador area="frigorifico" clave="FR" rotulo="Resueltas" valor-id="resolvedDiscrepanciesCount" valor="—" />
+                    <x-folios.ticket-indicador area="frigorifico" clave="FR" rotulo="Pallets no encontrados" valor-id="missingPalletsCount" valor="—" detalle="Abiertas por localizar" />
                 </section>
 
-                <section class="eui-panel discrepancies-panel">
+                <x-folios.bandeja area="frigorifico" titulo="Casos de la temporada activa" id="discrepanciesRegisterTitle">
+                    <x-slot:resumen><span id="discrepanciesResults" role="status"></span></x-slot:resumen>
                     <form class="discrepancies-filters" id="discrepanciesFilters" data-folios-toolbar>
                         <label>
                             <span>Estado</span>
@@ -71,18 +69,14 @@
                         <button class="eui-button eui-button--secondary" id="discrepanciesClear" type="button">Limpiar</button>
                     </form>
 
-                    <div class="discrepancies-panel__heading">
-                        <div><p class="eyebrow">BANDEJA</p><h2>Casos de la temporada activa</h2></div>
-                        <span id="discrepanciesResults">0 registros</span>
-                    </div>
                     <p class="form-error" id="discrepanciesError" role="alert"></p>
-                    <div class="discrepancies-list" id="discrepanciesList"></div>
+                    <div class="discrepancies-list" id="discrepanciesList"><div class="folios-bandeja__estado">Consultando discrepancias…</div></div>
                     <nav class="discrepancies-pagination" aria-label="Paginación de discrepancias">
-                        <button class="eui-button eui-button--secondary" id="discrepanciesPrevious" type="button">← Anterior</button>
+                        <button class="eui-button eui-button--secondary" id="discrepanciesPrevious" type="button" disabled>← Anterior</button>
                         <span id="discrepanciesPage">Página 1 de 1</span>
-                        <button class="eui-button eui-button--secondary" id="discrepanciesNext" type="button">Siguiente →</button>
+                        <button class="eui-button eui-button--secondary" id="discrepanciesNext" type="button" disabled>Siguiente →</button>
                     </nav>
-                </section>
+                </x-folios.bandeja>
             </div>
 
             <div class="loading is-hidden" id="discrepanciesLoading" aria-hidden="true">

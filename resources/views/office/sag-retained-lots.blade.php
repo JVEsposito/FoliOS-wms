@@ -20,21 +20,33 @@
     <main class="office-app is-hidden" id="officeApp" data-folios-workspace="registro">
         <x-office.navigation domain="frigorifico" office="lotes-retenidos-sag" context="FRIGORÍFICO · SAG" icon="SAG" />
         <section class="sl-workspace">
-            <header class="sl-heading" data-folios-masthead><div><p class="eyebrow">CONTROL DE LOTES DE RECEPCIÓN</p><h1>Lotes retenidos SAG</h1><p id="slSeason"></p></div><button class="primary-button" id="slNew">Registrar lote</button></header>
-            <p class="sl-help">Los pallets pueden asignarse a cargas y movilizarse. La salida del camión se impide cuando el destino está restringido.</p>
-            <p id="slMessage" role="status"></p>
-            <section class="panel" data-folios-register>
+            <x-folios.cabecera-etiqueta area="frigorifico" seccion="Frigorífico · SAG" titulo="Lotes retenidos SAG"
+                codigo="SAG · CONTROL DE LOTES" class="sl-heading">
+                <button class="primary-button" id="slNew" type="button" disabled>Registrar lote</button>
+            </x-folios.cabecera-etiqueta>
+            <p class="sl-help">El lote puede movilizarse. La salida del camión se bloquea cuando su destino está restringido.</p>
+            <p id="slMessage" role="status" hidden></p>
+            <x-folios.bandeja area="frigorifico" titulo="Seguimiento de lotes" id="slRegisterTitle">
+                <x-slot:resumen><span id="slResults" role="status"></span></x-slot:resumen>
                 <form class="sl-grid" id="slFilters" data-folios-toolbar>
                     <label>Cliente<select name="cliente_id" data-clients><option value="">Todos los clientes</option></select></label>
                     <label>Número de lote<input name="lote" maxlength="100" placeholder="Lote de recepción"></label>
                     <label>Estado<select name="estado"><option value="">Todos</option><option value="con_observaciones">Con observaciones</option><option value="retenido">Retenido</option><option value="liberado_con_restricciones">Liberado con restricciones</option><option value="liberado">Liberado</option></select></label>
                     <button class="secondary-button">Buscar / actualizar</button>
                 </form>
-                <div class="sl-scroll"><table><thead><tr><th>Cliente / lote</th><th>Estado</th><th>Restricción de destinos</th><th>Actualización</th><th>Detalle</th></tr></thead><tbody id="slRows"></tbody></table></div>
-                <div class="sl-actions" id="slPages"></div>
-            </section>
-            <section class="panel is-hidden" id="slEditor" data-folios-register>
-                <header class="sl-heading"><div><p class="eyebrow" id="slVersion"></p><h2 id="slTitle">Registrar lote</h2></div><button class="secondary-button" type="button" id="slClose">Cerrar detalle</button></header>
+                <div class="sl-scroll" role="region" aria-label="Bandeja de lotes SAG" tabindex="0">
+                    <table><thead><tr><th scope="col">Lote / Cliente</th><th scope="col">Estado</th><th scope="col">Restricción de destinos</th><th scope="col">Detección / Actualización</th><th scope="col">Detalle</th></tr></thead>
+                        <tbody id="slRows"><tr><td colspan="5"><div class="folios-bandeja__estado">Consultando lotes…</div></td></tr></tbody>
+                    </table>
+                </div>
+                <nav class="sl-actions" id="slPages" aria-label="Paginación de lotes SAG"></nav>
+            </x-folios.bandeja>
+            <section class="folios-ticket sl-editor is-hidden" id="slEditor" data-ticket-area="frigorifico" aria-labelledby="slTitle">
+                <header class="sl-heading">
+                    <div><p class="eyebrow" id="slVersion"></p><h2 id="slTitle" tabindex="-1">Registrar lote</h2><p id="slClient"></p></div>
+                    <div class="sl-detail-state"><div id="slRecordState"></div><button class="secondary-button" type="button" id="slClose">Cerrar detalle</button></div>
+                </header>
+                <div class="folios-perforacion" aria-hidden="true"></div>
                 <form id="slForm">
                     <div class="sl-grid">
                         <label>Cliente<select name="cliente_id" data-clients required><option value="">Seleccionar cliente</option></select></label>
@@ -61,7 +73,7 @@
                     <h3>Planillas y antecedentes</h3><div class="sl-actions"><button class="secondary-button" data-report="pdf">Descargar PDF</button><button class="secondary-button" data-report="xlsx">Descargar Excel</button></div>
                     <p id="slTotals"></p>
                     <div class="sl-scroll"><table><thead><tr><th>Folio</th><th>Cajas del lote / pallet</th><th>CSG referencial</th><th>Ubicación / estado</th><th>Carga</th></tr></thead><tbody id="slFolios"></tbody></table></div>
-                    <h3>Historial de seguimiento y resoluciones</h3><div id="slHistory"></div>
+                    <h3>Historial de seguimiento y resoluciones</h3><ol id="slHistory" class="sl-history-list"></ol>
                 </section>
             </section>
         </section>

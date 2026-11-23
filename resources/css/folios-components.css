@@ -494,3 +494,35 @@
     .folios-atencion { grid-template-columns: minmax(0, 1fr); }
     .folios-atencion__graphic .folios-gajo--attention { inline-size: 116px; }
 }
+
+.office-app .folios-bandeja__cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    color: var(--text-secondary);
+    font-size: .83rem;
+}
+
+.office-app .folios-bandeja__cabecera .folios-gajo { --gajo-area: var(--ticket-ink); }
+
+.office-app .folios-bandeja__cabecera h2 {
+    flex: 1;
+    margin: 0;
+    color: var(--text-strong);
+    font: 800 1.5rem/1.05 var(--font-sans);
+    font-stretch: var(--font-condensed-stretch);
+}
+
+.office-app .folios-bandeja__contenido { min-inline-size: 0; padding: 12px 16px; }
+
+.office-app .folios-bandeja__estado {
+    display: grid;
+    gap: 4px;
+    padding: 18px 10px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.office-app .folios-bandeja__estado strong { color: var(--text-strong); }

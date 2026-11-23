@@ -328,6 +328,18 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_discrepancias_exporta_la_bandeja_y_sus_estados_de_lectura(): void
+    {
+        $html = $this->get('/oficina/frigorifico/discrepancias')->assertOk()
+            ->assertSee('aria-labelledby="discrepanciesRegisterTitle"', false)
+            ->assertSee('Consultando discrepancias')
+            ->getContent();
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/discrepancias.html'), $html);
+        }
+    }
+
     public function test_diagramas_sag_exporta_el_editor_de_pallets_y_sus_salidas(): void
     {
         $html = $this->get('/oficina/frigorifico/diagramas-sag')->assertOk()->getContent();

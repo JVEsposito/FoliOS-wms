@@ -44,7 +44,11 @@ class RetencionLoteSagController extends Controller
             $consulta->conEstado($datos['estado']);
         }
 
-        return response()->json($consulta->orderByDesc('updated_at')->orderBy('id')->paginate(25));
+        return response()->json($consulta
+            ->orderByRaw('CASE WHEN estado = ? THEN 1 ELSE 0 END', ['liberado'])
+            ->orderByDesc('updated_at')
+            ->orderBy('id')
+            ->paginate(25));
     }
 
     public function store(GuardarRetencionLoteSagRequest $request, ServicioRetencionesLoteSag $servicio)

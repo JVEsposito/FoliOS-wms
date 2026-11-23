@@ -18,7 +18,8 @@ test('registra una retención y libera parcialmente un bloque sin perder el borr
         });
         let record = null, fail = false;
         const writes = [], errors = [];
-        const detail = () => ({ registro: record, paises_restringidos: ['us', 'cl'], folios: [{ id: 'folio', folio: '60001', activo: true, cajas_lote: 1, cajas_pallet: 120, estado: 'en_camara', csg: '89868', ubicacion: 'CAM-09', carga: 'CAR-1' }], historial: [] });
+        const detail = () => ({ registro: record, paises_restringidos: ['us', 'cl'], folios: [{ id: 'folio', folio: '60001', activo: true, cajas_lote: 1, cajas_pallet: 120, estado: 'en_camara', csg: '89868', ubicacion: 'CAM-09', carga: 'CAR-1' }],
+            historial: [{ version: record.version, usuario: 'Contraparte SAG', fecha: '2026-11-17 15:00:00', despues: record, folios_afectados: ['folio'] }] });
         await context.route('http://localhost/**', async route => {
             const request = route.request(), path = new URL(request.url()).pathname;
             if (path === '/oficina/frigorifico/lotes-retenidos-sag') return route.fulfill({ body: html, contentType: 'text/html' });
@@ -40,6 +41,7 @@ test('registra una retención y libera parcialmente un bloque sin perder el borr
         });
         const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
         await page.goto('http://localhost/oficina/frigorifico/lotes-retenidos-sag');
+        await page.getByText('Sin lotes para esta búsqueda').waitFor();
         await page.locator('#slNew').click();
         await page.locator('#slForm [name=cliente_id]').selectOption('client');
         await page.locator('#slForm [name=numero_lote]').fill('10056');
@@ -51,7 +53,10 @@ test('registra una retención y libera parcialmente un bloque sin perder el borr
         assert.deepEqual(writes[0].destinos, [{ tipo: 'bloque', id: 'block' }]);
         assert.equal(writes[0].estado, 'liberado_con_restricciones');
         assert.equal(await page.locator('#slForm [name=cliente_id]').isDisabled(), true);
-        assert.match(await page.locator('#slFolios').textContent(), /60001.*1 \/ 120.*89868.*CAM-09.*CAR-1/);
+        assert.match(await page.locator('#slFolios').textContent(), /60001.*1 \/ 120.*89868.*CAM-09.*CAR-1/s);
+        assert.equal(await page.locator('#slFolios .folios-code:first-child strong').first().textContent(), '0001');
+        assert.equal(await page.locator('#slRecordState [data-estado="atencion"]').count(), 1);
+        assert.equal(await page.locator('#slHistory .folios-ticket__stub').innerText(), 'v1');
         await page.locator('#slExpand').click();
         assert.deepEqual(await page.locator('[data-destination^="pais|"]').evaluateAll((inputs) => inputs.map((input) => input.checked)), [true, true]);
         // Quitar todos limpia también «Todos los destinos»; luego se busca y marca el que sigue restringido.
@@ -79,6 +84,38 @@ test('registra una retención y libera parcialmente un bloque sin perder el borr
         assert.equal(writes[2].version, 1);
         assert.equal('cliente_id' in writes[2], false);
         assert.equal('numero_lote' in writes[2], false);
+        const theme = page.getByRole('combobox', { name: 'Tema de Oficina' });
+        const colors = new Map();
+        for (const key of ['light-professional', 'dark-industrial', 'light-professional', 'dark-industrial']) {
+            await theme.selectOption(key);
+            await page.waitForFunction(expected => document.documentElement.dataset.officeTheme === expected, key);
+            const palette = await page.locator('#slEditor').evaluate(editor => {
+                const state = editor.querySelector('#slRecordState .folios-estado');
+                const rgb = (color) => color.match(/\d+/g).slice(0, 3).map(value => {
+                    const n = Number(value) / 255;
+                    return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4;
+                }).reduce((sum, value, i) => sum + value * [.2126, .7152, .0722][i], 0);
+                const background = getComputedStyle(editor).backgroundColor;
+                const foreground = getComputedStyle(state).color;
+                const [dark, light] = [rgb(background), rgb(foreground)].sort((a, b) => a - b);
+                return { background, foreground, contrast: (light + .05) / (dark + .05) };
+            });
+            assert.ok(palette.contrast >= 4.5, key);
+            if (colors.has(key)) assert.deepEqual(palette, colors.get(key));
+            colors.set(key, palette);
+        }
+        assert.notEqual(colors.get('light-professional').background, colors.get('dark-industrial').background);
+        await page.locator('#slClose').click();
+        const open = page.getByRole('button', { name: 'Abrir lote 10056' });
+        await open.waitFor();
+        const row = open.locator('xpath=ancestor::tr');
+        assert.equal(await row.locator('.sl-age').count(), 1);
+        assert.match(await row.innerText(), /Detectado (hoy|hace \d+ días?)/);
+        await open.click();
+        await page.locator('#slTitle').filter({ hasText: 'Lote 10056' }).waitFor();
+        assert.equal(await page.locator('#slTitle').evaluate(title => title === document.activeElement), true);
+        await page.locator('#slClose').click();
+        assert.equal(await open.evaluate(button => button === document.activeElement), true);
         assert.deepEqual(errors, []);
         await context.close();
     } finally { await browser.close(); }

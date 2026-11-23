@@ -1,5 +1,6 @@
 .sl-workspace { display: grid; gap: 18px; max-width: 1500px; margin: auto; padding: 22px; }
 .sl-heading, .sl-actions { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sl-heading { padding: 14px 18px; }
 .sl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; align-items: end; }
 .sl-workspace label { display: grid; gap: 7px; margin-bottom: 14px; }
 .sl-workspace input, .sl-workspace select, .sl-workspace textarea { width: 100%; min-width: 0; }
@@ -15,7 +16,38 @@
 .sl-destination-actions button { flex: 1 1 auto; }
 .sl-options { max-height: 280px; overflow: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
 .sl-options label { margin: 0; padding: 9px; border-bottom: 1px solid var(--line); }
-.sl-history { padding: 14px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .sl-history p { white-space: pre-wrap; }
 .sl-workspace textarea { resize: vertical; }
 @media (max-width: 700px) { .sl-workspace { padding: 12px; } .sl-grid { grid-template-columns: 1fr; } .sl-options { grid-template-columns: 1fr; } }
+
+#slFilters label { margin: 0; }
+#slMessage { margin: 0; color: var(--text-strong); }
+.sl-help { margin: 0; }
+.sl-workspace th { color: var(--text-secondary); }
+.sl-workspace td .folios-code { color: var(--text-strong); font-weight: 750; }
+.sl-workspace td small { color: var(--text-secondary); }
+.sl-age {
+    display: block;
+    inline-size: 80px;
+    block-size: 4px;
+    margin-block: 4px;
+    background: var(--line);
+}
+.sl-age i { display: block; block-size: 100%; background: var(--text-secondary); }
+.sl-editor > :is(form, section) { padding: 14px 18px; }
+.sl-editor h2 { margin: 0; color: var(--text-strong); font-size: clamp(1.4rem, 3vw, 2.1rem); }
+.sl-editor :is(#slClient, #slVersion) { margin-block: 4px; color: var(--text-secondary); }
+.sl-editor :is(#slClient, #slVersion):empty { display: none; }
+.sl-detail-state { align-self: flex-start; display: grid; justify-items: start; gap: 6px; }
+.sl-history-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.sl-history {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 12px;
+    padding: 0;
+    border: 1px solid var(--corporate-border);
+}
+.sl-history__body { min-inline-size: 0; padding: 8px 10px 8px 0; overflow-wrap: anywhere; }
+.sl-history__body small { color: var(--text-secondary); }
+.sl-history__body p { margin-block: 4px; }
+.sl-scroll:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
