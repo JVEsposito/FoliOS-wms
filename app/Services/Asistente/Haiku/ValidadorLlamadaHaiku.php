@@ -30,15 +30,17 @@ class ValidadorLlamadaHaiku
         private readonly PeriodoOperativo $periodo,
         private readonly TemporadasAsistente $temporadasAsistente,
         private readonly ServicioTemporadaActiva $temporadas,
+        private readonly CoberturaConsultaHaiku $cobertura,
     ) {}
 
     /**
      * @param  array<string, mixed>  $entrada  parámetros de la herramienta consultar
      * @param  list<ConsultaAsistente>  $permitidas
      * @param  array<string, array{tipo: string, id: string, etiqueta: string}>  $fichas
-     * @return array{consulta: ConsultaAsistente, vista: VistaConsulta, parametros: ParametrosConsulta, sin_cubrir: list<string>}|string la llamada validada o el motivo del rechazo
+     * @param  array<string, mixed>  $entidades  periodo y filtros que FoliOS reconoció en la pregunta
+     * @return array{consulta: ConsultaAsistente, vista: VistaConsulta, parametros: ParametrosConsulta, sin_cubrir: list<string>, incompatibilidad: ?string}|string la llamada validada o el motivo del rechazo
      */
-    public function validar(array $entrada, array $permitidas, array $fichas, User $usuario): array|string
+    public function validar(array $entrada, array $permitidas, array $fichas, User $usuario, string $pregunta, array $entidades): array|string
     {
         $consulta = null;
         foreach ($permitidas as $permitida) {
@@ -87,7 +89,9 @@ class ValidadorLlamadaHaiku
             vista: $vista->clave,
         );
 
-        return ['consulta' => $consulta, 'vista' => $vista, 'parametros' => $parametros, 'sin_cubrir' => $this->filtrosSinCubrir($vista, $parametros)];
+        return ['consulta' => $consulta, 'vista' => $vista, 'parametros' => $parametros,
+            'sin_cubrir' => $this->filtrosSinCubrir($vista, $parametros),
+            'incompatibilidad' => $this->cobertura->impedimento($consulta, $vista, $pregunta, $parametros, $entidades)];
     }
 
     /**

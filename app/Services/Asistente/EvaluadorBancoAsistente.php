@@ -2,12 +2,14 @@
 
 namespace App\Services\Asistente;
 
+use App\Models\LlamadaIaAsistente;
 use App\Models\User;
 use App\Services\Asistente\Haiku\InterpreteHaiku;
 
 /**
  * Corre el intérprete sobre el banco de preguntas de la planta
- * (resources/asistente/banco-preguntas.json) sin ejecutar consultas ni registrar nada.
+ * (resources/asistente/banco-preguntas.json) sin ejecutar consultas de negocio ni
+ * registrar preguntas. En modo Haiku registra las llamadas, sus tokens y su costo.
  *
  * Cada pregunta termina en una de cuatro clases:
  * - correcta: eligió la consulta que el banco espera hoy o la consulta objetivo;
@@ -15,8 +17,9 @@ use App\Services\Asistente\Haiku\InterpreteHaiku;
  * - pregunta_de_mas: no eligió consulta, pero el banco espera que responda (no es falsa);
  * - falsa: eligió otra consulta. Es la única falla grave.
  *
- * La prueba de CI revisa además periodos y filtros con datos de ejemplo; aquí, con los
- * datos reales de la planta, solo se compara la consulta elegida.
+ * La prueba de CI revisa además periodos y filtros con datos de ejemplo. La evaluación
+ * cuenta también errores y preguntas sin API disponible: cero falsas no basta si la
+ * API falló o la evaluación se cortó por los topes o el piloto.
  */
 class EvaluadorBancoAsistente
 {
@@ -43,7 +46,8 @@ class EvaluadorBancoAsistente
      *
      * @param  list<array<string, mixed>>|null  $preguntas
      * @return array{total: int, correctas: int, preguntas: int, preguntas_de_mas: int, falsas: int,
-     *     llamadas_haiku: int, costo_usd: float, tokens_entrada: int, tokens_salida: int,
+     *     llamadas_haiku: int, llamadas_exitosas_haiku: int, errores_haiku: int, no_disponibles_haiku: int,
+     *     costo_usd: float, tokens_entrada: int, tokens_salida: int,
      *     detalle: list<array{n: int, pregunta: string, esperada: ?string, elegida: ?string, vista_elegida: ?string, clase: string, interprete: string, detalle: ?string}>}
      */
     public function evaluar(User $usuario, bool $conHaiku = false, ?array $preguntas = null): array
@@ -53,6 +57,9 @@ class EvaluadorBancoAsistente
         $costo = 0.0;
         $entrada = 0;
         $salida = 0;
+        $exitosas = 0;
+        $errores = 0;
+        $noDisponibles = 0;
         foreach ($preguntas ?? $this->preguntas() as $pregunta) {
             $reglas = $this->interprete->interpretar($usuario, $pregunta['pregunta']);
             $elegida = $reglas['consulta']?->clave();
@@ -62,11 +69,15 @@ class EvaluadorBancoAsistente
             if ($elegida === null && $conHaiku) {
                 $haiku = $this->haiku->interpretar($usuario, $pregunta['pregunta'], $reglas['entidades']);
                 $interprete = 'haiku:'.$haiku['tipo'];
+                if ($haiku['tipo'] === InterpreteHaiku::NO_DISPONIBLE) {
+                    $noDisponibles++;
+                }
                 $elegida = $haiku['tipo'] === InterpreteHaiku::CONSULTA ? $haiku['consulta']->clave() : null;
                 $vista = $haiku['tipo'] === InterpreteHaiku::CONSULTA ? $haiku['vista']?->clave : null;
                 $explicacion = $this->explicar($haiku);
                 if ($haiku['llamada'] !== null) {
                     $llamadas++;
+                    $haiku['llamada']->estado === LlamadaIaAsistente::OK ? $exitosas++ : $errores++;
                     $costo += $haiku['llamada']->costo_usd;
                     $entrada += $haiku['llamada']->tokens_entrada + $haiku['llamada']->tokens_cache_lectura + $haiku['llamada']->tokens_cache_escritura;
                     $salida += $haiku['llamada']->tokens_salida;
@@ -101,6 +112,9 @@ class EvaluadorBancoAsistente
             'preguntas_de_mas' => $cuenta('pregunta_de_mas'),
             'falsas' => $cuenta('falsa'),
             'llamadas_haiku' => $llamadas,
+            'llamadas_exitosas_haiku' => $exitosas,
+            'errores_haiku' => $errores,
+            'no_disponibles_haiku' => $noDisponibles,
             'costo_usd' => round($costo, 6),
             'tokens_entrada' => $entrada,
             'tokens_salida' => $salida,

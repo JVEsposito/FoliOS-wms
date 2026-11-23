@@ -177,13 +177,18 @@ class InterpreteHaikuTest extends TestCase
 
     public function test_haiku_elige_tema_y_vista(): void
     {
-        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'guias-envases', 'vista' => 'confirmadas', 'periodo_tipo' => 'jornada', 'desde' => '2026-11-21']));
+        $this->haikuResponde('consultar', $this->consultar(['consulta' => 'guias-envases', 'vista' => 'confirmadas',
+            'periodo_tipo' => 'jornada', 'desde' => '2026-11-19', 'cliente' => 'CLIENTE_1']));
 
-        $this->preguntar(self::DUDOSA)
+        $this->preguntar('qué documentos de recipientes salieron para Exportadora Andina el jueves')
             ->assertJsonPath('data.tipo', 'respuesta')
             ->assertJsonPath('data.consulta', 'guias-envases')
             ->assertJsonPath('data.parametros.vista', 'confirmadas')
+            ->assertJsonPath('data.parametros.cliente_id', $this->cliente->id)
+            ->assertJsonPath('data.parametros.desde', '2026-11-19')
             ->assertJsonPath('data.entendido.consulta', 'Guías de despacho de envases · Confirmadas');
+
+        Http::assertSentCount(1);
     }
 
     public function test_general_en_un_tema_con_vistas_no_se_ejecuta(): void
