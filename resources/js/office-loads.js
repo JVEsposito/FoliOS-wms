@@ -453,8 +453,8 @@ function canResolveIncidents() {
         || state.identity?.puede_resolver_reparacion_carga === true;
 }
 
-function canCloseDispatch(load) {
-    return state.identity?.puede_cerrar_despacho_frigorifico === true
+function canCloseDispatch(load, identity = state.identity) {
+    return identity?.puede_cerrar_despacho_frigorifico === true
         && load?.estado === 'despachada';
 }
 
@@ -1268,7 +1268,7 @@ async function selectLoad(id, { busy = true } = {}) {
     if (busy) setBusy(true, 'Cargando orden…');
     try {
         const [response, incidents] = await Promise.all([
-            api(`/api/cargas/${id}`),
+            api(`/api/cargas/${encodeURIComponent(id)}`),
             api(`/api/cargas/incidencias?carga_id=${encodeURIComponent(id)}&per_page=50`),
         ]);
         state.incidents = incidents.data;
@@ -1277,6 +1277,26 @@ async function selectLoad(id, { busy = true } = {}) {
         toast(error.message, true);
     } finally {
         if (busy) setBusy(false);
+    }
+}
+
+async function openRequestedLoad() {
+    const url = new URL(window.location.href);
+    const id = url.searchParams.get('carga');
+    if (!id || !/^[a-z0-9-]{1,64}$/i.test(id)) return;
+    const requestClose = url.searchParams.get('accion') === 'cerrar';
+    if (requestClose) {
+        url.searchParams.delete('accion');
+        window.history.replaceState(window.history.state, '', url);
+    }
+    await selectLoad(id, { busy: false });
+    if (!requestClose || state.selected?.id !== id) return;
+    const { usuario } = await api('/api/acceso-oficina');
+    const load = state.selected;
+    if (load?.id === id && canCloseDispatch(load, usuario) && !load.salida_restringida_sag && !load.incidencias_abiertas) {
+        openCloseDialog();
+    } else {
+        toast('Esta carga no está disponible para cerrar. Revisa su estado.', true);
     }
 }
 
@@ -1425,6 +1445,7 @@ elements.loginForm.addEventListener('submit', async (event) => {
         showApp();
         await loadInitialData();
         showEmpty();
+        await openRequestedLoad();
     } catch (error) {
         elements.loginError.textContent = error.message;
     } finally {
@@ -2266,6 +2287,7 @@ async function boot() {
     try {
         await loadInitialData();
         showEmpty();
+        await openRequestedLoad();
     } catch (error) {
         if (error.status !== 401) toast(error.message, true);
     } finally {

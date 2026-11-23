@@ -183,6 +183,16 @@ class OperacionAhoraApiTest extends TestCase
         $this->assertSame($decisionesAntes, DecisionArbitrajeManiobra::query()->count());
     }
 
+    public function test_indica_si_el_perfil_puede_abrir_la_confirmacion_de_cierre(): void
+    {
+        $this->crearTemporada();
+        $usuario = User::factory()->create(['rol' => RolUsuario::Administrador]);
+
+        $this->actingAs($usuario, 'sanctum')->getJson('/api/operacion-ahora')
+            ->assertOk()
+            ->assertJsonPath('data.despacho.puede_cerrar', true);
+    }
+
     public function test_requiere_un_perfil_gerencial_y_expone_solo_la_temporada_activa(): void
     {
         $temporada = $this->crearTemporada();
@@ -198,6 +208,7 @@ class OperacionAhoraApiTest extends TestCase
             ->getJson('/api/operacion-ahora')
             ->assertOk()
             ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('data.despacho.puede_cerrar', false)
             ->assertJsonPath('data.temporada.id', $temporada->id)
             ->assertJsonPath('data.jornada.zona_horaria', 'America/Santiago')
             ->assertJsonPath('data.jornada.turno', app(VentanasVerificacion::class)->actual()['nombre'])

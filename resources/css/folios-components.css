@@ -363,7 +363,10 @@
 }
 
 :is(.folios-pallet-cells, .folios-pallet-key) [data-cell="done"] { background: var(--text-strong); }
-:is(.folios-pallet-cells, .folios-pallet-key) [data-cell="dock"] { border-color: var(--area-frigorifico-ink); }
+:is(.folios-pallet-cells, .folios-pallet-key) [data-cell="dock"] {
+    border-color: var(--info-text);
+    background: var(--info-bg);
+}
 :is(.folios-pallet-cells, .folios-pallet-key) [data-cell="free"] { border: 1px dashed var(--input-border); }
 
 /* Ocupación proporcional de una cámara, que puede tener cientos de posiciones. */

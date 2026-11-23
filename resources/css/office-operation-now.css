@@ -452,6 +452,17 @@
     font-variant-numeric: tabular-nums;
 }
 
+.operation-now-overview__visual { margin-block-start: 3px; }
+.operation-now-overview__visual .folios-pallet-cells { --pallet-cell-size: 10px; }
+.operation-now-overview__capacity {
+    display: block;
+    block-size: 10px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: repeating-linear-gradient(-55deg, transparent 0 2px, var(--input-border) 2px 3px);
+}
+.operation-now-overview__capacity > i { display: block; block-size: 100%; background: var(--text-strong); }
+
 .operation-now-overview__ticket:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 .operation-now-overview__metric small,
@@ -848,7 +859,7 @@
     margin-block-start: 5px;
     background: var(--surface-muted);
 }
-.operation-now-reception-wait i { display: block; block-size: 100%; background: var(--area-materia-prima-ink); }
+.operation-now-reception-wait i { display: block; block-size: 100%; background: var(--text-strong); }
 
 .operation-now-dispatch__legend {
     --pallet-cell-size: 14px;
@@ -908,21 +919,75 @@
 .operation-now-dispatch__loads { display: grid; gap: 12px; min-inline-size: 0; }
 .operation-now-dispatch__heading {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 12px;
-    padding: 12px 16px;
-    border-block-end: 1px dashed var(--line);
+    grid-template-columns: minmax(10.75rem, .7fr) minmax(0, 1.65fr) minmax(9rem, max-content);
+    align-items: start;
+    gap: 10px 18px;
+    padding: 16px 18px;
 }
-.operation-now-dispatch__heading h3 { margin: 0; font-size: clamp(1.15rem, 2vw, 1.65rem); line-height: 1.15; }
-.operation-now-dispatch__heading small { margin-block-start: 4px; }
-.operation-now-dispatch__state { min-width: 0; }
+.operation-now-dispatch__heading h3 {
+    margin-block: 3px 8px;
+    font-size: clamp(1.45rem, 2.2vw, 2rem);
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+.operation-now-dispatch__ref {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: .76rem;
+    font-weight: 750;
+    letter-spacing: .025em;
+    text-transform: uppercase;
+}
+.operation-now-dispatch__client {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: .96rem;
+    font-weight: 750;
+    overflow-wrap: anywhere;
+}
+.operation-now-dispatch__context .operation-now-subtext { margin-block-start: 4px; }
+.operation-now-dispatch__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.operation-now-dispatch__tags li {
+    padding: 2px 6px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: .77rem;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+}
+.operation-now-dispatch__decision {
+    display: grid;
+    justify-items: end;
+    gap: 6px;
+    min-inline-size: 0;
+}
+.operation-now-dispatch__state { min-inline-size: 0; }
+.operation-now-dispatch__close {
+    min-block-size: 36px;
+    padding: 7px 12px;
+    border-radius: var(--radius-control);
+    background: var(--primary);
+    color: var(--on-primary);
+    font-weight: 750;
+    text-decoration: none;
+}
+.operation-now-dispatch__close:hover { background: var(--primary-hover); }
+.operation-now-dispatch__close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 
 .operation-now-dispatch__body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(128px, .22fr);
+    grid-template-columns: minmax(0, 1fr) minmax(136px, .27fr);
     align-items: stretch;
-    gap: 14px;
-    padding: 12px 16px;
+    gap: 16px;
+    padding: 14px 18px;
 }
 .operation-now-dispatch__measures {
     display: grid;
@@ -930,21 +995,33 @@
     gap: 12px;
     margin: 0;
 }
+.operation-now-dispatch__progress {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: start;
+    align-items: baseline;
+    gap: 3px 6px;
+    min-inline-size: 0;
+}
 .operation-now-dispatch__progress dt { color: var(--text-secondary); font-size: .78rem; font-weight: 700; }
-.operation-now-dispatch__progress dd { display: grid; gap: 4px; min-inline-size: 0; margin: 0; }
-.operation-now-dispatch__progress dd > strong { font-size: .99rem; }
+.operation-now-dispatch__progress dd { display: contents; }
+.operation-now-dispatch__progress dd > strong { justify-self: end; font-size: .99rem; }
+.operation-now-dispatch__progress dd > :not(strong) { grid-column: 1 / -1; }
 .operation-now-dispatch__progress small,
 .operation-now-dispatch__dock small { color: var(--text-secondary); font-size: .76rem; }
+.operation-now-dispatch__load .folios-pallet-cells { --pallet-cell-size: 13px; }
 .operation-now-dispatch__dock {
     display: grid;
     align-content: center;
-    gap: 2px;
+    gap: 4px;
     min-inline-size: 0;
     padding: 8px 10px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--input-border);
     border-radius: var(--radius-control);
-    background: var(--surface-muted);
 }
+.operation-now-dispatch__dock[data-truck-present="false"] { border-style: dashed; border-color: var(--line); }
+.operation-now-dispatch__dock > strong { font-size: 1.35rem; }
+
 .operation-now-dispatch__instructions {
     padding: 8px 16px;
     border-block-start: 1px solid var(--line-soft);
@@ -969,6 +1046,7 @@
     .operation-now-dispatch__heading,
     .operation-now-dispatch__body,
     .operation-now-dispatch__instruction { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .operation-now-dispatch__decision { justify-items: start; }
 }
 
 #operationSagLotAlerts .sag-lot-alerts {
@@ -986,6 +1064,32 @@
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
     gap: 4px 24px;
     color: var(--text-secondary);
+}
+
+#operationSagLotAlerts .sag-lot-alerts__stamp {
+    display: inline-block;
+    margin-inline-end: 7px;
+    padding: 1px 5px;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    color: var(--warning-text);
+    font-size: .7rem;
+    font-weight: 750;
+    text-transform: uppercase;
+}
+#operationSagLotAlerts .sag-lot-alerts__stamp[data-tone="critical"] { color: var(--danger-text); }
+
+.operation-now-reentry__empty:not([hidden]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    margin: 12px 18px;
+    padding: 10px 12px;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius-control);
+    color: var(--text-secondary);
+    font-size: .84rem;
 }
 
 .operation-now-table--reentry { min-width: 720px; table-layout: fixed; }

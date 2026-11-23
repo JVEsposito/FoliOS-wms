@@ -1,5 +1,5 @@
 import { sagLotAlertsHtml } from './shared/sag-lot-alerts.js';
-import { officeCode, palletCells } from './shared/folios-display.js';
+import { officeCode, officePlate, palletCells } from './shared/folios-display.js';
 import { mountPalletAdministration } from './shared/admin-pallet-control.js';
 import { createAvailabilityTracker, operatorPresenceLabel } from './shared/operator-availability';
 import { createUuid } from './shared/uuid.js';
@@ -498,6 +498,12 @@ function renderHeader(data) {
     startClock();
 }
 
+function renderOverviewVisual(tab, markup) {
+    const container = document.querySelector(`[data-overview-visual="${tab}"]`);
+    container.innerHTML = markup;
+    container.hidden = !markup;
+}
+
 function renderMetrics(data) {
     const cameras = data.camaras || [];
     const productCameras = cameras.filter((camera) => camera.contenido === 'productos');
@@ -514,11 +520,14 @@ function renderMetrics(data) {
     setText('precoolingPanelSummary', `${number(precooling.procesos_activos)} en proceso · ${number(precooling.procesos_fuera_objetivo)} fuera de objetivo`);
     setText('operationOverviewCold', capacity ? percent(occupancy) : '—');
     setText('operationOverviewColdDetail', `${number(occupied)} de ${number(capacity)} posiciones PT · ${number(precooling.procesos_activos)} en prefrío`);
+    renderOverviewVisual('camaras', capacity ? `<span class="operation-now-overview__capacity folios-capacity-track"><i style="inline-size:${clampedPercent(occupancy)}%"></i></span>` : '');
     const dispatch = data.despacho?.resumen;
     setText('operationOverviewDispatch', number(dispatch?.activas));
     setText('operationOverviewDispatchDetail', dispatch
         ? `Cargas activas · ${number(dispatch.cargando)} en carguío`
         : 'Cargas activas');
+
+    renderOverviewVisual('despacho', dispatch?.activas > 0 ? palletCells(dispatch.activas, dispatch.activas) : '');
 
     const cameraSummary = byId('cameraPanelSummary');
     if (cameraSummary) {
@@ -554,8 +563,8 @@ function renderReceptionRows(id, receptions, available) {
     target.innerHTML = receptions.length ? receptions.map((row, index) => `<tr>
         <td><span class="folios-code">${officeCode(row.numero, escapeHtml)}</span><span class="operation-now-subtext">${escapeHtml(row.guias?.join(' · ') || 'Sin guía')}</span></td>
         <td>${escapeHtml(row.cliente || '—')}</td>
-        <td>${escapeHtml(row.patente || '—')}</td>
-        <td>${escapeHtml(dateTime(row.ingreso_at))}${waits[index] === null ? '' : `
+        <td>${officePlate(row.patente, escapeHtml)}</td>
+        <td>${escapeHtml(dateTime(row.ingreso_at, { timeOnly: true }))}${waits[index] === null ? '' : `
             <span class="operation-now-subtext">${escapeHtml(duration(waits[index]))} en planta</span>
             <span class="operation-now-reception-wait" aria-hidden="true"><i style="inline-size:${waits[index] / maxWait * 100}%"></i></span>
         `}</td>
@@ -569,6 +578,7 @@ function renderReceptionRows(id, receptions, available) {
 function renderPlantFlow({ recepcion_mp: reception, validacion_pt: validation }) {
     setText('operationOverviewMp', number(reception?.en_curso));
     setText('operationOverviewPt', number(validation?.procesadas));
+    renderOverviewVisual('recepcion-mp', reception?.en_curso > 0 ? palletCells(reception.en_curso, reception.en_curso) : '');
     const kilos = reception ? `${number(reception.kilos_netos_jornada, 2)} kg` : '—';
     setText('operationOverviewMpDetail', reception ? `Camiones en curso · ${kilos} netos en la jornada` : 'Camiones con fruta en curso');
     setText('operationMpEntry', number(reception?.en_ingreso));
@@ -603,6 +613,7 @@ function renderPlantFlow({ recepcion_mp: reception, validacion_pt: validation })
 // Minutos entre un registro y la lectura vigente: la edad se mide contra el servidor,
 // no contra el reloj del equipo que mira.
 function minutesBefore(value, reference) {
+    if (!value || !reference) return null;
     const moment = new Date(value).getTime();
     const base = new Date(reference).getTime();
     if (!Number.isFinite(moment) || !Number.isFinite(base)) return null;
@@ -1336,7 +1347,8 @@ function dispatchMeasures(load) {
     const separation = load.separacion || {};
     const loading = load.carguio || {};
     const separationDetail = [
-        `${percent(separation.porcentaje)} · umbral ${percent(separation.umbral_porcentaje)}`,
+        `${number(separation.en_anden)} en andén · ${percent(separation.porcentaje)}`,
+        `umbral ${percent(separation.umbral_porcentaje)}`,
         load.pallets_pendientes_asignar > 0 ? `${number(load.pallets_pendientes_asignar)} por asignar` : '',
         load.pendientes_ubicacion > 0 ? `${number(load.pendientes_ubicacion)} por ubicar` : '',
     ].filter(Boolean).join(' · ');
@@ -1367,29 +1379,50 @@ function dispatchInstruction(instruction, load) {
     </li>`;
 }
 
-function dispatchTicket(load) {
+function dispatchTicket(load, canClose) {
     const instructions = load.instructivos || [];
-    const reference = [load.numero_orden_externa, load.embarque, (load.clientes || []).join(' · ')].filter(Boolean).join(' · ');
-    const truck = load.camion_en_anden
-        ? `Camión ${load.camion_en_anden.patente || 'sin patente'} · desde ${dateTime(load.camion_en_anden.ingresada_at, { timeOnly: true })}`
-        : 'Sin camión';
+    const reference = load.embarque || load.numero_orden_externa;
+    const truck = load.camion_en_anden;
+    const clients = (load.clientes || []).join(' · ');
     const single = instructions.length === 1 ? instructions[0] : null;
+    const destinations = [...new Set(instructions.map((item) => item.destino).filter(Boolean))];
+    const bookings = [...new Set(instructions.map((item) => item.booking).filter(Boolean))];
+    const programmed = instructions.filter((item) => item.id);
+    const programmedCount = programmed.length && programmed.every((item) => item.pallets_programados != null)
+        ? programmed.reduce((sum, item) => sum + Number(item.pallets_programados), 0) : null;
+    const labels = [
+        single ? instructionTitle(single) : instructions.length > 1 ? `${number(instructions.length)} instructivos` : '',
+        destinations.join(' · '),
+        bookings.length === 1 ? `Booking ${bookings[0]}` : '',
+        programmedCount === null ? '' : `${number(programmedCount)} programados`,
+    ].filter(Boolean);
+    const mayClose = canClose && load.lista_para_cerrar === true && !load.salida_restringida_sag;
+    const closeUrl = `/oficina/frigorifico/despacho/cargas?carga=${encodeURIComponent(load.id)}&accion=cerrar`;
 
     return `<article class="folios-ticket operation-now-dispatch__load" data-ticket-area="frigorifico" data-dispatch-load="${escapeHtml(load.id)}">
         <header class="operation-now-dispatch__heading">
             <div>
+                <p class="operation-now-dispatch__ref">Carga${reference ? ` · ${escapeHtml(reference)}` : ''}</p>
                 <h3 class="folios-code">${officeCode(load.codigo, escapeHtml, 3)}</h3>
-                <small class="operation-now-subtext">${escapeHtml(reference || 'Sin orden externa')}</small>
-                ${single ? `<small class="operation-now-subtext" data-single-instruction="${escapeHtml(single.id || 'sin-instructivo')}">${escapeHtml([instructionTitle(single), instructionReference(single)].join(' · '))}</small>` : ''}
+                <p class="operation-now-dispatch__client">${escapeHtml(clients || 'Sin cliente asociado')}</p>
             </div>
-            ${dispatchState(load)}
+            <div class="operation-now-dispatch__context">
+                ${labels.length ? `<ul class="operation-now-dispatch__tags">${labels.map((label) => `<li>${escapeHtml(label)}</li>`).join('')}</ul>` : ''}
+                ${single ? `<small class="operation-now-subtext" data-single-instruction="${escapeHtml(single.id || 'sin-instructivo')}">${escapeHtml([single.recibidor, `${number(single.pallets_asignados)} asignados`, single.pallets_pendientes_asignar > 0 ? `${number(single.pallets_pendientes_asignar)} por asignar` : ''].filter(Boolean).join(' · '))}</small>` : ''}
+            </div>
+            <div class="operation-now-dispatch__decision">
+                ${dispatchState(load)}
+                ${mayClose ? `<a class="primary-button operation-now-dispatch__close" href="${escapeHtml(closeUrl)}" aria-label="Cerrar carga ${escapeHtml(load.codigo)}">Cerrar carga</a>` : ''}
+            </div>
         </header>
+        <div class="folios-perforacion" aria-hidden="true"></div>
         <div class="operation-now-dispatch__body">
             ${dispatchMeasures(load)}
-            <div class="operation-now-dispatch__dock">
+            <div class="operation-now-dispatch__dock" data-truck-present="${Boolean(truck)}">
                 <small>Andén</small>
                 <strong class="folios-code">${escapeHtml(load.anden || '—')}</strong>
-                <small>${escapeHtml(truck)}</small>
+                ${truck ? `<small>Camión ${officePlate(truck.patente, escapeHtml)}${truck.ingresada_at ? ` desde ${escapeHtml(dateTime(truck.ingresada_at, { timeOnly: true }))}` : ''}</small>`
+                    : '<small>Sin camión asignado</small>'}
             </div>
         </div>
         ${instructions.length > 1 ? `<div class="operation-now-dispatch__instructions">
@@ -1399,17 +1432,23 @@ function dispatchTicket(load) {
     </article>`;
 }
 
-function renderDispatch(dispatch = {}) {
-    const loads = dispatch.cargas || [];
-    const summary = dispatch.resumen || {};
+let dispatchMarkup;
+
+function renderDispatch(dispatch) {
+    const loads = dispatch?.cargas || [];
+    const summary = dispatch?.resumen || {};
     setText('dispatchActiveCount', number(summary.activas));
     setText('dispatchActiveLabel', Number(summary.activas) === 1 ? 'activa' : 'activas');
     setText('dispatchLoadingCount', number(summary.cargando));
     setText('dispatchReadyCount', number(summary.listas_para_cerrar));
     setText('dispatchReadyLabel', Number(summary.listas_para_cerrar) === 1 ? 'lista para cerrar' : 'listas para cerrar');
-    elements.dispatchRows.innerHTML = loads.length
-        ? loads.map(dispatchTicket).join('')
-        : empty('Sin cargas en despacho', 'Las cargas aparecen al publicarse y salen al cerrar el despacho.');
+    const nextMarkup = loads.length ? loads.map((load) => dispatchTicket(load, dispatch.puede_cerrar === true)).join('')
+        : dispatch ? empty('Sin cargas en despacho', 'Las cargas aparecen al publicarse y salen al cerrar el despacho.')
+            : empty('Despacho PT sin lectura', 'La lectura actual no incluye las cargas.');
+    if (dispatchMarkup !== nextMarkup) {
+        elements.dispatchRows.innerHTML = nextMarkup;
+        dispatchMarkup = nextMarkup;
+    }
 }
 
 const REENTRY_TASK_STATES = { pendiente: 'Esperando camarero', asumida: 'Asumida', en_proceso: 'En curso', completada: 'Completada', cancelada: 'Cancelada' };
@@ -1427,18 +1466,24 @@ function reentryTask(item) {
     return `${signal(REENTRY_TASK_STATES[item.tarea.estado] || humanize(item.tarea.estado), item.tarea.estado === 'pendiente' ? 'warning' : 'info')}<span class="operation-now-subtext">${escapeHtml(item.tarea.responsable || 'Sin responsable')}</span>`;
 }
 
-function renderReentries(dispatch = {}) {
-    const items = dispatch.reingresos || [];
+function renderReentries(dispatch) {
+    const items = dispatch?.reingresos || [];
     const pending = items.filter((item) => item.estado === 'pendiente').length;
     elements.reentrySummary.textContent = pending
         ? `${number(pending)} ${pending === 1 ? 'pendiente' : 'pendientes'}${dispatch.resumen?.reingreso_mas_antiguo_minutos ? ` · el más antiguo espera ${duration(dispatch.resumen.reingreso_mas_antiguo_minutos)}` : ''}`
-        : 'Sin pallets pendientes';
+        : dispatch ? 'Sin pallets pendientes' : 'Sin lectura';
+    const emptyReentries = byId('operationReentryEmpty');
+    emptyReentries.hidden = items.length > 0;
+    byId('operationReentryTable').hidden = items.length === 0;
     if (!items.length) {
-        elements.reentryRows.innerHTML = `<tr><td colspan="5">${empty('Sin reingresos', 'Aparecen cuando un pallet ya fuera de cámara sale de su carga.')}</td></tr>`;
+        emptyReentries.innerHTML = dispatch
+            ? `${signal('Sin reingresos', 'success')}<span>Aparecen cuando un pallet ya fuera de cámara sale de su carga.</span>`
+            : signal('Reingresos sin lectura');
+        elements.reentryRows.replaceChildren();
         return;
     }
     elements.reentryRows.innerHTML = items.map((item) => `<tr${item.estado === 'ubicado' ? ' class="is-muted"' : ''}>
-        <td><span class="operation-now-code">${escapeHtml(item.folio?.numero_folio || '—')}</span><span class="operation-now-subtext">${escapeHtml([item.folio?.cliente, item.folio?.variedad].filter(Boolean).join(' · ') || '—')}</span></td>
+        <td><span class="folios-code">${officeCode(item.folio?.numero_folio, escapeHtml)}</span><span class="operation-now-subtext">${escapeHtml([item.folio?.cliente, item.folio?.variedad].filter(Boolean).join(' · ') || '—')}</span></td>
         <td><strong>${escapeHtml(item.origen_etiqueta)}</strong><span class="operation-now-subtext">${escapeHtml([item.carga?.codigo, item.anden && `andén ${item.anden}`, item.motivo].filter(Boolean).join(' · '))}</span></td>
         <td><strong>${escapeHtml(item.antiguedad_minutos === null ? '—' : duration(item.antiguedad_minutos))}</strong><span class="operation-now-subtext">${escapeHtml(item.registrado_por || '—')}</span></td>
         <td>${item.temperatura_pulpa === null
@@ -1499,7 +1544,7 @@ function render(data) {
     state.snapshot = data;
     const sag = document.getElementById('operationSagLotAlerts');
     if (sag) {
-        sag.innerHTML = sagLotAlertsHtml(data.retenciones_sag);
+        sag.innerHTML = sagLotAlertsHtml(data.retenciones_sag, { stamped: true });
         sag.hidden = !sag.innerHTML;
     }
     renderHeader(data);

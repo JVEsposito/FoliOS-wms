@@ -14,6 +14,9 @@
                         <span>{{ $label }}</span>
                         <strong id="{{ $valueId }}">—</strong>
                         <small @if ($detailId) id="{{ $detailId }}" @endif>{{ $detail }}</small>
+                        @if ($detailId)
+                            <span class="operation-now-overview__visual" data-overview-visual="{{ $tab }}" aria-hidden="true" hidden></span>
+                        @endif
                     </span>
                 </a>
             @endforeach
