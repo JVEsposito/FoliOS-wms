@@ -48,7 +48,7 @@
 
         <main class="office-app is-hidden" id="officeApp" data-folios-workspace="expediente">
             
-            <x-office.navigation domain="frigorifico" office="cargas" context="FRIGORÍFICO · PT" icon="▤" :gajos-vivos="true" />
+            <x-office.navigation domain="frigorifico" office="cargas" context="FRIGORÍFICO · PT" icon="▤" />
 
 
             <section class="loads-workspace">

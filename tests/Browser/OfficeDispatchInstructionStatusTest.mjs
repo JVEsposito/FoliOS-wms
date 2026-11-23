@@ -84,8 +84,21 @@ test('Despacho PT muestra los subestados de cada instructivo sin duplicar el cam
         assert.match(await page.locator('#dispatchPanelSummary').innerText(), /^2 activas/);
         assert.equal(await page.locator('#dispatchLoadingCount').innerText(), '1');
         assert.equal(await page.locator('#dispatchReadyCount').innerText(), '0');
-        assert.equal(await page.locator('#operationWorkday').textContent(), '11-11-2026');
-        assert.match(await page.locator('#operationWorkdayHours').textContent(), /Jornada 07:00–06:59/);
+        const workday = page.locator('[data-office-shell-header] .estiba-office-workday');
+        assert.equal(await workday.locator('#operationWorkday').textContent(), '11-11-2026');
+        assert.equal(await workday.locator('#operationShift').textContent(), ' · Turno A');
+        assert.equal(await workday.locator('#operationWorkdayHours').textContent(), '07:00–06:59');
+        assert.equal(await page.locator('.operation-now-command #operationWorkday').count(), 0);
+        const contextRule = await page.locator('[data-office-shell-header]').evaluate(header => {
+            const actual = getComputedStyle(header, '::after').backgroundColor;
+            const probe = document.createElement('span');
+            probe.style.color = 'var(--area-operacion-ink)';
+            header.append(probe);
+            const expected = getComputedStyle(probe).color;
+            probe.remove();
+            return { actual, expected };
+        });
+        assert.equal(contextRule.actual, contextRule.expected);
         const masthead = page.locator('.operation-now-command h1');
         assert.ok(await masthead.evaluate((title) => parseFloat(getComputedStyle(title).fontSize)) >= 48);
         assert.equal(await page.locator('[data-tab-badge="despacho"]').textContent(), '2');

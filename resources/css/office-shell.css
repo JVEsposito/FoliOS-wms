@@ -205,6 +205,12 @@
     white-space: nowrap;
 }
 
+.estiba-office-workday small {
+    display: block;
+    margin-top: 2px;
+    font: 500 .68rem/1.2 var(--font-mono);
+}
+
 .estiba-office-shell .estiba-office-status {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;

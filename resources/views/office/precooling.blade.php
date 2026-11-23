@@ -35,8 +35,9 @@
 
 
             <section class="prefrio-workspace">
-                <header class="prefrio-heading prefrio-command" data-folios-masthead>
-                    <div class="prefrio-heading__title"><p class="eyebrow">FRIGORÍFICO · CONTROL TÉRMICO</p><h1>Tablero de Prefrío</h1><p>La aprobación habilita almacenamiento; el folio solo queda disponible después de ser ubicado en cámara.</p></div>
+                <x-folios.cabecera-etiqueta class="prefrio-heading prefrio-command" area="frigorifico" seccion="Frigorífico · Control térmico"
+                    titulo="Tablero de Prefrío" codigo="PF · TÚNELES Y CICLOS"
+                    descripcion="La aprobación habilita el almacenamiento. El folio queda disponible al ubicarlo en cámara.">
                     <div class="prefrio-heading__status" aria-live="polite">
                         <span>ESTADO DE LA VISTA</span>
                         <strong id="prefrioViewStatus">Consultando operación…</strong>
@@ -48,7 +49,7 @@
                         <a class="secondary-button" href="/oficina/prefrio/punto-rocio">Punto de rocío →</a>
                         <button class="secondary-button" id="reloadPrefrioButton" type="button">↻ Actualizar</button>
                     </div>
-                </header>
+                </x-folios.cabecera-etiqueta>
 
                 <div class="prefrio-metrics" data-folios-metrics>
                     <article data-tone="neutral"><span>TÚNELES ACTIVOS</span><strong id="activeTunnelCount">0</strong><small>Disponibles para operar</small></article>

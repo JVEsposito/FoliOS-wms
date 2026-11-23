@@ -31,7 +31,7 @@
 
         <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
             
-            <x-office.navigation domain="materia-prima" office="romana" context="MATERIA PRIMA" icon="⚖" :gajos-vivos="true" />
+            <x-office.navigation domain="materia-prima" office="romana" context="MATERIA PRIMA" icon="⚖" />
 
 
             <section class="weighbridge-workspace">

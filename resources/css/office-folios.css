@@ -110,111 +110,62 @@ body,
 }
 
 /* 2. Área activa ----------------------------------------------------------------- */
-/* El shell marca la oficina abierta con data-active-domain / data-active-office. Cada
-   área fija --area-* (ver bloques de tema) y --area-gajo, el gajo de 6 hojas con la
-   hoja del área en su color. Sin coincidencia, rige Operación (frost). */
-
-:root {
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%239cc3cc'/%3E%3Ccircle cx='16' cy='16' r='4.4' fill='%230f5c6e'/%3E%3C/svg%3E");
-}
-
-:root[data-office-theme="dark-industrial"] {
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%232f6f80'/%3E%3Ccircle cx='16' cy='16' r='4.4' fill='%235fd3e6'/%3E%3C/svg%3E");
-}
-
-:root:has([data-active-domain="materia-prima"]) {
+/* El shell marca la oficina abierta. Sin coincidencia, rige Operación (frost). */
+:root:has([data-office-shell][data-folios-area="materia-prima"]) {
     --area-ink: var(--area-materia-prima-ink);
     --area-text: var(--area-materia-prima-text);
     --area-tint: var(--area-materia-prima-tint);
     --area-line: var(--area-materia-prima-line);
     --area-bright: var(--area-materia-prima-bright);
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%238c1d40'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%23e3b3c2'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23e3b3c2'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23e3b3c2'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23e3b3c2'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23e3b3c2'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
 }
 
-:root:has([data-active-domain="frigorifico"]) {
+:root:has([data-office-shell][data-folios-area="frigorifico"]) {
     --area-ink: var(--area-frigorifico-ink);
     --area-text: var(--area-frigorifico-text);
     --area-tint: var(--area-frigorifico-tint);
     --area-line: var(--area-frigorifico-line);
     --area-bright: var(--area-frigorifico-bright);
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23a9cbe6'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%231d6fa8'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23a9cbe6'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23a9cbe6'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23a9cbe6'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23a9cbe6'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
 }
 
-:root:has([data-active-domain="materiales"]) {
+:root:has([data-office-shell][data-folios-area="materiales"]) {
     --area-ink: var(--area-materiales-ink);
     --area-text: var(--area-materiales-text);
     --area-tint: var(--area-materiales-tint);
     --area-line: var(--area-materiales-line);
     --area-bright: var(--area-materiales-bright);
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23dcc0a0'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%23dcc0a0'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%238c5a22'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23dcc0a0'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23dcc0a0'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23dcc0a0'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
 }
 
-:root:has([data-active-domain="consultas"]) {
+:root:has([data-office-shell][data-folios-area="consultas"]) {
     --area-ink: var(--area-consultas-ink);
     --area-text: var(--area-consultas-text);
     --area-tint: var(--area-consultas-tint);
     --area-line: var(--area-consultas-line);
     --area-bright: var(--area-consultas-bright);
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23cdbde8'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%23cdbde8'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23cdbde8'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%235e3f91'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23cdbde8'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23cdbde8'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
 }
 
-:root:has([data-active-domain="gerencia"]),
-:root:has([data-active-domain="administracion"][data-active-office="panel"]) {
+:root:has([data-office-shell][data-folios-area="gerencia"]) {
     --area-ink: var(--area-gerencia-ink);
     --area-text: var(--area-gerencia-text);
     --area-tint: var(--area-gerencia-tint);
     --area-line: var(--area-gerencia-line);
     --area-bright: var(--area-gerencia-bright);
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23c3d9a6'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%23c3d9a6'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23c3d9a6'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23c3d9a6'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%234c7a1c'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23c3d9a6'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
 }
 
-:root:has([data-active-domain="administracion"]:not([data-active-office="panel"]):not([data-active-office="operacion-ahora"])) {
+:root:has([data-office-shell][data-folios-area="administracion"]) {
     --area-ink: var(--area-administracion-ink);
     --area-text: var(--area-administracion-text);
     --area-tint: var(--area-administracion-tint);
     --area-line: var(--area-administracion-line);
     --area-bright: var(--area-administracion-bright);
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23bfc8ce'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%23bfc8ce'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23bfc8ce'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23bfc8ce'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23bfc8ce'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%234b5862'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%23ffffff'/%3E%3C/svg%3E");
 }
 
-:root:has([data-active-office="operacion-ahora"]) {
+:root:has([data-office-shell][data-folios-area="operacion"]) {
     --area-ink: var(--area-operacion-ink);
     --area-text: var(--area-operacion-text);
     --area-tint: var(--area-operacion-tint);
     --area-line: var(--area-operacion-line);
     --area-bright: var(--area-operacion-bright);
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%239cc3cc'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%239cc3cc'/%3E%3Ccircle cx='16' cy='16' r='4.4' fill='%230f5c6e'/%3E%3C/svg%3E");
 }
-
-:root[data-office-theme="dark-industrial"]:has([data-active-domain="materia-prima"]) {
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%23f2879f'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%237a3a4a'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%237a3a4a'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%237a3a4a'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%237a3a4a'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%237a3a4a'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
-}
-
-:root[data-office-theme="dark-industrial"]:has([data-active-domain="frigorifico"]) {
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%233f6f93'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%237dbceb'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%233f6f93'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%233f6f93'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%233f6f93'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%233f6f93'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
-}
-
-:root[data-office-theme="dark-industrial"]:has([data-active-domain="materiales"]) {
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%237a5a35'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%237a5a35'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%23e0aa6c'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%237a5a35'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%237a5a35'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%237a5a35'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
-}
-
-:root[data-office-theme="dark-industrial"]:has([data-active-domain="consultas"]) {
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%235d4b84'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%235d4b84'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%235d4b84'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%23bba2ea'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%235d4b84'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%235d4b84'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
-}
-
-:root[data-office-theme="dark-industrial"]:has([data-active-domain="gerencia"]),
-:root[data-office-theme="dark-industrial"]:has([data-active-domain="administracion"][data-active-office="panel"]) {
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%234f6d2e'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%234f6d2e'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%234f6d2e'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%234f6d2e'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%23a6d16e'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%234f6d2e'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
-}
-
-:root[data-office-theme="dark-industrial"]:has([data-active-domain="administracion"]:not([data-active-office="panel"]):not([data-active-office="operacion-ahora"])) {
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%234f5f69'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%234f5f69'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%234f5f69'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%234f5f69'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%234f5f69'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%23b7c4cc'/%3E%3Ccircle cx='16' cy='16' r='2.6' fill='%2315303c'/%3E%3C/svg%3E");
-}
-
-:root[data-office-theme="dark-industrial"]:has([data-active-office="operacion-ahora"]) {
-    --area-gajo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16,16 L16,2 L26.97,7.3 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L28.12,9 L29.02,21.15 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L28.12,23 L18.05,29.85 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L16,30 L5.03,24.7 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L3.88,23 L2.98,10.85 Z' fill='%232f6f80'/%3E%3Cpath d='M16,16 L3.88,9 L13.95,2.15 Z' fill='%232f6f80'/%3E%3Ccircle cx='16' cy='16' r='4.4' fill='%235fd3e6'/%3E%3C/svg%3E");
-}
-
 
 /* 3. Tarjetas y paneles ------------------------------------------------------------ */
 
@@ -417,6 +368,18 @@ body,
     min-inline-size: 0;
 }
 
+.office-app [data-folios-masthead]:not(.folios-etiqueta--cabecera, :has(+ [data-folios-section-nav])) {
+    padding-block-end: max(24px, 1.8vw);
+}
+
+.office-app [data-folios-masthead]:not(.folios-etiqueta--cabecera, :has(+ [data-folios-section-nav]))::after {
+    position: absolute;
+    inset: auto 0 9px;
+    border-block-start: 1px dashed var(--line);
+    pointer-events: none;
+    content: "";
+}
+
 .office-app [data-folios-masthead] :is(.eyebrow, .eui-heading__eyebrow) {
     display: flex;
     align-items: center;
@@ -431,14 +394,6 @@ body,
     letter-spacing: .065em;
     text-transform: uppercase;
     white-space: normal;
-}
-
-.office-app [data-folios-masthead] :is(.eyebrow, .eui-heading__eyebrow)::before {
-    flex: 0 0 17px;
-    inline-size: 17px;
-    block-size: 17px;
-    background: var(--area-gajo) center / contain no-repeat;
-    content: "";
 }
 
 .office-app h1:not([data-office-shell] *, .operation-now-command *, [data-folios-masthead] *) {
@@ -501,6 +456,10 @@ body,
 .office-app [data-folios-section-nav] > :is(button, a) {
     min-block-size: 44px;
     border-block-end-width: 3px;
+}
+
+.office-app [data-folios-section-nav] > :is(button, a):is(.is-active, [aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) {
+    border-block-end-color: var(--area-ink);
 }
 
 .office-app [data-folios-masthead]:has(+ [data-folios-section-nav]) {

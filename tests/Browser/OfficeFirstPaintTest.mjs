@@ -30,7 +30,10 @@ async function firstPaint(browser, storage, { modules = false, contextData = {},
         if (pathname.startsWith('/build/')) {
             return route.fulfill({ path: resolve(root, `public${pathname}`) });
         }
-        if (pathname === '/api/oficina/contexto') return route.fulfill({ json: { data: { planta: 'Planta de prueba', temporada: null, ...contextData } } });
+        if (pathname === '/api/oficina/contexto') {
+            const { status = 200, ...data } = contextData;
+            return route.fulfill({ status, json: { data: { planta: 'Planta de prueba', temporada: null, ...data } } });
+        }
         if (pathname === '/api/oficina/tema-personal/personal-prueba' && route.request().headers().authorization === `Bearer ${token}`) {
             return Promise.resolve(personalGate()).then(() => route.fulfill({ body: personalCss, contentType: 'text/css' }));
         }
@@ -42,6 +45,49 @@ async function firstPaint(browser, storage, { modules = false, contextData = {},
     await page.goto('http://localhost/oficina/materia-prima');
     return { context, page, visited };
 }
+
+test('la barra conserva la última lectura al perder el servidor y verifica de nuevo al reconectar', async () => {
+    const browser = await chromium.launch({
+        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+        args: ['--no-sandbox', '--disable-gpu'],
+    });
+    try {
+        const contextData = {
+            temporada: { codigo: 'TEMP-2627' },
+            jornada: { fecha_jornada: '2026-11-22', turno_operativo: 'B' },
+        };
+        const { context, page, visited } = await firstPaint(browser, {
+            local: {
+                estiba_wms_office_token: token,
+                estiba_wms_office_identity: JSON.stringify({ ...identity, puede_consultar_romana: true }),
+            },
+            session: {},
+        }, { modules: true, contextData });
+        const label = page.locator('[data-office-context-label]');
+        const status = page.locator('[data-office-context-status]');
+        await label.getByText('En línea', { exact: true }).waitFor();
+        assert.ok(visited.includes('/api/oficina/contexto?jornada=1'));
+        assert.equal(await page.locator('[data-office-workday]').textContent(), '22-11-2026 · Turno B');
+
+        contextData.status = 503;
+        await page.locator('[data-office-context-refresh]').click();
+        await label.getByText('Contexto sin actualizar', { exact: true }).waitFor();
+        assert.match(await status.textContent(), /^Lectura hace /);
+        assert.equal(await page.locator('[data-office-season]').textContent(), 'TEMP-2627');
+        await context.setOffline(true);
+        await label.getByText('Sin conexión', { exact: true }).waitFor();
+        assert.match(await status.textContent(), /^Lectura hace /);
+
+        delete contextData.status;
+        contextData.jornada = { fecha_jornada: '2026-11-23', turno_operativo: 'A' };
+        await context.setOffline(false);
+        await label.getByText('En línea', { exact: true }).waitFor();
+        assert.equal(await page.locator('[data-office-workday]').textContent(), '23-11-2026 · Turno A');
+        await context.close();
+    } finally {
+        await browser.close();
+    }
+});
 
 test('el tema personal se descarga con sesión y se retira al actualizar el perfil', async () => {
     const browser = await chromium.launch({

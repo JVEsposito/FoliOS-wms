@@ -139,7 +139,7 @@
     $serverLabel = config('app.server_label');
 @endphp
 
-<div class="estiba-ui estiba-office-shell" data-office-shell data-folios-area="{{ $area }}" @if ($gajosVivos) data-office-gajos-vivos @endif>
+<div class="estiba-ui estiba-office-shell" data-office-shell data-folios-area="{{ $area }}">
     <a class="estiba-office-skip" href="#officeContent" data-office-skip>Saltar al contenido</a>
     <header class="estiba-office-header" data-office-shell-header data-active-domain="{{ $domain }}" data-active-office="{{ $office }}">
         <div class="estiba-office-brand">
@@ -159,14 +159,15 @@
         <div class="estiba-office-context">
             <span>Temporada<strong data-office-season>Sin consultar</strong></span>
             <span>Planta<strong data-office-plant>Sin consultar</strong></span>
-            @if ($office === 'operacion-ahora' || $gajosVivos)
+            {{ $jornada ?? '' }}
+            @unless (isset($jornada))
                 <span>Jornada<strong data-office-workday>Sin consultar</strong></span>
-            @endif
+            @endunless
             <x-office.global-search />
         </div>
-        <button class="estiba-office-status" type="button" data-office-context-refresh aria-label="{{ $gajosVivos ? 'Actualizar contexto de planta' : 'Actualizar temporada y planta' }}">
+        <button class="estiba-office-status" type="button" data-office-context-refresh aria-label="Actualizar contexto de planta">
             <i aria-hidden="true"></i>
-            <span><small class="estiba-office-status__caption">Datos</small><strong data-office-context-label>Verificando contexto</strong><small data-office-context-status>Temporada y planta</small></span>
+            <span><small class="estiba-office-status__caption">Contexto de Oficina</small><strong data-office-context-label>Verificando contexto</strong><small data-office-context-status>Temporada, planta y jornada</small></span>
             <x-estiba.icon name="refresh" />
         </button>
         <div class="estiba-office-tools">

@@ -23,7 +23,8 @@
 <main class="office-app is-hidden" id="officeApp" data-folios-workspace="operacion">
     <x-office.navigation domain="materia-prima" office="porteria" context="PORTERÍA · INGRESOS" />
     <section class="gate-workspace" id="officeContent">
-        <header data-folios-masthead><p class="eyebrow">PORTERÍA</p><h1>Ingresos Portería</h1><p>Registra cada llegada, aunque la patente o la guía hayan ingresado antes.</p></header>
+        <x-folios.cabecera-etiqueta area="materia-prima" seccion="Materia Prima · Portería" titulo="Ingresos Portería" codigo="PORT · LLEGADAS"
+            descripcion="Registra cada llegada, aunque la patente o la guía hayan ingresado antes." />
         <p id="gateStatus" role="status" aria-live="polite"></p>
         <div class="gate-columns">
             <section class="panel gate-panel" id="gateCapture" hidden>

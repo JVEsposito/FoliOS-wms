@@ -35,8 +35,9 @@
 
 
             <section class="validation-workspace" data-validation-timezone="{{ config('app.operational_timezone') }}">
-                <header class="validation-heading validation-heading--history" data-folios-masthead>
-                    <div><p class="eyebrow">CONTROL DE INGRESO</p><h1>Validación de pallets</h1><p>La aprobación crea el folio pendiente de prefrío; observar conserva la posibilidad de corregir y volver a validar.</p></div>
+                <x-folios.cabecera-etiqueta class="validation-heading validation-heading--history" area="frigorifico" seccion="Frigorífico · Control de ingreso"
+                    titulo="Validación de pallets" codigo="PT · RRPP-01"
+                    descripcion="La aprobación crea el folio pendiente de prefrío. Una observación permite corregir y volver a validar.">
                     <div class="validation-toolbar">
                         <div class="validation-heading__actions">
                             <label><span>Temporada visible</span><select id="seasonSelector"></select></label>
@@ -49,7 +50,7 @@
                         </div>
                         <small id="validationExportScope" aria-live="polite"></small>
                     </div>
-                </header>
+                </x-folios.cabecera-etiqueta>
 
                 <div class="validation-metrics" data-folios-metrics>
                     <article><span>PALLETS VALIDADOS</span><strong id="dayValidatedCount">0</strong><small id="dayValidatedLabel">hoy</small></article>

@@ -50,13 +50,11 @@ function syncThemes(themes, personalThemes) {
 }
 
 async function loadContext() {
-    const root = shell();
-    if (!root) return;
-    const gajosVivos = root.hasAttribute('data-office-gajos-vivos');
+    if (!shell()) return;
     const currentToken = token();
     if (!currentToken) return;
     const button = field('context-refresh');
-    if (gajosVivos && !navigator.onLine) {
+    if (!navigator.onLine) {
         button.disabled = false;
         contextState('Sin conexión', contextAge(), 'critical');
         return;
@@ -66,10 +64,11 @@ async function loadContext() {
     const requestController = controller;
     const currentGeneration = ++generation;
     button.disabled = true;
-    contextState('Verificando contexto', 'Consultando temporada y planta…', 'neutral');
+    contextState('Verificando contexto', 'Consultando datos de planta…');
     const timeout = setTimeout(() => requestController.abort(), 10000);
     try {
-        const response = await fetch(gajosVivos ? '/api/oficina/contexto?jornada=1' : '/api/oficina/contexto', {
+        // Operación ahora obtiene su jornada de la instantánea que alimenta el tablero.
+        const response = await fetch(field('workday') ? '/api/oficina/contexto?jornada=1' : '/api/oficina/contexto', {
             headers: { Accept: 'application/json', Authorization: `Bearer ${currentToken}` },
             cache: 'no-store', signal: requestController.signal,
         });
@@ -83,33 +82,19 @@ async function loadContext() {
         text('plant', data.planta || 'Sin configurar');
         text('season', data.temporada?.codigo || 'Sin temporada activa');
         renderNotices([...(Array.isArray(data.avisos_cierre) ? data.avisos_cierre : []), ...(Array.isArray(data.avisos_materiales) ? data.avisos_materiales : [])]);
-        if (gajosVivos) {
-            const date = data.jornada?.fecha_jornada?.split('-').reverse().join('-');
-            const shift = data.jornada?.turno_operativo ? `Turno ${data.jornada.turno_operativo}` : null;
-            text('workday', [date, shift].filter(Boolean).join(' · ') || 'Sin configurar');
-            contextReadAt = Date.now();
-            contextState('En línea', contextAge(), 'success');
-        } else {
-            contextState(
-                'Contexto verificado',
-                `Actualizado ${new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`,
-                'success',
-            );
-        }
+        const date = data.jornada?.fecha_jornada?.split('-').reverse().join('-');
+        const shift = data.jornada?.turno_operativo ? `Turno ${data.jornada.turno_operativo}` : null;
+        text('workday', [date, shift].filter(Boolean).join(' · ') || 'Sin configurar');
+        contextReadAt = Date.now();
+        contextState('En línea', contextAge(), 'success');
     } catch (error) {
         if (currentGeneration !== generation || currentToken !== token()) return;
-        if (gajosVivos && !navigator.onLine) {
+        if (!navigator.onLine) {
             contextState('Sin conexión', contextAge(), 'critical');
             return;
         }
-        text('plant', 'Sin verificar');
-        text('season', 'Sin verificar');
-        if (gajosVivos) text('workday', 'Sin verificar');
-        contextState(
-            'Contexto no verificado',
-            error.name === 'AbortError' ? 'La consulta tardó demasiado' : error.message,
-            'critical',
-        );
+        const message = error.name === 'AbortError' ? 'La consulta tardó demasiado' : error.message;
+        contextState('Contexto sin actualizar', contextReadAt === null ? message : contextAge(), 'critical');
     } finally {
         clearTimeout(timeout);
         if (currentGeneration === generation) button.disabled = !token();
@@ -156,19 +141,20 @@ export function refreshOfficeShell(identity, hasSession) {
     const readonly = field('readonly');
     if (readonly) readonly.hidden = !hasSession || !(identity?.solo_consulta || identity?.capacidades?.solo_consulta);
     const currentToken = hasSession ? token() : null;
-    if (!currentToken) {
+    if (contextToken !== currentToken || !currentToken) {
         contextReadAt = null;
+        text('plant', 'Sin consultar');
+        text('season', 'Sin consultar');
+        text('workday', 'Sin consultar');
+        renderNotices([]);
+    }
+    if (!currentToken) {
         contextToken = null;
         generation += 1;
         controller?.abort();
-        text('plant', 'Sin consultar');
-        text('season', 'Sin consultar');
-        if (shell().hasAttribute('data-office-gajos-vivos')) text('workday', 'Sin consultar');
-        renderNotices([]);
         contextState('Contexto sin consultar', 'Inicia sesión para verificarlo', 'neutral');
         field('context-refresh').disabled = true;
     } else if (contextToken !== currentToken) {
-        contextReadAt = null;
         contextToken = currentToken;
         void loadContext();
     }
@@ -248,17 +234,14 @@ export function initializeOfficeShell() {
         const button = event.target.closest('[data-read-notice]');
         if (button) void readNotice(button.dataset.readNotice);
     });
-    if (root.hasAttribute('data-office-gajos-vivos')) {
-        window.setInterval(() => {
-            if (!document.hidden && field('context-refresh')?.dataset.tone === 'success') text('context-status', contextAge());
-        }, 5000);
-        window.addEventListener('offline', () => {
-            controller?.abort();
-            contextState('Sin conexión', contextAge(), 'critical');
-        });
-        window.addEventListener('online', () => void loadContext());
-    } else {
-        window.addEventListener('offline', () => contextState('Sin conexión', 'El contexto puede estar desactualizado', 'critical'));
-        window.addEventListener('online', () => contextState('Conexión recuperada', 'Actualiza para verificar el contexto', 'neutral'));
-    }
+    window.setInterval(() => {
+        if (!document.hidden && contextReadAt !== null
+            && field('context-refresh')?.dataset.tone !== 'neutral') text('context-status', contextAge());
+    }, 5000);
+    window.addEventListener('offline', () => {
+        if (!contextToken) return;
+        controller?.abort();
+        contextState('Sin conexión', contextAge(), 'critical');
+    });
+    window.addEventListener('online', () => void loadContext());
 }
