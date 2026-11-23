@@ -28,6 +28,18 @@
 .assistant-settings__modes small,
 .assistant-settings__pilot small { color: var(--muted); font-size: .75rem; }
 .assistant-settings__modes input:disabled + span { opacity: .55; }
+/* Los controles de Oficina son grandes para tablets; aquí van del tamaño del texto. */
+.assistant-settings input[type="radio"],
+.assistant-settings input[type="checkbox"] {
+    inline-size: 18px;
+    block-size: 18px;
+    min-height: 0;
+    min-width: 0;
+    flex: 0 0 18px;
+    margin: 2px 0 0;
+    padding: 0;
+    accent-color: var(--cyan);
+}
 .assistant-settings__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .assistant-settings__pilot { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .assistant-settings__filter { min-inline-size: 220px; }

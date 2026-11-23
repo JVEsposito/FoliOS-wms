@@ -27,7 +27,7 @@ export function renderGate(report) {
     return `
         <p class="assistant-settings__decision" data-decision="${escapeHtml(report.decision)}"><strong>${escapeHtml(DECISIONES[report.decision] || report.decision)}.</strong> ${escapeHtml(report.motivo)}</p>
         <dl class="assistant-settings__facts">
-            <div><dt>Preguntas</dt><dd>${r.total} de ${r.usuarios} usuarios</dd></div>
+            <div><dt>Preguntas</dt><dd>${r.total} de ${r.usuarios} ${r.usuarios === 1 ? 'usuario' : 'usuarios'}</dd></div>
             <div><dt>Sin consulta, como se registró</dt><dd>${percent(r.proporcion_sugerencias)}</dd></div>
             <div><dt>Sin consulta, con las reglas de hoy</dt><dd>${percent(a.proporcion_sugerencias)}</dd></div>
             <div><dt>Banco</dt><dd>${b.correctas} correctas · ${b.falsas} falsas</dd></div>
