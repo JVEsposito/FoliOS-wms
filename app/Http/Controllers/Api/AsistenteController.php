@@ -45,11 +45,11 @@ class AsistenteController extends Controller
             'especie_id' => ['nullable', 'uuid'],
             'codigo' => ['nullable', 'string', 'max:60'],
             'temporada_anterior' => ['nullable', 'boolean'],
+            'turno' => ['nullable', Rule::in(['A', 'B'])],
+            'periodo' => ['nullable', 'string', 'max:80'],
         ]);
 
-        $resultado = $this->asistente->ejecutar($request->user(), $clave, ParametrosConsulta::desdeArreglo($datos));
-
-        return response()->json(['data' => ['tipo' => 'respuesta', 'modo' => ServicioAsistente::MODO, 'consulta' => $clave, 'resultado' => $resultado->toArray()]]);
+        return response()->json(['data' => $this->asistente->ejecutar($request->user(), $clave, ParametrosConsulta::desdeArreglo($datos))]);
     }
 
     public function configuracion(): JsonResponse

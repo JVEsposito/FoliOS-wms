@@ -26,7 +26,7 @@ class CajasPt extends ConsultaProductoTerminado
 
     public function palabrasClave(): array
     {
-        return ['cajas', 'caja', 'pallets', 'pallet', 'pt', 'existencia', 'stock', 'folios', 'terminado'];
+        return ['cajas', 'caja', 'pallets', 'pallet', 'pt', 'existencia', 'stock', 'folios', 'terminado', 'camara', 'camaras'];
     }
 
     public function ejecutar(User $usuario, ParametrosConsulta $parametros): ResultadoConsulta

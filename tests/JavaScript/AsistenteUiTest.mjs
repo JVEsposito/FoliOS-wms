@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { esquinaMasCercana, glifoEstado, renderResultado, renderSugerencias } from '../../resources/js/shared/asistente-ui.js';
+import { esquinaMasCercana, glifoEstado, renderEntendido, renderResultado, renderSugerencias } from '../../resources/js/shared/asistente-ui.js';
 
 const escape = (valor) => String(valor ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -62,5 +62,26 @@ test('tres sugerencias producen tres botones', () => {
     ], escape);
 
     assert.equal(html.match(/data-asistente-sugerencia=/g).length, 3);
-    assert.equal(renderSugerencias([], escape), '');
+});
+
+test('sin sugerencias lo dice en vez de quedar en blanco', () => {
+    const html = renderSugerencias([], escape);
+
+    assert.ok(html.includes('No tengo una consulta para esa pregunta.'));
+    assert.ok(!html.includes('data-asistente-sugerencia='));
+});
+
+test('la línea Entendí muestra consulta, fichas, Corregir y lo que no se aplicó', () => {
+    const html = renderEntendido({
+        consulta: 'Repaletizajes',
+        fichas: ['Jornada 21-11-2026'],
+        no_aplicados: ['No filtra por cliente (Exportadora <Andina>): incluye todos los clientes.'],
+    }, escape);
+
+    assert.ok(html.includes('<strong>Repaletizajes</strong>'));
+    assert.ok(html.includes('Jornada 21-11-2026'));
+    assert.ok(html.includes('data-asistente-corregir'));
+    assert.ok(html.includes('Exportadora &lt;Andina&gt;'));
+    assert.ok(html.includes('data-tono="atencion"'));
+    assert.equal(renderEntendido(null, escape), '');
 });

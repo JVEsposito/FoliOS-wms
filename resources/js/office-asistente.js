@@ -1,4 +1,4 @@
-import { ESQUINAS, esquinaMasCercana, renderResultado, renderSugerencias } from './shared/asistente-ui.js';
+import { ESQUINAS, esquinaMasCercana, renderEntendido, renderResultado, renderSugerencias } from './shared/asistente-ui.js';
 
 // Gajo asistente de Oficina (docs/ASISTENTE_OFICINA.md): se muestra solo con la capacidad
 // puede_usar_asistente, se arrastra a cualquier esquina y nunca se abre por su cuenta.
@@ -34,6 +34,8 @@ function iniciarAsistente() {
     const enviar = raiz.querySelector('[data-asistente-enviar]');
     const modo = raiz.querySelector('[data-asistente-modo]');
     let sugerenciasVigentes = [];
+    let ultimaPregunta = null;
+    let ultimoTexto = '';
     let ocupado = false;
 
     function habilitado() {
@@ -74,6 +76,17 @@ function iniciarAsistente() {
         return bloque;
     }
 
+    // La respuesta se lee desde su comienzo: la pregunta queda arriba del historial.
+    function mostrarDesdePregunta() {
+        if (!ultimaPregunta) return;
+        historial.scrollTop += ultimaPregunta.getBoundingClientRect().top - historial.getBoundingClientRect().top;
+    }
+
+    function preguntar(textoVisible, guardarTexto) {
+        ultimaPregunta = agregar(`<p>${escape(textoVisible)}</p>`, 'folios-asistente__pregunta');
+        if (guardarTexto) ultimoTexto = textoVisible;
+    }
+
     async function llamar(url, cuerpo) {
         const respuesta = await fetch(url, {
             method: 'POST',
@@ -95,10 +108,12 @@ function iniciarAsistente() {
             const busqueda = datos.busqueda
                 ? `<a class="folios-asistente__enlace" href="/oficina/consultas/busqueda?q=${encodeURIComponent(datos.busqueda)}">Buscar «${escape(datos.busqueda)}» en la Búsqueda operacional</a>`
                 : '';
-            agregar(renderSugerencias(sugerenciasVigentes, escape) + busqueda, 'folios-asistente__respuesta');
+            agregar(renderSugerencias(sugerenciasVigentes, escape, datos.mensaje) + busqueda, 'folios-asistente__respuesta');
+            mostrarDesdePregunta();
             return;
         }
-        agregar(renderResultado(datos?.resultado, escape), 'folios-asistente__respuesta');
+        agregar(renderEntendido(datos?.entendido, escape) + renderResultado(datos?.resultado, escape), 'folios-asistente__respuesta');
+        mostrarDesdePregunta();
     }
 
     async function ejecutar(promesa) {
@@ -121,17 +136,23 @@ function iniciarAsistente() {
         evento.preventDefault();
         const pregunta = texto.value.trim();
         if (!pregunta || ocupado) return;
-        agregar(`<p>${escape(pregunta)}</p>`, 'folios-asistente__pregunta');
+        preguntar(pregunta, true);
         texto.value = '';
         ejecutar(() => llamar('/api/asistente/preguntas', { texto: pregunta }));
     });
 
     historial.addEventListener('click', (evento) => {
+        if (evento.target.closest('[data-asistente-corregir]')) {
+            // Corregir: la pregunta vuelve al cuadro para precisar periodo, cliente o consulta.
+            texto.value = ultimoTexto;
+            texto.focus();
+            return;
+        }
         const boton = evento.target.closest('[data-asistente-sugerencia]');
         if (!boton || ocupado) return;
         const sugerencia = sugerenciasVigentes[Number(boton.dataset.asistenteSugerencia)];
         if (!sugerencia) return;
-        agregar(`<p>${escape(sugerencia.titulo)}</p>`, 'folios-asistente__pregunta');
+        preguntar(sugerencia.titulo, false);
         ejecutar(() => llamar(`/api/asistente/consultas/${encodeURIComponent(sugerencia.clave)}`, sugerencia.parametros ?? {}));
     });
 

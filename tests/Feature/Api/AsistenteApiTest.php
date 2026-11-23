@@ -3,9 +3,11 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
+use App\Models\GuiaDespachoEnvase;
 use App\Models\PreguntaAsistente;
 use App\Services\Autorizacion\CatalogoModulosAcceso;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\Concerns\PreparaAsistente;
 use Tests\TestCase;
 
@@ -52,7 +54,7 @@ class AsistenteApiTest extends TestCase
             ->assertJsonPath('data.resultado.filas.0.codigo', 'REC-2611-0108');
     }
 
-    public function test_pregunta_sin_sentido_devuelve_tres_sugerencias_y_busqueda(): void
+    public function test_pregunta_sin_sentido_no_inventa_sugerencias_y_ofrece_busqueda(): void
     {
         $respuesta = $this->actingAs($this->administrador, 'sanctum')
             ->postJson('/api/asistente/preguntas', ['texto' => 'asdf qwerty 31-02'])
@@ -60,7 +62,65 @@ class AsistenteApiTest extends TestCase
             ->assertJsonPath('data.tipo', 'sugerencias')
             ->assertJsonPath('data.busqueda', 'asdf qwerty 31-02');
 
-        $this->assertCount(3, $respuesta->json('data.sugerencias'));
+        $this->assertSame([], $respuesta->json('data.sugerencias'));
+        $this->assertStringContainsString('No tengo una consulta', $respuesta->json('data.mensaje'));
+    }
+
+    public function test_pregunta_ambigua_sugiere_solo_consultas_parecidas(): void
+    {
+        $claves = array_column($this->actingAs($this->administrador, 'sanctum')
+            ->postJson('/api/asistente/preguntas', ['texto' => 'tiempos de hoy'])
+            ->assertOk()
+            ->assertJsonPath('data.tipo', 'sugerencias')
+            ->json('data.sugerencias'), 'clave');
+
+        sort($claves);
+        $this->assertSame(['tiempos-cargas', 'tiempos-prefrio', 'tiempos-romana'], $claves);
+    }
+
+    public function test_respuesta_trae_linea_entendido_con_periodo_y_filtros(): void
+    {
+        $this->recepcion('REC-2611-0200', 9000);
+
+        $this->actingAs($this->administrador, 'sanctum')
+            ->postJson('/api/asistente/preguntas', ['texto' => 'kilos recibidos hoy de exportadora andina'])
+            ->assertOk()
+            ->assertJsonPath('data.consulta', 'kilos-recepciones')
+            ->assertJsonPath('data.entendido.consulta', 'Kilos recibidos')
+            ->assertJsonPath('data.entendido.fichas.1', 'Exportadora Andina')
+            ->assertJsonPath('data.entendido.no_aplicados', []);
+    }
+
+    public function test_filtro_que_la_consulta_no_aplica_se_informa(): void
+    {
+        $entendido = $this->actingAs($this->administrador, 'sanctum')
+            ->postJson('/api/asistente/preguntas', ['texto' => 'repaletizajes de ayer de exportadora andina'])
+            ->assertOk()
+            ->assertJsonPath('data.consulta', 'repaletizajes')
+            ->json('data.entendido');
+
+        $this->assertNotContains('Exportadora Andina', $entendido['fichas']);
+        $this->assertStringContainsString('No filtra por cliente (Exportadora Andina)', $entendido['no_aplicados'][0]);
+    }
+
+    public function test_numero_de_guia_encuentra_la_guia_de_despacho_de_envases(): void
+    {
+        GuiaDespachoEnvase::create([
+            'operacion_id' => (string) Str::uuid(), 'numero' => 'GDE-2611-0163', 'numero_guia_despacho' => '2345',
+            'temporada_id' => $this->temporada->id, 'cliente_id' => $this->cliente->id,
+            'cliente_codigo_snapshot' => $this->cliente->codigo, 'cliente_nombre_snapshot' => $this->cliente->nombre,
+            'estado' => 'confirmada', 'salida_at' => now(), 'patente_camion' => 'ABCD12', 'version' => 1,
+            'creado_por_user_id' => $this->administrador->id,
+        ]);
+
+        foreach (['busca la guia 2345', 'GDE-2611-0163'] as $texto) {
+            $this->actingAs($this->administrador, 'sanctum')
+                ->postJson('/api/asistente/preguntas', ['texto' => $texto])
+                ->assertOk()
+                ->assertJsonPath('data.consulta', 'expediente-por-codigo')
+                ->assertJsonPath('data.resultado.filas.0.tipo', 'Guía de envases')
+                ->assertJsonPath('data.resultado.filas.0.codigo', 'GDE-2611-0163 · guía 2345');
+        }
     }
 
     public function test_texto_vacio_o_espacios_o_501_caracteres_da_422_y_no_registra(): void
@@ -80,7 +140,7 @@ class AsistenteApiTest extends TestCase
         $usuario = $this->usuarioAsistente(RolUsuario::OperadorRomana, [CatalogoModulosAcceso::OFICINA_ASISTENTE, 'materia-prima.romana']);
 
         $sugerencias = $this->actingAs($usuario, 'sanctum')
-            ->postJson('/api/asistente/preguntas', ['texto' => 'algo que no entiende nadie'])
+            ->postJson('/api/asistente/preguntas', ['texto' => 'tiempos de cargas'])
             ->assertOk()
             ->json('data.sugerencias');
 

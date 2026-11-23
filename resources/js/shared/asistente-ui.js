@@ -76,11 +76,32 @@ export function renderResultado(resultado, escape) {
         </article>`;
 }
 
-export function renderSugerencias(sugerencias, escape) {
-    if (!sugerencias?.length) return '';
+// Línea «Entendí»: qué consulta corrió, con qué periodo y filtros. Lo reconocido que la
+// consulta no aplica se avisa aparte; una cifra nunca se lee como filtrada si no lo está.
+export function renderEntendido(entendido, escape) {
+    if (!entendido?.consulta) return '';
+    const fichas = (entendido.fichas ?? []).map((ficha) => `<span class="folios-asistente__ficha">${escape(ficha)}</span>`).join('');
+    const avisos = (entendido.no_aplicados ?? []).map((aviso) => `
+        <li><span aria-hidden="true">◆</span> ${escape(aviso)}</li>`).join('');
+
+    return `
+        <div class="folios-asistente__entendido">
+            <p><span class="folios-asistente__entendi">Entendí:</span> <strong>${escape(entendido.consulta)}</strong>${fichas}
+                <button type="button" class="folios-asistente__corregir" data-asistente-corregir>Corregir</button></p>
+            ${avisos ? `<ul class="folios-asistente__no-aplicados" data-tono="atencion">${avisos}</ul>` : ''}
+        </div>`;
+}
+
+const MENSAJE_SUGERENCIAS = 'No estoy seguro de qué consulta quieres. ¿Es alguna de estas?';
+const MENSAJE_SIN_CONSULTA = 'No tengo una consulta para esa pregunta. Puedes buscarla en FoliOS o ver lo que sé responder.';
+
+export function renderSugerencias(sugerencias, escape, mensaje) {
+    if (!sugerencias?.length) {
+        return `<div class="folios-asistente__sugerencias"><p>${escape(mensaje || MENSAJE_SIN_CONSULTA)}</p></div>`;
+    }
     return `
         <div class="folios-asistente__sugerencias">
-            <p>No estoy seguro de qué consulta quieres. ¿Es alguna de estas?</p>
+            <p>${escape(mensaje || MENSAJE_SUGERENCIAS)}</p>
             <ul>${sugerencias.map((s, indice) => `
                 <li><button type="button" data-asistente-sugerencia="${indice}">
                     <strong>${escape(s.titulo)}</strong><span>${escape(s.descripcion ?? '')}</span>

@@ -27,6 +27,17 @@ interface ConsultaAsistente
     /** @return list<string> palabras ya normalizadas con TextoNormalizado */
     public function palabrasClave(): array;
 
+    /** @return list<string> palabras que también usa otra consulta: cuentan la mitad */
+    public function palabrasSecundarias(): array;
+
+    /**
+     * Filtros que la consulta aplica de verdad: periodo, cliente, csg, especie o codigo.
+     * Un filtro reconocido que no está aquí se informa en «Entendí», nunca se ignora en silencio.
+     *
+     * @return list<string>
+     */
+    public function filtros(): array;
+
     public function puedeEjecutar(User $usuario): bool;
 
     public function ejecutar(User $usuario, ParametrosConsulta $parametros): ResultadoConsulta;

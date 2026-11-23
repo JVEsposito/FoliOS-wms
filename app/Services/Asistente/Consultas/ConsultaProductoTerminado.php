@@ -29,6 +29,12 @@ abstract class ConsultaProductoTerminado extends ConsultaBase
         return 'frigorifico';
     }
 
+    /** La existencia es la de ahora: no filtra por fecha ni por temporada anterior. */
+    public function filtros(): array
+    {
+        return ['cliente'];
+    }
+
     public function puedeEjecutar(User $usuario): bool
     {
         return $this->existencias->puedeConsultar($usuario, ServicioExistencias::PRODUCTO_TERMINADO);

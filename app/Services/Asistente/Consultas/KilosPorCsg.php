@@ -36,7 +36,17 @@ class KilosPorCsg extends ConsultaBase
 
     public function palabrasClave(): array
     {
-        return ['csg', 'productor', 'productores', 'kilos', 'kg', 'lote', 'lotes', 'predio'];
+        return ['csg', 'productor', 'productores', 'lote', 'lotes', 'predio'];
+    }
+
+    public function palabrasSecundarias(): array
+    {
+        return ['kilos', 'kilo', 'kg'];
+    }
+
+    public function filtros(): array
+    {
+        return ['periodo', 'cliente', 'csg'];
     }
 
     public function puedeEjecutar(User $usuario): bool

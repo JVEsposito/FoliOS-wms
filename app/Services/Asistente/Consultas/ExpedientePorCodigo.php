@@ -2,6 +2,7 @@
 
 namespace App\Services\Asistente\Consultas;
 
+use App\Models\GuiaDespachoEnvase;
 use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ResultadoConsulta;
@@ -10,8 +11,9 @@ use App\Services\Consultas\ServicioConsultaOperacional;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 
 /**
- * Un código suelto (recepción, folio, lote) abre lo que encuentra la Búsqueda
- * Operacional, con su mismo permiso.
+ * Un código suelto (recepción, folio, lote, guía) abre lo que encuentra la Búsqueda
+ * Operacional, con su mismo permiso. Las guías de despacho de envases (GDE-… o el
+ * número de la guía SII) se buscan aparte y solo para quien ve la cuenta de envases.
  */
 class ExpedientePorCodigo extends ConsultaBase
 {
@@ -35,7 +37,7 @@ class ExpedientePorCodigo extends ConsultaBase
 
     public function descripcion(): string
     {
-        return 'Recepciones, folios, lotes y productores que coinciden con un código.';
+        return 'Recepciones, folios, lotes, productores y guías de envases que coinciden con un código.';
     }
 
     public function dominio(): string
@@ -43,9 +45,14 @@ class ExpedientePorCodigo extends ConsultaBase
         return 'consultas';
     }
 
+    public function filtros(): array
+    {
+        return ['codigo'];
+    }
+
     public function palabrasClave(): array
     {
-        return ['buscar', 'busca', 'expediente', 'codigo', 'donde', 'esta'];
+        return ['buscar', 'busca', 'expediente', 'codigo', 'donde', 'guia'];
     }
 
     public function puedeEjecutar(User $usuario): bool
@@ -72,6 +79,13 @@ class ExpedientePorCodigo extends ConsultaBase
                 ];
             }
         }
+        foreach ($this->guiasEnvases($usuario, $codigo) as $guia) {
+            $filas[] = [
+                'tipo' => 'Guía de envases',
+                'codigo' => $guia->numero.($guia->numero_guia_despacho ? ' · guía '.$guia->numero_guia_despacho : ''),
+                'detalle' => trim(($guia->cliente_nombre_snapshot ?? '').' · '.ucfirst((string) $guia->estado?->value), ' ·'),
+            ];
+        }
 
         if ($filas === []) {
             return ResultadoConsulta::sinDatos($this->titulo(), "No se encontró nada con el código {$codigo}.", $enlace);
@@ -90,5 +104,18 @@ class ExpedientePorCodigo extends ConsultaBase
             $filas,
             $enlace,
         );
+    }
+
+    /** @return iterable<GuiaDespachoEnvase> */
+    private function guiasEnvases(User $usuario, string $codigo): iterable
+    {
+        if (! $this->alcance->puedeConsultarCuentaEnvases($usuario) && ! $this->alcance->puedeGestionarDespachoEnvases($usuario)) {
+            return [];
+        }
+
+        return GuiaDespachoEnvase::query()
+            ->where(fn ($consulta) => $consulta->where('numero', mb_strtoupper($codigo))->orWhere('numero_guia_despacho', $codigo))
+            ->latest('created_at')->limit(10)
+            ->get(['id', 'numero', 'numero_guia_despacho', 'cliente_nombre_snapshot', 'estado']);
     }
 }
