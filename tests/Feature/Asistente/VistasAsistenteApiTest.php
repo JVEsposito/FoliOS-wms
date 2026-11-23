@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Asistente;
 
+use App\Models\ConfiguracionAsistente;
 use App\Services\Asistente\CatalogoConsultasAsistente;
 use App\Services\Asistente\OpcionConsulta;
 use App\Services\Asistente\ParametrosConsulta;
@@ -82,6 +83,14 @@ class VistasAsistenteApiTest extends TestCase
         $this->assertSame('Guías de despacho de envases · Confirmadas', $respuesta['sugerencias'][0]['titulo']);
         // Un tema sin vista elegida se sugiere con su vista por defecto.
         $this->assertSame('borrador', $respuesta['sugerencias'][1]['vista']);
+    }
+
+    public function test_recomendar_una_vista_sin_recomendacion_es_regla_de_negocio(): void
+    {
+        ConfiguracionAsistente::actual()->update(['modo' => ConfiguracionAsistente::MODO_MIXTO]);
+
+        $this->actingAs($this->administrador, 'sanctum')->postJson('/api/asistente/recomendaciones/guias-envases', ['vista' => 'borrador'])
+            ->assertUnprocessable()->assertJsonPath('codigo', 'regla_de_negocio')->assertJsonPath('message', 'Esa vista no admite recomendaciones.');
     }
 
     private function ejecutar(string $clave, array $datos = [])

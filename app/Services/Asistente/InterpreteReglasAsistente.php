@@ -95,7 +95,10 @@ class InterpreteReglasAsistente
         $motivo = null;
         if ($mejor !== null && $puntajes[$mejor] >= self::UMBRAL && ! $empate) {
             $tema = $permitidas[$mejor];
-            [$vista, $empatadas] = $this->elegirVista($usuario, $tema, $frases, $significativas);
+            [$vista, $empatadas] = $this->elegirVista($usuario, $tema, $parametros, $frases, $significativas);
+            if ($vista === null && $empatadas === []) {
+                return [...$base, 'consulta' => null, 'confianza' => $confianza, 'motivo' => null, 'alternativas' => []];
+            }
             if ($vista === null) {
                 return [...$base, 'consulta' => null, 'confianza' => $confianza,
                     'motivo' => "«{$tema->titulo()}» tiene varias vistas. ¿Cuál quieres?",
@@ -154,11 +157,17 @@ class InterpreteReglasAsistente
      * @param  list<string>  $significativas
      * @return array{0: ?VistaConsulta, 1: list<VistaConsulta>}
      */
-    private function elegirVista(User $usuario, ConsultaAsistente $tema, string $frases, array $significativas): array
+    private function elegirVista(User $usuario, ConsultaAsistente $tema, ParametrosConsulta $parametros, string $frases, array $significativas): array
     {
         $vistas = array_values(array_filter($tema->vistas(), fn (VistaConsulta $v): bool => $tema->puedeVer($usuario, $v)));
-        if (count($vistas) === 1) {
-            return [$vistas[0], []];
+        // Un cliente, CSG o especie reconocido deja solo las vistas que lo aplican, si alguna lo hace.
+        $reconocidos = array_keys(array_filter(['cliente' => $parametros->clienteId, 'csg' => $parametros->csgId, 'especie' => $parametros->especieId]));
+        $aplican = array_values(array_filter($vistas, fn (VistaConsulta $v): bool => array_diff($reconocidos, $v->filtros) === []));
+        if ($reconocidos !== [] && $aplican !== []) {
+            $vistas = $aplican;
+        }
+        if (count($vistas) <= 1) {
+            return [$vistas[0] ?? null, []];
         }
         // Cada palabra de la pregunta cuenta una vez por vista: «confirmadas» no suma por cada forma de «confirmar».
         $puntajes = array_map(function (VistaConsulta $vista) use ($frases, $significativas): int {
