@@ -2,6 +2,7 @@
 
 namespace App\Services\Asistente\Consultas;
 
+use App\Models\RangoTaraAsistente;
 use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ResultadoConsulta;
@@ -55,6 +56,20 @@ class RevisarTaras extends ConsultaBase
     public function palabrasClave(): array
     {
         return ['tara', 'taras', 'destare', 'destares', 'destara', 'revisa', 'revisar', 'revision', 'error', 'errores', 'raro', 'raros', 'sospechoso', 'esponja', 'esponjas', 'tote', 'totes', 'promedio'];
+    }
+
+    public function admiteRecomendacion(): bool
+    {
+        return true;
+    }
+
+    public function capacidades(): array
+    {
+        return RangoTaraAsistente::query()->where('activo', true)->orderBy('tipo_envase')->get()
+            ->flatMap(fn (RangoTaraAsistente $r): array => [
+                ['nombre' => "Neto mínimo por {$r->tipo_envase}".($r->especie ? " ({$r->especie})" : ''), 'valor' => (float) $r->minimo_kg],
+                ['nombre' => "Neto máximo por {$r->tipo_envase}".($r->especie ? " ({$r->especie})" : ''), 'valor' => (float) $r->maximo_kg],
+            ])->values()->all();
     }
 
     public function puedeEjecutar(User $usuario): bool

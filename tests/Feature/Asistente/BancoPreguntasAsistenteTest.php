@@ -14,7 +14,7 @@ use Tests\Concerns\PreparaAsistente;
 use Tests\TestCase;
 
 /**
- * Banco de 60 preguntas reales de la planta (tests/Fixtures/asistente/banco-preguntas.json).
+ * Banco de 60 preguntas reales de la planta (resources/asistente/banco-preguntas.json).
  * La regla es una sola: ninguna respuesta falsa. El intérprete ejecuta la consulta que el
  * banco espera hoy, o pregunta; nunca otra consulta, otro periodo ni un filtro callado.
  * Al sumar una consulta nueva, se actualiza responde_hoy en el banco.
@@ -23,7 +23,7 @@ class BancoPreguntasAsistenteTest extends TestCase
 {
     use PreparaAsistente, RefreshDatabase;
 
-    private const BANCO = __DIR__.'/../../Fixtures/asistente/banco-preguntas.json';
+    private const BANCO = __DIR__.'/../../../resources/asistente/banco-preguntas.json';
 
     protected function setUp(): void
     {

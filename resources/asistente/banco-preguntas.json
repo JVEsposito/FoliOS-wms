@@ -100,9 +100,10 @@
       "area": "Romana",
       "pregunta": "¿Cuántos bins y totes entraron hoy?",
       "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "consulta_objetivo": "envases-recibidos",
       "objetivo": "envases recibidos",
-      "responde_hoy": null
+      "responde_hoy": "envases-recibidos",
+      "clase_resuelta": "PR 4 tanda 1"
     },
     {
       "n": 11,
@@ -136,9 +137,10 @@
       "area": "Romana",
       "pregunta": "¿Qué camiones hay en patio ahora?",
       "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "consulta_objetivo": "camiones-en-planta",
       "objetivo": "camiones en planta (Portería y Romana)",
-      "responde_hoy": null
+      "responde_hoy": "camiones-en-planta",
+      "clase_resuelta": "PR 4 tanda 1"
     },
     {
       "n": 15,
@@ -191,9 +193,10 @@
       "area": "Envases",
       "pregunta": "¿Qué despachos de envases siguen en borrador?",
       "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "consulta_objetivo": "despachos-envases-pendientes",
       "objetivo": "despachos de envases",
-      "responde_hoy": null
+      "responde_hoy": "despachos-envases-pendientes",
+      "clase_resuelta": "PR 4 tanda 1"
     },
     {
       "n": 21,
@@ -290,9 +293,10 @@
       "area": "Proceso",
       "pregunta": "¿Cuántos folios se validaron hoy?",
       "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "consulta_objetivo": "validaciones-pt",
       "objetivo": "validaciones PT del día",
-      "responde_hoy": null
+      "responde_hoy": "validaciones-pt",
+      "clase_resuelta": "PR 4 tanda 2"
     },
     {
       "n": 32,
@@ -308,9 +312,10 @@
       "area": "Frío",
       "pregunta": "¿Qué túneles van atrasados ahora?",
       "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "consulta_objetivo": "prefrio-en-curso",
       "objetivo": "prefrío en curso",
-      "responde_hoy": null
+      "responde_hoy": "prefrio-en-curso",
+      "clase_resuelta": "PR 4 tanda 2"
     },
     {
       "n": 34,
@@ -406,18 +411,20 @@
       "area": "Frío",
       "pregunta": "¿Qué folios se anularon esta semana?",
       "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "consulta_objetivo": "anulaciones-validacion",
       "objetivo": "anulaciones",
-      "responde_hoy": null
+      "responde_hoy": "anulaciones-validacion",
+      "clase_resuelta": "PR 4 tanda 2"
     },
     {
       "n": 44,
       "area": "Despacho",
       "pregunta": "¿Cuántos pallets despachamos ayer?",
       "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "consulta_objetivo": "folios-despachados",
       "objetivo": "despachos PT por día",
-      "responde_hoy": null
+      "responde_hoy": "folios-despachados",
+      "clase_resuelta": "PR 4 tanda 1"
     },
     {
       "n": 45,

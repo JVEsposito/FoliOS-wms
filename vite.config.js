@@ -20,6 +20,8 @@ export default defineConfig({
                 'resources/js/office-demo.js',
                 'resources/css/office-cameras.css',
                 'resources/js/office-cameras.js',
+                'resources/css/office-assistant-settings.css',
+                'resources/js/office-assistant-settings.js',
                 'resources/css/office-discrepancies.css',
                 'resources/js/office-discrepancies.js',
                 'resources/css/office-staff-control.css',
