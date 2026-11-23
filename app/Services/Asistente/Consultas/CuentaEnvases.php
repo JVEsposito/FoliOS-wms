@@ -70,7 +70,8 @@ class CuentaEnvases extends ConsultaPorTema
     {
         return [
             new VistaConsulta('saldos', 'Saldos', 'Saldo de la cuenta por cliente y envase en la temporada activa, y quién debe a quién.',
-                ['saldo', 'saldos', 'debe', 'debemos', 'deben'], ['cliente']),
+                // «Saldos» solo es un saldo de pallets (saldos-pt): aquí va en frases con el envase.
+                ['debe', 'debemos', 'deben', 'saldo de envases', 'saldos de envases', 'saldo de bins', 'saldo de totes'], ['cliente']),
         ];
     }
 
