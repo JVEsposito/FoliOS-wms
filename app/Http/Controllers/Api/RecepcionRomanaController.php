@@ -45,6 +45,7 @@ use App\Services\Romana\ServicioRecepcionRomana;
 use App\Services\Romana\ServicioRepartoEnvases;
 use App\Services\Romana\ServicioTarasRomana;
 use App\Services\Temporadas\ServicioTemporadaActiva;
+use App\Services\ValidacionMp\ServicioValidacionMp;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -332,6 +333,16 @@ class RecepcionRomanaController extends Controller
         return $this->show($recepcion->refresh());
     }
 
+    /** Libera una Validación MP tomada que nadie confirma, para que la tome otro validador. */
+    public function liberarValidacionMp(Request $request, RecepcionRomana $recepcion, ServicioValidacionMp $servicio): JsonResponse
+    {
+        Gate::authorize('liberar-validacion-mp');
+        $datos = $request->validate(['operacion_id' => ['required', 'uuid'], 'motivo' => ['required', 'string', 'min:10', 'max:2000']]);
+        $servicio->liberar($recepcion, trim($datos['motivo']), $datos['operacion_id'], $request->user());
+
+        return $this->show($recepcion->refresh());
+    }
+
     public function destroy(Request $request, RecepcionRomana $recepcion, ServicioAnulacionRecepcionRomana $servicio): JsonResponse
     {
         Gate::authorize('eliminar-recepciones-romana');
@@ -575,6 +586,8 @@ class RecepcionRomanaController extends Controller
                 && ! $esSoloEnvases && ($esPesajeEnvases || $recepcion->estado === EstadoRecepcionRomana::Cerrado),
             'puede_corregir_fecha_real' => $conEventos && app(ServicioFechaRealRecepcionRomana::class)->disponible($recepcion, request()->user()),
             'puede_anular' => Gate::allows('anular-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,
+            'puede_liberar_validacion_mp' => Gate::allows('liberar-validacion-mp') && $recepcion->estado !== EstadoRecepcionRomana::Anulada
+                && $recepcion->estado_validacion_mp === EstadoValidacionMp::EnCurso,
             'puede_eliminar' => Gate::allows('eliminar-recepciones-romana') && $recepcion->estado !== EstadoRecepcionRomana::Anulada,
             'eliminada' => $recepcion->eliminada_at !== null,
             'eliminada_at' => $recepcion->eliminada_at?->toAtomString(),

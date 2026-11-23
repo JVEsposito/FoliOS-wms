@@ -50,7 +50,17 @@ La aplicación se presenta en orientación vertical.
 
 ## Toma exclusiva
 
-Una recepción puede estar tomada por un único validador MP.
+Una recepción puede estar tomada por un único validador MP. La ficha de la recepción en Romana muestra quién la tomó y a qué hora: «En curso · tomada por Ana Pérez a las 17:52».
+
+### Liberar una validación tomada
+
+Si un validador toma una recepción y no la confirma, la recepción queda sin segmentos ni lotes: solo él puede confirmarla. Un administrador puede liberarla desde la ficha en Romana con **Liberar Validación MP**, siempre con motivo (`POST /api/romana/recepciones/{recepcion}/liberar-validacion-mp`, con `operacion_id` y `motivo`, puerta `liberar-validacion-mp`).
+
+- Solo se libera una validación **en curso** de la temporada activa.
+- La recepción vuelve a los pendientes y la toma cualquier validador, también el mismo. La validación conserva su registro: quien la toma pasa a ser su validador.
+- El validador anterior ya no puede confirmarla: recibe «La validación fue liberada por administración. Vuelve a tomarla desde los pendientes.».
+- Queda el evento **Validación MP liberada (administración)** en la línea de tiempo de la recepción, con quien liberó, el motivo y a quién estaba tomada.
+- Es idempotente: el mismo `operacion_id` con el mismo motivo devuelve el resultado ya registrado; con otro motivo, conflicto.
 
 La toma debe:
 

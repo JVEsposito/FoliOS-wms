@@ -113,7 +113,7 @@ function label(value) {
         fecha_real_corregida: 'Fecha real corregida',
         mismos: 'Se va con los mismos', diferentes: 'Se va con más o menos', vacio: 'Se va vacío',
         en_bascula_ingreso: 'En báscula ingreso', en_pesaje_envases: 'Pesaje acumulativo', en_bascula_salida: 'Pendiente de destare', cerrado: 'Cerrado',
-        anulada: 'Anulada', recepcion_anulada: 'Recepción anulada', ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada', salida_envases_corregida: 'Salida de envases corregida', correccion_integral: 'Corrección administrativa de recepción validada', ajuste_cuenta_envases: 'Ajuste de cuenta de envases (administración)', numero_guia_corregido: 'N° de guía corregido (administración)',
+        anulada: 'Anulada', recepcion_anulada: 'Recepción anulada', ingreso_registrado: 'Ingreso registrado', ingreso_actualizado: 'Antecedentes de ingreso actualizados', correccion_administrativa: 'Corrección administrativa', ingreso_confirmado: 'Ingreso confirmado', pesaje_envases_registrado: 'Tanda de envases pesada', pesaje_envases_anulado: 'Tanda de pesaje anulada', recepcion_cerrada: 'Recepción cerrada', validacion_mp_liberada: 'Validación MP liberada (administración)', salida_envases_corregida: 'Salida de envases corregida', correccion_integral: 'Corrección administrativa de recepción validada', ajuste_cuenta_envases: 'Ajuste de cuenta de envases (administración)', numero_guia_corregido: 'N° de guía corregido (administración)',
         almacenaje: 'Almacenaje', proceso: 'Proceso', prefrio: 'Pre-frío', fruta_con_envases: 'Fruta con envases', fruta_pesaje_envases: 'Fruta con pesaje acumulativo', solo_envases: 'Solo envases', termo: 'Camión termo', plano: 'Camión plano', compra: 'Compra', arriendo: 'Arriendo', pendiente: 'Pendiente', en_curso: 'En curso', validada: 'Validada',
     };
     return labels[value] || String(value || '').replaceAll('_', ' ').replace(/^./, (character) => character.toUpperCase());
@@ -123,6 +123,14 @@ const receptionStates = {
     en_bascula_ingreso: 'en-curso', en_pesaje_envases: 'en-curso',
     en_bascula_salida: 'atencion', cerrado: 'listo', anulada: 'bloqueado',
 };
+/** «En curso · tomada por Ana Pérez a las 17:52»: sin ese nombre no se sabe a quién pedir que confirme. */
+function validationLabel(reception) {
+    const estado = label(reception.estado_validacion_mp);
+    if (reception.estado_validacion_mp !== 'en_curso' || !reception.validacion_tomada_por) return estado;
+    const hora = reception.validacion_tomada_at ? ` a las ${formatTime(reception.validacion_tomada_at)}` : '';
+    return `${estado} · tomada por ${reception.validacion_tomada_por.nombre}${hora}`;
+}
+
 function receptionStateLabel(reception, status) {
     if (status === 'anulada' && reception.eliminada) return 'Eliminada';
     if (reception.tipo_recepcion !== 'solo_envases') return label(status);
@@ -508,14 +516,14 @@ function renderDetail(reception) {
         ...(reception.destare_pendiente_validacion ? [fact('DESTARE', 'Espera la Validación MP completa en la PDA')] : []),
         ...(reception.modo_salida_envases ? [fact('SALIDA ENVASES', label(reception.modo_salida_envases)), fact('GUÍA DE SALIDA', reception.numero_guia_salida || 'Sin salida'), ...(reception.salida_productor?.codigo ? [fact('ENTREGADOS A', `CSG ${reception.salida_productor.codigo}${reception.salida_productor.nombre ? ` · ${reception.salida_productor.nombre}` : ''}`)] : []), fact('ENVASES RETIRADOS', (reception.salida_envases || []).filter((x) => x.cantidad > 0).map((x) => `${x.cantidad} ${label(x.tipo_envase)}`).join(' · ') || 'Ninguno')] : []),
         ...(plantBinsFact(reception) ? [fact('BINS DE PLANTA', plantBinsFact(reception))] : []),
-        fact('CAMIÓN', reception.patente_camion), fact('TIPO DE CAMIÓN', reception.tipo_camion ? label(reception.tipo_camion) : 'No informado'), fact('CARRO', reception.patente_carro || 'No informado'), fact('CONDUCTOR', reception.nombre_conductor), fact('RUT', reception.rut_conductor), fact('ENVASES DECLARADOS', envasesLabel(reception)), fact('VALIDACIÓN MP', label(reception.estado_validacion_mp)),
+        fact('CAMIÓN', reception.patente_camion), fact('TIPO DE CAMIÓN', reception.tipo_camion ? label(reception.tipo_camion) : 'No informado'), fact('CARRO', reception.patente_carro || 'No informado'), fact('CONDUCTOR', reception.nombre_conductor), fact('RUT', reception.rut_conductor), fact('ENVASES DECLARADOS', envasesLabel(reception)), fact('VALIDACIÓN MP', validationLabel(reception)),
         ...weighingFacts,
         ...outboundTareFacts,
         ...standardWeightFacts,
         ...(reception.observacion_conteo?.length ? [fact('CONTEO VALIDACIÓN MP', reception.observacion_conteo.join(' '))] : []),
         fact('VERSIÓN', String(reception.version)), fact('OBS. INGRESO', reception.observacion || 'Sin observaciones'), fact('OBS. CIERRE', reception.observacion_cierre || 'Sin observaciones'),
     ].join('');
-    elements.detailTimeline.innerHTML = (reception.eventos || []).map((event) => `<article class="timeline-item"><i></i><div><strong>${escapeHtml(label(event.tipo))}</strong><small>${escapeHtml(event.usuario?.nombre || 'Sistema')} · ${escapeHtml(event.estado_anterior ? `${receptionStateLabel(reception, event.estado_anterior)} → ${receptionStateLabel(reception, event.estado_nuevo)}` : receptionStateLabel(reception, event.estado_nuevo))}</small>${grossWeightAudit(event)}${tareAudit(event)}${realDateAudit(event, byId('realDateDialog')?.dataset.zone || 'America/Santiago')}${['ajuste_cuenta_envases', 'numero_guia_corregido'].includes(event.tipo) && event.datos?.resumen ? `<small>${escapeHtml(event.datos.resumen)}</small>` : ''}${event.datos?.motivo ? `<small>Motivo: ${escapeHtml(event.datos.motivo)}</small>` : ''}</div><time>${escapeHtml(formatDate(event.ocurrido_at))}</time></article>`).join('');
+    elements.detailTimeline.innerHTML = (reception.eventos || []).map((event) => `<article class="timeline-item"><i></i><div><strong>${escapeHtml(label(event.tipo))}</strong><small>${escapeHtml(event.usuario?.nombre || 'Sistema')} · ${escapeHtml(event.estado_anterior ? `${receptionStateLabel(reception, event.estado_anterior)} → ${receptionStateLabel(reception, event.estado_nuevo)}` : receptionStateLabel(reception, event.estado_nuevo))}</small>${grossWeightAudit(event)}${tareAudit(event)}${realDateAudit(event, byId('realDateDialog')?.dataset.zone || 'America/Santiago')}${['ajuste_cuenta_envases', 'numero_guia_corregido', 'validacion_mp_liberada'].includes(event.tipo) && event.datos?.resumen ? `<small>${escapeHtml(event.datos.resumen)}</small>` : ''}${event.datos?.motivo ? `<small>Motivo: ${escapeHtml(event.datos.motivo)}</small>` : ''}</div><time>${escapeHtml(formatDate(event.ocurrido_at))}</time></article>`).join('');
     elements.weightBalance.innerHTML = reception.tipo_recepcion === 'solo_envases'
         ? '<div class="net-row"><span>Recepción documental</span><strong>Sin registro de kilos</strong></div>'
         : `<div><span>Bruto${reception.pesaje_envases ? ' acumulado' : ''}</span><strong>${escapeHtml(formatWeight(reception.peso_bruto))}</strong></div><div><span>Tara ${reception.pesaje_envases ? 'acumulada' : 'camión'}</span><strong>${escapeHtml(formatWeight(reception.peso_tara))}</strong></div>${reception.modo_salida_envases && reception.peso_tara_envases !== 0 ? `<div><span>Diferencia tara envases</span><strong>${escapeHtml(formatWeight(reception.peso_tara_envases))}</strong></div>` : ''}${reception.pesaje_envases ? (weighingTypes(reception.pesaje_envases).length > 1
@@ -529,6 +537,7 @@ function renderDetail(reception) {
         && reception.correccion_administrativa_disponible
         && !reception.puede_editar;
     elements.annulReception.classList.toggle('is-hidden', !reception.puede_anular || Boolean(reception.puede_eliminar));
+    byId('releaseValidationButton').classList.toggle('is-hidden', reception.puede_liberar_validacion_mp !== true);
     elements.deleteReception.classList.toggle('is-hidden', !reception.puede_eliminar);
     elements.correctGrossWeight.classList.toggle('is-hidden', state.identity?.rol !== 'administrador' || !reception.puede_corregir_peso_bruto);
     elements.correctTare.classList.toggle('is-hidden', state.identity?.rol !== 'administrador' || !reception.puede_corregir_tara);
@@ -970,6 +979,33 @@ function openReceptionRemoval(reception, deleting = false) {
     elements.annulDialog.showModal();
 }
 elements.annulReception.addEventListener('click', () => openReceptionRemoval(state.selected));
+byId('releaseValidationButton').addEventListener('click', () => {
+    const reception = state.selected;
+    if (!reception) return;
+    state.release = { id: reception.id, operacion_id: operationUuid(), submitting: false };
+    const form = byId('releaseValidationForm');
+    form.reset(); byId('releaseValidationError').textContent = '';
+    byId('releaseValidationSummary').textContent = `${reception.numero_recepcion} · ${validationLabel(reception)}`;
+    form.querySelector('[type="submit"]').disabled = false;
+    byId('releaseValidationDialog').showModal();
+});
+byId('releaseValidationCancel').addEventListener('click', () => byId('releaseValidationDialog').close());
+byId('releaseValidationForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const attempt = state.release;
+    if (!attempt || attempt.submitting) return;
+    const form = byId('releaseValidationForm');
+    const submit = form.querySelector('[type="submit"]');
+    attempt.submitting = true; submit.disabled = true; byId('releaseValidationError').textContent = '';
+    try {
+        // El mismo operacion_id en un reintento devuelve el resultado ya registrado.
+        const payload = await api(`/api/romana/recepciones/${attempt.id}/liberar-validacion-mp`, { method: 'POST', body: JSON.stringify({ operacion_id: attempt.operacion_id, motivo: form.elements.motivo.value.trim() }) });
+        byId('releaseValidationDialog').close();
+        renderDetail(payload.data);
+        await loadReceptions({ silent: true }); toast('Validación MP liberada. La recepción vuelve a los pendientes de los validadores.');
+    } catch (error) { byId('releaseValidationError').textContent = error.message; }
+    finally { attempt.submitting = false; if (state.release === attempt) submit.disabled = false; }
+});
 elements.deleteReception.addEventListener('click', () => openReceptionRemoval(state.selected, true));
 byId('annulReceptionCancel').addEventListener('click', () => elements.annulDialog.close());
 elements.annulForm.addEventListener('submit', async (event) => {

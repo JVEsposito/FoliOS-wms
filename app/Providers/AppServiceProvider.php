@@ -520,6 +520,9 @@ class AppServiceProvider extends ServiceProvider
             && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarRomana($usuario));
         Gate::define('anular-recepciones-romana', fn (User $usuario): bool => $usuario->activo
             && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarRomana($usuario));
+        // Liberar una Validación MP tomada que nadie confirma, para que la tome otro validador.
+        Gate::define('liberar-validacion-mp', fn (User $usuario): bool => $usuario->activo
+            && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarRomana($usuario));
         Gate::define('eliminar-recepciones-romana', fn (User $usuario): bool => $usuario->activo
             && $usuario->rol === RolUsuario::Administrador && $alcance->puedeConsultarRomana($usuario));
         Gate::define('corregir-peso-bruto-romana', fn (User $usuario): bool => $usuario->activo
