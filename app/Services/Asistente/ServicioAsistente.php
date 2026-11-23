@@ -7,6 +7,7 @@ use App\Models\ConfiguracionAsistente;
 use App\Models\PreguntaAsistente;
 use App\Models\User;
 use App\Services\Asistente\Consultas\ConsultaAsistente;
+use App\Services\Asistente\Consultas\VistaConsulta;
 use App\Services\Asistente\Haiku\ClienteAnthropic;
 use App\Services\Asistente\Haiku\FallaHaiku;
 use App\Services\Asistente\Haiku\InterpreteHaiku;
@@ -79,16 +80,14 @@ class ServicioAsistente
                         default => self::SIN_CONSULTA,
                     }, self::MODO_HAIKU);
                 case InterpreteHaiku::PARCIAL:
-                    $opciones = collect([...$haiku['opciones'], ...$interpretacion['alternativas']])
-                        ->unique(fn (ConsultaAsistente $c): string => $c->clave())->take(3)->values()->all();
+                    $opciones = array_slice($this->unicas([...$haiku['opciones'], ...$interpretacion['alternativas']]), 0, 3);
 
                     return $this->sugerir($usuario, $texto, $parametros, $opciones, sprintf(
                         'Lo más cercano que tengo es «%s», pero no cubre %s. ¿Te sirve igual o es alguna de estas?',
                         $haiku['consulta']->titulo(), $this->enumerar($haiku['sin_cubrir']),
                     ), self::MODO_HAIKU);
                 case InterpreteHaiku::INVALIDA:
-                    $opciones = collect([...$haiku['opciones'], ...$interpretacion['alternativas']])
-                        ->unique(fn (ConsultaAsistente $c): string => $c->clave())->take(3)->values()->all();
+                    $opciones = array_slice($this->unicas([...$haiku['opciones'], ...$interpretacion['alternativas']]), 0, 3);
 
                     return $this->sugerir($usuario, $texto, $parametros, $opciones,
                         "Entendí la pregunta, pero no pude comprobar sus datos: {$haiku['motivo']}. ¿Es alguna de estas?", self::MODO_HAIKU);
@@ -112,11 +111,8 @@ class ServicioAsistente
     /** @return array{tipo: string, modo: string, consulta: string, parametros: array, entendido: array, resultado: array, recomendable: bool} */
     public function ejecutar(User $usuario, string $clave, ParametrosConsulta $parametros): array
     {
-        $consulta = $this->catalogo->buscar($clave);
-        if ($consulta === null || ! $consulta->puedeEjecutar($usuario)) {
-            throw new OperacionNoAutorizada('No tienes acceso a esa consulta del asistente.');
-        }
-
+        [$consulta, $vista] = $this->consultaYVista($usuario, $clave, $parametros);
+        $parametros = $parametros->conVista($vista->clave);
         $resultado = $consulta->ejecutar($usuario, $parametros);
 
         return [
@@ -126,11 +122,34 @@ class ServicioAsistente
             'parametros' => $parametros->toArray(),
             'entendido' => $this->entendido->construir($consulta, $parametros),
             'resultado' => $resultado->toArray(),
-            'recomendable' => $this->recomendable($consulta, $resultado),
+            'recomendable' => $this->recomendable($vista, $resultado),
         ];
     }
 
-    /** @return list<array{clave: string, titulo: string, descripcion: string, dominio: string}> */
+    /**
+     * La consulta y la vista pedidas, si el usuario puede verlas. Sin vista rige la por
+     * defecto; una vista que el tema no tiene es una regla de negocio, nunca la por defecto.
+     *
+     * @return array{0: ConsultaAsistente, 1: VistaConsulta}
+     */
+    private function consultaYVista(User $usuario, string $clave, ParametrosConsulta $parametros): array
+    {
+        $consulta = $this->catalogo->buscar($clave);
+        if ($consulta === null || ! $consulta->puedeEjecutar($usuario)) {
+            throw new OperacionNoAutorizada('No tienes acceso a esa consulta del asistente.');
+        }
+        $vista = $consulta->vista($parametros->vista);
+        if ($vista === null) {
+            throw new DomainException('Esa consulta no tiene la vista pedida.');
+        }
+        if (! $consulta->puedeVer($usuario, $vista)) {
+            throw new OperacionNoAutorizada('No tienes acceso a esa vista del asistente.');
+        }
+
+        return [$consulta, $vista];
+    }
+
+    /** @return list<array{clave: string, titulo: string, descripcion: string, dominio: string, vistas: list<array{clave: string, titulo: string, descripcion: string}>}> */
     public function catalogo(User $usuario): array
     {
         return array_map(fn (ConsultaAsistente $consulta): array => [
@@ -138,11 +157,17 @@ class ServicioAsistente
             'titulo' => $consulta->titulo(),
             'descripcion' => $consulta->descripcion(),
             'dominio' => $consulta->dominio(),
+            'vistas' => array_values(array_map(
+                fn (VistaConsulta $vista): array => ['clave' => $vista->clave, 'titulo' => $vista->titulo, 'descripcion' => $vista->descripcion],
+                array_filter($consulta->vistas(), fn (VistaConsulta $vista): bool => $consulta->puedeVer($usuario, $vista)),
+            )),
         ], $this->catalogo->disponiblesPara($usuario));
     }
 
     private function responder(User $usuario, string $texto, ConsultaAsistente $consulta, ParametrosConsulta $parametros, string $modo, float $confianza): array
     {
+        [$consulta, $vista] = $this->consultaYVista($usuario, $consulta->clave(), $parametros);
+        $parametros = $parametros->conVista($vista->clave);
         $resultado = $consulta->ejecutar($usuario, $parametros);
         $this->registrar($usuario, $texto, $consulta->clave(), $parametros, $resultado->estado, $confianza, $modo === self::MODO_HAIKU ? 'haiku' : 'reglas');
 
@@ -153,16 +178,16 @@ class ServicioAsistente
             'parametros' => $parametros->toArray(),
             'entendido' => $this->entendido->construir($consulta, $parametros),
             'resultado' => $resultado->toArray(),
-            'recomendable' => $this->recomendable($consulta, $resultado),
+            'recomendable' => $this->recomendable($vista, $resultado),
             'sugerencias' => [],
             'busqueda' => '',
         ];
     }
 
     /** Se ofrece «Pedir recomendación» solo en modo mixto, con clave y sobre una respuesta con datos. */
-    private function recomendable(ConsultaAsistente $consulta, ResultadoConsulta $resultado): bool
+    private function recomendable(VistaConsulta $vista, ResultadoConsulta $resultado): bool
     {
-        return $consulta->admiteRecomendacion()
+        return $vista->admiteRecomendacion
             && $resultado->estado === ResultadoConsulta::RESPONDIDA
             && $this->anthropic->disponible()
             && ConfiguracionAsistente::actual()->modo === ConfiguracionAsistente::MODO_MIXTO;
@@ -176,18 +201,14 @@ class ServicioAsistente
      */
     public function recomendar(User $usuario, string $clave, ParametrosConsulta $parametros): array
     {
-        $consulta = $this->catalogo->buscar($clave);
-        if ($consulta === null || ! $consulta->puedeEjecutar($usuario)) {
-            throw new OperacionNoAutorizada('No tienes acceso a esa consulta del asistente.');
-        }
+        [$consulta, $vista] = $this->consultaYVista($usuario, $clave, $parametros);
         if (ConfiguracionAsistente::actual()->modo !== ConfiguracionAsistente::MODO_MIXTO) {
             throw new DomainException('Las recomendaciones solo están disponibles con el asistente en modo mixto.');
         }
 
-        return $this->recomendador->recomendar($usuario, $consulta, $consulta->ejecutar($usuario, $parametros));
+        return $this->recomendador->recomendar($usuario, $consulta, $consulta->ejecutar($usuario, $parametros->conVista($vista->clave)));
     }
 
-    /** @param  list<ConsultaAsistente>  $opciones */
     /**
      * «A», «A ni B» o «A, B ni C»: va después de «no cubre».
      *
@@ -200,8 +221,15 @@ class ServicioAsistente
         return $partes === [] ? (string) $ultima : implode(', ', $partes).' ni '.$ultima;
     }
 
+    /**
+     * Opciones para elegir: temas o pares tema y vista. Cada botón lleva su vista en los
+     * parámetros, así que ejecuta exactamente lo que ofrece.
+     *
+     * @param  list<ConsultaAsistente|OpcionConsulta>  $opciones
+     */
     private function sugerir(User $usuario, string $texto, ParametrosConsulta $parametros, array $opciones, string $mensaje, string $modo, ?string $aviso = null): array
     {
+        $opciones = $this->unicas($opciones);
         $this->registrar($usuario, $texto, null, $parametros, 'sugerencias', 0.0, $modo === self::MODO_HAIKU ? 'haiku' : 'reglas');
 
         return array_filter([
@@ -211,14 +239,25 @@ class ServicioAsistente
             'aviso' => $aviso,
             'consulta' => null,
             'resultado' => null,
-            'sugerencias' => array_map(fn (ConsultaAsistente $opcion): array => [
-                'clave' => $opcion->clave(),
+            'sugerencias' => array_map(fn (OpcionConsulta $opcion): array => [
+                'clave' => $opcion->consulta->clave(),
+                'vista' => $opcion->vista?->clave,
                 'titulo' => $opcion->titulo(),
                 'descripcion' => $opcion->descripcion(),
-                'parametros' => $parametros->toArray(),
+                'parametros' => $parametros->conVista($opcion->vista?->clave)->toArray(),
             ], $opciones),
             'busqueda' => trim($texto),
         ], fn ($valor, string $clave): bool => $clave !== 'aviso' || $valor !== null, ARRAY_FILTER_USE_BOTH);
+    }
+
+    /**
+     * @param  list<ConsultaAsistente|OpcionConsulta>  $opciones
+     * @return list<OpcionConsulta>
+     */
+    private function unicas(array $opciones): array
+    {
+        return collect($opciones)->map(fn (ConsultaAsistente|OpcionConsulta $o): OpcionConsulta => OpcionConsulta::de($o))
+            ->unique(fn (OpcionConsulta $o): string => $o->clave())->values()->all();
     }
 
     private function registrar(User $usuario, string $texto, ?string $consulta, ParametrosConsulta $parametros, string $estado, float $confianza, string $interprete = 'reglas'): void

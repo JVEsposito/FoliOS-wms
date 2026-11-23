@@ -72,6 +72,7 @@ class AsistenteController extends Controller
             'turno' => ['nullable', Rule::in(['A', 'B'])],
             'periodo' => ['nullable', 'string', 'max:80'],
             'agrupar' => ['nullable', Rule::in(['dia'])],
+            'vista' => ['nullable', 'string', 'max:40', 'regex:/^[a-z0-9\-]+$/'],
         ]);
 
         return ParametrosConsulta::desdeArreglo($datos);
