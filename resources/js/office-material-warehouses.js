@@ -1,4 +1,5 @@
 import { createUuid as uuid } from './shared/uuid.js';
+import { officeCode, officeStatus } from './shared/folios-display.js';
 const tokenKey = 'estiba_wms_office_token';
 const identityKey = 'estiba_wms_office_identity';
 const state = {
@@ -9,6 +10,7 @@ const state = {
     tab: 'bodega',
 };
 const $ = (id) => document.getElementById(id);
+let loadVersion = 0;
 class ApiError extends Error {
     constructor(message, status = 0) {
         super(message);
@@ -23,9 +25,8 @@ const escapeHtml = (value) => String(value ?? '')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
-const qty = (value) => new Intl.NumberFormat('es-CL', {
-    maximumFractionDigits: 3,
-}).format(Number(value || 0));
+const numberFormat = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 3 });
+const qty = (value) => numberFormat.format(Number(value || 0));
 const dateTime = (value) => value
     ? new Intl.DateTimeFormat('es-CL', {
         dateStyle: 'short',
@@ -127,18 +128,36 @@ function showApp() {
 }
 
 async function load() {
+    const version = ++loadVersion;
     const puedeConsultarKardex = can('puede_consultar_kardex_materiales');
-    const [data, movements] = await Promise.all([
-        api('/api/materiales/almacenes'),
-        puedeConsultarKardex
-            ? api('/api/materiales/almacenes/movimientos?limite=100')
-            : Promise.resolve({ data: [] }),
-    ]);
-    state.data = data;
-    state.kardex = movements.data || [];
-    renderFilterOptions();
-    render();
-    prepareIncidentAdjustment();
+    $('custodyInventory').setAttribute('aria-busy', 'true');
+    $('custodyReload').disabled = true;
+    $('custodyFilterError').textContent = '';
+    $('custodyResultsSummary').textContent = 'Consultando inventario…';
+
+    try {
+        const [data, movements] = await Promise.all([
+            api('/api/materiales/almacenes'),
+            puedeConsultarKardex
+                ? api('/api/materiales/almacenes/movimientos?limite=100')
+                : Promise.resolve({ data: [] }),
+        ]);
+        if (version !== loadVersion) return;
+        state.data = data;
+        state.kardex = movements.data || [];
+        renderFilterOptions();
+        render();
+        prepareIncidentAdjustment();
+    } catch (error) {
+        if (version !== loadVersion || handleAuthenticationError(error)) return;
+        $('custodyResultsSummary').textContent = state.data ? 'Última consulta disponible' : 'Inventario sin consultar';
+        $('custodyFilterError').textContent = error.message;
+    } finally {
+        if (version === loadVersion) {
+            $('custodyInventory').setAttribute('aria-busy', 'false');
+            $('custodyReload').disabled = false;
+        }
+    }
 }
 
 function render() {
@@ -151,9 +170,9 @@ function render() {
         !puedeGestionar && !puedeAjustar,
     );
     $('custodyKardexPanel').classList.toggle('is-hidden', !puedeConsultarKardex);
-    $('custodyFolioCount').textContent = state.data.resumen.folios;
-    $('custodyWarehouseCount').textContent = state.data.resumen.almacenes;
-    $('custodyItemCount').textContent = state.data.resumen.items;
+    $('custodyFolioCount').textContent = qty(state.data.resumen.folios);
+    $('custodyWarehouseCount').textContent = qty(state.data.resumen.almacenes);
+    $('custodyItemCount').textContent = qty(state.data.resumen.items);
     configureActions(puedeGestionar, puedeAjustar);
     renderTable();
     if (puedeGestionar || puedeAjustar) renderSelectors();
@@ -323,9 +342,10 @@ function renderFilterVisibility() {
 }
 
 function renderTable() {
+    if (!state.data) return;
     const allRows = state.data.perspectivas[state.tab] || [];
     const rows = visibleRows();
-    $('custodyResultsSummary').textContent = `Mostrando ${rows.length} de ${allRows.length} registros`;
+    $('custodyResultsSummary').textContent = `${qty(rows.length)} de ${qty(allRows.length)} registros`;
     $('custodyExport').disabled = rows.length === 0;
 
     if (state.tab === 'total_empresa') {
@@ -337,7 +357,7 @@ function renderTable() {
             <td>${qty(row.en_centros_costo)} ${escapeHtml(row.unidad_medida)}</td>
             <td><strong>${qty(row.total_empresa)} ${escapeHtml(row.unidad_medida)}</strong></td>
             <td>${row.folios}</td>
-        </tr>`).join('') || '<tr><td colspan="6">Sin resultados para los filtros seleccionados.</td></tr>';
+        </tr>`).join('') || '<tr><td colspan="6"><span class="folios-bandeja__estado">Sin resultados para los filtros seleccionados.</span></td></tr>';
         return;
     }
 
@@ -347,12 +367,14 @@ function renderTable() {
         <td><strong>${escapeHtml(row.almacen.nombre)}</strong><br>${escapeHtml(row.almacen.centro_costo || row.almacen.codigo || '—')}</td>
         <td>${escapeHtml(row.cliente.codigo)} · ${escapeHtml(row.cliente.nombre)}</td>
         <td><strong>${escapeHtml(row.item.codigo)}</strong><br>${escapeHtml(row.item.nombre)}</td>
-        <td>${escapeHtml(row.numero_folio)}${row.vencimiento?.etiqueta ? `<br><strong>${escapeHtml(row.vencimiento.etiqueta)}</strong>` : ''}<br>${escapeHtml(row.lote || 'Sin lote')}</td>
+        <td><span class="folios-code">${officeCode(row.numero_folio, escapeHtml)}</span><br>${escapeHtml(row.lote || 'Sin lote')}
+            ${row.vencimiento?.etiqueta ? `<br>${officeStatus(row.vencimiento.etiqueta, row.vencimiento.estado === 'vencido' ? 'bloqueado' : 'atencion', escapeHtml)}` : ''}
+        </td>
         <td>${qty(row.cantidad_actual)} ${escapeHtml(row.unidad_medida)}</td>
         <td>${qty(row.cantidad_reservada)}</td>
         <td><strong>${qty(row.cantidad_disponible)}</strong></td>
-        ${virtual ? '' : `<td>${escapeHtml(row.camara?.codigo || 'Pendiente')}<br>${escapeHtml(row.posicion?.etiqueta || 'Sin posición')}</td>`}
-    </tr>`).join('') || `<tr><td colspan="${virtual ? 7 : 8}">Sin resultados para los filtros seleccionados.</td></tr>`;
+        ${virtual ? '' : `<td>${row.camara?.codigo ? escapeHtml(row.camara.codigo) : officeStatus('Pendiente', 'pendiente', escapeHtml)}<br>${escapeHtml(row.posicion?.etiqueta || 'Sin posición')}</td>`}
+    </tr>`).join('') || `<tr><td colspan="${virtual ? 7 : 8}"><span class="folios-bandeja__estado">Sin resultados para los filtros seleccionados.</span></td></tr>`;
 }
 
 function exportParameters() {
@@ -609,7 +631,7 @@ function renderKardex() {
 document.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => {
     state.tab = button.dataset.tab;
     document.querySelectorAll('[data-tab]').forEach((candidate) => {
-        candidate.classList.toggle('is-active', candidate === button);
+        candidate.setAttribute('aria-pressed', String(candidate === button));
     });
     renderFilterVisibility();
     renderTable();
@@ -622,12 +644,7 @@ $('custodyFiltersReset').addEventListener('click', () => {
 });
 $('custodyExport').addEventListener('click', exportInventory);
 $('custodyHistoryExport').addEventListener('click', exportHistory);
-$('custodyReload').addEventListener('click', () => {
-    load().catch((error) => {
-        if (handleAuthenticationError(error)) return;
-        $('custodyFilterError').textContent = error.message;
-    });
-});
+$('custodyReload').addEventListener('click', () => void load());
 $('custodyMovementForm').elements.tipo.addEventListener('change', renderSelectors);
 $('custodyMovementForm').elements.almacen_origen_id.addEventListener('change', () => {
     renderFoliosForOrigin();
@@ -676,12 +693,7 @@ async function boot() {
     }
 
     showApp();
-    try {
-        await load();
-    } catch (error) {
-        if (handleAuthenticationError(error)) return;
-        $('custodyFilterError').textContent = error.message;
-    }
+    await load();
 }
 
 void boot();
