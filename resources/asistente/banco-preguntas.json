@@ -223,10 +223,12 @@
       "n": 23,
       "area": "Envases",
       "pregunta": "¿Cuántos bins arrendados quedan en existencia?",
-      "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "existencia-envases",
       "objetivo": "existencia de envases por propiedad",
-      "responde_hoy": null
+      "responde_hoy": "existencia-envases",
+      "vista": "por-propiedad",
+      "clase_resuelta": "temas y vistas"
     },
     {
       "n": 24,

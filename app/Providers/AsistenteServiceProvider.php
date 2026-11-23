@@ -10,6 +10,7 @@ use App\Services\Asistente\Consultas\ConsumosOt;
 use App\Services\Asistente\Consultas\CuentaEnvases;
 use App\Services\Asistente\Consultas\EnvasesRecibidos;
 use App\Services\Asistente\Consultas\EstadoCargas;
+use App\Services\Asistente\Consultas\ExistenciaEnvases;
 use App\Services\Asistente\Consultas\ExpedientePorCodigo;
 use App\Services\Asistente\Consultas\FoliosDespachados;
 use App\Services\Asistente\Consultas\FormatosPt;
@@ -50,6 +51,7 @@ class AsistenteServiceProvider extends ServiceProvider
         EnvasesRecibidos::class,
         GuiasEnvases::class,
         CuentaEnvases::class,
+        ExistenciaEnvases::class,
         EstadoCargas::class,
         FoliosDespachados::class,
         PrefrioEnCurso::class,
