@@ -298,6 +298,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/aplicar', [ConciliacionSalidaEnvaseController::class, 'aplicar']);
     });
     Route::post('/romana/recepciones/{recepcion}/anular', [RecepcionRomanaController::class, 'anular'])->middleware('can:anular-recepciones-romana');
+    Route::post('/romana/recepciones/{recepcion}/liberar-validacion-mp', [RecepcionRomanaController::class, 'liberarValidacionMp'])->middleware('can:liberar-validacion-mp');
     Route::post('/envases/cuenta-corriente/movimientos/{movimientoEnvase}/corregir-saldo-historico', [CuentaCorrienteEnvaseController::class, 'corregirSaldoHistorico'])->middleware('can:ajustar-cuenta-envases');
     Route::post('/envases/cuenta-corriente/movimientos/{movimientoEnvase}/revertir-ajuste', [CuentaCorrienteEnvaseController::class, 'revertirAjuste'])
         ->middleware('can:ajustar-cuenta-envases');

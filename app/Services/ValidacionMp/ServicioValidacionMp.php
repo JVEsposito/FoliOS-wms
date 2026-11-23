@@ -89,6 +89,15 @@ class ServicioValidacionMp
             }
 
             $existente = ValidacionMp::query()->where('recepcion_romana_id', $recepcion->id)->first();
+            // Liberada por administración: la validación sigue en curso, pero la recepción volvió a pendientes
+            // y la toma quien llegue primero, también el mismo validador.
+            if ($existente && $existente->estado === EstadoValidacionMp::EnCurso && $recepcion->estado_validacion_mp === EstadoValidacionMp::Pendiente) {
+                $ahora = now();
+                $existente->update(['validador_user_id' => $usuario->id, 'dispositivo_id' => $dispositivoId, 'tomada_at' => $ahora, 'operacion_toma_id' => $operacionId]);
+                $recepcion->update(['estado_validacion_mp' => EstadoValidacionMp::EnCurso, 'validacion_tomada_por_user_id' => $usuario->id, 'validacion_tomada_at' => $ahora]);
+
+                return $this->cargar($existente);
+            }
             if ($existente) {
                 if ($existente->validador_user_id !== $usuario->id) {
                     throw new ConflictoOperacion('La recepción ya fue tomada por otro validador MP.');
@@ -120,6 +129,46 @@ class ServicioValidacionMp
         }, attempts: 3);
     }
 
+    /**
+     * Libera una Validación MP tomada que nadie confirma: la recepción vuelve a pendientes
+     * y la toma cualquier validador. La validación conserva su registro; el validador
+     * anterior ya no puede confirmarla. Queda un evento en la recepción con el motivo.
+     */
+    public function liberar(RecepcionRomana $recepcion, string $motivo, string $operacionId, User $actor): RecepcionRomana
+    {
+        return DB::transaction(function () use ($recepcion, $motivo, $operacionId, $actor): RecepcionRomana {
+            $recepcion = RecepcionRomana::query()->with('validacionTomadaPor')->lockForUpdate()->findOrFail($recepcion->id);
+            $hash = hash('sha256', json_encode(['recepcion' => $recepcion->id, 'motivo' => $motivo], JSON_THROW_ON_ERROR));
+            $previo = EventoRecepcionRomana::query()->where('operacion_id', $operacionId)->first();
+            if ($previo !== null) {
+                if ($previo->recepcion_romana_id !== $recepcion->id || $previo->payload_hash !== $hash) {
+                    throw new ConflictoOperacion('El identificador de operación ya se usó con otros datos.');
+                }
+
+                return $recepcion;
+            }
+            if ($recepcion->estado === EstadoRecepcionRomana::Anulada) {
+                throw new ConflictoOperacion('La recepción está anulada.');
+            }
+            if ($recepcion->estado_validacion_mp !== EstadoValidacionMp::EnCurso) {
+                throw new ConflictoOperacion('Solo se libera una Validación MP en curso.');
+            }
+            app(GuardiaTemporadaActiva::class)->asegurar($recepcion);
+            $anterior = $recepcion->validacionTomadaPor;
+            $tomadaAt = $recepcion->validacion_tomada_at;
+            $recepcion->update(['estado_validacion_mp' => EstadoValidacionMp::Pendiente, 'validacion_tomada_por_user_id' => null, 'validacion_tomada_at' => null]);
+            EventoRecepcionRomana::create([
+                'operacion_id' => $operacionId, 'payload_hash' => $hash, 'recepcion_romana_id' => $recepcion->id,
+                'tipo' => TipoEventoRomana::ValidacionMpLiberada, 'estado_anterior' => $recepcion->estado, 'estado_nuevo' => $recepcion->estado,
+                'user_id' => $actor->id, 'ocurrido_at' => now(),
+                'datos' => ['motivo' => $motivo, 'validador_anterior_id' => $anterior?->id, 'tomada_at' => $tomadaAt?->toAtomString(),
+                    'resumen' => 'Estaba tomada por '.($anterior?->name ?? 'un validador').'.'],
+            ]);
+
+            return $recepcion;
+        }, attempts: 3);
+    }
+
     /** @param array<string, mixed> $datos */
     public function confirmar(ValidacionMp $validacion, array $datos, User $usuario): ValidacionMp
     {
@@ -137,6 +186,9 @@ class ServicioValidacionMp
                     return $this->cargar($validacion);
                 }
                 throw new ConflictoOperacion('La recepción ya fue validada y sus cantidades son inmutables.');
+            }
+            if ($recepcion->estado_validacion_mp !== EstadoValidacionMp::EnCurso || $recepcion->validacion_tomada_por_user_id !== $usuario->id) {
+                throw new ConflictoOperacion('La validación fue liberada por administración. Vuelve a tomarla desde los pendientes.');
             }
             if ($recepcion->tipo_recepcion === TipoRecepcionRomana::FrutaPesajeEnvases
                 && $recepcion->estado !== EstadoRecepcionRomana::Cerrado) {
