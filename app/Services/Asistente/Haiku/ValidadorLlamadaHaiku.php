@@ -24,15 +24,17 @@ class ValidadorLlamadaHaiku
         private readonly PeriodoOperativo $periodo,
         private readonly TemporadasAsistente $temporadasAsistente,
         private readonly ServicioTemporadaActiva $temporadas,
+        private readonly CoberturaConsultaHaiku $cobertura,
     ) {}
 
     /**
      * @param  array<string, mixed>  $entrada  parámetros de la herramienta consultar
      * @param  list<ConsultaAsistente>  $permitidas
      * @param  array<string, array{tipo: string, id: string, etiqueta: string}>  $fichas
+     * @param  array<string, mixed>  $entidades  periodo y filtros que FoliOS reconoció en la pregunta
      * @return array{consulta: ConsultaAsistente, parametros: ParametrosConsulta}|string la llamada validada o el motivo del rechazo
      */
-    public function validar(array $entrada, array $permitidas, array $fichas): array|string
+    public function validar(array $entrada, array $permitidas, array $fichas, string $pregunta, array $entidades): array|string
     {
         $consulta = null;
         foreach ($permitidas as $permitida) {
@@ -58,21 +60,23 @@ class ValidadorLlamadaHaiku
             return $periodo;
         }
 
-        return [
-            'consulta' => $consulta,
-            'parametros' => new ParametrosConsulta(
-                desde: $periodo['desde'],
-                hasta: $periodo['hasta'],
-                clienteId: $cliente,
-                csgId: $csg,
-                especieId: $especie,
-                temporadaAnterior: $periodo['temporada_anterior'],
-                turno: $periodo['turno'],
-                etiquetaPeriodo: $periodo['etiqueta'],
-                periodoExplicito: $periodo['explicito'],
-                agrupar: ($entrada['agrupar_por'] ?? 'nada') === 'jornada' ? 'dia' : null,
-            ),
-        ];
+        $parametros = new ParametrosConsulta(
+            desde: $periodo['desde'],
+            hasta: $periodo['hasta'],
+            clienteId: $cliente,
+            csgId: $csg,
+            especieId: $especie,
+            temporadaAnterior: $periodo['temporada_anterior'],
+            turno: $periodo['turno'],
+            etiquetaPeriodo: $periodo['etiqueta'],
+            periodoExplicito: $periodo['explicito'],
+            agrupar: ($entrada['agrupar_por'] ?? 'nada') === 'jornada' ? 'dia' : null,
+        );
+        if ($motivo = $this->cobertura->impedimento($consulta, $pregunta, $parametros, $entidades)) {
+            return $motivo;
+        }
+
+        return ['consulta' => $consulta, 'parametros' => $parametros];
     }
 
     /** @return string|null|false el id de la ficha, null si viene vacía o false si no existe */

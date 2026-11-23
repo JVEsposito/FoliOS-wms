@@ -137,7 +137,11 @@ Todos los parámetros son obligatorios, con valores neutros (`""`, `todas`, `nin
 
 **Configuración.** `ANTHROPIC_API_KEY` va solo en el `.env` del servidor. El modo se cambia con `PUT /api/asistente/configuracion` (`modo`: `sin_ia` o `mixto`); `mixto` se rechaza si falta la clave. `GET /api/asistente/configuracion` informa en `ia` si hay clave, el modelo, el consumo del mes y los topes.
 
-**Evaluación con Haiku real.** `php artisan asistente:evaluar --modo=haiku` corre el banco como el modo mixto, con llamadas reales que cuentan en los topes, e informa llamadas, tokens y costo. Las pruebas de CI usan respuestas grabadas y nunca llaman a la API.
+**Cobertura comprobada en el servidor.** Cada consulta declara al intérprete lo que responde y sus límites. Antes de aceptar una elección de Haiku, FoliOS comprueba que no cambie u omita los clientes, CSG, especies y periodos que reconoció, ni pida filtros que la consulta no aplica. También rechaza confusiones conocidas entre estados, eventos, unidades y dominios: pendientes frente a validaciones terminadas, retornos frente a repaletizajes, producción histórica frente a existencias actuales, insumos de cartón frente a fruta embalada, y folios frente a cajas o kilos. La revisión de taras no sustituye un informe de promedios por CSG ni de salidas de envases. Si no hay cobertura, se pide aclaración y no se ejecuta la consulta.
+
+**Evaluación con Haiku real.** `php artisan asistente:evaluar --modo=haiku` corre el banco como el modo mixto, con llamadas reales que cuentan en los topes, e informa llamadas exitosas, errores, preguntas sin API disponible, tokens y costo. Termina con código 1 si hay respuestas falsas, si no hubo llamadas exitosas con tokens, o si la API falló o quedó inaccesible por topes/piloto. El mismo criterio se aplica con `--json`: cero falsas no equivale a aprobación si la evaluación quedó incompleta. Las pruebas de CI usan respuestas grabadas y nunca llaman a la API.
+
+Después de una evaluación de 38 llamadas, un usuario con el límite de 50 dispone como máximo de otras 12 en esa jornada, descontando otros usos. Antes de repetir el banco, revisar el cupo en Configuración del asistente; si no alcanza, esperar la siguiente jornada o evaluar con otro administrador autorizado que tenga cupo. No borrar los registros de consumo ni aumentar los topes automáticamente.
 
 ## Recomendaciones a pedido
 

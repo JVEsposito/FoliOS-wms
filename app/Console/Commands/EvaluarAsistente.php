@@ -7,7 +7,7 @@ use App\Services\Asistente\EvaluadorBancoAsistente;
 use App\Services\Asistente\Haiku\ClienteAnthropic;
 use Illuminate\Console\Command;
 
-/** Solo lectura: interpreta el banco de preguntas sin ejecutar consultas ni registrar nada. */
+/** Interpreta el banco sin ejecutar consultas de negocio; las llamadas reales registran consumo. */
 class EvaluarAsistente extends Command
 {
     use UsuarioEvaluadorAsistente;
@@ -40,16 +40,20 @@ class EvaluarAsistente extends Command
         }
 
         $informe = $evaluador->evaluar($usuario, $modo === 'haiku');
+        $haikuIncompleto = $modo === 'haiku' && ($informe['llamadas_exitosas_haiku'] === 0 || $informe['errores_haiku'] > 0
+            || $informe['no_disponibles_haiku'] > 0 || $informe['tokens_entrada'] + $informe['tokens_salida'] === 0);
         if ($this->option('json')) {
             $this->line(json_encode($informe, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
 
-            return $informe['falsas'] > 0 ? self::FAILURE : self::SUCCESS;
+            return $informe['falsas'] > 0 || $haikuIncompleto ? self::FAILURE : self::SUCCESS;
         }
 
         $this->table(['#', 'Pregunta', 'Esperada', 'Elegida', 'Intérprete', 'Resultado'], array_map(fn (array $d): array => [
             $d['n'], mb_strimwidth($d['pregunta'], 0, 60, '…'), $d['esperada'] ?? '—', $d['elegida'] ?? '—', $d['interprete'], $d['clase'],
         ], $informe['detalle']));
         if ($modo === 'haiku') {
+            $this->line(sprintf('API: %d llamadas exitosas · %d errores · %d preguntas sin Haiku disponible.',
+                $informe['llamadas_exitosas_haiku'], $informe['errores_haiku'], $informe['no_disponibles_haiku']));
             $this->line(sprintf('Haiku: %d llamadas · %d tokens de entrada · %d de salida · US$ %s.',
                 $informe['llamadas_haiku'], $informe['tokens_entrada'], $informe['tokens_salida'], number_format($informe['costo_usd'], 4, ',', '.')));
         }
@@ -59,6 +63,11 @@ class EvaluarAsistente extends Command
         ));
         if ($informe['falsas'] > 0) {
             $this->error('Hay respuestas falsas: el intérprete eligió otra consulta.');
+
+            return self::FAILURE;
+        }
+        if ($haikuIncompleto) {
+            $this->error('Evaluación incompleta: revisa los errores, el piloto y los topes de Haiku antes de activar el modo mixto.');
 
             return self::FAILURE;
         }

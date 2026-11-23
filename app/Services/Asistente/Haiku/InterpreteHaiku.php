@@ -80,7 +80,7 @@ class InterpreteHaiku
             ->registrar($usuario, $estado, $uso, $this->ms($inicio), $herramienta ?: null, $consulta, $detalle);
 
         if ($herramienta === HerramientasHaiku::CONSULTAR) {
-            $validada = $this->validador->validar($entrada, $permitidas, $preparada['fichas']);
+            $validada = $this->validador->validar($entrada, $permitidas, $preparada['fichas'], $preparada['texto'], $entidades);
             if (is_string($validada)) {
                 $elegida = collect($permitidas)->first(fn (ConsultaAsistente $c): bool => $c->clave() === ($entrada['consulta'] ?? null));
 
