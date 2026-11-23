@@ -7,6 +7,7 @@ use App\Services\Asistente\Consultas\AnulacionesValidacion;
 use App\Services\Asistente\Consultas\CajasPt;
 use App\Services\Asistente\Consultas\CamionesEnPlanta;
 use App\Services\Asistente\Consultas\ConsumosOt;
+use App\Services\Asistente\Consultas\CuentaEnvases;
 use App\Services\Asistente\Consultas\EnvasesRecibidos;
 use App\Services\Asistente\Consultas\EstadoCargas;
 use App\Services\Asistente\Consultas\ExpedientePorCodigo;
@@ -48,6 +49,7 @@ class AsistenteServiceProvider extends ServiceProvider
         CamionesEnPlanta::class,
         EnvasesRecibidos::class,
         GuiasEnvases::class,
+        CuentaEnvases::class,
         EstadoCargas::class,
         FoliosDespachados::class,
         PrefrioEnCurso::class,
