@@ -94,6 +94,7 @@
                             <button class="secondary-button is-hidden" id="correctTareButton" type="button">Corregir tara</button>
                             <button class="secondary-button is-hidden" id="guideNumberButton" type="button">Corregir N° de guía</button>
                             <button class="secondary-button is-hidden" id="integralCorrectionButton" type="button">Corregir recepción validada</button>
+                            <button class="secondary-button is-hidden" id="containerAccountCorrectionButton" type="button">Corregir cuenta de envases</button>
                             <button class="primary-button is-hidden" id="confirmEntryButton" type="button">Confirmar ingreso</button>
                             <button class="primary-button is-hidden" id="addContainerWeighingButton" type="button">+ Registrar tanda</button>
                             <button class="primary-button is-hidden" id="closeReceptionButton" type="button">Registrar destare y cerrar</button>
