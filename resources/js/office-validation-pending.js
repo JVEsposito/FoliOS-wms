@@ -1,3 +1,4 @@
+import { officeCode, officeStatus } from './shared/folios-display.js';
 import { waitIntegrationOperation } from './shared/integration-operation.js';
 import { initReconciliations, loadReconciliations } from './office-validation-reconciliation.js';
 
@@ -47,6 +48,7 @@ const situations = {
     anulado: 'Validación anulada',
     sin_folio: 'Sin folio',
 };
+const validationGlyphs = { observado: 'atencion', rechazado: 'bloqueado', conflicto: 'atencion', anulado: 'bloqueado', sin_folio: 'atencion' };
 const fieldLabels = { estado: 'Estado', tipo: 'Tipo', cajas: 'Cajas', calibre: 'Calibre', csg: 'Cajas por CSG' };
 const requirements = {
     cliente: (item) => `Primero vincula el cliente ${item.cliente}.`,
@@ -94,9 +96,14 @@ function formatDay(value) {
 }
 
 /** «hace 3 h», «hace 2 d»: cuánto lleva en bodega sin validar. */
+function elapsedMinutes(value) {
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) ? Math.max(0, Math.round((Date.now() - timestamp) / 60000)) : null;
+}
+
 function age(value) {
-    if (!value) return '';
-    const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+    const minutes = elapsedMinutes(value);
+    if (minutes === null) return '';
     if (minutes < 60) return `hace ${minutes} min`;
     const hours = Math.round(minutes / 60);
     return hours < 48 ? `hace ${hours} h` : `hace ${Math.round(hours / 24)} d`;
@@ -172,12 +179,24 @@ function differenceItem(difference, suggestion = false) {
  * Cajas por CSG y, dentro de cada CSG, por lote y proceso: lo que Validación debe encontrar en
  * la etiqueta del pallet. El CSG con más cajas va primero.
  */
+function boxCells(boxes, total) {
+    const count = Number(boxes);
+    if (!Number.isSafeInteger(count) || count <= 0 || !Number.isFinite(total) || total <= 0) return '';
+    const width = Math.min(100, count / total * 100);
+    // Una trama con un segmento por caja. Las cantidades muy densas se dibujan como un tramo sólido.
+    return `<span class="pending-box-track" aria-hidden="true"><i data-boxes="${count}" style="inline-size:${width}%;--box-step:${100 / count}%;--box-gap:${total > 120 ? 0 : 0.7}px"></i></span>`;
+}
+
 function composition(item) {
     const groups = item.distribucion || [];
     if (!groups.length) return '—';
+    const total = Math.max(Number(item.cajas) || 0, groups.reduce((sum, group) => sum + (Number(group.cajas) || 0), 0));
     return `<div class="pending-composition">${groups.map((group) => `<div class="pending-composition__csg">
-        <div class="pending-composition__head"><b>${escapeHtml(group.csg || 'Sin CSG')}</b>${group.predio ? `<span>${escapeHtml(group.predio)}</span>` : ''}<em>${number(group.cajas)}</em></div>
-        ${(group.lineas || []).map((line) => `<div class="pending-composition__line"><span>${line.lote ? `lote ${escapeHtml(line.lote)}` : 'sin lote'}${line.proceso ? ` · ${escapeHtml(line.proceso)}` : ''}</span><em>${number(line.cajas)}</em></div>`).join('')}
+        <div class="pending-composition__head"><b class="folios-code">${escapeHtml(group.csg || 'Sin CSG')}</b>${group.predio ? `<span>${escapeHtml(group.predio)}</span>` : ''}<em>${number(group.cajas)}</em></div>
+        ${boxCells(group.cajas, total)}
+        ${(group.lineas || []).map((line) => `<div class="pending-composition__line"><span>${line.lote ? `lote <b class="folios-code">${escapeHtml(line.lote)}</b>` : 'sin lote'}${line.proceso ? ` · <b class="folios-code">${escapeHtml(line.proceso)}</b>` : ''}</span><em>${number(line.cajas)}</em>
+            ${boxCells(line.cajas, total)}
+        </div>`).join('')}
     </div>`).join('')}</div>`;
 }
 
@@ -188,9 +207,7 @@ function bulkType(item) {
 
 function validationStatus(item) {
     const status = item.validacion?.situacion;
-    return status
-        ? `<span class="pending-chip pending-chip--${escapeHtml(status)}">${escapeHtml(situations[status] || status)}</span>`
-        : '<span class="pending-chip">Sin intento</span>';
+    return officeStatus(situations[status] || status || 'Sin intento', validationGlyphs[status], escapeHtml);
 }
 
 function validationReason(attempt) {
@@ -271,17 +288,22 @@ function render() {
 
     const withoutApproval = [...data.pendientes, ...data.por_resolver].sort((first, second) =>
         receivedAt(first) - receivedAt(second) || first.numero.localeCompare(second.numero));
-    elements.pendingBody.innerHTML = rows(withoutApproval, (item) => `<tr>
-        <td><b class="pending-number">${escapeHtml(item.numero)}</b>${bulkType(item)}</td>
-        <td>${formatDate(item.recibido_origen_at)}<small>${age(item.recibido_origen_at)} · embalado ${formatDay(item.fecha_embalaje)}</small></td>
+    const longest = withoutApproval.reduce((maximum, item) => Math.max(maximum, elapsedMinutes(item.recibido_origen_at) ?? 0), 1);
+    elements.pendingBody.innerHTML = rows(withoutApproval, (item) => {
+        const minutes = elapsedMinutes(item.recibido_origen_at);
+        return `<tr>
+        <td><span class="pending-number folios-code">${officeCode(item.numero, escapeHtml)}</span>${bulkType(item)}</td>
+        <td>${formatDate(item.recibido_origen_at)}<small>${[age(item.recibido_origen_at), `embalado ${formatDay(item.fecha_embalaje)}`].filter(Boolean).join(' · ')}</small>
+            ${minutes === null ? '' : `<span class="pending-age-track" aria-hidden="true"><i style="inline-size:${Math.min(100, minutes / longest * 100)}%"></i></span>`}</td>
         <td>${validationStatus(item)}${item.validacion ? `<small>${escapeHtml(validationReason(item.validacion))}</small>` : ''}</td>
         <td class="pending-num">${number(item.cajas)}</td>
         <td>${article(item)}</td>
         <td>${composition(item)}</td>
-    </tr>`, 'No hay pallets ni saldos en el stock de origen pendientes de aprobación o revisión.', 6);
+    </tr>`;
+    }, 'Los pallets y saldos en stock de origen aparecerán aquí cuando no tengan aprobación vigente.', 6);
 
     elements.unresolvedBody.innerHTML = rows(data.por_resolver, (item) => `<tr>
-        <td><b class="pending-number">${escapeHtml(item.numero)}</b>${bulkType(item)}</td>
+        <td><span class="pending-number folios-code">${officeCode(item.numero, escapeHtml)}</span>${bulkType(item)}</td>
         <td>${validationStatus(item)}</td>
         <td>${escapeHtml(validationReason(item.validacion) || '—')}</td>
         <td>${formatDate(item.validacion.registrado_at)}<small>intento ${escapeHtml(item.validacion.intento)}</small></td>
@@ -290,14 +312,14 @@ function render() {
     </tr>`, 'No hay pallets con validaciones observadas, rechazadas o anuladas.', 6);
 
     elements.differencesBody.innerHTML = rows(data.diferencias, (item) => `<tr>
-        <td><b class="pending-number">${escapeHtml(item.numero)}</b>${bulkType(item)}</td>
+        <td><span class="pending-number folios-code">${officeCode(item.numero, escapeHtml)}</span>${bulkType(item)}</td>
         <td>${escapeHtml(item.folio.estado_etiqueta)}<small>validado ${formatDate(item.folio.validado_at)}</small></td>
         <td><ul class="pending-differences">${item.diferencias.map((difference) => differenceItem(difference)).join('')}${(item.sugerencias || []).map((difference) => differenceItem(difference, true)).join('')}</ul></td>
         <td>${article(item)}</td>
     </tr>`, 'Lo validado coincide con el origen.', 4);
 
     elements.onlyFoliosBody.innerHTML = rows(data.solo_en_folios, (item) => `<tr>
-        <td><b class="pending-number">${escapeHtml(item.numero)}</b>${bulkType(item)}</td>
+        <td><span class="pending-number folios-code">${officeCode(item.numero, escapeHtml)}</span>${bulkType(item)}</td>
         <td>${escapeHtml(item.estado_etiqueta)}</td>
         <td>${formatDate(item.validado_at)}<small>${age(item.validado_at)}</small></td>
         <td class="pending-num">${number(item.cajas)}</td>
@@ -440,6 +462,16 @@ async function load({ quiet = false } = {}) {
         else if (op && !trackedOperation && elements.sync) elements.sync.textContent = op.respuesta?.contenido?.message || op.fase;
         await loadReconciliations();
     } catch (error) {
+        elements.source.className = 'pending-source pending-source--error';
+        elements.source.textContent = state.data
+            ? 'No se pudo actualizar. Se muestra la última lectura disponible.'
+            : 'Bandeja sin lectura. Reintenta con «Leer ahora» o espera la próxima consulta.';
+        if (!state.data) {
+            for (const body of [elements.pendingBody, elements.unresolvedBody, elements.differencesBody, elements.onlyFoliosBody, elements.catalogBody]) {
+                const waiting = body.querySelector('.pending-empty-cell');
+                if (waiting) waiting.textContent = 'Datos sin lectura.';
+            }
+        }
         if (!quiet) toast(error.message, true);
     } finally {
         if (!quiet) busy(false);

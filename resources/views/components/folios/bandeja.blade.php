@@ -1,6 +1,7 @@
-@props(['area', 'titulo', 'id'])
+@props(['area', 'titulo', 'id', 'panelId' => null])
 
-<section {{ $attributes->class('folios-ticket folios-bandeja') }} data-ticket-area="{{ $area }}" aria-labelledby="{{ $id }}">
+<section {{ $attributes->class('folios-ticket folios-bandeja') }} data-ticket-area="{{ $area }}"
+    @if ($panelId) id="{{ $panelId }}" @endif aria-labelledby="{{ $id }}">
     <header class="folios-bandeja__cabecera">
         <x-folios.gajo :area="$area" :size="24" class="folios-gajo--hoja" />
         <h2 id="{{ $id }}">{{ $titulo }}</h2>
