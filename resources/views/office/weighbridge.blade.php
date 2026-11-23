@@ -88,6 +88,7 @@
                         <div class="detail-actions">
                             <button class="secondary-button rec-delete-button is-hidden" id="deleteReceptionButton" type="button">Eliminar recepción</button>
                             <button class="secondary-button is-hidden" id="annulReceptionButton" type="button">Anular recepción</button>
+                            <button class="secondary-button is-hidden" id="releaseValidationButton" type="button">Liberar Validación MP</button>
                             <button class="secondary-button is-hidden" id="editReceptionButton" type="button">Editar ingreso</button>
                             <button class="secondary-button is-hidden" id="realDateButton" type="button">Corregir fecha real</button>
                             <button class="secondary-button is-hidden" id="correctGrossWeightButton" type="button">Corregir peso bruto</button>
@@ -124,6 +125,16 @@
                 <label class="field"><span id="annulReceptionReasonLabel">Motivo de anulación</span><textarea name="motivo" required minlength="10" maxlength="2000" rows="3"></textarea></label>
                 <p class="form-error" id="annulReceptionError" role="alert"></p>
                 <footer class="dialog-actions"><button class="secondary-button" id="annulReceptionCancel" type="button">Volver</button><button class="primary-button" type="submit">Confirmar anulación</button></footer>
+            </form>
+        </dialog>
+        <dialog class="weighbridge-dialog weighbridge-dialog--compact" id="releaseValidationDialog" aria-labelledby="releaseValidationTitle">
+            <form class="weighbridge-dialog__shell" id="releaseValidationForm">
+                <header class="weighbridge-dialog__heading"><div><p class="eyebrow">CORRECCIÓN ADMINISTRATIVA</p><h2 id="releaseValidationTitle">Liberar Validación MP</h2></div></header>
+                <p id="releaseValidationSummary"></p>
+                <p>La recepción vuelve a los pendientes de Validación MP y la puede tomar cualquier validador. Quien la tenía ya no podrá confirmarla. Queda registrado con tu nombre y el motivo.</p>
+                <label class="field"><span>Motivo</span><textarea name="motivo" required minlength="10" maxlength="2000" rows="3"></textarea></label>
+                <p class="form-error" id="releaseValidationError" role="alert"></p>
+                <footer class="dialog-actions"><button class="secondary-button" id="releaseValidationCancel" type="button">Volver</button><button class="primary-button" type="submit">Liberar validación</button></footer>
             </form>
         </dialog>
         <dialog class="weighbridge-dialog integral-dialog" id="integralCorrectionDialog" aria-label="Corregir recepción validada"></dialog>

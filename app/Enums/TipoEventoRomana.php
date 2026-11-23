@@ -27,4 +27,5 @@ enum TipoEventoRomana: string
     case FechaRealCorregida = 'fecha_real_corregida';
     // Administración corrigió la tara (camión o envases) y rehízo neto y kilos de lotes, con o sin procesos posteriores.
     case TaraCorregida = 'tara_corregida';
+    case ValidacionMpLiberada = 'validacion_mp_liberada';
 }

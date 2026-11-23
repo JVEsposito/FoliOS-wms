@@ -51,7 +51,6 @@
 
 .custody-heading,
 .custody-card,
-.custody-metrics article,
 .custody-login {
     color: var(--text);
     background: var(--panel);
@@ -82,56 +81,6 @@
 .custody-card p,
 .custody-login p {
     color: var(--muted);
-}
-
-.custody-metrics {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: .75rem;
-    margin-bottom: 1rem;
-}
-
-.custody-metrics article {
-    padding: .9rem;
-}
-
-.custody-metrics span {
-    display: block;
-    color: var(--muted);
-    font-size: .72rem;
-    font-weight: 700;
-}
-
-.custody-metrics strong {
-    display: block;
-    margin-top: .35rem;
-    font-size: 1.5rem;
-}
-
-.custody-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .5rem;
-    margin-bottom: 1rem;
-}
-
-.custody-tabs button {
-    padding: .55rem .9rem;
-    color: var(--muted);
-    background: var(--raised);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    cursor: pointer;
-}
-
-.custody-tabs button:hover {
-    background: var(--soft);
-}
-
-.custody-tabs button.is-active {
-    color: var(--text-strong);
-    background: var(--soft);
-    border-color: var(--cyan);
 }
 
 .custody-filters {
@@ -289,6 +238,112 @@
     color: var(--muted);
 }
 
+.materials-bandejas {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+}
+
+.materials-bandejas .custody-grid { margin-block-start: 0; }
+.materials-bandejas .custody-grid:not(:has(> :not(.is-hidden))) { display: none; }
+
+.materials-bandejas .custody-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-block-end: 12px;
+}
+
+.materials-bandejas .custody-tabs button {
+    min-block-size: 42px;
+    padding: .55rem .8rem;
+    color: var(--text-secondary);
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    border-radius: var(--folios-control-shape);
+    cursor: pointer;
+}
+
+.materials-bandejas .custody-tabs button:hover,
+.materials-bandejas .custody-tabs button[aria-pressed="true"] {
+    color: var(--area-text);
+    background: var(--area-tint);
+}
+
+.materials-bandejas .custody-tabs button[aria-pressed="true"] {
+    border-color: var(--area-line);
+    box-shadow: inset 0 -3px var(--area-ink);
+}
+
+.materials-bandejas .custody-filters {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+    background: var(--surface-muted);
+}
+
+.materials-bandejas :is(input, select, textarea) { min-inline-size: 0; }
+
+.materials-bandejas .custody-table-wrap {
+    border: 1px solid var(--line);
+    border-radius: var(--folios-control-shape);
+}
+
+.materials-bandejas .custody-table {
+    min-inline-size: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.materials-bandejas .custody-table .folios-estado { white-space: nowrap; }
+
+.materials-bandejas .custody-table strong,
+.materials-bandejas .custody-table .folios-code { color: var(--text-strong); }
+
+.materials-bandeja-qty { white-space: nowrap; }
+
+.materials-bandeja-item {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--area-text);
+    font: inherit;
+    font-weight: 720;
+    text-align: start;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.materials-bandeja-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.custody-filters .materials-bandeja-actions { grid-column: 1 / -1; }
+
+.materials-bandeja-error {
+    margin: 0 0 10px;
+    color: var(--danger-text);
+    overflow-wrap: anywhere;
+}
+
+.materials-bandeja-error:empty { display: none; }
+
+.materials-bandejas #detail h3 {
+    margin: 12px 0 6px;
+    color: var(--text-strong);
+}
+
+.materials-bandejas #levelsForm {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+    padding: 12px;
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    border-radius: var(--folios-control-shape);
+}
+
+.materials-bandejas #pages { margin-block: 8px; }
+
 .custody-login {
     max-width: 520px;
     margin: 8vh auto;
@@ -308,7 +363,6 @@
 
 @media (max-width: 900px) {
     .custody-grid,
-    .custody-metrics,
     .custody-filters {
         grid-template-columns: 1fr;
     }

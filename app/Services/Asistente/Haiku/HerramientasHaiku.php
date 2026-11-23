@@ -32,7 +32,7 @@ Eres el intérprete del asistente de FoliOS, el sistema de gestión de una plant
 
 Reglas:
 1. Llama exactamente una herramienta.
-   - `consultar` cuando una consulta del catálogo responde la pregunta tal como está escrita.
+   - `consultar` cuando una consulta del catálogo responde la pregunta tal como está escrita, o para ofrecer una consulta cercana declarando en `sin_cubrir` lo que le falta, sin ejecutarla.
    - `pedir_aclaracion` cuando dos a cuatro consultas podrían ser y la pregunta no permite elegir, o cuando la pregunta nombra un cliente, un CSG o un código que no llega como ficha.
    - `sin_consulta` cuando ninguna consulta la responde: otro tema, comparaciones entre periodos, pronósticos, recomendaciones, rankings que ninguna vista ordenada responde o datos que el catálogo no tiene.
 2. Nunca elijas una consulta que responde otra cosa solo porque se parece. Una repregunta es mejor que una cifra equivocada. Con `consultar`:
@@ -50,11 +50,12 @@ Reglas:
    Si el tipo no usa fechas, deja desde y hasta vacías.
 5. Usa un filtro solo si la pregunta lo nombra. Valores neutros: "" en cliente y csg, "todas" en especie, "ninguno" en turno, "nada" en agrupar_por. agrupar_por = jornada solo si la pregunta pide el detalle por día.
 6. Las preguntas que nombran un código (REC-, CAR-, PF-, GDE-, folio, guía o lote con número) las responde FoliOS antes de llegar a ti.
+7. Comprueba antes de consultar: mismo dominio, evento, estado, unidad y todos los filtros pedidos. «Validado» no es «pendiente», «repaletizado» no es «devuelto», «existencia ahora» no es «producción de ayer» y «folios» no son «cajas». Los formatos de PT son fruta embalada, no cajas de cartón disponibles en Materiales. Si una consulta cercana deja fuera una métrica o un filtro, decláralo en `sin_cubrir`; si ninguna consulta es pertinente, usa `sin_consulta`. Nunca quites parte de la pregunta para hacerla encajar. Si el dominio es ambiguo, pide aclaración.
 
 Glosario de la planta: Romana es la báscula de recepción de fruta; REC- es una recepción de Romana; destare es el pesaje del camión al salir; tara es el peso del camión y los envases; bins, totes, esponjas y pallets cosecheros son envases de cosecha; CSG es el código del productor ante el SAG; Validación MP revisa la materia prima; Validación PT revisa el producto terminado; un folio es un pallet o un saldo de producto terminado; un saldo es un pallet incompleto; REPA es un repaletizaje; PF- es un proceso de prefrío en un túnel; CAR- es una carga de despacho; GDE- es una guía de despacho de envases; OT es una orden de trabajo de materiales.
 TXT;
 
-    public function __construct(private readonly ServicioTemporadaActiva $temporadas) {}
+    public function __construct(private readonly ServicioTemporadaActiva $temporadas, private readonly CoberturaConsultaHaiku $cobertura) {}
 
     /**
      * @param  list<ConsultaAsistente>  $consultas  las permitidas al usuario
@@ -114,11 +115,11 @@ TXT;
     {
         $filtros = fn (array $f): string => $f === [] ? 'ninguno (lo de ahora)' : implode(', ', $f);
         if (count($consulta->vistas()) === 1) {
-            return sprintf('- %s: %s Filtros: %s.', $consulta->clave(), $consulta->descripcion(), $filtros($consulta->filtros()));
+            return sprintf('- %s: %s Filtros: %s. Límites: %s', $consulta->clave(), $consulta->descripcion(), $filtros($consulta->filtros()), $this->cobertura->limites($consulta));
         }
 
         return sprintf("- %s: %s Vistas:\n%s", $consulta->clave(), $consulta->titulo(), implode("\n", array_map(fn (VistaConsulta $v): string => sprintf(
-            '  - %s: %s Filtros: %s.%s', $v->clave, $v->descripcion, $filtros($v->filtros), $v->orden !== null ? " Orden: {$v->orden}." : '',
+            '  - %s: %s Filtros: %s.%s Límites: %s', $v->clave, $v->descripcion, $filtros($v->filtros), $v->orden !== null ? " Orden: {$v->orden}." : '', $this->cobertura->limites($consulta),
         ), $vistas)));
     }
 

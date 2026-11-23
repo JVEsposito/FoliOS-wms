@@ -91,7 +91,7 @@ class InterpreteHaiku
 
         if ($herramienta === HerramientasHaiku::CONSULTAR) {
             $pide = $this->condicion($entrada['pide'] ?? '', $preparada['fichas'], 200) ?: null;
-            $validada = $this->validador->validar($entrada, $permitidas, $preparada['fichas'], $usuario);
+            $validada = $this->validador->validar($entrada, $permitidas, $preparada['fichas'], $usuario, $preparada['texto'], $entidades);
             if (is_string($validada)) {
                 $elegida = collect($permitidas)->first(fn (ConsultaAsistente $c): bool => $c->clave() === ($entrada['consulta'] ?? null));
 
@@ -104,6 +104,11 @@ class InterpreteHaiku
                 ...array_map(fn (string $c): string => "«{$c}»", $this->sinCubrir($entrada['sin_cubrir'] ?? [], $preparada['fichas'])),
                 ...$validada['sin_cubrir'],
             ]));
+            // Si el modelo no declara el límite, la comprobación de FoliOS lo impone.
+            // Si ya hay condiciones concretas, se conservan sin repetir una explicación genérica.
+            if ($sinCubrir === [] && $validada['incompatibilidad'] !== null) {
+                $sinCubrir[] = 'toda la pregunta ('.$validada['incompatibilidad'].')';
+            }
             if ($sinCubrir !== []) {
                 // El registro guarda cuántas condiciones faltaron, nunca el texto de la pregunta.
                 return [...$vacio, 'tipo' => self::PARCIAL, 'consulta' => $validada['consulta'], 'vista' => $validada['vista'],
