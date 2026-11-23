@@ -10,6 +10,10 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const identity = { nombre: 'Gerencia General', rol: 'consulta', modulos_acceso: ['gerencia.panel'], puede_consultar_panel_gerencial: true, ambito_camaras: 'productos' };
 const season = { id: 't1', codigo: '2026-2027', nombre: 'Temporada 2026-2027', activa: true, fecha_inicio: '2026-10-01', fecha_fin: null };
 const camera = (codigo, nombre, operativas, ocupadas, contenido = 'productos') => ({ id: codigo, codigo, nombre, contenido, operativas, ocupadas, disponibles: operativas - ocupadas, no_operativas: 0, ocupacion_porcentaje: Math.round((ocupadas * 1000) / operativas) / 10 });
+const tunnelPositions = (count, occupied = [], inactive = []) => Array.from({ length: count }, (_, index) => {
+    const numero = index + 1;
+    return { numero, etiqueta: `P${numero}`, activa: !inactive.includes(numero), ocupada: occupied.includes(numero) };
+});
 const days = ['mié 4', 'jue 5', 'vie 6', 'sáb 7', 'dom 8', 'lun 9', 'mar 10'];
 
 function dashboard() {
@@ -57,9 +61,16 @@ function dashboard() {
         materiales: { reposicion: null, vencimientos: {}, verificaciones: { habilitada: false, periodos: {} }, items_con_stock: 12, folios_con_stock: 30, despachos_abiertos: 2, despachos_parciales: 1, recepciones_confirmadas_hoy: 1, recepciones_borrador: 0,
             unidades_medida: [{ unidad_medida: 'unidad', items_con_stock: 12, folios_con_stock: 30, cantidad_actual: 181467, cantidad_reservada: 0, cantidad_disponible: 0, cantidad_bloqueada: 0, cantidad_pendiente_ubicacion: 180900, cantidad_no_disponible: 567,
                 items: [{ item_id: 'i1', cliente: { id: 'c1', codigo: 'AGU', nombre: 'La Aguada' }, temporada: { activa: true }, codigo: 'CJ-5', nombre: 'Caja 5 kg', categoria: 'Envase', unidad_medida: 'unidad', folios: 30, cantidad_actual: 181467, cantidad_reservada: 0, cantidad_disponible: 0, cantidad_bloqueada: 0, cantidad_pendiente_ubicacion: 180900, cantidad_no_disponible: 567 }] }] },
-        prefrio: { tuneles_operativos: 2, tuneles_totales: 2, procesos_activos: 1, procesos_atrasados: 0, aprobados_hoy: 3, reprocesos_hoy: 0, duracion_promedio_minutos_7d: 210, folios_pendientes: 43, capacidad: 36, ocupadas: 24, disponibles: 12, ocupacion_porcentaje: 66.7,
-            tuneles: [{ id: 'tu1', codigo: 'TUN-01', nombre: 'Túnel 1', operativo: true, capacidad: 24, ocupadas: 24, disponibles: 0, ocupacion_porcentaje: 100, proceso_activo: { codigo: 'PF-0101', estado: 'en_proceso', setpoint: 0.5, transcurridos_minutos: 120, duracion_objetivo_minutos: 240, atrasado: false } },
-                { id: 'tu2', codigo: 'TUN-02', nombre: 'Túnel 2', operativo: true, capacidad: 12, ocupadas: 0, disponibles: 12, ocupacion_porcentaje: 0, proceso_activo: null }] },
+        prefrio: { tuneles_operativos: 2, tuneles_totales: 3, procesos_activos: 1, procesos_atrasados: 1, aprobados_hoy: 3, reprocesos_hoy: 0, duracion_promedio_minutos_7d: 210, folios_pendientes: 43, capacidad: 31, ocupadas: 4, disponibles: 27, ocupacion_porcentaje: 12.9,
+            tuneles: [
+                { id: 'tu1', codigo: 'TUN-01', nombre: 'Túnel 1', operativo: true, capacidad: 19, ocupadas: 4, disponibles: 15, ocupacion_porcentaje: 21.1,
+                    posiciones: tunnelPositions(20, [2, 5, 11, 20], [3]),
+                    proceso_activo: { codigo: 'PF-0101', estado: 'en_proceso', setpoint: 0.5, transcurridos_minutos: 540, duracion_objetivo_minutos: 480, atrasado: true } },
+                { id: 'tu2', codigo: 'TUN-02', nombre: 'Túnel 2', operativo: true, capacidad: 12, ocupadas: 0, disponibles: 12, ocupacion_porcentaje: 0,
+                    posiciones: tunnelPositions(12), proceso_activo: null },
+                { id: 'tu3', codigo: 'TUN-03', nombre: 'Túnel 3', operativo: false, capacidad: 0, ocupadas: 0, disponibles: 0, estado_tecnico: 'mantenimiento',
+                    posiciones: tunnelPositions(2), proceso_activo: null },
+            ] },
         romana: {
             en_bascula_ingreso: 1, en_pesaje_envases: 0, pendientes_destare: 2, cerradas_hoy: 0, peso_neto_hoy: 0, envases_hoy: 0, clientes_hoy: 0,
             kilos_temporada: 412530.4, recepciones_temporada: 38, kilos_7_dias: 127500, recepciones_7_dias: 12, clientes_temporada: 3,
@@ -84,7 +95,7 @@ function dashboard() {
     };
 }
 
-async function open(browser, width, theme = 'dark-industrial', user = identity) {
+async function open(browser, width, theme = 'dark-industrial', user = identity, fixture = dashboard()) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     await context.addInitScript(({ user, officeTheme }) => {
         localStorage.setItem('estiba_wms_office_token', 'fixture');
@@ -98,7 +109,7 @@ async function open(browser, width, theme = 'dark-industrial', user = identity) 
         if (path.startsWith('/build/') || path.startsWith('/brand/')) {
             try { return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png' })[extname(path)] || 'application/octet-stream' }); } catch { return route.fulfill({ status: 404 }); }
         }
-        if (path === '/api/gerencia/resumen') return route.fulfill({ json: { data: dashboard() } });
+        if (path === '/api/gerencia/resumen') return route.fulfill({ json: { data: fixture } });
         if (path === '/api/acceso-oficina') return route.fulfill({ json: { usuario: user } });
         return route.fulfill({ json: { data: { planta: 'Pruebas', temporada: null, avisos_materiales: [], avisos_cierre: [] } } });
     });
@@ -117,12 +128,12 @@ const capture = async (page, name) => {
 };
 
 function luminance(rgb) {
-    const match = rgb.match(/^rgb\((\d+), (\d+), (\d+)\)$/);
-    assert.ok(match, `Se esperaba un color opaco: ${rgb}`);
-    const [red, green, blue] = match.slice(1).map((value) => {
-        const channel = Number(value) / 255;
-        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-    });
+    const rgbChannels = rgb.match(/^rgb\((\d+), (\d+), (\d+)\)$/)?.slice(1).map(value => Number(value) / 255);
+    const channels = rgbChannels ?? rgb.match(/^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)\)$/)?.slice(1).map(Number);
+    assert.ok(channels, `Se esperaba un color opaco: ${rgb}`);
+    const [red, green, blue] = channels.map((channel) => (
+        channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+    ));
     return red * 0.2126 + green * 0.7152 + blue * 0.0722;
 }
 
@@ -198,9 +209,14 @@ for (const width of [1366, 390]) test(`Panel gerencial: kilos por cliente, folio
 
         await page.locator('#management-tab-precooling').click();
         const rows = page.getByRole('table', { name: 'Ocupación por túnel' }).locator('tbody tr');
-        assert.equal(await rows.nth(0).locator('[data-cell="done"]').count(), 24);
+        assert.equal(await rows.nth(0).locator('[data-cell="done"]').count(), 4);
+        assert.equal(await rows.nth(0).locator('[data-position="3"][data-cell="unavailable"]').count(), 1);
+        assert.deepEqual(await rows.nth(0).locator('[data-position="20"]').evaluate((element) => [element.style.gridColumn, element.style.gridRow]), ['10', '2']);
         assert.equal(await rows.nth(1).locator('[data-cell="free"]').count(), 12);
-        assert.match(await rows.nth(0).locator('.management-tunnel__timeline').innerText(), /Objetivo 4 h/);
+        assert.match(await rows.nth(0).locator('.management-tunnel__timeline').innerText(), /Objetivo 8 h/);
+        assert.match(await rows.nth(1).locator('.folios-estado').innerText(), /Disponible$/);
+        assert.match(await rows.nth(2).locator('.folios-estado').innerText(), /En mantenimiento$/);
+        assert.equal(await rows.nth(2).locator('[data-cell="free"]').count(), 0);
         assert.match(await rows.nth(0).locator('.management-tunnel__setpoint').innerText(), /0,5 °C/);
 
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `desborde a ${width}px`);
@@ -241,5 +257,58 @@ test('Panel gerencial: los gráficos se repintan al cargarse NERV', async () => 
         assert.equal(await page.locator(leyenda).first().evaluate(element => element.style.backgroundColor), rojo);
         assert.deepEqual(errors, []);
         await context.close();
+    } finally { await browser.close(); }
+});
+
+test('Prefrío conserva sus indicadores y contraste al alternar claro y oscuro', async () => {
+    const browser = await launch();
+    try {
+        const fixture = dashboard();
+        const { page, errors } = await open(browser, 1366, 'light-professional', identity, fixture);
+        await page.locator('#management-tab-precooling').click();
+        assert.equal(await page.locator('#precoolingTabCount').innerText(), '1 atrasado');
+        const cards = page.locator('.management-precooling-kpi');
+        assert.equal(await cards.count(), 5);
+        assert.equal(await cards.first().evaluate((card) => getComputedStyle(card).display), 'grid');
+        assert.match(await page.locator('#precoolingOverdueDetail').innerText(), /Túnel 1 · \+1 h/);
+        assert.equal(await page.locator('#precoolingChartSummary [data-cell="pending"]').count(), 43);
+        assert.match(await page.locator('#precoolingChartSummary').innerText(), /27 posiciones libres/);
+        assert.equal(await page.locator('#managementOpenPrecooling').isHidden(), true);
+
+        const selector = page.getByRole('combobox', { name: 'Tema de Oficina' });
+        const palettes = new Map();
+        for (const theme of ['light-professional', 'dark-industrial', 'light-professional', 'dark-industrial']) {
+            await selector.selectOption(theme);
+            await page.waitForFunction((key) => document.documentElement.dataset.officeTheme === key, theme);
+            const palette = await page.locator('#management-panel-precooling').evaluate((panel) => {
+                const read = (selector, prop) => getComputedStyle(panel.querySelector(selector))[prop];
+                return {
+                    surface: read('.management-precooling-kpi', 'backgroundColor'),
+                    metric: read('#precoolingOverdueMetric', 'color'),
+                    badgeBackground: getComputedStyle(document.querySelector('#precoolingTabCount')).backgroundColor,
+                    badgeText: getComputedStyle(document.querySelector('#precoolingTabCount')).color,
+                    occupied: read('[data-position="2"][data-cell="done"]', 'backgroundColor'),
+                    overtime: read('.management-tunnel__overdue', 'backgroundColor'),
+                };
+            });
+            for (const [background, foreground] of [[palette.surface, palette.metric], [palette.badgeBackground, palette.badgeText]]) {
+                const [dark, bright] = [luminance(background), luminance(foreground)].sort((a, b) => a - b);
+                assert.ok((bright + .05) / (dark + .05) >= 4.5, theme);
+            }
+            if (palettes.has(theme)) assert.deepEqual(palette, palettes.get(theme));
+            palettes.set(theme, palette);
+        }
+        for (const key of ['surface', 'metric', 'occupied', 'overtime']) {
+            assert.notEqual(palettes.get('light-professional')[key], palettes.get('dark-industrial')[key]);
+        }
+        await capture(page, 'gerencia-prefrio-oscuro');
+        fixture.prefrio.procesos_atrasados = 0;
+        fixture.prefrio.folios_pendientes = 0;
+        fixture.prefrio.tuneles[0].proceso_activo.atrasado = false;
+        await page.locator('#refreshDashboardButton').click();
+        await page.getByText(/Sin folios en espera/).waitFor();
+        assert.equal(await page.locator('#precoolingTabCount').isHidden(), true);
+        assert.equal(await page.locator('#precoolingOverdueDetail').isHidden(), true);
+        assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });

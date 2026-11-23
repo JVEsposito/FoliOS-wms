@@ -1,5 +1,5 @@
 import { BarController, BarElement, CategoryScale, Chart, Legend, LinearScale, Tooltip } from 'chart.js';
-import { officeCode, palletCells } from './shared/folios-display.js';
+import { officeCode, officeStatus, palletCells } from './shared/folios-display.js';
 import { createOperationalPoller } from './shared/operational-poller';
 import { bulkWidths, productStateRows } from './shared/management-product-states';
 import { readManagementChartPaletteSafely } from './shared/management-chart-theme';
@@ -99,6 +99,9 @@ const elements = {
     materialReceptionDrafts: byId('materialReceptionDraftsMetric'),
     precoolingActive: byId('precoolingActiveMetric'),
     precoolingOverdue: byId('precoolingOverdueMetric'),
+    precoolingOverdueDetail: byId('precoolingOverdueDetail'),
+    precoolingTabCount: byId('precoolingTabCount'),
+    openPrecooling: byId('managementOpenPrecooling'),
     precoolingApproved: byId('precoolingApprovedMetric'),
     precoolingReprocess: byId('precoolingReprocessMetric'),
     precoolingAverage: byId('precoolingAverageMetric'),
@@ -296,6 +299,7 @@ function showApp() {
     elements.loadsNav.classList.toggle('is-hidden', state.identity?.puede_consultar_cargas !== true);
     elements.materialsNav.classList.toggle('is-hidden', state.identity?.puede_consultar_despachos_materiales !== true);
     elements.prefrioNav.classList.toggle('is-hidden', state.identity?.puede_consultar_prefrio !== true);
+    elements.openPrecooling.hidden = state.identity?.puede_consultar_prefrio !== true;
     elements.accessesNav.classList.toggle('is-hidden', state.identity?.puede_administrar_accesos !== true);
     elements.romanaNav.classList.toggle('is-hidden', state.identity?.puede_consultar_romana !== true);
     elements.rawMaterialNav.classList.toggle('is-hidden', state.identity?.puede_consultar_materia_prima !== true);
@@ -728,7 +732,7 @@ function precoolingTimeline(process, scale) {
     const target = Number(process.duracion_objetivo_minutos);
     const elapsedWidth = clampPercentage(elapsed / scale * 100);
     const targetWidth = clampPercentage(target / scale * 100);
-    const withinTarget = process.atrasado && target > 0 ? targetWidth : elapsedWidth;
+    const withinTarget = process.atrasado && target > 0 ? Math.min(elapsedWidth, targetWidth) : elapsedWidth;
     const overdueWidth = elapsedWidth - withinTarget;
 
     return `<div class="management-tunnel__timeline">
@@ -744,15 +748,56 @@ function precoolingTimeline(process, scale) {
 }
 
 function precoolingSetpoint(value) {
-    if (value == null || !Number.isFinite(Number(value))) return '—';
-    const temperature = Number(value);
-    const band = temperature > 8 ? 0 : 4 - [0, 2, 4].filter((limit) => temperature >= limit).length;
+    if (value == null || !Number.isFinite(Number(value))) return '<span class="management-tunnel__detail">Sin setpoint</span>';
+    return `<strong class="management-tunnel__setpoint folios-code">${escapeHtml(formatQuantity(value))} °C</strong>`;
+}
 
-    return `<div class="management-tunnel__setpoint">
-        <span class="management-tunnel__cold-scale" aria-hidden="true">${Array.from({ length: 5 }, (_, index) =>
-            `<i${band === index ? ' data-band-active' : ''}></i>`).join('')}</span>
-        <strong class="folios-code">${escapeHtml(formatQuantity(temperature))} °C</strong>
+function precoolingPositions(tunnel) {
+    const positions = (tunnel.posiciones || []).filter(({ numero }) => Number.isSafeInteger(numero) && numero > 0);
+    if (!positions.length) return '';
+    const labels = { done: 'Ocupada', free: 'Libre', unavailable: 'No habilitada' };
+    const cells = positions.map((position) => {
+        const state = position.ocupada ? 'done' : position.activa && tunnel.operativo ? 'free' : 'unavailable';
+        const side = position.numero % 2 ? 'izquierda' : 'derecha';
+        const caption = `${position.etiqueta} · ${labels[state]} · ${side}`;
+        return `<i data-cell="${state}" data-position="${position.numero}" style="grid-column:${Math.ceil(position.numero / 2)};grid-row:${side === 'izquierda' ? 1 : 2}" title="${escapeHtml(caption)}"></i>`;
+    });
+    const occupied = positions.filter(({ ocupada }) => ocupada).map(({ etiqueta }) => etiqueta);
+
+    return `<div class="management-tunnel__positions">
+        <span class="folios-pallet-cells management-tunnel__matrix" role="img" aria-label="${escapeHtml(occupied.length ? `Ocupadas: ${occupied.join(', ')}` : 'Ninguna posición ocupada')}">${cells.join('')}</span>
     </div>`;
+}
+
+function precoolingState(tunnel) {
+    const process = tunnel.proceso_activo;
+    const states = {
+        borrador: ['Borrador', 'pendiente'],
+        cargando: ['Cargando', 'en-curso'],
+        listo_para_iniciar: ['Listo para iniciar', 'listo'],
+        en_proceso: ['En proceso', 'en-curso'],
+        pendiente_verificacion: ['Pendiente de verificación', 'atencion'],
+        aprobado: ['Pendiente de retiro', 'atencion'],
+        requiere_reproceso: ['Pendiente de retiro', 'atencion'],
+        cancelado: ['Pendiente de retiro', 'atencion'],
+    };
+
+    if (!tunnel.operativo) {
+        if (tunnel.estado_administrativo === 'inactivo') return ['Inactivo', 'bloqueado'];
+        if (tunnel.estado_tecnico === 'mantenimiento') return ['En mantenimiento', 'bloqueado'];
+        return ['Fuera de servicio', 'bloqueado'];
+    }
+    if (tunnel.proceso_otra_temporada) return ['Proceso de otra temporada', 'atencion'];
+    if (process?.atrasado) return ['Sobre objetivo', 'atencion'];
+    if (process) return states[process.estado] || [humanize(process.estado), 'pendiente'];
+    if (!Number(tunnel.capacidad)) return ['Sin posiciones habilitadas', 'bloqueado'];
+    return ['Disponible', 'pendiente'];
+}
+
+function precoolingDelay(process) {
+    return process?.atrasado && Number(process.duracion_objetivo_minutos) > 0
+        ? Math.max(0, Number(process.transcurridos_minutos) - Number(process.duracion_objetivo_minutos))
+        : 0;
 }
 
 function renderPrecooling(precooling) {
@@ -763,8 +808,20 @@ function renderPrecooling(precooling) {
     elements.precoolingAverage.textContent = precooling.duracion_promedio_minutos_7d == null
         ? '—'
         : formatDuration(precooling.duracion_promedio_minutos_7d);
+    const overdueCount = Number(precooling.procesos_atrasados);
+    elements.precoolingTabCount.hidden = !(overdueCount > 0);
+    elements.precoolingTabCount.textContent = overdueCount > 0 ? plural(overdueCount, 'atrasado') : '';
 
     const tunnels = precooling.tuneles || [];
+    const longest = tunnels.reduce((largest, tunnel) => {
+        const delay = precoolingDelay(tunnel.proceso_activo);
+        return delay > (largest?.delay ?? 0) ? { delay, name: tunnel.nombre || tunnel.codigo } : largest;
+    }, null);
+    elements.precoolingOverdueDetail.hidden = !longest;
+    elements.precoolingOverdueDetail.innerHTML = longest
+        ? officeStatus(`${longest.name} · +${formatDuration(longest.delay)}`, 'atencion', escapeHtml)
+        : '';
+
     const minutes = tunnels.flatMap(({ proceso_activo: process }) => [
         Number(process?.transcurridos_minutos) || 0,
         Number(process?.duracion_objetivo_minutos) || 0,
@@ -772,34 +829,32 @@ function renderPrecooling(precooling) {
     const scale = Math.ceil(Math.max(600, ...minutes) / 60) * 60;
     elements.precoolingChart.innerHTML = tunnels.map((tunnel) => {
         const process = tunnel.proceso_activo;
-        const occupied = Number(tunnel.ocupadas || 0);
-        const available = Number(tunnel.disponibles || 0);
-        const capacity = occupied + available;
-        const state = tunnel.operativo === false ? 'No operativo'
-            : process?.atrasado ? 'Atrasado' : process ? humanize(process.estado) : 'Disponible';
-        const tone = tunnel.operativo === false ? 'critical' : process?.atrasado ? 'warning' : process ? 'info' : 'neutral';
-        const late = process?.atrasado && Number(process.duracion_objetivo_minutos) > 0
-            ? formatDuration(Number(process.transcurridos_minutos) - Number(process.duracion_objetivo_minutos))
-            : null;
+        const [status, state] = precoolingState(tunnel);
+        const late = precoolingDelay(process);
 
         return `<tr>
             <th scope="row"><strong>${escapeHtml(tunnel.nombre || tunnel.codigo)}</strong>
                 ${process?.codigo ? `<small class="management-tunnel__detail folios-code">${officeCode(process.codigo, escapeHtml, 3)}</small>` : ''}
             </th>
             <td>
-                ${palletCells(capacity, occupied, 0, 'free')}
-                <small class="management-tunnel__detail"><b>${formatInteger(occupied)}/${formatInteger(capacity)}</b> posiciones · ${plural(available, 'libre')}</small>
+                ${precoolingPositions(tunnel)}
+                <small class="management-tunnel__detail">${tunnel.operativo
+                    ? `<b>${formatInteger(tunnel.ocupadas)}/${formatInteger(tunnel.capacidad)}</b> posiciones · ${plural(tunnel.disponibles, 'libre')}`
+                    : 'Sin posiciones disponibles'}</small>
             </td>
             <td>${precoolingTimeline(process, scale)}</td>
             <td>${precoolingSetpoint(process?.setpoint)}</td>
-            <td><span class="management-tunnel__state" data-tone="${tone}"><i aria-hidden="true"></i>${escapeHtml(state)}</span>
-                ${late ? `<small class="management-tunnel__detail">${escapeHtml(late)} sobre objetivo</small>` : ''}
+            <td>${officeStatus(status, state, escapeHtml)}
+                ${late ? `<small class="management-tunnel__detail">+${escapeHtml(formatDuration(late))}</small>` : ''}
             </td>
         </tr>`;
     }).join('') || '<tr><td colspan="5">Sin túneles registrados.</td></tr>';
 
-    elements.precoolingSummary.innerHTML = `<h3>Cola de prefrío</h3>
-        <p><b>${plural(precooling.folios_pendientes, 'folio')}</b> en espera · ${plural(precooling.disponibles, 'posición libre', 'posiciones libres')} en túneles</p>`;
+    const waiting = Number(precooling.folios_pendientes);
+    elements.precoolingSummary.innerHTML = `
+        ${waiting > 0 ? `<div class="management-precooling-queue__cells" aria-hidden="true">${palletCells(waiting, 0)}</div>` : ''}
+        <p>${waiting > 0 ? `<b>${plural(waiting, 'folio')}</b> en espera` : 'Sin folios en espera'}
+        · ${plural(precooling.disponibles, 'posición libre', 'posiciones libres')} en túneles</p>`;
 }
 
 function seriesColors() {
@@ -1035,7 +1090,13 @@ async function loadDashboard({ blocking = false, silent = false } = {}) {
         renderDashboard(payload.data);
         if (!silent) toast('Panel actualizado con la información actual.');
     } catch (error) {
-        elements.refreshStatus.textContent = 'No fue posible actualizar; se conserva la última lectura.';
+        elements.refreshStatus.textContent = state.dashboard
+            ? 'No fue posible actualizar; se conserva la última lectura.'
+            : 'No fue posible cargar la lectura.';
+        if (!state.dashboard) {
+            elements.precoolingChart.innerHTML = '<tr><td colspan="5">No fue posible consultar los túneles.</td></tr>';
+            elements.precoolingSummary.textContent = 'Cola sin lectura.';
+        }
         if (error.status === 403) {
             clearSession();
             elements.loginError.textContent = 'Tu perfil no posee acceso al panel gerencial.';

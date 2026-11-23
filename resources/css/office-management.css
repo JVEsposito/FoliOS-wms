@@ -321,12 +321,6 @@ body {
 
 .management-app:has(#management-tab-precooling[aria-selected="true"]) > .management-kpis { display: none !important; }
 
-.management-precooling-kpis {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
-    gap: 10px;
-    margin-block-end: 12px;
-}
 .management-precooling-kpi {
     display: grid;
     grid-template-columns: 40px minmax(0, 1fr);
@@ -339,12 +333,25 @@ body {
     min-inline-size: 0;
     padding: 10px 12px;
 }
+.management-app :is(#precoolingTabCount, #managementOpenPrecooling)[hidden] { display: none; }
+.management-app #precoolingTabCount {
+    border: 1px solid var(--warning-text);
+    background: var(--warning-bg);
+    color: var(--warning-text);
+    white-space: nowrap;
+}
 .management-precooling-kpi small { color: var(--text-secondary); font-size: .78rem; }
 .management-precooling-kpi strong {
     color: var(--text-strong);
+    overflow-wrap: anywhere;
     font: 800 clamp(1.35rem, 2.4vw, 2.35rem)/1.1 var(--font-sans, sans-serif);
     font-stretch: var(--font-condensed-stretch);
     font-variant-numeric: tabular-nums;
+}
+
+.management-precooling-tunnels > header {
+    --area-tint: var(--corporate-card);
+    --folios-corner: none;
 }
 
 .management-app .management-capacity-chart {
@@ -366,7 +373,32 @@ body {
 }
 .management-app .management-capacity-chart tbody tr:nth-child(even) th[scope="row"] { background: var(--row-alt) !important; }
 .management-app .management-capacity-chart tbody tr:hover th[scope="row"] { background: var(--row-hover) !important; }
-.management-capacity-chart .folios-pallet-cells { max-inline-size: 137px; }
+.management-precooling-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin: 0 0 12px;
+    padding: 0;
+    list-style: none;
+    color: var(--text-secondary);
+    font-size: .79rem;
+}
+.management-precooling-key li { display: inline-flex; align-items: center; gap: 6px; }
+.management-precooling-key__overdue { background: var(--warning-text); }
+
+.management-tunnel__positions { max-inline-size: 100%; overflow-x: auto; }
+.management-tunnel__positions .management-tunnel__matrix {
+    display: inline-grid;
+    grid-template-rows: repeat(2, minmax(var(--pallet-cell-size, 11px), auto));
+    grid-auto-columns: var(--pallet-cell-size, 11px);
+    inline-size: max-content;
+}
+.management-app :is(.management-tunnel__matrix, .management-precooling-key) [data-cell="unavailable"] {
+    background:
+        linear-gradient(45deg, transparent calc(50% - .5px), var(--text-secondary) calc(50% - .5px) calc(50% + .5px), transparent calc(50% + .5px)),
+        var(--surface-muted);
+    border-color: var(--line);
+}
 .management-tunnel__detail { display: block; margin-block-start: 4px; color: var(--text-secondary); font-size: .76rem; }
 
 .management-tunnel__timeline { display: grid; gap: 4px; }
@@ -384,7 +416,7 @@ body {
     block-size: 9px;
     background: repeating-linear-gradient(-55deg, var(--surface-muted) 0 3px, var(--line) 3px 4px);
 }
-.management-tunnel__track i { block-size: 100%; background: var(--area-frigorifico-ink); }
+.management-tunnel__track i { block-size: 100%; background: var(--text-strong); }
 .management-tunnel__track .management-tunnel__overdue { background: var(--warning-text); }
 .management-tunnel__track b {
     position: absolute;
@@ -394,41 +426,19 @@ body {
     background: var(--text-strong);
 }
 
-.management-tunnel__setpoint { display: grid; gap: 6px; }
-.management-tunnel__cold-scale { display: inline-flex; gap: 4px; }
-.management-tunnel__cold-scale i {
-    inline-size: 9px;
-    block-size: 11px;
-    border: 1px solid var(--line);
-    border-radius: 2px;
-    background: color-mix(in srgb, var(--area-frigorifico-ink) var(--cold-tone, 24%), var(--corporate-card));
-}
-.management-tunnel__cold-scale i:nth-child(2) { --cold-tone: 40%; }
-.management-tunnel__cold-scale i:nth-child(3) { --cold-tone: 56%; }
-.management-tunnel__cold-scale i:nth-child(4) { --cold-tone: 72%; }
-.management-tunnel__cold-scale i:nth-child(5) { --cold-tone: 88%; }
-.management-tunnel__cold-scale i[data-band-active] { outline: 1.5px solid var(--text-strong); outline-offset: 1px; }
+.management-tunnel__setpoint { white-space: nowrap; }
 
-.management-tunnel__state {
-    display: inline-flex;
+.management-precooling-queue {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
-    color: var(--text-secondary);
-    font-size: .82rem;
-    font-weight: 700;
+    gap: 10px 24px;
 }
-.management-tunnel__state i { inline-size: 8px; block-size: 8px; border: 1px solid currentColor; border-radius: 50%; flex: none; }
-.management-tunnel__state[data-tone="info"] { color: var(--info-text); }
-.management-tunnel__state[data-tone="warning"] { color: var(--warning-text); }
-.management-tunnel__state[data-tone="critical"] { color: var(--danger-text); }
-.management-tunnel__state[data-tone="info"] i { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
-.management-tunnel__state[data-tone="warning"] i { border-radius: 0; background: currentColor; transform: rotate(45deg) scale(.85); }
-.management-tunnel__state[data-tone="critical"] i { border-radius: 0; background: currentColor; }
-
-.management-precooling-queue { margin-block-start: 12px; padding: 10px 12px; border: 1px dashed var(--line); }
-.management-precooling-queue :is(h3, p) { margin: 0; }
-.management-precooling-queue h3 { color: var(--text-strong); font-size: .96rem; }
-.management-precooling-queue p { color: var(--text-secondary); font-size: .84rem; }
+#precoolingChartSummary { flex: 1 1 15rem; min-inline-size: 0; }
+.management-precooling-queue__cells { margin-block-end: 5px; }
+.management-precooling-queue__cells .folios-celdas-resumen small { display: none; }
+.management-precooling-queue p { margin: 0; color: var(--text-secondary); font-size: .84rem; }
+.management-precooling-queue p b { color: var(--text-strong); }
 
 .chart-container {
     position: relative;

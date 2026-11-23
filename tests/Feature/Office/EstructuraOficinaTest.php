@@ -384,7 +384,7 @@ class EstructuraOficinaTest extends TestCase
             ->assertSee('Validación de pallets de hoy')
             ->assertSee('Túneles de prefrío')
             ->assertSee('aria-label="Ocupación por túnel"', false)
-            ->assertSee('Tiempo de proceso')
+            ->assertSee('Tiempo frente al objetivo')
             ->assertSee('Lotes y continuidad hacia proceso')
             ->assertSee('Existencia física y cuenta por cliente')
             ->assertSee('Entradas y salidas · últimos 7 días')

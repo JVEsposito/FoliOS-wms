@@ -118,7 +118,7 @@
                         'cameras' => ['label' => 'Cámaras', 'icon' => '▦'],
                         'loads' => ['label' => 'Cargas', 'icon' => '↗'],
                         'validation' => ['label' => 'Validación', 'icon' => '✓'],
-                        'precooling' => ['label' => 'Prefrío', 'icon' => '❄'],
+                        'precooling' => ['label' => 'Prefrío', 'icon' => '❄', 'badge_id' => 'precoolingTabCount', 'badge' => '', 'badge_hidden' => true],
                         'materials' => ['label' => 'Materiales', 'icon' => '▤'],
                         'raw-material' => ['label' => 'MP y Envases', 'icon' => '▣'],
                     ]"
@@ -290,7 +290,7 @@
                     role="tabpanel"
                     aria-labelledby="management-tab-precooling"
                 >
-                    <div class="management-precooling-kpis" aria-label="Indicadores de Prefrío" data-folios-metrics>
+                    <div class="management-precooling-kpis folios-indicadores" aria-label="Indicadores de Prefrío">
                         @foreach ([
                             ['Activos', 'precoolingActiveMetric', 'procesos abiertos'],
                             ['Atrasados', 'precoolingOverdueMetric', 'sobre el objetivo'],
@@ -299,29 +299,48 @@
                             ['Promedio 7 días', 'precoolingAverageMetric', 'por proceso'],
                         ] as [$caption, $metric, $detail])
                             <article class="management-precooling-kpi folios-ticket" data-ticket-area="frigorifico">
-                                <span class="folios-ticket__stub" aria-hidden="true"><x-folios.gajo area="frigorifico" :size="21" />FR</span>
-                                <div><small>{{ $caption }}</small><strong id="{{ $metric }}">—</strong><small>{{ $detail }}</small></div>
+                                <span class="folios-ticket__stub" aria-hidden="true"><x-folios.gajo area="frigorifico" :size="21" />PF</span>
+                                <div>
+                                    <small>{{ $caption }}</small>
+                                    <strong id="{{ $metric }}">—</strong>
+                                    <small>{{ $detail }}</small>
+                                    @if ($metric === 'precoolingOverdueMetric')
+                                        <small id="precoolingOverdueDetail" hidden></small>
+                                    @endif
+                                </div>
                             </article>
                         @endforeach
                     </div>
-                    <article class="management-panel folios-ticket" data-ticket-area="frigorifico" data-folios-register>
+                    <article class="management-panel management-precooling-tunnels folios-ticket" data-ticket-area="frigorifico" data-folios-register>
                         <header>
                             <div class="management-panel__identity">
                                 <x-folios.gajo area="frigorifico" :size="34" />
                                 <div><p class="eyebrow">Capacidad térmica</p><h2>Túneles de prefrío</h2></div>
                             </div>
-                            <a class="management-panel-link folios-action" href="/oficina/prefrio">Abrir Prefrío</a>
+                            <a class="management-panel-link folios-action" id="managementOpenPrecooling" href="/oficina/prefrio" hidden>Abrir Prefrío</a>
                         </header>
+                        <ul class="management-precooling-key folios-pallet-key" aria-label="Leyenda de Prefrío">
+                            <li><i data-cell="done" aria-hidden="true"></i>Ocupada</li>
+                            <li><i data-cell="free" aria-hidden="true"></i>Libre</li>
+                            <li><i data-cell="unavailable" aria-hidden="true"></i>No habilitada</li>
+                            <li><i class="management-precooling-key__overdue" aria-hidden="true"></i>Sobre objetivo</li>
+                        </ul>
                         <div class="table-scroll" role="region" aria-label="Lectura de túneles de prefrío" tabindex="0">
                             <table class="management-capacity-chart" aria-label="Ocupación por túnel">
                                 <thead>
-                                    <tr><th scope="col">Túnel</th><th scope="col">Posiciones</th><th scope="col">Tiempo de proceso</th><th scope="col">Setpoint</th><th scope="col">Estado</th></tr>
+                                    <tr><th scope="col">Túnel</th><th scope="col">Posiciones</th><th scope="col">Tiempo frente al objetivo</th><th scope="col">Setpoint</th><th scope="col">Estado</th></tr>
                                 </thead>
-                                <tbody id="precoolingChartRows"></tbody>
+                                <tbody id="precoolingChartRows"><tr><td colspan="5">Consultando túneles…</td></tr></tbody>
                             </table>
                         </div>
-                        <div class="management-precooling-queue" id="precoolingChartSummary"></div>
                     </article>
+                    <section class="management-panel management-precooling-queue folios-ticket" data-ticket-area="frigorifico" aria-labelledby="precoolingQueueTitle">
+                        <div class="management-panel__identity">
+                            <x-folios.gajo area="frigorifico" :size="30" />
+                            <h2 id="precoolingQueueTitle">Cola de prefrío</h2>
+                        </div>
+                        <div id="precoolingChartSummary">Consultando cola…</div>
+                    </section>
                 </div>
 
                 <div
