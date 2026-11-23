@@ -87,7 +87,7 @@ class CuentaEnvases extends ConsultaPorTema
                 // «Saldos» solo es un saldo de pallets (saldos-pt): aquí va en frases con el envase.
                 ['debe', 'debemos', 'deben', 'saldo de envases', 'saldos de envases', 'saldo de bins', 'saldo de totes'], ['cliente']),
             new VistaConsulta('por-productor', 'Saldo por productor', 'Saldo de envases por CSG (productor) dentro de la cuenta de cada cliente, con la misma atribución del estado de cuenta.',
-                ['productor', 'productores', 'por productor', 'por csg'], ['cliente', 'csg']),
+                ['productor', 'productores', 'csg', 'por productor', 'por csg'], ['cliente', 'csg']),
             new VistaConsulta('estado-cuenta', 'Estado de cuenta', 'Estado de cuenta de envases de un cliente: saldo inicial, entradas, salidas y saldo final por envase, como el documento.',
                 ['estado de cuenta', 'cartola'], ['periodo', 'cliente']),
             new VistaConsulta('descuadres', 'Descuadres guía y Romana', 'Salidas de envases registradas dos veces, en una guía de despacho de envases y en el destare de Romana, con la diferencia por envase. Solo para quien ajusta la cuenta.',
