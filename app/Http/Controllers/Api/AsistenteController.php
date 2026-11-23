@@ -8,6 +8,8 @@ use App\Models\ConfiguracionAsistente;
 use App\Models\PreguntaAsistente;
 use App\Models\RangoTaraAsistente;
 use App\Services\Asistente\CompuertaAsistente;
+use App\Services\Asistente\Haiku\ClienteAnthropic;
+use App\Services\Asistente\Haiku\PresupuestoHaiku;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ServicioAsistente;
 use Illuminate\Http\JsonResponse;
@@ -15,11 +17,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /** API del asistente de Oficina (docs/ASISTENTE_OFICINA.md). */
 class AsistenteController extends Controller
 {
-    public function __construct(private readonly ServicioAsistente $asistente) {}
+    public function __construct(
+        private readonly ServicioAsistente $asistente,
+        private readonly ClienteAnthropic $anthropic,
+        private readonly PresupuestoHaiku $presupuesto,
+    ) {}
 
     public function preguntar(PreguntaAsistenteRequest $request): JsonResponse
     {
@@ -66,6 +73,7 @@ class AsistenteController extends Controller
         Gate::authorize('administrar-asistente');
         $datos = $request->validate([
             'margen_desviaciones' => ['required', 'numeric', 'between:0.5,5'],
+            'modo' => ['nullable', Rule::in(ConfiguracionAsistente::MODOS)],
             'rangos' => ['present', 'array'],
             'rangos.*.tipo_envase' => ['required', 'string', Rule::in(['bins', 'totes'])],
             'rangos.*.especie' => ['nullable', 'string', 'max:100'],
@@ -76,8 +84,15 @@ class AsistenteController extends Controller
             'rangos.*.maximo_kg.gt' => 'El máximo del rango debe ser mayor que el mínimo.',
         ]);
 
+        if (($datos['modo'] ?? null) === ConfiguracionAsistente::MODO_MIXTO && ! $this->anthropic->disponible()) {
+            throw ValidationException::withMessages(['modo' => 'Falta ANTHROPIC_API_KEY en el .env del servidor: el asistente sigue sin IA.']);
+        }
+
         DB::transaction(function () use ($datos): void {
-            ConfiguracionAsistente::actual()->update(['margen_desviaciones' => $datos['margen_desviaciones']]);
+            ConfiguracionAsistente::actual()->update(array_filter([
+                'margen_desviaciones' => $datos['margen_desviaciones'],
+                'modo' => $datos['modo'] ?? null,
+            ], fn ($valor): bool => $valor !== null));
             foreach ($datos['rangos'] as $rango) {
                 $especie = filled($rango['especie'] ?? null) ? trim($rango['especie']) : null;
                 RangoTaraAsistente::query()->updateOrCreate(
@@ -129,6 +144,13 @@ class AsistenteController extends Controller
 
         return [
             'modo' => $configuracion->modo,
+            'ia' => [
+                'disponible' => $this->anthropic->disponible(),
+                'modelo' => $this->anthropic->modelo(),
+                'consumo_mes_usd' => $this->presupuesto->consumoMes(),
+                'tope_mensual_usd' => (float) config('asistente.topes.mensual_usd'),
+                'limite_diario_usuario' => (int) config('asistente.topes.diario_usuario'),
+            ],
             'margen_desviaciones' => $configuracion->margen_desviaciones,
             'rangos' => RangoTaraAsistente::query()->orderBy('tipo_envase')->orderBy('especie')->get()
                 ->map(fn (RangoTaraAsistente $r): array => [

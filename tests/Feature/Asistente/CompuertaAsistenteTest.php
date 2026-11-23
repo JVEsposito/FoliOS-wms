@@ -95,7 +95,8 @@ class CompuertaAsistenteTest extends TestCase
     public function test_comandos_de_evaluacion_y_compuerta(): void
     {
         $this->artisan('asistente:evaluar')->expectsOutputToContain('0 falsas')->assertSuccessful();
-        $this->artisan('asistente:evaluar --modo=haiku')->assertExitCode(2);
+        $this->artisan('asistente:evaluar --modo=haiku')->assertExitCode(1);
+        $this->artisan('asistente:evaluar --modo=otro')->assertExitCode(2);
         $this->artisan('asistente:compuerta --dias=7')->expectsOutputToContain('Decisión: faltan datos')->assertSuccessful();
         $this->artisan('asistente:compuerta --dias=0')->assertExitCode(2);
     }

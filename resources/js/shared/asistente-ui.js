@@ -92,6 +92,19 @@ export function renderEntendido(entendido, escape) {
         </div>`;
 }
 
+// Aviso de por qué se respondió sin IA (tope, red, tema sensible). Lo escribe FoliOS.
+export function renderAviso(aviso, escape) {
+    if (!aviso) return '';
+    return `<p class="folios-asistente__aviso" data-tono="atencion"><span aria-hidden="true">◆</span> ${escape(aviso)}</p>`;
+}
+
+// Con Haiku, el pie deja claro que las cifras son de FoliOS, no del modelo.
+export function renderPie(modo, ahora) {
+    if (modo !== 'haiku') return '';
+    const hora = ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `<p class="folios-asistente__pie">Haiku eligió la consulta. Cifras calculadas por FoliOS a las ${hora}.</p>`;
+}
+
 const MENSAJE_SUGERENCIAS = 'No estoy seguro de qué consulta quieres. ¿Es alguna de estas?';
 const MENSAJE_SIN_CONSULTA = 'No tengo una consulta para esa pregunta. Puedes buscarla en FoliOS o ver lo que sé responder.';
 

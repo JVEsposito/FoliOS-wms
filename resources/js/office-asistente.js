@@ -1,4 +1,4 @@
-import { ESQUINAS, esquinaMasCercana, renderEntendido, renderResultado, renderSugerencias } from './shared/asistente-ui.js';
+import { ESQUINAS, esquinaMasCercana, renderAviso, renderEntendido, renderPie, renderResultado, renderSugerencias } from './shared/asistente-ui.js';
 
 // Gajo asistente de Oficina (docs/ASISTENTE_OFICINA.md): se muestra solo con la capacidad
 // puede_usar_asistente, se arrastra a cualquier esquina y nunca se abre por su cuenta.
@@ -108,11 +108,14 @@ function iniciarAsistente() {
             const busqueda = datos.busqueda
                 ? `<a class="folios-asistente__enlace" href="/oficina/consultas/busqueda?q=${encodeURIComponent(datos.busqueda)}">Buscar «${escape(datos.busqueda)}» en la Búsqueda operacional</a>`
                 : '';
-            agregar(renderSugerencias(sugerenciasVigentes, escape, datos.mensaje) + busqueda, 'folios-asistente__respuesta');
+            agregar(renderAviso(datos.aviso, escape) + renderSugerencias(sugerenciasVigentes, escape, datos.mensaje) + busqueda, 'folios-asistente__respuesta');
             mostrarDesdePregunta();
             return;
         }
-        agregar(renderEntendido(datos?.entendido, escape) + renderResultado(datos?.resultado, escape), 'folios-asistente__respuesta');
+        agregar(
+            renderAviso(datos?.aviso, escape) + renderEntendido(datos?.entendido, escape) + renderResultado(datos?.resultado, escape) + renderPie(datos?.modo, new Date()),
+            'folios-asistente__respuesta',
+        );
         mostrarDesdePregunta();
     }
 

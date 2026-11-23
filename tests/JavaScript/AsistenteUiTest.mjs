@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { esquinaMasCercana, glifoEstado, renderEntendido, renderResultado, renderSugerencias } from '../../resources/js/shared/asistente-ui.js';
+import { esquinaMasCercana, glifoEstado, renderAviso, renderEntendido, renderPie, renderResultado, renderSugerencias } from '../../resources/js/shared/asistente-ui.js';
 
 const escape = (valor) => String(valor ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -84,4 +84,11 @@ test('la línea Entendí muestra consulta, fichas, Corregir y lo que no se aplic
     assert.ok(html.includes('Exportadora &lt;Andina&gt;'));
     assert.ok(html.includes('data-tono="atencion"'));
     assert.equal(renderEntendido(null, escape), '');
+});
+
+test('el aviso de modo sin IA se escapa y el pie solo aparece con Haiku', () => {
+    assert.equal(renderAviso(null, escape), '');
+    assert.ok(renderAviso('Tope <del> mes', escape).includes('Tope &lt;del&gt; mes'));
+    assert.equal(renderPie('sin_ia', new Date()), '');
+    assert.ok(renderPie('haiku', new Date(2026, 10, 23, 9, 5)).includes('Cifras calculadas por FoliOS a las 09:05'));
 });
