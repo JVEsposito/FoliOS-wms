@@ -292,6 +292,24 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_exporta_bandejas_de_custodia_reposicion_y_niveles(): void
+    {
+        foreach ([
+            'inventario-cc' => ['/oficina/materiales/almacenes', 'custodyTableBody'],
+            'reposicion' => ['/oficina/materiales/reposicion', 'replenishmentList'],
+            'niveles' => ['/oficina/materiales/items/niveles', 'levelsForm'],
+        ] as $archivo => [$ruta, $id]) {
+            $html = $this->get($ruta)->assertOk()
+                ->assertSee('id="'.$id.'"', false)
+                ->assertSee('data-ticket-area="materiales"', false)
+                ->getContent();
+            if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+                File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+                File::put(storage_path('app/ui/oficina/'.$archivo.'.html'), $html);
+            }
+        }
+    }
+
     public function test_cambio_de_atributos_pt_exporta_su_pantalla(): void
     {
         $html = $this->get('/oficina/administracion/atributos-pt')->assertOk()->getContent();

@@ -15,32 +15,32 @@
 <main id="custodyApp" class="office-app is-hidden" data-folios-workspace="catalogo">
     <x-office.navigation domain="materiales" office="custodia" context="INVENTARIO CC" icon="⌖" />
 
-    <div class="custody-shell">
-        <header class="custody-heading" data-folios-masthead>
-            <div>
-                <p class="eyebrow">INVENTARIO CC · CENTROS DE COSTO</p>
-                <h1>Custodia distribuida de materiales</h1>
-                <p>Una entrega cambia la custodia; solo un consumo o ajuste disminuye la existencia total de la empresa.</p>
-            </div>
-            <button class="secondary-button" id="custodyReload" type="button">↻ Actualizar</button>
-        </header>
+    <div class="custody-shell materials-bandejas">
+        <x-folios.cabecera-etiqueta area="materiales" seccion="Materiales · Centros de costo"
+            titulo="Inventario CC" codigo="MA · CUSTODIA"
+            descripcion="Una entrega cambia la custodia. El consumo o un ajuste modifican la existencia total de la empresa.">
+            <button class="secondary-button" id="custodyReload" type="button">Actualizar</button>
+        </x-folios.cabecera-etiqueta>
 
-        <section class="custody-metrics" data-folios-metrics>
-            <article><span>FOLIOS VIGENTES</span><strong id="custodyFolioCount">0</strong></article>
-            <article><span>ALMACENES CON SALDO</span><strong id="custodyWarehouseCount">0</strong></article>
-            <article><span>ÍTEMS CON EXISTENCIA</span><strong id="custodyItemCount">0</strong></article>
+        <section class="folios-indicadores" aria-label="Resumen de custodia">
+            <x-folios.ticket-indicador area="materiales" clave="MA" rotulo="Folios vigentes" valor-id="custodyFolioCount" valor="—" />
+            <x-folios.ticket-indicador area="materiales" clave="MA" rotulo="Almacenes con saldo" valor-id="custodyWarehouseCount" valor="—" />
+            <x-folios.ticket-indicador area="materiales" clave="MA" rotulo="Ítems con existencia" valor-id="custodyItemCount" valor="—" />
         </section>
 
-        <div class="custody-tabs" role="tablist" aria-label="Perspectiva del inventario">
-            <button class="is-active" data-tab="bodega" type="button" role="tab">Existencia en Bodega</button>
-            <button data-tab="centros_costo" type="button" role="tab">Existencia en centros de costo</button>
-            <button data-tab="total_empresa" type="button" role="tab">Existencia total empresa</button>
-        </div>
+        <x-folios.bandeja area="materiales" titulo="Existencias por custodia" id="custodyInventoryHeading" panel-id="custodyInventory">
+            <x-slot:resumen>
+                <span id="custodyResultsSummary" role="status">Consultando inventario…</span>
+            </x-slot:resumen>
 
-        <section class="custody-card">
+            <div class="custody-tabs" role="group" aria-label="Perspectiva del inventario">
+                <button data-tab="bodega" type="button" aria-pressed="true">Existencia en Bodega</button>
+                <button data-tab="centros_costo" type="button" aria-pressed="false">Existencia en centros de costo</button>
+                <button data-tab="total_empresa" type="button" aria-pressed="false">Existencia total empresa</button>
+            </div>
             <form class="custody-filters" id="custodyFilters" data-folios-toolbar>
                 <label>Buscar
-                    <input name="q" type="search" placeholder="Almacén, cliente, ítem, folio, lote, cantidad, cámara o posición">
+                    <input name="q" type="search" placeholder="Folio, ítem, lote o ubicación">
                 </label>
                 <label>Cliente
                     <select name="cliente_id"><option value="">Todos los clientes</option></select>
@@ -54,26 +54,23 @@
                 <label data-custody-filter-camera>Cámara
                     <select name="camara_id"><option value="">Todas las cámaras</option></select>
                 </label>
-                <button class="secondary-button" id="custodyFiltersReset" type="button">Limpiar</button>
-                <button class="primary-button" id="custodyExport" type="button">⇩ Exportar Excel</button>
+                <div class="materials-bandeja-actions">
+                    <button class="secondary-button" id="custodyFiltersReset" type="button">Limpiar</button>
+                    <button class="secondary-button" id="custodyExport" type="button" disabled>Exportar Excel</button>
+                </div>
             </form>
-            <div class="custody-filter-summary">
-                <span id="custodyResultsSummary">0 registros</span>
-                <p class="custody-error" id="custodyFilterError" role="alert"></p>
-            </div>
-            <div class="custody-table-wrap">
+            <p class="materials-bandeja-error" id="custodyFilterError" role="alert"></p>
+            <div class="custody-table-wrap" role="region" tabindex="0" aria-label="Detalle de existencias">
                 <table class="custody-table">
                     <thead id="custodyTableHead"></thead>
                     <tbody id="custodyTableBody"></tbody>
                 </table>
             </div>
-        </section>
+        </x-folios.bandeja>
 
         <div class="custody-grid">
-            <section class="custody-card" id="custodyMovementPanel">
-                <p class="eyebrow">OPERACIÓN POSTERIOR A LA ENTREGA</p>
-                <h2>Registrar movimiento</h2>
-                <p>Consumir descuenta inventario; devolver y transferir conservan el total; ajustar exige supervisión.</p>
+            <x-folios.bandeja area="materiales" titulo="Registrar movimiento" id="custodyMovementHeading" panel-id="custodyMovementPanel" class="is-hidden">
+                <p class="materials-help">Consumir descuenta inventario, devolver y transferir conservan el total, y ajustar exige supervisión.</p>
                 <form class="custody-form" id="custodyMovementForm">
                     <input type="hidden" name="incidencia_verificacion_id">
                     <p id="custodyIncidentContext" class="is-hidden"></p>
@@ -122,12 +119,10 @@
                         <button class="primary-button" type="submit">Registrar movimiento</button>
                     </div>
                 </form>
-            </section>
+            </x-folios.bandeja>
 
-            <aside class="custody-card" id="custodyKardexPanel">
-                <p class="eyebrow">TRAZABILIDAD</p>
-                <h2>Kardex por almacén</h2>
-                <p>Consulta en pantalla los últimos 100 eventos o descarga el historial completo según tipo y período.</p>
+            <x-folios.bandeja area="materiales" titulo="Kardex por almacén" id="custodyKardexHeading" panel-id="custodyKardexPanel" class="is-hidden">
+                <p class="materials-help">Consulta los últimos 100 eventos o descarga el historial completo según tipo y período.</p>
                 <form class="custody-form" id="custodyHistoryFilters" data-folios-toolbar>
                     <label class="wide">Historial a exportar
                         <select name="categoria">
@@ -145,11 +140,11 @@
                     </label>
                     <p class="custody-error" id="custodyHistoryError" role="alert"></p>
                     <div class="custody-actions">
-                        <button class="primary-button" id="custodyHistoryExport" type="button">⇩ Exportar historial</button>
+                        <button class="secondary-button" id="custodyHistoryExport" type="button">Exportar historial</button>
                     </div>
                 </form>
                 <div class="custody-kardex" id="custodyKardex"></div>
-            </aside>
+            </x-folios.bandeja>
         </div>
     </div>
 </main>
