@@ -2,6 +2,7 @@
 
 namespace App\Services\Validacion;
 
+use App\Exceptions\ConflictoOperacion;
 use App\Models\CsgValidacion;
 use App\Models\EspecieValidacion;
 use App\Models\ProductorCsg;
@@ -15,6 +16,7 @@ class ServicioSincronizacionCatalogoSag
     public function __construct(
         private readonly ServicioProyeccionCatalogoValidacion $proyector,
         private readonly ServicioTemporadaActiva $temporadas,
+        private readonly BloqueoCatalogoValidacion $bloqueo,
     ) {}
 
     /**
@@ -45,9 +47,17 @@ class ServicioSincronizacionCatalogoSag
         ];
 
         return DB::transaction(function () use ($productor, $pares, $proyectar, $resultado): array {
-            $temporada = $this->temporadas->buscar(bloquear: true);
-            if (! $temporada) {
+            $activa = $this->temporadas->buscar();
+            if (! $activa) {
                 return $resultado;
+            }
+            // Primero el catálogo y después la temporada, en el mismo orden que las demás
+            // escrituras del catálogo. Compartido: la temporada sigue activa hasta el commit,
+            // sin frenar a Romana ni lotes.
+            $this->bloqueo->adquirir($activa->id);
+            $temporada = $this->temporadas->buscarConBloqueoCompartido();
+            if ($temporada?->id !== $activa->id) {
+                throw new ConflictoOperacion('La temporada activa cambió durante la sincronización con SAG. Vuelve a intentarlo.');
             }
 
             $resultado['temporada_id'] = $temporada->id;
@@ -122,10 +132,10 @@ class ServicioSincronizacionCatalogoSag
             $resultado['catalogo_actualizado'] = $catalogoCambio;
 
             if ($catalogoCambio) {
-                $temporada->increment('version_catalogo');
                 if ($proyectar) {
-                    $this->proyector->sincronizarCsg($temporada->refresh(), $productor);
+                    $this->proyector->sincronizarCsg($temporada, $productor);
                 }
+                $this->bloqueo->publicar($temporada);
             }
 
             return $resultado;

@@ -20,6 +20,7 @@ class ServicioCatalogoValidacion
 {
     public function __construct(
         private readonly ServicioCliente $clientes,
+        private readonly BloqueoCatalogoValidacion $bloqueo,
     ) {}
 
     /**
@@ -250,14 +251,13 @@ class ServicioCatalogoValidacion
     private function guardarCatalogo(Model $modelo, array $atributos, array $relaciones = []): Model
     {
         return DB::transaction(function () use ($modelo, $atributos, $relaciones): Model {
+            $temporada = $this->bloqueo->adquirir($atributos['temporada_id']);
             $modelo->fill($atributos);
             $cambio = ! $modelo->exists || $modelo->isDirty();
             $modelo->save();
 
             if ($cambio) {
-                Temporada::query()
-                    ->whereKey($atributos['temporada_id'])
-                    ->increment('version_catalogo');
+                $this->bloqueo->publicar($temporada);
             }
 
             return $modelo->refresh()->load($relaciones);
