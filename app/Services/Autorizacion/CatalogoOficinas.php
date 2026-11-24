@@ -75,6 +75,7 @@ class CatalogoOficinas
         ['frigorifico', 'Labores por turno', '/oficina/frigorifico/labores-turno', 'frigorifico.camaras', ['puede_supervisar_camaras_productos']],
         ['frigorifico', 'Discrepancias', '/oficina/frigorifico/discrepancias', 'frigorifico.camaras', ['puede_supervisar']],
         ['frigorifico', 'Cargas', '/oficina/frigorifico/despacho/cargas', 'frigorifico.cargas', ['puede_consultar_catalogo_cargas']],
+        ['frigorifico', 'Despacho nacional', '/oficina/frigorifico/despacho/nacional', 'frigorifico.cargas', ['puede_consultar_catalogo_cargas']],
         ['frigorifico', 'Estatus operativo', '/oficina/frigorifico/despacho/estatus', 'frigorifico.cargas', ['puede_consultar_cargas']],
         ['frigorifico', 'Calendario de embarques', '/oficina/frigorifico/despacho/calendario', 'frigorifico.cargas', ['puede_consultar_catalogo_cargas']],
         ['frigorifico', 'Control de despacho (R-24)', '/oficina/frigorifico/control-despacho', 'frigorifico.control-despacho', ['puede_consultar_control_despacho']],
