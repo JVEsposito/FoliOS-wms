@@ -292,6 +292,19 @@ class EstructuraOficinaTest extends TestCase
         }
     }
 
+    public function test_despacho_nacional_se_abre_desde_frigorifico(): void
+    {
+        $html = $this->get('/oficina/frigorifico/despacho/nacional')->assertOk()
+            ->assertSee('id="nationalSeparationForm"', false)
+            ->assertSee('id="nationalDispatchForm"', false)
+            ->assertSee('aria-current="page"', false)
+            ->getContent();
+        if (getenv('ESTIBA_EXPORTAR_UI_TESTS') === '1') {
+            File::ensureDirectoryExists(storage_path('app/ui/oficina'));
+            File::put(storage_path('app/ui/oficina/despacho-nacional.html'), $html);
+        }
+    }
+
     public function test_exporta_bandejas_de_custodia_reposicion_y_niveles(): void
     {
         foreach ([

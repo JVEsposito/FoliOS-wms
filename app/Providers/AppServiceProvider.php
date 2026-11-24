@@ -305,6 +305,10 @@ class AppServiceProvider extends ServiceProvider
                 && $usuario->rol === RolUsuario::Administrador,
         );
         Gate::define(
+            'cerrar-despacho-nacional-pt',
+            fn (User $usuario): bool => $alcance->puedeCerrarDespachoFrigorifico($usuario),
+        );
+        Gate::define(
             'gestionar-cargas',
             fn (User $usuario): bool => $alcance->puedeGestionarCargas($usuario),
         );
