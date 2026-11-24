@@ -53,6 +53,29 @@ class InterpreteReglasAsistenteTest extends TestCase
         $this->assertSame($esperada, $this->interpretar($texto)['consulta']?->clave(), $texto);
     }
 
+    /** @return array<string, array{string, string, string}> */
+    public static function preguntasDeLotes(): array
+    {
+        return [
+            'lotes retenidos sag' => ['lotes retenidos sag?', 'retenciones-sag', 'vigentes'],
+            'lotes con observaciones' => ['que lotes sag tienen observaciones', 'retenciones-sag', 'vigentes'],
+            'pallets con fruta retenida' => ['que pallets tienen fruta retenida', 'retenciones-sag', 'folios-afectados'],
+            'donde estan los pallets retenidos' => ['donde estan los pallets retenidos', 'retenciones-sag', 'folios-afectados'],
+            'retenidos en hidrocooler' => ['lotes retenidos en hidrocooler', 'lotes-mp', 'por-estado'],
+            'disponibles para proceso' => ['cuantos lotes hay disponibles para proceso', 'lotes-mp', 'por-estado'],
+            'resguardo sin proceso' => ['que lotes siguen en resguardo sin proceso', 'lotes-mp', 'antiguedad'],
+            'mas antiguos' => ['lotes mas antiguos', 'lotes-mp', 'antiguedad'],
+        ];
+    }
+
+    #[DataProvider('preguntasDeLotes')]
+    public function test_lotes_y_sag_eligen_tema_y_vista(string $texto, string $tema, string $vista): void
+    {
+        $interpretacion = $this->interpretar($texto);
+
+        $this->assertSame([$tema, $vista], [$interpretacion['consulta']?->clave(), $interpretacion['parametros']->vista], $texto);
+    }
+
     /** @return array<string, array{string}> */
     public static function preguntasDudosas(): array
     {
@@ -61,6 +84,8 @@ class InterpreteReglasAsistenteTest extends TestCase
             'dos consultas a la vez' => ['cajas y kilos'],
             'nada que ver' => ['como esta el clima'],
             'pregunta de otro dominio' => ['cuantos trabajadores vinieron hoy'],
+            'ordenes de proceso por turno' => ['que lotes entran a proceso en el turno a'],
+            'lotes sag liberados' => ['que lotes sag se liberaron'],
         ];
     }
 

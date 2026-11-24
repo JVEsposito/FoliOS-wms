@@ -292,10 +292,12 @@
       "n": 30,
       "area": "Proceso",
       "pregunta": "¿Qué lotes siguen en resguardo sin proceso?",
-      "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "lotes-mp",
       "objetivo": "existencias MP",
-      "responde_hoy": null
+      "responde_hoy": "lotes-mp",
+      "vista": "antiguedad",
+      "clase_resuelta": "temas y vistas"
     },
     {
       "n": 31,
@@ -392,10 +394,12 @@
       "n": 40,
       "area": "Frío",
       "pregunta": "¿Qué lotes están retenidos por SAG?",
-      "clase": "falta_consulta",
-      "consulta_objetivo": null,
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "retenciones-sag",
       "objetivo": "lotes retenidos SAG",
-      "responde_hoy": null
+      "responde_hoy": "retenciones-sag",
+      "vista": "vigentes",
+      "clase_resuelta": "temas y vistas"
     },
     {
       "n": 41,
@@ -731,6 +735,126 @@
       "objetivo": "estado de cuenta de envases",
       "responde_hoy": "cuenta-envases",
       "vista": "estado-cuenta"
+    },
+    {
+      "n": 75,
+      "area": "Frío",
+      "clase": "reglas_bastan",
+      "pregunta": "¿Qué lotes SAG tienen observaciones?",
+      "consulta_objetivo": "retenciones-sag",
+      "objetivo": "lotes SAG con observaciones",
+      "responde_hoy": "retenciones-sag",
+      "clase_resuelta": "temas y vistas",
+      "vista": "vigentes"
+    },
+    {
+      "n": 76,
+      "area": "Frío",
+      "clase": "reglas_bastan",
+      "pregunta": "Lotes retenidos SAG de Valle Alto",
+      "consulta_objetivo": "retenciones-sag",
+      "objetivo": "lotes retenidos SAG de un cliente",
+      "responde_hoy": "retenciones-sag",
+      "clase_resuelta": "temas y vistas",
+      "vista": "vigentes"
+    },
+    {
+      "n": 77,
+      "area": "Frío",
+      "clase": "reglas_bastan",
+      "pregunta": "¿Qué pallets tienen fruta retenida?",
+      "consulta_objetivo": "retenciones-sag",
+      "objetivo": "pallets con cajas de lotes retenidos",
+      "responde_hoy": "retenciones-sag",
+      "clase_resuelta": "temas y vistas",
+      "vista": "folios-afectados"
+    },
+    {
+      "n": 78,
+      "area": "Frío",
+      "clase": "reglas_bastan",
+      "pregunta": "¿Dónde están los pallets retenidos por SAG?",
+      "consulta_objetivo": "retenciones-sag",
+      "objetivo": "ubicación de pallets con fruta retenida",
+      "responde_hoy": "retenciones-sag",
+      "clase_resuelta": "temas y vistas",
+      "vista": "folios-afectados"
+    },
+    {
+      "n": 79,
+      "area": "Frío",
+      "clase": "falta_consulta",
+      "pregunta": "¿Qué lotes SAG se liberaron esta semana?",
+      "consulta_objetivo": null,
+      "objetivo": "lotes SAG liberados",
+      "responde_hoy": null,
+      "periodo_explicito": true
+    },
+    {
+      "n": 80,
+      "area": "Proceso",
+      "clase": "reglas_bastan",
+      "pregunta": "¿Cuántos lotes hay en hidrocooler?",
+      "consulta_objetivo": "lotes-mp",
+      "objetivo": "lotes por estado",
+      "responde_hoy": "lotes-mp",
+      "clase_resuelta": "temas y vistas",
+      "vista": "por-estado"
+    },
+    {
+      "n": 81,
+      "area": "Proceso",
+      "clase": "reglas_bastan",
+      "pregunta": "¿Cuántos lotes hay disponibles para proceso?",
+      "consulta_objetivo": "lotes-mp",
+      "objetivo": "lotes disponibles para proceso",
+      "responde_hoy": "lotes-mp",
+      "clase_resuelta": "temas y vistas",
+      "vista": "por-estado"
+    },
+    {
+      "n": 82,
+      "area": "Proceso",
+      "clase": "reglas_bastan",
+      "pregunta": "Lotes retenidos en hidrocooler",
+      "consulta_objetivo": "lotes-mp",
+      "objetivo": "lotes retenidos por Hidrocooler",
+      "responde_hoy": "lotes-mp",
+      "clase_resuelta": "temas y vistas",
+      "vista": "por-estado"
+    },
+    {
+      "n": 83,
+      "area": "Proceso",
+      "clase": "reglas_bastan",
+      "pregunta": "¿Cuáles son los lotes más antiguos?",
+      "consulta_objetivo": "lotes-mp",
+      "objetivo": "lotes más antiguos sin proceso",
+      "responde_hoy": "lotes-mp",
+      "clase_resuelta": "temas y vistas",
+      "vista": "antiguedad"
+    },
+    {
+      "n": 84,
+      "area": "Proceso",
+      "clase": "reglas_bastan",
+      "pregunta": "Lotes esperando proceso de Valle Alto",
+      "consulta_objetivo": "lotes-mp",
+      "objetivo": "lotes esperando proceso de un cliente",
+      "responde_hoy": "lotes-mp",
+      "clase_resuelta": "temas y vistas",
+      "vista": "antiguedad"
+    },
+    {
+      "n": 85,
+      "area": "Proceso",
+      "clase": "reglas_bastan",
+      "pregunta": "¿Cuántos kilos de lotes recibimos hoy por CSG?",
+      "consulta_objetivo": "kilos-por-csg",
+      "objetivo": "kilos por CSG",
+      "responde_hoy": "kilos-por-csg",
+      "clase_resuelta": "temas y vistas",
+      "periodo_explicito": true
     }
   ]
 }

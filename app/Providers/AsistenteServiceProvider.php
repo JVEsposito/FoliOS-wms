@@ -17,8 +17,10 @@ use App\Services\Asistente\Consultas\FormatosPt;
 use App\Services\Asistente\Consultas\GuiasEnvases;
 use App\Services\Asistente\Consultas\KilosPorCsg;
 use App\Services\Asistente\Consultas\KilosRecepciones;
+use App\Services\Asistente\Consultas\LotesMateriaPrima;
 use App\Services\Asistente\Consultas\PrefrioEnCurso;
 use App\Services\Asistente\Consultas\Repaletizajes;
+use App\Services\Asistente\Consultas\RetencionesSag;
 use App\Services\Asistente\Consultas\RevisarTaras;
 use App\Services\Asistente\Consultas\SaldosPt;
 use App\Services\Asistente\Consultas\TiemposCargas;
@@ -52,6 +54,8 @@ class AsistenteServiceProvider extends ServiceProvider
         GuiasEnvases::class,
         CuentaEnvases::class,
         ExistenciaEnvases::class,
+        LotesMateriaPrima::class,
+        RetencionesSag::class,
         EstadoCargas::class,
         FoliosDespachados::class,
         PrefrioEnCurso::class,
