@@ -65,6 +65,21 @@ class RetencionesSagTest extends TestCase
         $this->assertSame(['Con observaciones', 'Sin restricciones de destino'], [$filas['20002']['estado'], $filas['20002']['destinos']]);
     }
 
+    public function test_un_pallet_mezclado_cuenta_una_vez_en_el_total(): void
+    {
+        $this->retencion('10056', 'retenido', todos: true);
+        $this->retencion('10057', 'con_observaciones');
+        $mezcla = $this->folio('10056', 30);
+        $externos = $mezcla->datos_externos;
+        $externos['composicion'][] = [...$externos['composicion'][0], 'lote_materia_prima' => '10057', 'cantidad_cajas' => 20];
+        $mezcla->update(['datos_externos' => $externos]);
+
+        $resultado = $this->vista('vigentes');
+
+        $this->assertSame([1, 1], array_column($resultado->filas, 'pallets'));
+        $this->assertSame(1, $resultado->cifras[1]['valor']);
+    }
+
     public function test_folios_afectados_excluye_despachados_y_lotes_liberados(): void
     {
         $this->retencion('10056', 'retenido', todos: true);

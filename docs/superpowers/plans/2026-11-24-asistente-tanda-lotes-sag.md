@@ -43,7 +43,7 @@
 - Test: `tests/Feature/Asistente/LotesMateriaPrimaTest.php`.
 
 **Interfaces:** tema `lotes-mp`, «Lotes de materia prima», dominio `materia-prima`.
-- **Palabras del tema:** `lote`, `lotes`, `proceso`.
+- **Palabras del tema:** `lote`, `lotes`. «Proceso» suelto quedó fuera porque llevaba a este tema «¿qué lotes entran a proceso en el turno A?»; cuenta en las frases `para proceso` y `directo a proceso`.
 - **Vista `por-estado`** (por defecto):
   - palabras: `estado`, `estados`, `hidrocooler`, `disponibles`, `disponible`, `camara`, `parcial`, `entregados`, `por estado`, `retenidos en hidrocooler`, `retenido en hidrocooler`, `entrega parcial`;
   - filtros: cliente, CSG, especie;
@@ -80,7 +80,7 @@
   - registros no liberados de la temporada activa;
   - columnas: lote, cliente, estado (con el accessor), destinos (con el mismo texto de la oficina), detección, pallets en planta y cajas del lote en planta.
 - **Vista `folios-afectados`:**
-  - palabras: `pallets`, `pallet`, `folios`, `folio`, `cajas`, `donde`, `ubicacion`, `fruta retenida`, `pallets retenidos`;
+  - palabras: `afectados`, `afectado`, `ubicacion` y frases como `fruta retenida`, `pallets retenidos`, `folios retenidos` y `cajas retenidas`. «Pallets», «folios» y «cajas» sueltos empataban con Existencias PT;
   - filtro: cliente;
   - un pallet por fila, con `foliosDelLote()`, solo si está activo y fuera de Despachado, Anulado, Agotado o Retirado definitivo;
   - columnas: folio, lote, cliente, estado de la retención, cajas del lote, ubicación y carga.

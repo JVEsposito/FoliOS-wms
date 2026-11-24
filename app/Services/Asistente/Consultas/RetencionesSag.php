@@ -112,7 +112,8 @@ class RetencionesSag extends ConsultaPorTema
         ])->values()->all();
         $porEstado = collect($filas)->countBy('estado');
         $detalle = collect(self::ESTADOS)->map(fn (string $etiqueta): string => mb_strtolower($etiqueta).': '.($porEstado[$etiqueta] ?? 0))->implode(', ');
-        $pallets = array_sum(array_column($filas, 'pallets'));
+        // Un pallet mezclado con cajas de dos lotes vigentes cuenta una vez en el total.
+        $pallets = $casos->flatMap(fn (array $c): Collection => $c['folios']->pluck('id'))->unique()->count();
 
         return new ResultadoConsulta(
             ResultadoConsulta::RESPONDIDA,
