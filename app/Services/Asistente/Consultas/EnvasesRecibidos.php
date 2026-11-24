@@ -5,15 +5,17 @@ namespace App\Services\Asistente\Consultas;
 use App\Enums\EstadoRecepcionRomana;
 use App\Enums\TipoEnvaseRomana;
 use App\Models\DetalleEnvaseRecepcionRomana;
+use App\Models\SalidaEnvaseRecepcionRomana;
 use App\Models\User;
 use App\Services\Asistente\ParametrosConsulta;
 use App\Services\Asistente\ResultadoConsulta;
 
 /**
- * Envases que entraron con la fruta en el periodo, por tipo: la cantidad validada en
- * Validación MP o, si todavía no se valida, la declarada en Romana.
+ * Envases en Romana: los que entraron con la fruta en el periodo, por tipo (la cantidad
+ * validada en Validación MP o, si todavía no se valida, la declarada en Romana), y los
+ * que salieron con el camión en el destare.
  */
-class EnvasesRecibidos extends ConsultaBase
+class EnvasesRecibidos extends ConsultaPorTema
 {
     public function clave(): string
     {
@@ -35,9 +37,25 @@ class EnvasesRecibidos extends ConsultaBase
         return 'materia-prima';
     }
 
-    public function palabrasClave(): array
+    protected function palabrasDelTema(): array
     {
         return ['bins', 'bin', 'totes', 'tote', 'esponjas', 'esponja', 'smartpick', 'cosechero', 'cosecheros'];
+    }
+
+    public function vistaPorDefecto(): ?string
+    {
+        return 'recibidos';
+    }
+
+    protected function vistasDelTema(): array
+    {
+        return [
+            new VistaConsulta('recibidos', 'Llegaron con la fruta', 'Bins, totes y otros envases que llegaron con la fruta, por tipo, con los vacíos contados en Validación MP.',
+                [], ['periodo', 'cliente']),
+            // Solo frases: «destare» o «salieron» solos también son de tiempos de Romana o de despacho.
+            new VistaConsulta('salidas-destare', 'Salidas en el destare', 'Envases que salieron con el camión en el destare de Romana, por recepción y tipo.',
+                ['salieron con envases', 'envases salieron', 'en el destare', 'salidas de envases', 'devueltos en destare'], ['periodo', 'cliente']),
+        ];
     }
 
     public function palabrasSecundarias(): array
@@ -45,17 +63,64 @@ class EnvasesRecibidos extends ConsultaBase
         return ['envases', 'envase', 'entraron', 'llegaron', 'recibidos', 'recibimos'];
     }
 
-    public function filtros(): array
-    {
-        return ['periodo', 'cliente'];
-    }
-
     public function puedeEjecutar(User $usuario): bool
     {
         return $this->alcance->puedeConsultarRomana($usuario);
     }
 
-    public function ejecutar(User $usuario, ParametrosConsulta $parametros): ResultadoConsulta
+    protected function ejecutarVista(VistaConsulta $vista, User $usuario, ParametrosConsulta $parametros): ResultadoConsulta
+    {
+        return $vista->clave === 'salidas-destare' ? $this->salidasDestare($parametros) : $this->recibidos($parametros);
+    }
+
+    /** Envases que salieron con el camión en el destare de recepciones del periodo, por su hora de salida. */
+    private function salidasDestare(ParametrosConsulta $parametros): ResultadoConsulta
+    {
+        $titulo = 'Envases que salieron en el destare';
+        $temporada = $this->temporada($parametros);
+        [$desde, $hasta] = $parametros->rango();
+        $filas = $temporada === null ? collect() : SalidaEnvaseRecepcionRomana::query()
+            ->join('recepciones_romana', 'recepciones_romana.id', '=', 'salidas_envases_recepcion_romana.recepcion_romana_id')
+            ->where('recepciones_romana.temporada_id', $temporada->id)
+            ->whereNull('recepciones_romana.eliminada_at')
+            ->where('recepciones_romana.estado', '!=', EstadoRecepcionRomana::Anulada->value)
+            ->where('recepciones_romana.salida_at', '>=', $desde)->where('recepciones_romana.salida_at', '<', $hasta)
+            ->where('salidas_envases_recepcion_romana.cantidad', '>', 0)
+            ->when($parametros->clienteId, fn ($q, $id) => $q->where('recepciones_romana.cliente_id', $id))
+            ->orderBy('recepciones_romana.salida_at')
+            ->get(['recepciones_romana.numero_recepcion', 'recepciones_romana.cliente_nombre_snapshot', 'recepciones_romana.patente_camion',
+                'salidas_envases_recepcion_romana.tipo_envase', 'salidas_envases_recepcion_romana.cantidad']);
+        if ($filas->isEmpty()) {
+            return ResultadoConsulta::sinDatos($titulo, "No salieron envases en el destare el {$this->periodo($parametros)}.", '/oficina/romana');
+        }
+        // Por salida, recepción y luego el orden del catálogo de envases.
+        $filas = $filas->sortBy(fn (SalidaEnvaseRecepcionRomana $fila): array => [$fila->numero_recepcion, $fila->tipo_envase->orden()])
+            ->map(fn (SalidaEnvaseRecepcionRomana $fila): array => [
+                'recepcion' => $fila->numero_recepcion,
+                'cliente' => $fila->cliente_nombre_snapshot,
+                'patente' => $fila->patente_camion,
+                'envase' => $fila->tipo_envase->etiqueta(),
+                'cantidad' => $fila->cantidad,
+            ])->values();
+
+        return new ResultadoConsulta(
+            ResultadoConsulta::RESPONDIDA,
+            $titulo,
+            sprintf('El %s salieron %d envases en el destare de %d recepciones.', $this->periodo($parametros), $filas->sum('cantidad'), $filas->unique('recepcion')->count()),
+            [ResultadoConsulta::cifra('Envases', $filas->sum('cantidad'))],
+            [
+                ['clave' => 'recepcion', 'titulo' => 'Recepción', 'tipo' => 'codigo'],
+                ['clave' => 'cliente', 'titulo' => 'Cliente'],
+                ['clave' => 'patente', 'titulo' => 'Patente', 'tipo' => 'codigo'],
+                ['clave' => 'envase', 'titulo' => 'Envase'],
+                ['clave' => 'cantidad', 'titulo' => 'Cantidad', 'tipo' => 'numero'],
+            ],
+            $filas->all(),
+            '/oficina/romana',
+        );
+    }
+
+    private function recibidos(ParametrosConsulta $parametros): ResultadoConsulta
     {
         $temporada = $this->temporada($parametros);
         [$desde, $hasta] = $parametros->rango();

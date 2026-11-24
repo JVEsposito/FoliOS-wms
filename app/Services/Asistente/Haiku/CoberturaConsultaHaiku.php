@@ -18,7 +18,7 @@ class CoberturaConsultaHaiku
     {
         return match ($consulta->clave()) {
             'revisar-taras' => 'Solo anomalías de tara y neto fuera de rango. No calcula promedios de neto por envase agrupados por CSG ni lista entregas de envases al destare.',
-            'envases-recibidos' => 'Totales recibidos por tipo; incluye una columna de vacíos, pero no selecciona un tipo ni responde el total exclusivo de vacíos o llenos de Validación MP.',
+            'envases-recibidos' => 'Ninguna vista selecciona un tipo de envase ni responde el total exclusivo de vacíos o llenos de Validación MP; la de recibidos solo trae una columna de vacíos.',
             'validaciones-pt' => 'Solo validaciones PT aceptadas y terminadas. No lista pendientes, faltantes ni folios sin validar.',
             'cajas-pt', 'formatos-pt', 'saldos-pt' => 'Existencia actual de fruta embalada. No es producción histórica ni inventario de insumos, cajas vacías o cartón.',
             'repaletizajes' => 'Solo repaletizajes confirmados. No son retornos, devoluciones ni pallets que volvieron desde cargas.',

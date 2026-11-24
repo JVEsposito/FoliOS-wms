@@ -202,6 +202,9 @@ class ServicioAsistente
     public function recomendar(User $usuario, string $clave, ParametrosConsulta $parametros): array
     {
         [$consulta, $vista] = $this->consultaYVista($usuario, $clave, $parametros);
+        if (! $vista->admiteRecomendacion) {
+            throw new DomainException('Esa vista no admite recomendaciones.');
+        }
         if (ConfiguracionAsistente::actual()->modo !== ConfiguracionAsistente::MODO_MIXTO) {
             throw new DomainException('Las recomendaciones solo están disponibles con el asistente en modo mixto.');
         }
