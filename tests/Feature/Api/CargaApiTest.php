@@ -4,6 +4,8 @@ namespace Tests\Feature\Api;
 
 use App\Enums\CondicionTermicaFolio;
 use App\Enums\ContenidoCamara;
+use App\Enums\EstadoCarga;
+use App\Enums\EstadoCargaFolio;
 use App\Enums\EstadoOperacionalFolio;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\RolUsuario;
@@ -62,6 +64,7 @@ class CargaApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.version', 2)
             ->assertJsonPath('data.total_folios', 1)
+            ->assertJsonPath('data.folios.0.cantidad_cajas', null)
             ->assertJsonPath('data.folios.0.ubicacion.camara.codigo', 'CAM-01');
 
         $this->actingAs($despachador, 'sanctum')
@@ -319,6 +322,7 @@ class CargaApiTest extends TestCase
         $pallet = Folio::create([
             'numero_folio' => 'PAL-TUNEL-SIN-POSICION',
             'tipo_bulto' => TipoBulto::Pallet,
+            'datos_externos' => ['cantidad_cajas' => 720],
             'estado_operacional' => EstadoOperacionalFolio::PendientePrefrio,
             'fecha_ingreso' => now(),
             'activo' => true,
@@ -326,6 +330,7 @@ class CargaApiTest extends TestCase
         $saldo = Folio::create([
             'numero_folio' => 'SALDO-TUNEL',
             'tipo_bulto' => TipoBulto::Saldo,
+            'datos_externos' => ['cantidad_cajas' => '37'],
             'estado_operacional' => EstadoOperacionalFolio::PendientePrefrio,
             'fecha_ingreso' => now(),
             'activo' => true,
@@ -342,6 +347,7 @@ class CargaApiTest extends TestCase
                 'version_esperada' => 1,
             ])
             ->assertOk()
+            ->assertJsonPath('data.folios.0.cantidad_cajas', 720)
             ->assertJsonPath('data.folios.0.ubicacion', null);
 
         $this->actingAs($despachador, 'sanctum')
@@ -358,7 +364,43 @@ class CargaApiTest extends TestCase
                 'version_esperada' => 1,
             ])
             ->assertOk()
+            ->assertJsonPath('data.folios.0.cantidad_cajas', 37)
             ->assertJsonPath('data.folios.0.ubicacion', null);
+    }
+
+    public function test_detalle_cerrado_expone_cajas_de_pallet_y_saldo_y_conserva_cantidades_desconocidas(): void
+    {
+        $despachador = $this->despachador();
+        $carga = $this->crearCarga($despachador);
+        $carga->update(['estado' => EstadoCarga::Cerrada]);
+
+        foreach ([[TipoBulto::Pallet, 108], [TipoBulto::Saldo, 37], [TipoBulto::Pallet, null]] as $numero => [$tipo, $cajas]) {
+            $folio = Folio::create([
+                'numero_folio' => 'HISTORICO-CAJAS-'.$numero,
+                'tipo_bulto' => $tipo,
+                'estado_operacional' => EstadoOperacionalFolio::Despachado,
+                'fecha_ingreso' => now(),
+                'activo' => true,
+                'datos_externos' => $cajas === null ? [] : ['cantidad_cajas' => $cajas],
+            ]);
+            CargaFolio::create([
+                'carga_id' => $carga->id,
+                'folio_id' => $folio->id,
+                'estado' => EstadoCargaFolio::Despachado,
+                'asignado_por_user_id' => $despachador->id,
+                'asignado_at' => now()->addSeconds($numero),
+            ]);
+        }
+
+        $this->actingAs($despachador, 'sanctum')
+            ->getJson("/api/cargas/{$carga->id}")
+            ->assertOk()
+            ->assertJsonPath('data.total_folios', 3)
+            ->assertJsonPath('data.folios.0.tipo_bulto', 'pallet')
+            ->assertJsonPath('data.folios.0.cantidad_cajas', 108)
+            ->assertJsonPath('data.folios.1.tipo_bulto', 'saldo')
+            ->assertJsonPath('data.folios.1.cantidad_cajas', 37)
+            ->assertJsonPath('data.folios.2.cantidad_cajas', null);
     }
 
     public function test_planifica_pallets_y_saldos_sin_ubicacion_y_camaras_habilita_su_extraccion_al_ubicarlos(): void

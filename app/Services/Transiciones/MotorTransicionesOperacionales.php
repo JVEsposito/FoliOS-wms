@@ -44,20 +44,24 @@ class MotorTransicionesOperacionales
                 $payloadHash,
                 $accion,
             ): array {
-                $existente = $this->buscarExistente($comando, $tipo);
+                $transicion = $this->crearORecuperar($comando, $tipo, [
+                    ...$this->atributosBase($comando, $tipo, $payload, $payloadHash),
+                    'estado' => EstadoTransicionOperacional::Procesando,
+                    'cantidad_cambios' => 0,
+                ]);
 
-                if ($existente) {
-                    $this->validarRepeticion($existente, $comando, $payloadHash);
+                if (! $transicion->wasRecentlyCreated) {
+                    $this->validarRepeticion($transicion, $comando, $payloadHash);
 
-                    if ($existente->estado === EstadoTransicionOperacional::Aplicada) {
+                    if ($transicion->estado === EstadoTransicionOperacional::Aplicada) {
                         return ['repetida' => true];
                     }
 
                     // Un fallo técnico histórico no es una nueva excepción de MySQL.
                     // Reemitir su SQLSTATE hace que Laravel lo confunda con otro deadlock
                     // y evita que el cliente reciba el rechazo definitivo del UUID.
-                    $mensaje = $existente->error_mensaje;
-                    if ($existente->estado === EstadoTransicionOperacional::Fallida
+                    $mensaje = $transicion->error_mensaje;
+                    if ($transicion->estado === EstadoTransicionOperacional::Fallida
                         || Str::contains((string) $mensaje, ['SQLSTATE[', 'Deadlock found'])) {
                         $mensaje = 'El intento anterior terminó con un fallo técnico. Comprueba el resultado antes de registrar un nuevo intento.';
                     }
@@ -65,12 +69,6 @@ class MotorTransicionesOperacionales
                         $mensaje ?: 'La transición ya fue procesada y no puede reintentarse con el mismo UUID.',
                     );
                 }
-
-                $transicion = TransicionOperacional::create([
-                    ...$this->atributosBase($comando, $tipo, $payload, $payloadHash),
-                    'estado' => EstadoTransicionOperacional::Procesando,
-                    'cantidad_cambios' => 0,
-                ]);
 
                 try {
                     $valor = DB::transaction(
@@ -145,11 +143,7 @@ class MotorTransicionesOperacionales
                 $payloadHash,
                 $exception,
             ): void {
-                if ($this->buscarExistente($comando, $tipo)) {
-                    return;
-                }
-
-                TransicionOperacional::create([
+                $this->crearORecuperar($comando, $tipo, [
                     ...$this->atributosBase($comando, $tipo, $payload, $payloadHash),
                     'estado' => EstadoTransicionOperacional::Fallida,
                     'error_tipo' => $exception::class,
@@ -164,18 +158,25 @@ class MotorTransicionesOperacionales
         }
     }
 
-    private function buscarExistente(
+    /** @param array<string, mixed> $atributos */
+    private function crearORecuperar(
         ComandoTransicionOperacional $comando,
         string $tipo,
-    ): ?TransicionOperacional {
-        return $comando->operacionId
-            ? TransicionOperacional::query()
-                ->where('dominio', $comando->dominio->value)
-                ->where('tipo', $tipo)
-                ->where('operacion_id', $comando->operacionId)
-                ->lockForUpdate()
-                ->first()
-            : null;
+        array $atributos,
+    ): TransicionOperacional {
+        if ($comando->operacionId === null) {
+            return TransicionOperacional::create($atributos);
+        }
+
+        // Insertar primero evita el gap lock de buscar un UUID inexistente con FOR UPDATE.
+        // createOrFirst usa un savepoint y solo consulta si el índice único rechaza el INSERT.
+        // El bloqueo se aplica a esa lectura de recuperación: debe ver el registro recién
+        // confirmado por la otra conexión aunque esta transacción ya tenga un snapshot.
+        return TransicionOperacional::query()->lockForUpdate()->createOrFirst([
+            'dominio' => $comando->dominio->value,
+            'tipo' => $tipo,
+            'operacion_id' => $comando->operacionId,
+        ], $atributos);
     }
 
     /**

@@ -170,6 +170,12 @@ Reglas principales:
 - cancelar libera asignaciones, pero conserva eventos;
 - las cargas pertenecen a una temporada y no aceptan folios de otro ciclo.
 
+En Oficina, la tabla «Folios asignados» muestra la cantidad de cajas registrada
+en cada folio, tanto para pallets como para saldos. El detalle de cargas cerradas
+también la expone en sus asignaciones históricas. Si el folio no tiene cantidad
+registrada, se muestra «Sin dato»; no se deduce desde la cantidad programada del
+instructivo.
+
 ## Separación física
 
 El sistema calcula la concentración de los folios pendientes de una carga dentro del plano. Puede distinguir:

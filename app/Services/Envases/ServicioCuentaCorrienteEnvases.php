@@ -1172,6 +1172,32 @@ class ServicioCuentaCorrienteEnvases
      *
      * @return array{tipos: list<array<string, mixed>>, propios_entregados: list<array<string, mixed>>}
      */
+    /**
+     * Saldo de la cuenta por cliente y tipo de envase en la temporada: positivo, la planta
+     * debe envases al cliente; negativo, el cliente los debe. Las compras de envases propios
+     * no mueven la cuenta de nadie (signo 0): se ven en Existencia.
+     *
+     * @return list<array{cliente_id: string, cliente: array{codigo: string, nombre: string}, tipo_envase: string, saldo: int}>
+     */
+    public function saldos(string $temporadaId, ?string $clienteId = null, ?string $tipoEnvase = null): array
+    {
+        return MovimientoEnvase::query()
+            ->selectRaw('cliente_id, tipo_envase, SUM(CAST(cantidad AS SIGNED) * signo_cuenta) as saldo')
+            ->where('temporada_id', $temporadaId)
+            ->where('signo_cuenta', '!=', 0)
+            ->when($clienteId, fn (Builder $consulta): Builder => $consulta->where('cliente_id', $clienteId))
+            ->when($tipoEnvase, fn (Builder $consulta): Builder => $consulta->where('tipo_envase', $tipoEnvase))
+            ->groupBy('cliente_id', 'tipo_envase')
+            ->with('cliente:id,codigo,nombre')
+            ->get()
+            ->map(fn (MovimientoEnvase $movimiento): array => [
+                'cliente_id' => (string) $movimiento->cliente_id,
+                'cliente' => ['codigo' => (string) $movimiento->cliente->codigo, 'nombre' => (string) $movimiento->cliente->nombre],
+                'tipo_envase' => $movimiento->tipo_envase->value,
+                'saldo' => (int) $movimiento->getAttribute('saldo'),
+            ])->values()->all();
+    }
+
     public function existencia(string $temporadaId): array
     {
         $fisico = MovimientoEnvase::query()

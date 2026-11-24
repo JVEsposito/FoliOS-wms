@@ -61,6 +61,8 @@ Una proyección transaccional mantiene el contrato compuesto consumido por la PD
 
 Los registros proyectados antiguos no se eliminan cuando dejan de estar autorizados; quedan inactivos para preservar referencias históricas.
 
+Las escrituras del catálogo se ordenan con su propio bloqueo y no bloquean la temporada mientras recalculan la proyección (ver `docs/MAESTROS_GUARDADOS_PARCIALES.md`).
+
 ## Compatibilidad de catálogo
 
 La proyección actual considera:
@@ -192,6 +194,15 @@ Cada envío utiliza `operacion_id` UUID y hash del payload.
 - Una captura basada en un catálogo anterior conserva el snapshot y marca la diferencia de versión.
 
 La secuencia de intentos se serializa por número de folio, permitiendo que distintas PDA validen folios diferentes en paralelo.
+
+El motor central reserva el UUID insertando la transición antes de ejecutar el
+dominio. El índice único por dominio, tipo y UUID resuelve las solicitudes
+simultáneas; no se busca primero un UUID inexistente con `FOR UPDATE`, porque
+ese recorrido bloquea huecos del índice en MySQL y puede cruzar inserciones de
+operaciones distintas. Si el UUID ya existe, se recupera mediante una lectura
+con bloqueo para ver el resultado confirmado incluso con un snapshot anterior,
+y se comprueban actor y hash antes de devolverlo. El registro de fallos utiliza
+el mismo recorrido y conserva cualquier transición previa sin sobrescribirla.
 
 ## Resultados
 

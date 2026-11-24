@@ -7,16 +7,20 @@ use App\Services\Asistente\Consultas\AnulacionesValidacion;
 use App\Services\Asistente\Consultas\CajasPt;
 use App\Services\Asistente\Consultas\CamionesEnPlanta;
 use App\Services\Asistente\Consultas\ConsumosOt;
+use App\Services\Asistente\Consultas\CuentaEnvases;
 use App\Services\Asistente\Consultas\EnvasesRecibidos;
 use App\Services\Asistente\Consultas\EstadoCargas;
+use App\Services\Asistente\Consultas\ExistenciaEnvases;
 use App\Services\Asistente\Consultas\ExpedientePorCodigo;
 use App\Services\Asistente\Consultas\FoliosDespachados;
 use App\Services\Asistente\Consultas\FormatosPt;
 use App\Services\Asistente\Consultas\GuiasEnvases;
 use App\Services\Asistente\Consultas\KilosPorCsg;
 use App\Services\Asistente\Consultas\KilosRecepciones;
+use App\Services\Asistente\Consultas\LotesMateriaPrima;
 use App\Services\Asistente\Consultas\PrefrioEnCurso;
 use App\Services\Asistente\Consultas\Repaletizajes;
+use App\Services\Asistente\Consultas\RetencionesSag;
 use App\Services\Asistente\Consultas\RevisarTaras;
 use App\Services\Asistente\Consultas\SaldosPt;
 use App\Services\Asistente\Consultas\TiemposCargas;
@@ -48,6 +52,10 @@ class AsistenteServiceProvider extends ServiceProvider
         CamionesEnPlanta::class,
         EnvasesRecibidos::class,
         GuiasEnvases::class,
+        CuentaEnvases::class,
+        ExistenciaEnvases::class,
+        LotesMateriaPrima::class,
+        RetencionesSag::class,
         EstadoCargas::class,
         FoliosDespachados::class,
         PrefrioEnCurso::class,

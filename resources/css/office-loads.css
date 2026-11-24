@@ -962,6 +962,12 @@ button:disabled {
     text-transform: uppercase;
 }
 
+.folio-table .folio-boxes {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
 .folio-table tbody tr:last-child td {
     border-bottom: 0;
 }

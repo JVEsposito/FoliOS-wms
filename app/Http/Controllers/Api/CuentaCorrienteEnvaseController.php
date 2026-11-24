@@ -276,27 +276,12 @@ class CuentaCorrienteEnvaseController extends Controller
 
         $propiosEntregados = collect($cuenta->propiosEntregados($filtros['temporada_id'], $filtros['cliente_id'] ?? null))
             ->keyBy(fn (array $fila): string => $fila['cliente_id'].'|'.$fila['tipo_envase']);
-        // Las compras de envases propios no mueven la cuenta de nadie (signo 0): se ven en Existencia.
-        $balances = MovimientoEnvase::query()
-            ->selectRaw('cliente_id, tipo_envase, SUM(CAST(cantidad AS SIGNED) * signo_cuenta) as saldo')
-            ->where('temporada_id', $filtros['temporada_id'])
-            ->where('signo_cuenta', '!=', 0)
-            ->when(
-                ! empty($filtros['cliente_id']),
-                fn (Builder $consulta): Builder => $consulta->where('cliente_id', $filtros['cliente_id']),
-            )
-            ->when(
-                ! empty($filtros['tipo_envase']),
-                fn (Builder $consulta): Builder => $consulta->where('tipo_envase', $filtros['tipo_envase']),
-            )
-            ->groupBy('cliente_id', 'tipo_envase')
-            ->with('cliente:id,codigo,nombre')
-            ->get()
-            ->map(fn (MovimientoEnvase $movimiento): array => [
-                'cliente' => ['id' => $movimiento->cliente->id, 'codigo' => $movimiento->cliente->codigo, 'nombre' => $movimiento->cliente->nombre],
-                'tipo_envase' => $movimiento->tipo_envase->value,
-                'saldo' => (int) $movimiento->getAttribute('saldo'),
-                'propios_entregados' => (int) ($propiosEntregados->get($movimiento->cliente_id.'|'.$movimiento->tipo_envase->value)['cantidad'] ?? 0),
+        $balances = collect($cuenta->saldos($filtros['temporada_id'], $filtros['cliente_id'] ?? null, $filtros['tipo_envase'] ?? null))
+            ->map(fn (array $fila): array => [
+                'cliente' => ['id' => $fila['cliente_id'], ...$fila['cliente']],
+                'tipo_envase' => $fila['tipo_envase'],
+                'saldo' => $fila['saldo'],
+                'propios_entregados' => (int) ($propiosEntregados->get($fila['cliente_id'].'|'.$fila['tipo_envase'])['cantidad'] ?? 0),
             ])->values();
 
         $reservas = DetalleGuiaDespachoEnvase::query()

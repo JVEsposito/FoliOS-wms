@@ -2,9 +2,14 @@
 
 namespace Tests\Feature\Asistente;
 
+use App\Models\User;
 use App\Services\Asistente\CatalogoConsultasAsistente;
+use App\Services\Asistente\Consultas\ConsultaAsistente;
+use App\Services\Asistente\Consultas\VistaConsulta;
 use App\Services\Asistente\InterpreteReglasAsistente;
 use App\Services\Asistente\OpcionConsulta;
+use App\Services\Autorizacion\AlcanceOperacionalUsuario;
+use App\Services\Temporadas\ServicioTemporadaActiva;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\PreparaAsistente;
@@ -61,6 +66,36 @@ class VistasReglasTest extends TestCase
         $this->assertSame('«Bodegas de prueba» tiene varias vistas. ¿Cuál quieres?', $interpretacion['motivo']);
         $this->assertContainsOnlyInstancesOf(OpcionConsulta::class, $interpretacion['alternativas']);
         $this->assertSame(['ocupacion', 'clientes'], array_map(fn (OpcionConsulta $o) => $o->vista?->clave, $interpretacion['alternativas']));
+    }
+
+    public function test_un_tema_sin_vistas_visibles_no_responde(): void
+    {
+        $oculto = new class(app(AlcanceOperacionalUsuario::class), app(ServicioTemporadaActiva::class)) extends TemaDePrueba
+        {
+            public function puedeVer(User $usuario, VistaConsulta $vista): bool
+            {
+                return false;
+            }
+        };
+        $this->conTema($oculto);
+
+        $this->assertNull($this->interpretar('bodegones')['consulta']);
+    }
+
+    public function test_el_filtro_reconocido_elige_la_vista(): void
+    {
+        $this->conTema(app(TemaDePrueba::class));
+
+        $interpretacion = $this->interpretar('bodegones de exportadora andina');
+
+        $this->assertSame('tema-de-prueba', $interpretacion['consulta']?->clave());
+        $this->assertSame('clientes', $interpretacion['parametros']->vista);
+    }
+
+    private function conTema(ConsultaAsistente $tema): void
+    {
+        $catalogo = app(CatalogoConsultasAsistente::class);
+        $this->app->instance(CatalogoConsultasAsistente::class, new CatalogoConsultasAsistente([...$catalogo->todas(), $tema]));
     }
 
     /** @return array<string, mixed> */

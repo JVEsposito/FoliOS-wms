@@ -4,9 +4,9 @@ namespace App\Services\Consultas;
 
 use App\Models\Cliente;
 use App\Models\ProductorCsg;
-use App\Models\Temporada;
 use App\Models\User;
 use App\Services\Clientes\ServicioCliente;
+use App\Services\Validacion\BloqueoCatalogoValidacion;
 use App\Services\Validacion\ServicioProyeccionCatalogoValidacion;
 use App\Services\Validacion\ServicioSincronizacionCatalogoSag;
 use DomainException;
@@ -19,6 +19,7 @@ class ServicioAsociacionProductorCsg
         private readonly ServicioCliente $clientes,
         private readonly ServicioSincronizacionCatalogoSag $sincronizador,
         private readonly ServicioProyeccionCatalogoValidacion $proyector,
+        private readonly BloqueoCatalogoValidacion $bloqueo,
     ) {}
 
     /**
@@ -90,8 +91,9 @@ class ServicioAsociacionProductorCsg
                 $productor->especies_variedades ?? [],
                 proyectar: false,
             );
+            // La sincronización ya obtuvo el bloqueo del catálogo en esta transacción.
             $temporada = $sincronizacion['temporada_id']
-                ? Temporada::query()->find($sincronizacion['temporada_id'])
+                ? $this->bloqueo->adquirir($sincronizacion['temporada_id'])
                 : null;
 
             $catalogoCambio = $asociacionCambio
@@ -99,10 +101,8 @@ class ServicioAsociacionProductorCsg
                 || $sincronizacion['catalogo_actualizado'];
 
             if ($temporada && $catalogoCambio) {
-                $temporada->increment('version_catalogo');
-            }
-            if ($temporada && $catalogoCambio) {
-                $this->proyector->sincronizarCsg($temporada->refresh(), $productor);
+                $this->proyector->sincronizarCsg($temporada, $productor);
+                $this->bloqueo->publicar($temporada);
             }
 
             return $productor->fresh()->load('clientes');

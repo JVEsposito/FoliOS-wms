@@ -4,7 +4,9 @@ namespace Tests\Feature\Asistente;
 
 use App\Models\Cliente;
 use App\Models\ConfiguracionAsistente;
+use App\Services\Asistente\CatalogoConsultasAsistente;
 use App\Services\Asistente\EvaluadorBancoAsistente;
+use App\Services\Asistente\Haiku\CoberturaConsultaHaiku;
 use App\Services\Asistente\Haiku\FichasAsistente;
 use App\Services\Asistente\Haiku\InterpreteHaiku;
 use App\Services\Asistente\PeriodoOperativo;
@@ -166,6 +168,15 @@ class CoberturaHaikuTest extends TestCase
         $this->assertStringContainsString('periodo solicitado', implode(' ', $resultado['sin_cubrir']));
     }
 
+    public function test_los_limites_de_envases_recibidos_valen_para_sus_dos_vistas(): void
+    {
+        $limites = app(CoberturaConsultaHaiku::class)->limites(app(CatalogoConsultasAsistente::class)->buscar('envases-recibidos'));
+
+        // El límite se repite en la línea de cada vista: no puede describir solo la de recibidos.
+        $this->assertStringNotContainsString('Totales recibidos', $limites);
+        $this->assertStringContainsString('Ninguna vista', $limites);
+    }
+
     public function test_la_api_no_ejecuta_la_consulta_incorrecta_y_ofrece_aclarar(): void
     {
         $pregunta = '¿Qué falta por validar?';
@@ -199,7 +210,10 @@ class CoberturaHaikuTest extends TestCase
         $informe = app(EvaluadorBancoAsistente::class)->evaluar($this->administrador, conHaiku: true);
 
         $this->assertSame(0, $informe['falsas']);
-        $this->assertSame(8, collect($informe['detalle'])->where('interprete', 'haiku:parcial')->count());
+        // La salida al destare (n.º 17) ya la responden las reglas; las otras siete llegan a Haiku y quedan parciales.
+        $destare = collect($informe['detalle'])->firstWhere('n', 17);
+        $this->assertSame(['reglas', 'envases-recibidos', 'salidas-destare'], [$destare['interprete'], $destare['elegida'], $destare['vista_elegida']]);
+        $this->assertSame(7, collect($informe['detalle'])->where('interprete', 'haiku:parcial')->count());
         $this->assertStringContainsString('sin cubrir:', collect($informe['detalle'])->firstWhere('n', 24)['detalle']);
         $this->assertGreaterThan(0, $informe['llamadas_exitosas_haiku']);
         $this->assertSame(0, $informe['errores_haiku']);
@@ -257,7 +271,8 @@ class CoberturaHaikuTest extends TestCase
         $explicito = $entidades['periodo_explicito'];
 
         return [
-            'pide' => '', 'consulta' => $consulta, 'vista' => 'general', 'sin_cubrir' => [],
+            // Haiku elige la vista del tema; en uno de varias, «general» no es una elección válida.
+            'pide' => '', 'consulta' => $consulta, 'vista' => app(CatalogoConsultasAsistente::class)->buscar($consulta)?->vista(null)?->clave ?? 'general', 'sin_cubrir' => [],
             'periodo_tipo' => $explicito ? ($entidades['turno'] ? 'turno' : 'rango') : 'actual',
             'desde' => $explicito ? $periodo->jornada($entidades['desde']) : '',
             'hasta' => $explicito ? $periodo->jornada($entidades['hasta']->subSecond()) : '',

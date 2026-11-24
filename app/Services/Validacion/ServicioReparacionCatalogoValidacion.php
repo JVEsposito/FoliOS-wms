@@ -14,6 +14,7 @@ class ServicioReparacionCatalogoValidacion
         private readonly ServicioTemporadaActiva $temporadas,
         private readonly ServicioCliente $clientes,
         private readonly ServicioProyeccionCatalogoValidacion $proyector,
+        private readonly BloqueoCatalogoValidacion $bloqueo,
     ) {}
 
     /**
@@ -31,6 +32,7 @@ class ServicioReparacionCatalogoValidacion
         $clientesReparados = 0;
 
         DB::transaction(function () use ($temporada, &$clientesReparados): void {
+            $temporada = $this->bloqueo->adquirir($temporada->id);
             Cliente::query()
                 ->where('activo', true)
                 ->orderBy('codigo')
@@ -41,8 +43,8 @@ class ServicioReparacionCatalogoValidacion
                     }
                 });
 
-            $temporada->increment('version_catalogo');
-            $this->proyector->reconstruir($temporada->refresh());
+            $this->proyector->reconstruir($temporada);
+            $this->bloqueo->publicar($temporada);
         }, attempts: 3);
 
         return [

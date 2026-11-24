@@ -15,6 +15,23 @@ enum EstadoLoteMateriaPrima: string
     case EntregadoProceso = 'entregado_proceso';
     case Anulado = 'anulado';
 
+    /** Los textos de la oficina de materia prima. */
+    public function etiqueta(): string
+    {
+        return match ($this) {
+            self::Borrador => 'Borrador',
+            self::PendienteHidrocooler => 'Pendiente hidrocooler',
+            self::HidrocoolerEnCurso => 'Hidrocooler en curso',
+            self::HidrocoolerRetenido => 'Retenido por Hidrocooler',
+            self::PendienteAsignacion => 'Pendiente de cámara',
+            self::DisponibleProceso => 'Disponible directo a proceso',
+            self::AsignadoCamara => 'Asignado a cámara',
+            self::EntregaParcialProceso => 'Entrega parcial a Packing',
+            self::EntregadoProceso => 'Entregado a Packing',
+            self::Anulado => 'Anulado',
+        };
+    }
+
     public function esEditable(): bool
     {
         return $this === self::Borrador;

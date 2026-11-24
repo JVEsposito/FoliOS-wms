@@ -84,6 +84,25 @@ class ProyeccionParcialValidacionTest extends TestCase
         $this->assertSame($parcial, $this->firma());
     }
 
+    public function test_la_proyeccion_parcial_no_repite_el_cruce_paginando_con_offset(): void
+    {
+        // Con OFFSET cada página volvía a recorrer y ordenar todo el cruce: con 1,5 millones
+        // de combinaciones, un calibre nuevo repetía la consulta cientos de veces.
+        $cruces = [];
+        DB::listen(function ($consulta) use (&$cruces): void {
+            $sql = strtolower($consulta->sql);
+            if (str_contains($sql, 'csg_variedades_validacion') && str_contains($sql, 'origenes_validacion')) {
+                $cruces[] = $sql;
+            }
+        });
+        $servicio = app(ServicioCatalogoJerarquicoValidacion::class);
+        $servicio->guardarCalibre(['especie_validacion_id' => $this->datos['Cereza']['especie']->id, 'nombre' => '2J']);
+        $servicio->guardarMarca(['cliente_validacion_id' => MarcaValidacion::first()->cliente_validacion_id, 'nombre' => 'Nueva marca']);
+
+        $this->assertNotEmpty($cruces);
+        $this->assertSame([], array_values(array_filter($cruces, fn (string $sql): bool => str_contains($sql, ' offset '))));
+    }
+
     public function test_categoria_y_reintento_no_reconstruyen_y_publican_la_version_exacta(): void
     {
         $this->partialMock(ServicioProyeccionCatalogoValidacion::class, fn ($m) => $m->shouldNotReceive('reconstruir'));
