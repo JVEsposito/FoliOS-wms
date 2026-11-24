@@ -22,6 +22,7 @@ class ServicioCatalogoJerarquicoValidacion
     public function __construct(
         private readonly ServicioProyeccionCatalogoValidacion $proyector,
         private readonly ServicioProyeccionParcialValidacion $parcial,
+        private readonly BloqueoCatalogoValidacion $bloqueo,
     ) {}
 
     /**
@@ -232,7 +233,7 @@ class ServicioCatalogoJerarquicoValidacion
         }
 
         return DB::transaction(function () use ($datos, $modelo, $codigo, $variedades): CsgValidacion {
-            $temporada = Temporada::lockForUpdate()->findOrFail($datos['temporada_id']);
+            $temporada = $this->bloqueo->adquirir($datos['temporada_id']);
             $desde = $temporada->version_catalogo;
             $modelo = $modelo?->exists ? CsgValidacion::lockForUpdate()->findOrFail($modelo->id) : new CsgValidacion;
             $modelo->fill([
@@ -253,11 +254,10 @@ class ServicioCatalogoJerarquicoValidacion
             }
 
             if ($cambio) {
-                $temporada->increment('version_catalogo');
                 $this->parcial->sincronizar($temporada, $modelo);
             }
 
-            return $this->publicado($modelo->refresh()->load(['variedades', 'productor.clientes' => fn ($q) => $q->where('clientes_productores_csg.activo', true)]), $temporada, $desde);
+            return $this->publicar($modelo->refresh()->load(['variedades', 'productor.clientes' => fn ($q) => $q->where('clientes_productores_csg.activo', true)]), $temporada, $desde, $cambio);
         }, attempts: 3);
     }
 
@@ -279,21 +279,20 @@ class ServicioCatalogoJerarquicoValidacion
         }
 
         return DB::transaction(function () use ($modelo, $temporadaId): Model {
-            $temporada = Temporada::lockForUpdate()->findOrFail($temporadaId);
+            $temporada = $this->bloqueo->adquirir($temporadaId);
             $desde = $temporada->version_catalogo;
             $bloqueado = $modelo->newQuery()
                 ->lockForUpdate()
                 ->findOrFail($modelo->getKey());
 
             if (! (bool) $bloqueado->getAttribute('activo')) {
-                return $this->publicado($bloqueado->refresh(), $temporada, $desde);
+                return $this->publicar($bloqueado->refresh(), $temporada, $desde, false);
             }
 
             $bloqueado->forceFill(['activo' => false])->save();
-            $temporada->increment('version_catalogo');
             $this->parcial->sincronizar($temporada, $bloqueado);
 
-            return $this->publicado($bloqueado->refresh(), $temporada, $desde);
+            return $this->publicar($bloqueado->refresh(), $temporada, $desde, true);
         }, attempts: 3);
     }
 
@@ -341,7 +340,7 @@ class ServicioCatalogoJerarquicoValidacion
     private function guardar(Model $modelo, array $atributos, string $temporadaId, ?Closure $validar = null): Model
     {
         return DB::transaction(function () use ($modelo, $atributos, $temporadaId, $validar): Model {
-            $temporada = Temporada::lockForUpdate()->findOrFail($temporadaId);
+            $temporada = $this->bloqueo->adquirir($temporadaId);
             $desde = $temporada->version_catalogo;
             $modelo = $modelo->exists ? $modelo->newQuery()->lockForUpdate()->findOrFail($modelo->id) : $modelo;
             $modelo->fill($atributos);
@@ -350,21 +349,29 @@ class ServicioCatalogoJerarquicoValidacion
             $modelo->save();
 
             if ($cambio) {
-                $temporada->increment('version_catalogo');
                 $this->parcial->sincronizar($temporada, $modelo);
             }
 
-            return $this->publicado($modelo->refresh(), $temporada, $desde);
+            return $this->publicar($modelo->refresh(), $temporada, $desde, $cambio);
         }, attempts: 3);
     }
 
-    private function publicado(Model $modelo, Temporada $temporada, int $desde): Model
+    /**
+     * Se calcula con el mismo bloqueo que la escritura, nunca con una versión posterior.
+     * Cuenta antes de subir la versión: desde ahí la fila de la temporada queda bloqueada
+     * hasta el commit, y contar millones de combinaciones no debe alargar ese momento.
+     */
+    private function publicar(Model $modelo, Temporada $temporada, int $desde, bool $cambio): Model
     {
-        // Se calcula con el mismo bloqueo que la escritura, nunca con una versión posterior.
+        $proyeccion = $this->proyector->conteos($temporada);
+        if ($cambio) {
+            $this->bloqueo->publicar($temporada);
+        }
+
         return $modelo->setRelation('publicacion_catalogo', [
             'temporada_id' => $temporada->id, 'desde' => $desde,
             'version_catalogo' => $temporada->version_catalogo,
-            'proyeccion' => $this->proyector->conteos($temporada),
+            'proyeccion' => $proyeccion,
         ]);
     }
 

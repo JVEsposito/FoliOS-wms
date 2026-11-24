@@ -15,6 +15,8 @@ use Illuminate\Support\Str;
 
 class ServicioProyeccionCatalogoValidacion
 {
+    public function __construct(private readonly BloqueoCatalogoValidacion $bloqueo) {}
+
     /**
      * @return array{articulos: int, origenes: int, combinaciones: int}
      */
@@ -46,9 +48,7 @@ class ServicioProyeccionCatalogoValidacion
     public function sincronizarCsg(Temporada $temporada, ProductorCsg $productor): void
     {
         DB::transaction(function () use ($temporada, $productor): void {
-            $temporada = Temporada::query()
-                ->lockForUpdate()
-                ->findOrFail($temporada->id);
+            $temporada = $this->bloqueo->adquirir($temporada->id);
             $csg = CsgValidacion::query()
                 ->where('temporada_id', $temporada->id)
                 ->where('productor_csg_id', $productor->id)
@@ -73,9 +73,7 @@ class ServicioProyeccionCatalogoValidacion
     public function reconstruir(Temporada $temporada): void
     {
         DB::transaction(function () use ($temporada): void {
-            $temporada = Temporada::query()
-                ->lockForUpdate()
-                ->findOrFail($temporada->id);
+            $temporada = $this->bloqueo->adquirir($temporada->id);
 
             $temporada->load([
                 'clientes.marcas',

@@ -29,6 +29,7 @@ class ServicioImportacionValidacion
         private readonly LectorPlanillaValidacion $lector,
         private readonly ServicioProyeccionCatalogoValidacion $proyector,
         private readonly ServicioCliente $clientes,
+        private readonly BloqueoCatalogoValidacion $bloqueo,
     ) {}
 
     public function previsualizar(
@@ -138,7 +139,7 @@ class ServicioImportacionValidacion
                 throw new DomainException('La importación no contiene filas de datos y no puede confirmarse.');
             }
 
-            $temporada = Temporada::query()->lockForUpdate()->findOrFail($importacion->temporada_id);
+            $temporada = $this->bloqueo->adquirir($importacion->temporada_id);
             $idsProyeccionAnteriores = [
                 'articulos' => ArticuloValidacion::query()
                     ->where('temporada_id', $temporada->id)
@@ -299,8 +300,7 @@ class ServicioImportacionValidacion
                 }
             }
 
-            $temporada->increment('version_catalogo');
-            $temporada->refresh();
+            $this->bloqueo->publicar($temporada);
 
             $importacion->update([
                 'estado' => 'confirmada',

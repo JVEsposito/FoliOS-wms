@@ -17,9 +17,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-/** La temporada debe estar bloqueada por el escritor; versión y proyección se publican juntas. */
+/** El escritor tiene el bloqueo del catálogo (BloqueoCatalogoValidacion); versión y proyección se publican juntas. */
 class ServicioProyeccionParcialValidacion
 {
+    /** Artículos u orígenes por consulta: acota cada cruce sin paginarlo. */
+    private const GRUPO_CRUCE = 100;
+
     public function sincronizar(Temporada $temporada, Model $elemento): void
     {
         if ($elemento instanceof CategoriaValidacion) {
@@ -129,21 +132,27 @@ class ServicioProyeccionParcialValidacion
     {
         // SQL cruza solo variedades autorizadas y el cliente propietario del embalaje.
         // No hidrata la temporada ni compara todos los artículos con todos los orígenes en PHP.
-        DB::table('articulos_validacion as a')
-            ->join('csg_variedades_validacion as cv', 'cv.variedad_validacion_id', '=', 'a.variedad_validacion_id')
-            ->join('origenes_validacion as o', 'o.csg_validacion_id', '=', 'cv.csg_validacion_id')
-            ->where('a.temporada_id', $temporada->id)->where('o.temporada_id', $temporada->id)
-            ->where('a.activo', true)->where('o.activo', true)->where($alias.'.'.$campo, $id)
-            ->where(fn ($q) => $q->whereNull('a.cliente_validacion_id')->orWhereColumn('a.cliente_validacion_id', 'o.cliente_validacion_id'))
-            ->orderBy('a.id')->orderBy('o.id')->select(['a.id as articulo_id', 'o.id as origen_id'])
-            ->chunk(500, function ($pares) use ($temporada): void {
-                $ahora = now();
-                $filas = $pares->map(fn ($p) => ['id' => (string) Str::uuid(), 'temporada_id' => $temporada->id,
-                    'articulo_validacion_id' => $p->articulo_id, 'origen_validacion_id' => $p->origen_id,
-                    'activo' => true, 'created_at' => $ahora, 'updated_at' => $ahora])->all();
-                DB::table('combinaciones_validacion')->upsert($filas,
-                    ['temporada_id', 'articulo_validacion_id', 'origen_validacion_id'], ['activo', 'updated_at']);
-            });
+        // Recorre los artículos u orígenes afectados por grupos: paginar el cruce con OFFSET
+        // lo volvía a recorrer y ordenar completo en cada página, cientos de veces.
+        $afectados = DB::table($alias === 'a' ? 'articulos_validacion' : 'origenes_validacion')
+            ->where('temporada_id', $temporada->id)->where('activo', true)->where($campo, $id)->pluck('id');
+        foreach ($afectados->chunk(self::GRUPO_CRUCE) as $grupo) {
+            DB::table('articulos_validacion as a')
+                ->join('csg_variedades_validacion as cv', 'cv.variedad_validacion_id', '=', 'a.variedad_validacion_id')
+                ->join('origenes_validacion as o', 'o.csg_validacion_id', '=', 'cv.csg_validacion_id')
+                ->where('a.temporada_id', $temporada->id)->where('o.temporada_id', $temporada->id)
+                ->where('a.activo', true)->where('o.activo', true)->whereIn($alias.'.id', $grupo->values()->all())
+                ->where(fn ($q) => $q->whereNull('a.cliente_validacion_id')->orWhereColumn('a.cliente_validacion_id', 'o.cliente_validacion_id'))
+                ->get(['a.id as articulo_id', 'o.id as origen_id'])
+                ->chunk(500)->each(function ($pares) use ($temporada): void {
+                    $ahora = now();
+                    $filas = $pares->map(fn ($p) => ['id' => (string) Str::uuid(), 'temporada_id' => $temporada->id,
+                        'articulo_validacion_id' => $p->articulo_id, 'origen_validacion_id' => $p->origen_id,
+                        'activo' => true, 'created_at' => $ahora, 'updated_at' => $ahora])->values()->all();
+                    DB::table('combinaciones_validacion')->upsert($filas,
+                        ['temporada_id', 'articulo_validacion_id', 'origen_validacion_id'], ['activo', 'updated_at']);
+                });
+        }
     }
 
     private function clave(array $valores): string

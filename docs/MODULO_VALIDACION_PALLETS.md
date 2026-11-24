@@ -61,6 +61,8 @@ Una proyección transaccional mantiene el contrato compuesto consumido por la PD
 
 Los registros proyectados antiguos no se eliminan cuando dejan de estar autorizados; quedan inactivos para preservar referencias históricas.
 
+Las escrituras del catálogo se ordenan con su propio bloqueo y no bloquean la temporada mientras recalculan la proyección (ver `docs/MAESTROS_GUARDADOS_PARCIALES.md`).
+
 ## Compatibilidad de catálogo
 
 La proyección actual considera:
