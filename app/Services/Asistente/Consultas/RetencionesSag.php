@@ -83,7 +83,9 @@ class RetencionesSag extends ConsultaPorTema
                     'restricciones', 'restriccion', 'destinos', 'lotes retenidos', 'con observaciones'],
                 ['cliente']),
             new VistaConsulta('folios-afectados', 'Pallets con fruta retenida', 'Pallets en planta con cajas de un lote SAG vigente, aunque sea una caja o una mezcla: folio, lote, cajas del lote, ubicación y carga asignada.',
-                ['pallets', 'pallet', 'folios', 'folio', 'cajas', 'donde', 'ubicacion', 'fruta retenida', 'pallets retenidos'],
+                // Pallets, folios y cajas solo en frases: sueltas son de Existencias PT.
+                ['afectados', 'afectado', 'ubicacion', 'fruta retenida', 'pallets retenidos', 'folios retenidos', 'cajas retenidas',
+                    'pallets afectados', 'folios afectados', 'pallets con fruta'],
                 ['cliente']),
         ];
     }

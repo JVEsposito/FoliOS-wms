@@ -64,7 +64,8 @@ class LotesMateriaPrima extends ConsultaPorTema
 
     protected function palabrasDelTema(): array
     {
-        return ['lote', 'lotes', 'proceso'];
+        // «Proceso» suelto también es de órdenes de proceso por turno y de prefrío: va en frases.
+        return ['lote', 'lotes'];
     }
 
     protected function vistasDelTema(): array
@@ -72,7 +73,8 @@ class LotesMateriaPrima extends ConsultaPorTema
         return [
             new VistaConsulta('por-estado', 'Por estado', 'Lotes, kilos netos y bins por entregar en cada estado: hidrocooler, retenidos por Hidrocooler, pendientes de cámara, en cámara, disponibles directo a proceso, entrega parcial y entregados a Packing.',
                 ['estado', 'estados', 'hidrocooler', 'disponibles', 'disponible', 'camara', 'parcial', 'entregados',
-                    'por estado', 'retenidos en hidrocooler', 'retenido en hidrocooler', 'retenidos por hidrocooler', 'entrega parcial'],
+                    'por estado', 'retenidos en hidrocooler', 'retenido en hidrocooler', 'retenidos por hidrocooler', 'entrega parcial',
+                    'para proceso', 'directo a proceso'],
                 ['cliente', 'csg', 'especie']),
             new VistaConsulta('antiguedad', 'Más antiguos', 'Lotes recibidos que siguen sin entregarse del todo a proceso, del más antiguo al más nuevo según su ingreso a Romana, con días, cámara y bins por entregar.',
                 ['antiguos', 'antiguo', 'antiguedad', 'viejos', 'dias', 'resguardo', 'esperando',
