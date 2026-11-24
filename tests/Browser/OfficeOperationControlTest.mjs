@@ -26,6 +26,7 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
             'personal-omegamon-x': { nombre: 'Omegamon X', color: '#0d111b', claro: false },
             'personal-mugiwara': { nombre: 'Mugiwara', color: '#071c28', claro: false },
             'personal-nerv': { nombre: 'NERV', color: '#0c090a', claro: false },
+            'personal-majora-link': { nombre: 'Majora y Link · Última noche', color: '#15101d', claro: false },
         };
         const preferencias = { temas_oficina: Object.keys(temas), temas_oficina_personales: temas };
         const identity = {
@@ -75,14 +76,17 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
                 attentionRequests++;
                 return attentionFails ? route.fulfill({ status: 503 }) : route.fulfill({ json: { data: summaryAttention } });
             }
-            if (pathname.startsWith('/build/')) return route.fulfill({ path: resolve(root, `public${pathname}`) });
+            if (pathname.startsWith('/build/') || pathname.startsWith('/brand/')) return route.fulfill({ path: resolve(root, `public${pathname}`) });
             if (pathname === '/api/operacion-ahora') return route.fulfill({ json: { data: snapshot } });
             if (pathname === '/api/operacion-ahora/camareros') return route.fulfill({ json: { data: { generado_at: now, camareros: [] } } });
             if (pathname === '/api/acceso-oficina') return route.fulfill({ json: { usuario: identity } });
             const tema = pathname.slice('/api/oficina/tema-personal/'.length);
             if (pathname.startsWith('/api/oficina/tema-personal/') && Object.hasOwn(temas, tema)) {
                 const css = readFileSync(resolve(root, 'resources', 'temas-oficina', `${tema}.css`), 'utf8');
-                const ilustracion = tema === 'personal-nerv' ? `data:image/png;base64,${pngMagenta}` : `data:image/webp;base64,${webpMagenta}`;
+                const webp = tema === 'personal-majora-link'
+                    ? readFileSync(resolve(root, 'resources', 'temas-oficina', `${tema}.webp`)).toString('base64')
+                    : webpMagenta;
+                const ilustracion = tema === 'personal-nerv' ? `data:image/png;base64,${pngMagenta}` : `data:image/webp;base64,${webp}`;
                 const body = css.replace('data:image/webp;base64,__FOLIOS_TEMA_WEBP__', ilustracion).replace('__FOLIOS_TEMA_FONDO__', 'none');
                 return route.fulfill({ contentType: 'text/css', body });
             }
@@ -114,7 +118,7 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         assert.equal(await summary.locator('[data-attention-area="materiales"]').isVisible(), false);
 
         const selector = page.getByRole('combobox', { name: 'Tema de Oficina' });
-        const palette = () => summary.evaluate((element) => {
+        const palette = () => page.locator('#operationPanel-resumen').evaluate((element) => {
             const panel = element.querySelector('[data-folios-atencion]');
             const leaf = element.querySelector('[data-gajo-leaf="frigorifico"]');
             const count = element.querySelector('[data-gajo-count="frigorifico"]');
@@ -190,7 +194,7 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
 
         const cabecera = page.locator('.operation-now-command__title');
-        for (const tema of Object.keys(temas)) {
+        for (const tema of Object.keys(temas).filter((theme) => theme !== 'personal-majora-link')) {
             await page.setViewportSize({ width: 1440, height: 900 });
             await selector.selectOption(tema);
             await page.waitForFunction(clave => document.documentElement.dataset.officePersonalTheme === clave, tema);
@@ -209,6 +213,44 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         }
         assert.equal(await page.locator('.estiba-office-search input').evaluate(input => getComputedStyle(input).backgroundColor), 'rgb(17, 13, 14)');
         assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()), '#f47583');
+        const ultimaNoche = 'personal-majora-link';
+        const estilosUltimaNoche = () => page.locator('#operationValidationRows td').first().evaluate((cell) => {
+            const style = getComputedStyle(cell);
+            const header = getComputedStyle(document.querySelector('.operation-now-command__title'));
+            const badge = document.querySelector('#operationValidationRows .folios-estado');
+            return {
+                cell: style.backgroundColor, text: style.color,
+                status: badge ? getComputedStyle(badge).color : null,
+                art: header.backgroundImage.startsWith('linear-gradient') && header.backgroundImage.includes('data:image/webp;base64,'),
+            };
+        });
+
+        await selector.selectOption(ultimaNoche);
+        await page.waitForFunction((theme) => document.documentElement.dataset.officePersonalTheme === theme, ultimaNoche);
+        const noche = await estilosUltimaNoche();
+        assert.equal(noche.art, true);
+        assert.ok(luminance(noche.cell) < 0.12);
+        assert.ok((luminance(noche.text) + 0.05) / (luminance(noche.cell) + 0.05) >= 4.5);
+        if (noche.status) assert.ok((luminance(noche.status) + 0.05) / (luminance(noche.cell) + 0.05) >= 4.5);
+        assert.equal((await palette()).fill, colors['dark-industrial'].fill);
+        if (process.env.FOLIOS_UI_CAPTURE_DIR) {
+            await page.locator('#operationToasts .toast').first().waitFor({ state: 'hidden' });
+        }
+        for (const width of [390, 768, 1440]) {
+            await page.setViewportSize({ width, height: 900 });
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
+            if (process.env.FOLIOS_UI_CAPTURE_DIR) {
+                await page.screenshot({ path: resolve(process.env.FOLIOS_UI_CAPTURE_DIR, `ultima-noche-${width}.png`) });
+            }
+        }
+        await selector.selectOption('light-professional');
+        await page.waitForFunction(() => document.documentElement.dataset.officeTheme === 'light-professional');
+        assert.notEqual((await estilosUltimaNoche()).cell, noche.cell);
+        assert.equal((await estilosUltimaNoche()).art, false);
+        await selector.selectOption(ultimaNoche);
+        await page.waitForFunction((theme) => document.documentElement.dataset.officePersonalTheme === theme, ultimaNoche);
+        assert.deepEqual(await estilosUltimaNoche(), noche);
+        assert.equal(new URL(page.url()).hash, '#validacion-pt');
         assert.deepEqual(errors, []);
         await context.close();
     } finally {

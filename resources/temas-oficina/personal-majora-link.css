@@ -1,0 +1,273 @@
+@media screen {
+    :root[data-office-personal-theme="personal-majora-link"] {
+        color-scheme: dark;
+        --bg: #15101d;
+        --deep: #1b1027;
+        --panel: #24172f;
+        --raised: #30213e;
+        --soft: #432b55;
+        --line: #82669b;
+        --line-soft: #51395f;
+        --border: var(--line);
+        --input-border: #887092;
+        --text: #f6edf7;
+        --text-strong: #fff6e9;
+        --text-secondary: #e3d4e5;
+        --text-subtle: #c7b4cc;
+        --muted: var(--text-subtle);
+        --header-bg: var(--deep);
+        --subnav-bg: var(--panel);
+        --surface-muted: #2a2037;
+        --surface-hover: #382a48;
+        --surface-selected: #293d24;
+        --input-bg: #1d1527;
+        --table-head: #332540;
+        --row-bg: var(--panel);
+        --row-alt: #2a2036;
+        --row-hover: var(--surface-hover);
+        --button-secondary: #322543;
+        --button-secondary-hover: #433354;
+        --icon-surface: var(--surface-muted);
+        --primary: #b8e96f;
+        --primary-hover: #dafaa3;
+        --on-primary: #18280d;
+        --accent: var(--primary);
+        --focus-ring: #dec4ff;
+        --selection-bg: #cda8f55c;
+        --green: #a8daa0;
+        --amber: #f6cb79;
+        --red: #ff9d9d;
+        --success-text: var(--green);
+        --success-bg: #23372a;
+        --warning-text: var(--amber);
+        --warning-bg: #382b20;
+        --danger-text: var(--red);
+        --danger-bg: #42252f;
+        --info-text: #d7c1ff;
+        --info-bg: #33274d;
+        --seal: var(--warning-text);
+        --seal-bg: var(--warning-bg);
+        --critical-fill: var(--danger-text);
+        --on-critical-fill: #260e18;
+        --corporate-navy: var(--deep);
+        --corporate-canvas: var(--bg);
+        --corporate-card: var(--panel);
+        --corporate-border: var(--line-soft);
+        --corporate-text: var(--text);
+        --corporate-text-muted: var(--muted);
+        --corporate-blue: #c8b0f6;
+        --corporate-blue-dark: #654680;
+        --corporate-orange: #e7ad77;
+        --corporate-gold: var(--ultima-noche-ambar);
+        --corporate-shadow: 0 4px 18px #0c091138;
+        --corporate-shadow-raised: 0 16px 44px #0c091183;
+        --cyan: var(--corporate-blue);
+        --cyan-light: var(--info-text);
+        --frost: var(--corporate-blue);
+        --frost-strong: var(--info-text);
+        --brand-gradient: linear-gradient(125deg, var(--deep), #3d2055 75%, #26342a);
+        --kpi-surface: #2b2037;
+        --logo-bg: var(--deep);
+        --logo-border: #96794b;
+        --series-product: var(--primary);
+        --series-material: var(--ultima-noche-ambar);
+        --chart-grid: var(--line-soft);
+        --chart-text: var(--text-secondary);
+        --chart-tooltip-bg: var(--raised);
+        --chart-tooltip-border: var(--line);
+        --area-operacion-ink: var(--ultima-noche-ambar);
+        --area-operacion-text: #ffdda0;
+        --area-operacion-tint: #362938;
+        --area-operacion-line: #8d7152;
+        --area-operacion-bright: var(--ultima-noche-ambar);
+        --ultima-noche-ambar: #ffc861;
+        --ultima-noche-laton: #ad7a51;
+        --ultima-noche-ascua: #ec624b;
+        --ultima-noche-arte: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-shell {
+        --shell-navy: var(--deep);
+        --shell-navy-hover: var(--surface-hover);
+        --shell-strong: var(--text-strong);
+        --shell-ink: var(--text);
+        --shell-muted: var(--text-secondary);
+        --shell-faint: var(--text-subtle);
+        --shell-line: var(--line);
+        --shell-gajo: var(--line-soft);
+        --shell-active-bg: var(--surface-selected);
+        --shell-active-ink: var(--text-strong);
+        --shell-active-gajo: var(--primary);
+        --shell-focus: var(--primary);
+        --eui-shell-frost: var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-header {
+        background: linear-gradient(110deg, var(--deep) 20%, #391d50 70%, #213128);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-header::after {
+        height: 2px;
+        background: linear-gradient(90deg, var(--primary) 0 15%, #9d63de 43%, var(--ultima-noche-ascua) 74%, var(--ultima-noche-ambar));
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-sidebar {
+        background: radial-gradient(ellipse at 0 60%, #32233e 0%, transparent 74%), var(--deep);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-sidebar .estiba-office-offices a.is-active {
+        background: var(--surface-selected);
+        box-shadow: inset 2px 0 var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-signature::after {
+        display: block;
+        width: 18px;
+        height: 18px;
+        margin-top: 8px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 65% 35%, var(--deep) 0 49%, transparent 52%), var(--ultima-noche-ambar);
+        content: "";
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-ui {
+        --eui-color-navy: var(--deep);
+        --eui-color-navy-hover: var(--surface-hover);
+        --eui-color-on-navy-muted: var(--text-secondary);
+        --eui-color-canvas: var(--corporate-canvas);
+        --eui-color-surface: var(--corporate-card);
+        --eui-color-subtle: var(--surface-muted);
+        --eui-color-border: var(--line);
+        --eui-color-border-soft: var(--line-soft);
+        --eui-color-input-border: var(--input-border);
+        --eui-color-text: var(--text);
+        --eui-color-text-secondary: var(--text-secondary);
+        --eui-color-muted: var(--text-subtle);
+        --eui-color-primary: var(--primary);
+        --eui-color-primary-hover: var(--primary-hover);
+        --eui-color-on-primary: var(--on-primary);
+        --eui-color-selected: var(--surface-selected);
+        --eui-color-focus: var(--focus-ring);
+        --eui-color-disabled-surface: var(--soft);
+        --eui-color-disabled-text: var(--text-subtle);
+        --eui-color-frost: var(--frost);
+        --eui-color-frost-strong: var(--frost-strong);
+        --eui-color-frost-bright: var(--frost);
+        --eui-signal-neutral-text: var(--text-subtle);
+        --eui-signal-neutral-surface: var(--surface-muted);
+        --eui-signal-neutral-border: var(--line);
+        --eui-signal-info-text: var(--info-text);
+        --eui-signal-info-surface: var(--info-bg);
+        --eui-signal-success-text: var(--success-text);
+        --eui-signal-success-surface: var(--success-bg);
+        --eui-signal-warning-text: var(--warning-text);
+        --eui-signal-warning-surface: var(--warning-bg);
+        --eui-signal-critical-text: var(--danger-text);
+        --eui-signal-critical-surface: var(--danger-bg);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app :is([data-folios-masthead], .operation-now-command__title) {
+        background:
+            linear-gradient(90deg, #1c0b29 4%, #1c0b29ee 31%, #1c0b297a 62%, #1c0b2910 88%),
+            var(--ultima-noche-arte) right center / auto 100% no-repeat,
+            #1c0b29;
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app :is([data-folios-masthead], .operation-now-command__title) h1 {
+        color: var(--text-strong);
+        font-family: Georgia, Cambria, serif;
+        font-stretch: normal;
+        letter-spacing: -.035em;
+        text-shadow: 0 2px 12px #100a16d9;
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app [data-folios-masthead] {
+        min-block-size: clamp(104px, 12vw, 164px);
+        border-color: var(--ultima-noche-laton);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .operation-now .operation-now-command {
+        grid-template-areas: "title title title" "state date actions";
+        padding: 0 16px 12px;
+        border-color: var(--ultima-noche-laton);
+        background: var(--panel);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .operation-now-command__title {
+        display: grid;
+        align-content: center;
+        min-block-size: clamp(118px, 16vw, 218px);
+        margin-inline: -16px;
+        padding: 14px 16px;
+        border-radius: 7px 3px 0 0;
+        border-block-end: 1px solid var(--ultima-noche-laton);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .operation-now-command__date {
+        position: relative;
+        padding-inline-start: 41px;
+        border-inline-start: 1px solid var(--ultima-noche-laton);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] #operationTime {
+        color: var(--ultima-noche-ambar);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .operation-now-command__date::before {
+        position: absolute;
+        inset-block-start: 8px;
+        inset-inline-start: 10px;
+        inline-size: 21px;
+        aspect-ratio: 1;
+        border: 1px solid var(--ultima-noche-laton);
+        border-radius: 50%;
+        background:
+            radial-gradient(circle at center, var(--ultima-noche-ambar) 0 1px, var(--panel) 2px 4px, transparent 5px),
+            repeating-conic-gradient(from -2deg, var(--ultima-noche-ambar) 0deg 4deg, transparent 4deg 30deg);
+        content: "";
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app :is([role="tab"][aria-selected="true"], .custody-tabs [aria-pressed="true"]) {
+        border-block-end-color: var(--primary);
+        background: var(--surface-selected);
+        color: var(--text-strong);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app :is(button, a).primary-button {
+        border-color: var(--primary);
+        background: var(--primary);
+        color: var(--on-primary);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app :is(button, a).primary-button:hover:not(:disabled) {
+        background: var(--primary-hover);
+    }
+
+    @media (max-width: 760px) {
+        :root[data-office-personal-theme="personal-majora-link"] .estiba-office-shell .estiba-office-theme-select {
+            max-inline-size: 46vw;
+        }
+
+        :root[data-office-personal-theme="personal-majora-link"] .office-app :is([data-folios-masthead], .operation-now-command__title) {
+            background:
+                linear-gradient(90deg, #1c0b29 0%, #1c0b29d9 49%, #1c0b292b),
+                var(--ultima-noche-arte) right center / auto 100% no-repeat,
+                #1c0b29;
+        }
+
+        :root[data-office-personal-theme="personal-majora-link"] .operation-now .operation-now-command {
+            grid-template-areas: "title title" "date actions" "state state";
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        :root[data-office-personal-theme="personal-majora-link"] .operation-now-command__date {
+            padding-inline-start: 0;
+            border-inline-start: 0;
+        }
+
+        :root[data-office-personal-theme="personal-majora-link"] .operation-now-command__date::before {
+            display: none;
+        }
+    }
+}

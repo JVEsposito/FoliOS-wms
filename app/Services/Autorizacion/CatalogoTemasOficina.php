@@ -30,6 +30,12 @@ final class CatalogoTemasOficina
             'formato' => 'png',
             'fondo' => 'personal-nerv-eva.webp',
         ],
+        'personal-majora-link' => [
+            'nombre' => 'Majora y Link · Última noche',
+            'color' => '#15101d',
+            'claro' => false,
+            'incluido' => true,
+        ],
     ];
 
     private ?array $personales = null;
@@ -173,7 +179,7 @@ final class CatalogoTemasOficina
             return $this->personales;
         }
 
-        // Las ilustraciones son opcionales y se instalan fuera del directorio público.
+        // Los temas de Oficina se resuelven desde los recursos incluidos o el almacenamiento privado de la planta.
         $this->personales = [];
         $directorio = Storage::disk('local')->path('temas-oficina');
         $catalogo = json_decode($this->leerArchivo("{$directorio}/catalogo.json") ?? '', true);
@@ -191,7 +197,9 @@ final class CatalogoTemasOficina
             $temaPlanta = self::ESTILOS_DE_PLANTA[$clave] ?? null;
             $formato = $temaPlanta['formato'] ?? 'webp';
             if ($temaPlanta !== null) {
-                $arte = "{$directorio}/{$clave}.{$formato}";
+                $arte = ($temaPlanta['incluido'] ?? false)
+                    ? resource_path("temas-oficina/{$clave}.{$formato}")
+                    : "{$directorio}/{$clave}.{$formato}";
                 $estilo = resource_path("temas-oficina/{$clave}.css");
                 if ($this->esIlustracion($this->leerArchivo($arte, 12), $formato) && is_file($estilo) && is_readable($estilo)) {
                     $tema = $temaPlanta;

@@ -17,6 +17,6 @@ return [
     // Temas que cada rol trae siempre, además de los habilitados por correo. El perfil de acceso
     // «Superadmin» se asigna a cuentas con rol Administrador, así que queda cubierto.
     'temas_por_rol' => [
-        'administrador' => ['dark-bit', 'dark-bit-neon'],
+        'administrador' => ['dark-bit', 'dark-bit-neon', 'personal-majora-link'],
     ],
 ];
