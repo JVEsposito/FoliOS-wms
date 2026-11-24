@@ -304,6 +304,7 @@
                                             <tr>
                                                 <th>Folio</th>
                                                 <th>Tipo</th>
+                                                <th class="folio-boxes">Cajas</th>
                                                 <th>Estado en carga</th>
                                                 <th>Ubicación actual</th>
                                                 <th>Asignado</th>

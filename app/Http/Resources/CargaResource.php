@@ -231,6 +231,9 @@ class CargaResource extends JsonResource
                     'id' => $folio?->id,
                     'numero_folio' => $folio?->numero_folio,
                     'tipo_bulto' => $folio?->tipo_bulto?->value,
+                    'cantidad_cajas' => isset($folio?->datos_externos['cantidad_cajas'])
+                        ? (int) $folio->datos_externos['cantidad_cajas']
+                        : null,
                     'estado_operacional' => $folio?->estado_operacional?->value,
                     'estado_carga' => $asignacion->estado->value,
                     'prefrio' => $prefrio?->proceso?->tunel ? [

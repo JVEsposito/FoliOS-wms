@@ -24,10 +24,10 @@ test('completa una carga en despacho parcial con los pallets que faltaban', asyn
             }, theme);
             const writes = [], errors = [];
             const group = { id: 'instr-1', orden: 1, numero_externo: 'EFC0000011', booking: null, recibidor: null, pallets_programados: 4, cajas_programadas: null, pallets_asignados: 2, pallets_pendientes: 2, progreso: { en_anden: 1, cargados: 0 } };
-            const folio = (numero, estado) => ({ id: numero, numero_folio: numero, estado_carga: estado, tipo_bulto: 'pallet', estado_operacional: 'disponible', instructivo_embarque_id: 'instr-1', asignado_at: '2026-11-13T00:58:00Z' });
+            const folio = (numero, estado, cajas = 720) => ({ id: numero, numero_folio: numero, cantidad_cajas: cajas, estado_carga: estado, tipo_bulto: 'pallet', estado_operacional: 'disponible', instructivo_embarque_id: 'instr-1', asignado_at: '2026-11-13T00:58:00Z' });
             const load = { id: 'load', codigo: 'CAR-000036', estado: 'despacho_parcial', prioridad: 'normal', version: 9, total_folios: 2, total_programado: 4, segregaciones: [group], folios_sin_instructivo: [],
-                folios: [folio('6000000666', 'en_anden'), folio('6000001076', 'pendiente')], distribucion: [], progreso: { en_anden: 1, cargados: 0 }, embarque: { codigo: 'EIN0000011', numeros_externos: ['EFC0000011'] } };
-            const closed = { ...load, id: 'closed', codigo: 'CAR-000030', estado: 'cerrada', segregaciones: [], folios: [folio('6000000001', 'despachado')], total_folios: 1, total_programado: 1, cierre: { patente: 'AB-CD-12', conductor: 'Conductor', cerrada_at: '2026-11-12T20:00:00Z' } };
+                folios: [folio('6000000666', 'en_anden'), { ...folio('6000001076', 'pendiente', 37), tipo_bulto: 'saldo' }], distribucion: [], progreso: { en_anden: 1, cargados: 0 }, embarque: { codigo: 'EIN0000011', numeros_externos: ['EFC0000011'] } };
+            const closed = { ...load, id: 'closed', codigo: 'CAR-000030', estado: 'cerrada', segregaciones: [], folios: [folio('6000000001', 'despachado', 108), { ...folio('6000000002', 'despachado', null), tipo_bulto: 'saldo' }], total_folios: 2, total_programado: 2, cierre: { patente: 'AB-CD-12', conductor: 'Conductor', cerrada_at: '2026-11-12T20:00:00Z' } };
             await context.route('http://localhost/**', async route => {
                 const request = route.request(), path = new URL(request.url()).pathname;
                 if (path === '/oficina/frigorifico/despacho/cargas') return route.fulfill({ body: html, contentType: 'text/html' });
@@ -76,6 +76,9 @@ test('completa una carga en despacho parcial con los pallets que faltaban', asyn
             assert.match(await page.locator('#folioTableHint').textContent(), /Puedes agregar los pallets faltantes/);
             assert.equal(await page.locator('[data-segregate-folio]').count(), 0, 'la reclasificación de instructivo sigue sólo en borrador o pendiente');
             assert.equal(await page.locator('[data-change-folio]').count(), 2);
+            assert.equal(await page.locator('.folio-table thead .folio-boxes').textContent(), 'Cajas');
+            assert.deepEqual(await page.locator('#folioTableBody .folio-boxes').allTextContents(), ['720', '37']);
+            assert.equal(await page.locator('.instruction-folio-heading th').getAttribute('colspan'), '7');
             await page.locator('#folioInput').fill('6000001292\n6000001524');
             await page.locator('#addFoliosButton').click();
             await page.waitForFunction(() => document.querySelector('#loadTotalFolios').textContent === '4 / 4');
@@ -85,6 +88,7 @@ test('completa una carga en despacho parcial con los pallets que faltaban', asyn
             await page.locator('[data-load-id="closed"]').click();
             await page.waitForFunction(() => document.querySelector('#loadEditorTitle')?.textContent === 'CAR-000030');
             assert.equal(await page.locator('#folioAddSection').isHidden(), true);
+            assert.deepEqual(await page.locator('#folioTableBody .folio-boxes').allTextContents(), ['108', 'Sin dato']);
             assert.deepEqual(errors, []);
             await context.close();
         }
