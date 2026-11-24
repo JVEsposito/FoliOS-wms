@@ -238,6 +238,50 @@ class MotorTransicionesOperacionalesTest extends TestCase
         $this->assertDatabaseCount('cambios_transiciones_operacionales', 0);
     }
 
+    public function test_un_uuid_con_otro_payload_o_actor_no_ejecuta_ni_sobrescribe_la_operacion(): void
+    {
+        $usuario = $this->usuario();
+        $otroUsuario = $this->usuario();
+        $uuid = (string) Str::uuid();
+        $this->motor()->ejecutar(new ComandoTransicionOperacional(
+            dominio: DominioTransicionOperacional::Validacion,
+            tipo: 'pallet.registrar', usuario: $usuario,
+            payload: ['folio' => 'PAL-UUID'], operacionId: $uuid,
+        ), fn (): array => ['folio' => 'PAL-UUID']);
+        $transicion = TransicionOperacional::query()->where('operacion_id', $uuid)->sole();
+        $anterior = $transicion->getRawOriginal();
+
+        foreach ([[$usuario, 'OTRO-FOLIO'], [$otroUsuario, 'PAL-UUID']] as [$actor, $folio]) {
+            try {
+                $this->motor()->ejecutar(new ComandoTransicionOperacional(
+                    dominio: DominioTransicionOperacional::Validacion,
+                    tipo: 'pallet.registrar', usuario: $actor,
+                    payload: ['folio' => $folio], operacionId: $uuid,
+                ), fn () => $this->fail('Un UUID ajeno o con otro contenido no debe ejecutar la acción.'));
+                $this->fail('Se esperaba un conflicto de idempotencia.');
+            } catch (ConflictoOperacion $error) {
+                $this->assertStringContainsString('datos o actor diferentes', $error->getMessage());
+            }
+            $this->assertSame($anterior, $transicion->refresh()->getRawOriginal());
+        }
+        $this->assertDatabaseCount('transiciones_operacionales', 1);
+    }
+
+    public function test_operaciones_sin_uuid_crean_transiciones_independientes(): void
+    {
+        $comando = new ComandoTransicionOperacional(
+            dominio: DominioTransicionOperacional::Estiba,
+            tipo: 'retiro', usuario: $this->usuario(),
+        );
+
+        $this->motor()->ejecutar($comando, fn (): bool => true);
+        $this->motor()->ejecutar($comando, fn (): bool => true);
+
+        $this->assertDatabaseCount('transiciones_operacionales', 2);
+        $this->assertSame(2, TransicionOperacional::query()->whereNull('operacion_id')
+            ->where('estado', EstadoTransicionOperacional::Aplicada->value)->count());
+    }
+
     public function test_un_deadlock_historico_se_rechaza_sin_reemitirlo_como_excepcion_mysql(): void
     {
         $usuario = $this->usuario();
