@@ -1,0 +1,253 @@
+@media screen {
+    :root[data-office-personal-theme="personal-majora-link"] {
+        color-scheme: dark;
+        --bg: #15101d;
+        --deep: #1a1223;
+        --panel: #231a2e;
+        --raised: #2d2239;
+        --soft: #3a2a49;
+        --line: #725b80;
+        --line-soft: #493756;
+        --border: var(--line);
+        --input-border: #887092;
+        --text: #f6edf7;
+        --text-strong: #fff6e9;
+        --text-secondary: #e3d4e5;
+        --text-subtle: #c7b4cc;
+        --muted: var(--text-subtle);
+        --header-bg: var(--deep);
+        --subnav-bg: var(--panel);
+        --surface-muted: #2a2037;
+        --surface-hover: #382a48;
+        --surface-selected: #29392b;
+        --input-bg: #1d1527;
+        --table-head: #332540;
+        --row-bg: var(--panel);
+        --row-alt: #2a2036;
+        --row-hover: var(--surface-hover);
+        --button-secondary: #322543;
+        --button-secondary-hover: #433354;
+        --icon-surface: var(--surface-muted);
+        --primary: #f1cf88;
+        --primary-hover: #ffe4ab;
+        --on-primary: #201528;
+        --accent: var(--primary);
+        --focus-ring: #dec4ff;
+        --selection-bg: #cda8f55c;
+        --green: #a8daa0;
+        --amber: #f6cb79;
+        --red: #ff9d9d;
+        --success-text: var(--green);
+        --success-bg: #23372a;
+        --warning-text: var(--amber);
+        --warning-bg: #382b20;
+        --danger-text: var(--red);
+        --danger-bg: #42252f;
+        --info-text: #d7c1ff;
+        --info-bg: #33274d;
+        --seal: var(--warning-text);
+        --seal-bg: var(--warning-bg);
+        --critical-fill: var(--danger-text);
+        --on-critical-fill: #260e18;
+        --corporate-navy: var(--deep);
+        --corporate-canvas: var(--bg);
+        --corporate-card: var(--panel);
+        --corporate-border: var(--line-soft);
+        --corporate-text: var(--text);
+        --corporate-text-muted: var(--muted);
+        --corporate-blue: #c8b0f6;
+        --corporate-blue-dark: #654680;
+        --corporate-orange: #e7ad77;
+        --corporate-gold: var(--primary);
+        --corporate-shadow: 0 4px 18px #0c091138;
+        --corporate-shadow-raised: 0 16px 44px #0c091183;
+        --cyan: var(--corporate-blue);
+        --cyan-light: var(--info-text);
+        --frost: var(--corporate-blue);
+        --frost-strong: var(--info-text);
+        --brand-gradient: linear-gradient(125deg, var(--deep), #30213f 75%, #26342a);
+        --kpi-surface: #2b2037;
+        --logo-bg: var(--deep);
+        --logo-border: #96794b;
+        --series-product: #b4dda1;
+        --series-material: var(--primary);
+        --chart-grid: var(--line-soft);
+        --chart-text: var(--text-secondary);
+        --chart-tooltip-bg: var(--raised);
+        --chart-tooltip-border: var(--line);
+        --area-operacion-ink: var(--primary);
+        --area-operacion-text: var(--primary-hover);
+        --area-operacion-tint: #362938;
+        --area-operacion-line: #8d7152;
+        --area-operacion-bright: var(--primary);
+        --ultima-noche-bosque: #b4dda1;
+        --ultima-noche-laton: #9d7a50;
+        --ultima-noche-arte: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-shell {
+        --shell-navy: var(--deep);
+        --shell-navy-hover: var(--surface-hover);
+        --shell-strong: var(--text-strong);
+        --shell-ink: var(--text);
+        --shell-muted: var(--text-secondary);
+        --shell-faint: var(--text-subtle);
+        --shell-line: var(--line);
+        --shell-gajo: var(--line-soft);
+        --shell-active-bg: var(--surface-selected);
+        --shell-active-ink: var(--text-strong);
+        --shell-active-gajo: var(--ultima-noche-bosque);
+        --shell-focus: var(--primary);
+        --eui-shell-frost: var(--ultima-noche-bosque);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-header {
+        background: linear-gradient(110deg, var(--deep) 22%, #30213d 66%, #213128);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-header::after {
+        height: 2px;
+        background: linear-gradient(90deg, var(--ultima-noche-bosque), var(--primary) 48%, #84619b 84%, #3b4c3f);
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-sidebar {
+        background: radial-gradient(ellipse at 0 60%, #32233e 0%, transparent 74%), var(--deep);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-sidebar .estiba-office-offices a.is-active {
+        background: var(--surface-selected);
+        box-shadow: inset 2px 0 var(--ultima-noche-bosque);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-office-signature::after {
+        display: block;
+        width: 18px;
+        height: 18px;
+        margin-top: 8px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 65% 35%, var(--deep) 0 49%, transparent 52%), var(--primary);
+        content: "";
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .estiba-ui {
+        --eui-color-navy: var(--deep);
+        --eui-color-navy-hover: var(--surface-hover);
+        --eui-color-on-navy-muted: var(--text-secondary);
+        --eui-color-canvas: var(--corporate-canvas);
+        --eui-color-surface: var(--corporate-card);
+        --eui-color-subtle: var(--surface-muted);
+        --eui-color-border: var(--line);
+        --eui-color-border-soft: var(--line-soft);
+        --eui-color-input-border: var(--input-border);
+        --eui-color-text: var(--text);
+        --eui-color-text-secondary: var(--text-secondary);
+        --eui-color-muted: var(--text-subtle);
+        --eui-color-primary: var(--primary);
+        --eui-color-primary-hover: var(--primary-hover);
+        --eui-color-on-primary: var(--on-primary);
+        --eui-color-selected: var(--surface-selected);
+        --eui-color-focus: var(--focus-ring);
+        --eui-color-disabled-surface: var(--soft);
+        --eui-color-disabled-text: var(--text-subtle);
+        --eui-color-frost: var(--frost);
+        --eui-color-frost-strong: var(--frost-strong);
+        --eui-color-frost-bright: var(--frost);
+        --eui-signal-neutral-text: var(--text-subtle);
+        --eui-signal-neutral-surface: var(--surface-muted);
+        --eui-signal-neutral-border: var(--line);
+        --eui-signal-info-text: var(--info-text);
+        --eui-signal-info-surface: var(--info-bg);
+        --eui-signal-success-text: var(--success-text);
+        --eui-signal-success-surface: var(--success-bg);
+        --eui-signal-warning-text: var(--warning-text);
+        --eui-signal-warning-surface: var(--warning-bg);
+        --eui-signal-critical-text: var(--danger-text);
+        --eui-signal-critical-surface: var(--danger-bg);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app :is([data-folios-masthead], .operation-now-command__title) {
+        background:
+            linear-gradient(90deg, #1a1124 4%, #1a1124f0 31%, #1a11246c 63%, #1a11241c),
+            var(--ultima-noche-arte) right center / auto 100% no-repeat,
+            #1a1124;
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app :is([data-folios-masthead], .operation-now-command__title) h1 {
+        color: var(--text-strong);
+        font-family: Georgia, Cambria, serif;
+        font-stretch: normal;
+        letter-spacing: -.035em;
+        text-shadow: 0 2px 12px #100a16d9;
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app [data-folios-masthead] {
+        min-block-size: clamp(104px, 12vw, 164px);
+        border-color: var(--ultima-noche-laton);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .operation-now .operation-now-command {
+        grid-template-areas: "title title title" "state date actions";
+        padding: 0 16px 12px;
+        border-color: var(--ultima-noche-laton);
+        background: var(--panel);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .operation-now-command__title {
+        display: grid;
+        align-content: center;
+        min-block-size: clamp(118px, 16vw, 218px);
+        margin-inline: -16px;
+        padding: 14px 16px;
+        border-radius: 7px 3px 0 0;
+        border-block-end: 1px solid var(--ultima-noche-laton);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .operation-now-command__date {
+        padding-inline-start: 12px;
+        border-inline-start: 1px solid var(--ultima-noche-laton);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] #operationTime {
+        color: var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app :is([role="tab"][aria-selected="true"], .custody-tabs [aria-pressed="true"]) {
+        border-block-end-color: var(--ultima-noche-bosque);
+        background: var(--surface-selected);
+        color: var(--text-strong);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app :is(button, a).primary-button {
+        border-color: var(--primary);
+        background: var(--primary);
+        color: var(--on-primary);
+    }
+
+    :root[data-office-personal-theme="personal-majora-link"] .office-app :is(button, a).primary-button:hover:not(:disabled) {
+        background: var(--primary-hover);
+    }
+
+    @media (max-width: 760px) {
+        :root[data-office-personal-theme="personal-majora-link"] .estiba-office-shell .estiba-office-theme-select {
+            max-inline-size: 46vw;
+        }
+
+        :root[data-office-personal-theme="personal-majora-link"] .office-app :is([data-folios-masthead], .operation-now-command__title) {
+            background:
+                linear-gradient(90deg, #1a1124f5 0%, #1a1124c9 45%, #1a11247a),
+                var(--ultima-noche-arte) right center / auto 100% no-repeat,
+                #1a1124;
+        }
+
+        :root[data-office-personal-theme="personal-majora-link"] .operation-now .operation-now-command {
+            grid-template-areas: "title title" "date actions" "state state";
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        :root[data-office-personal-theme="personal-majora-link"] .operation-now-command__date {
+            padding-inline-start: 0;
+            border-inline-start: 0;
+        }
+    }
+}

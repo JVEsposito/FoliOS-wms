@@ -19,7 +19,7 @@ class TemasPerfilApiTest extends TestCase
         $perfil = PerfilAcceso::where('protegido', true)->where('rol_base', RolUsuario::Administrador)->firstOrFail();
         $usuario = User::factory()->create(['rol' => RolUsuario::Administrador, 'perfil_acceso_id' => $perfil->id]);
         $sesion = $this->postJson('/api/acceso-oficina', ['email' => $usuario->email, 'password' => 'password'])
-            ->assertOk()->assertJsonPath('usuario.temas_oficina', ['dark-princess', 'light-garden', 'dark-bit', 'dark-bit-neon']);
+            ->assertOk()->assertJsonPath('usuario.temas_oficina', ['dark-princess', 'light-garden', 'dark-bit', 'dark-bit-neon', 'personal-majora-link']);
         $this->withToken($sesion->json('token'));
         $ruta = "/api/administracion/perfiles-acceso/{$perfil->id}/temas";
 
@@ -37,7 +37,7 @@ class TemasPerfilApiTest extends TestCase
         $this->assertSame(1, $usuario->tokens()->count());
         $this->patchJson($ruta, ['temas_oficina' => null])->assertOk()->assertJsonPath('data.temas_oficina', null);
         app('auth')->forgetGuards();
-        $this->getJson('/api/oficina/contexto')->assertOk()->assertJsonPath('data.temas_oficina', ['dark-princess', 'light-garden', 'dark-bit', 'dark-bit-neon']);
+        $this->getJson('/api/oficina/contexto')->assertOk()->assertJsonPath('data.temas_oficina', ['dark-princess', 'light-garden', 'dark-bit', 'dark-bit-neon', 'personal-majora-link']);
     }
 
     public function test_el_perfil_habilita_un_tema_para_todas_sus_cuentas_sin_darles_permiso_de_edicion(): void
@@ -55,6 +55,34 @@ class TemasPerfilApiTest extends TestCase
             $this->getJson('/api/oficina/contexto')->assertOk()->assertJsonPath('data.temas_oficina', ['light-garden', 'dark-bit']);
             $this->patchJson($ruta, ['temas_oficina' => []])->assertForbidden();
         }
+    }
+
+    public function test_ultima_noche_incluye_su_ilustracion_y_respeta_la_asignacion_por_perfil(): void
+    {
+        Storage::fake('local');
+        $ruta = '/api/oficina/tema-personal/personal-majora-link';
+        $this->getJson($ruta)->assertUnauthorized();
+
+        $perfil = PerfilAcceso::where('predeterminado', true)->where('rol_base', RolUsuario::SupervisorFrio)->firstOrFail();
+        $supervisor = User::factory()->create(['rol' => RolUsuario::SupervisorFrio, 'perfil_acceso_id' => $perfil->id]);
+        Sanctum::actingAs($supervisor);
+        $this->get($ruta)->assertNotFound();
+
+        Sanctum::actingAs(User::factory()->create(['rol' => RolUsuario::Administrador]));
+        $this->getJson('/api/oficina/contexto')->assertOk()
+            ->assertJsonPath('data.temas_oficina_personales.personal-majora-link.nombre', 'Majora y Link · Última noche')
+            ->assertJsonPath('data.temas_oficina_personales.personal-majora-link.color', '#15101d')
+            ->assertJsonPath('data.temas_oficina_personales.personal-majora-link.claro', false);
+        $css = $this->get($ruta)->assertOk()->assertHeader('Content-Type', 'text/css; charset=UTF-8')->getContent();
+        $this->assertStringContainsString('[data-office-personal-theme="personal-majora-link"]', $css);
+        $this->assertStringContainsString('data:image/webp;base64,UklGR', $css);
+        $this->assertStringNotContainsString('__FOLIOS_TEMA_WEBP__', $css);
+        $this->patchJson("/api/administracion/perfiles-acceso/{$perfil->id}/temas", ['temas_oficina' => ['personal-majora-link']])->assertOk();
+
+        Sanctum::actingAs($supervisor->fresh());
+        $this->getJson('/api/oficina/contexto')->assertOk()
+            ->assertJsonPath('data.temas_oficina', ['personal-majora-link']);
+        $this->assertSame($css, $this->get($ruta)->assertOk()->getContent());
     }
 
     public function test_el_tema_local_se_entrega_por_correo_o_por_asignacion_de_perfil(): void
