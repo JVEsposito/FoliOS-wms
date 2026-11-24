@@ -13,6 +13,8 @@ use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Transiciones\ComandoTransicionOperacional;
 use App\Services\Transiciones\MotorTransicionesOperacionales;
+use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Regularización acotada al informe del 24/11/2026 y a los conteos confirmados.
@@ -143,7 +145,7 @@ final class RegularizacionCajasRepa20261124
                 $datos['regularizacion_cajas_fecha'] = [
                     'operacion_id' => self::OPERACION, 'usuario_id' => $usuario->id,
                     'fecha_utc' => now()->utc()->toAtomString(), 'antes' => $paso['antes'], 'despues' => $paso['despues'],
-                    'motivo' => 'Corrección del efecto de cambios de fecha posteriores a repaletizaje; conteo físico confirmado.',
+                    'motivo' => 'Corrección del efecto de cambios de fecha posteriores a repaletizaje; conteos confirmados y trazabilidad de folios agotados.',
                     'respaldo' => basename($respaldo),
                 ];
                 $folio->update([
@@ -173,9 +175,9 @@ if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
         }
         require $raiz.'/vendor/autoload.php';
         $app = require $raiz.'/bootstrap/app.php';
-        $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-        if (Illuminate\Support\Facades\DB::connection()->getDriverName() !== 'mysql'
-            || Illuminate\Support\Facades\DB::connection()->getDatabaseName() !== 'estiba_wms') {
+        $app->make(Kernel::class)->bootstrap();
+        if (DB::connection()->getDriverName() !== 'mysql'
+            || DB::connection()->getDatabaseName() !== 'estiba_wms') {
             throw new RuntimeException('Esta regularización está limitada a la base oficial estiba_wms auditada.');
         }
         $opciones = getopt('', ['aplicar', 'usuario:']);

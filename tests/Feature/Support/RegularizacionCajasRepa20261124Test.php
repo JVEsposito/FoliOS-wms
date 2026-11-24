@@ -13,6 +13,7 @@ use App\Services\InspeccionSag\ServicioExistenciasSag;
 use App\Services\Planificador\ServicioDepuracionIngresosCamara;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Mockery;
 use RegularizacionCajasRepa20261124;
 use Tests\TestCase;
@@ -103,7 +104,7 @@ class RegularizacionCajasRepa20261124Test extends TestCase
     public function test_regulariza_con_respaldo_auditoria_y_composicion_sin_tocar_los_casos_diferidos(): void
     {
         foreach (['6000005081' => 29, '6000001531' => 176, '6000005122' => 37] as $numero => $cantidad) {
-            $this->insertar((string) \Illuminate\Support\Str::uuid(), (string) $numero, $cantidad, true, 'pendiente_ubicacion', '2026-11-24 12:00:00');
+            $this->insertar((string) Str::uuid(), (string) $numero, $cantidad, true, 'pendiente_ubicacion', '2026-11-24 12:00:00');
         }
         $ruta = $this->respaldo();
         $resultado = $this->servicio()->aplicar($this->usuario, $ruta);
