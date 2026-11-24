@@ -1,0 +1,61 @@
+name: Verificar regularización de cajas REPA
+
+on:
+  push:
+    branches:
+      - agent/regularizacion-cajas-repa-20261124
+
+permissions:
+  contents: read
+
+jobs:
+  regularizacion:
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: estiba_wms_test
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      CACHE_STORE: array
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: estiba_wms_test
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
+    steps:
+      - uses: actions/checkout@v7
+      - run: cp .env.example .env
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_mysql, pdo_sqlite, zip, gd, exif
+          coverage: none
+          github-token: ${{ github.token }}
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Sintaxis
+        run: |
+          php -l scripts/soporte/regularizar-cajas-repa-20261124.php
+          php -l tests/Feature/Support/RegularizacionCajasRepa20261124Test.php
+      - name: Pruebas de regularización sobre MySQL 8.4
+        run: php artisan test tests/Feature/Support/RegularizacionCajasRepa20261124Test.php --fail-on-warning --stop-on-failure
+      - name: Estilo
+        run: vendor/bin/pint --test scripts/soporte/regularizar-cajas-repa-20261124.php tests/Feature/Support/RegularizacionCajasRepa20261124Test.php
+      - name: Mostrar ajustes de estilo si fueran necesarios
+        if: failure()
+        run: |
+          vendor/bin/pint scripts/soporte/regularizar-cajas-repa-20261124.php tests/Feature/Support/RegularizacionCajasRepa20261124Test.php
+          git diff -- scripts/soporte/regularizar-cajas-repa-20261124.php tests/Feature/Support/RegularizacionCajasRepa20261124Test.php
