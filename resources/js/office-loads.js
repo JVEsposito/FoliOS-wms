@@ -878,7 +878,7 @@ function renderFolios(load) {
     if (!load.folios?.length) {
         elements.folioTableBody.innerHTML = `
             <tr class="folio-empty-row">
-                <td colspan="6">Todavía no hay folios asignados a esta orden.</td>
+                <td colspan="7">Todavía no hay folios asignados a esta orden.</td>
             </tr>
         `;
         return;
@@ -887,7 +887,7 @@ function renderFolios(load) {
     const editable = canEdit(load);
     const adjustable = canAdjust(load);
     elements.folioTableBody.innerHTML = groupedLoadFolios(load).filter((group) => group.folios.length).map(({ instruction, folios }) => {
-        const heading = load.segregaciones?.length ? `<tr class="instruction-folio-heading"><th colspan="6" scope="colgroup">${escapeHtml(instruction ? instructionLabel(instruction) : 'Sin instructivo')} · ${folios.length} pallets${instruction?.booking ? ` · Booking ${escapeHtml(instruction.booking)}` : ''}</th></tr>` : '';
+        const heading = load.segregaciones?.length ? `<tr class="instruction-folio-heading"><th colspan="7" scope="colgroup">${escapeHtml(instruction ? instructionLabel(instruction) : 'Sin instructivo')} · ${folios.length} pallets${instruction?.booking ? ` · Booking ${escapeHtml(instruction.booking)}` : ''}</th></tr>` : '';
         return heading + folios.map((folio) => {
         const location = folio.estado_carga === 'despachado' ? 'Despachado'
             : folio.estado_carga === 'retornado' ? 'Retornado a planta'
@@ -902,6 +902,7 @@ function renderFolios(load) {
             <tr>
                 <td><span class="folios-codigo">${officeCode(folio.numero_folio, escapeHtml)}</span><small>${escapeHtml(statusText(folio.estado_operacional || '—'))}</small></td>
                 <td>${escapeHtml(statusText(folio.tipo_bulto || '—'))}</td>
+                <td class="folio-boxes">${folio.cantidad_cajas == null ? 'Sin dato' : escapeHtml(new Intl.NumberFormat('es-CL').format(folio.cantidad_cajas))}</td>
                 <td>${officeStatus(statusText(folio.estado_carga || 'pendiente'), palletStates[folio.estado_carga], escapeHtml)}</td>
                 <td><span class="location-label">${escapeHtml(location)}</span></td>
                 <td>${escapeHtml(formatDate(folio.asignado_at))}</td>
