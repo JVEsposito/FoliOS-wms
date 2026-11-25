@@ -23,6 +23,7 @@ class CoberturaConsultaHaiku
             'cajas-pt', 'formatos-pt', 'saldos-pt' => 'Existencia actual de fruta embalada. No es producción histórica ni inventario de insumos, cajas vacías o cartón.',
             'repaletizajes' => 'Solo repaletizajes confirmados. No son retornos, devoluciones ni pallets que volvieron desde cargas.',
             'folios-despachados' => 'Cuenta folios, pallets y saldos, no cajas ni kilos. No filtra por país, destino, puerto, mercado o recibidor.',
+            'neto-por-envase' => 'Kilos netos de fruta por tote o bin de recepciones cerradas. No responde la tara de un envase vacío, el peso de esponjas ni revisa errores de tara.',
             'lotes-mp' => 'Estado actual de los lotes de la temporada. No responde órdenes de proceso por turno o línea, kilos recibidos en un periodo ni retenciones SAG.',
             'retenciones-sag' => 'Solo seguimientos SAG no liberados y pallets que siguen en planta. No lista lotes liberados, pallets despachados, inspecciones SAG ni retenciones de Hidrocooler.',
             default => 'Responde exclusivamente lo descrito y aplica únicamente los filtros indicados.',
