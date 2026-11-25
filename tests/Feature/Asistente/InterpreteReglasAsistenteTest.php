@@ -76,6 +76,30 @@ class InterpreteReglasAsistenteTest extends TestCase
         $this->assertSame([$tema, $vista], [$interpretacion['consulta']?->clave(), $interpretacion['parametros']->vista], $texto);
     }
 
+    /** @return array<string, array{string, string, string}> */
+    public static function preguntasDeNetoPorEnvase(): array
+    {
+        return [
+            // La pregunta de la captura del 25-11-2026: antes caía en Revisión de taras.
+            'promedio de totes de un cliente' => ['promedio de totes de exportadora andina desde el 20-11 al 21-11', 'neto-por-envase', 'totes'],
+            'kilos por bin' => ['kilos por bin de exportadora andina', 'neto-por-envase', 'bins'],
+            'neto por tote por csg' => ['cuanto da el neto por tote por csg esta semana', 'neto-por-envase', 'por-csg'],
+        ];
+    }
+
+    #[DataProvider('preguntasDeNetoPorEnvase')]
+    public function test_neto_por_envase_elige_tema_y_vista(string $texto, string $tema, string $vista): void
+    {
+        $interpretacion = $this->interpretar($texto);
+
+        $this->assertSame([$tema, $vista], [$interpretacion['consulta']?->clave(), $interpretacion['parametros']->vista], $texto);
+    }
+
+    public function test_revisa_las_taras_sigue_en_revision_de_taras(): void
+    {
+        $this->assertSame('revisar-taras', $this->interpretar('revisa las taras de hoy')['consulta']?->clave());
+    }
+
     /** @return array<string, array{string}> */
     public static function preguntasDudosas(): array
     {
@@ -86,6 +110,7 @@ class InterpreteReglasAsistenteTest extends TestCase
             'pregunta de otro dominio' => ['cuantos trabajadores vinieron hoy'],
             'ordenes de proceso por turno' => ['que lotes entran a proceso en el turno a'],
             'lotes sag liberados' => ['que lotes sag se liberaron'],
+            'tara de un tote vacio' => ['cuanto pesa un tote vacio'],
         ];
     }
 

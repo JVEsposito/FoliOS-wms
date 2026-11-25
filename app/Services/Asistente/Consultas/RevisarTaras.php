@@ -55,7 +55,7 @@ class RevisarTaras extends ConsultaBase
 
     public function palabrasClave(): array
     {
-        return ['tara', 'taras', 'destare', 'destares', 'destara', 'revisa', 'revisar', 'revision', 'error', 'errores', 'raro', 'raros', 'sospechoso', 'esponja', 'esponjas', 'tote', 'totes', 'promedio'];
+        return ['tara', 'taras', 'destare', 'destares', 'destara', 'revisa', 'revisar', 'revision', 'error', 'errores', 'raro', 'raros', 'sospechoso', 'esponja', 'esponjas'];
     }
 
     public function admiteRecomendacion(): bool

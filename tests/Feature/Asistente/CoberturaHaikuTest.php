@@ -210,10 +210,13 @@ class CoberturaHaikuTest extends TestCase
         $informe = app(EvaluadorBancoAsistente::class)->evaluar($this->administrador, conHaiku: true);
 
         $this->assertSame(0, $informe['falsas']);
-        // La salida al destare (n.º 17) ya la responden las reglas; las otras siete llegan a Haiku y quedan parciales.
+        // Las reglas ya responden la salida al destare (n.º 17) y el neto por tote por CSG (n.º 9);
+        // las otras seis llegan a Haiku y quedan parciales.
         $destare = collect($informe['detalle'])->firstWhere('n', 17);
         $this->assertSame(['reglas', 'envases-recibidos', 'salidas-destare'], [$destare['interprete'], $destare['elegida'], $destare['vista_elegida']]);
-        $this->assertSame(7, collect($informe['detalle'])->where('interprete', 'haiku:parcial')->count());
+        $porCsg = collect($informe['detalle'])->firstWhere('n', 9);
+        $this->assertSame(['reglas', 'neto-por-envase', 'por-csg'], [$porCsg['interprete'], $porCsg['elegida'], $porCsg['vista_elegida']]);
+        $this->assertSame(6, collect($informe['detalle'])->where('interprete', 'haiku:parcial')->count());
         $this->assertStringContainsString('sin cubrir:', collect($informe['detalle'])->firstWhere('n', 24)['detalle']);
         $this->assertGreaterThan(0, $informe['llamadas_exitosas_haiku']);
         $this->assertSame(0, $informe['errores_haiku']);
