@@ -56,7 +56,7 @@ final class RegularizacionCajasRepa20261124
                 $consulta->lockForUpdate();
             }
 
-            return $consulta->first(['id']) !== null;
+            return $consulta->first() !== null;
         };
         $cantidad = $folio->datos_externos['cantidad_cajas'] ?? null;
         if ($folio->id !== $paso['id'] || $folio->numero_folio !== $numero
