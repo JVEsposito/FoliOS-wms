@@ -49,8 +49,15 @@ final class RegularizacionCajasRepa20261124
 
     public function __construct(private readonly string $temporadaEsperada = self::TEMPORADA) {}
 
-    private function validar(Folio $folio, string $numero, array $paso): array
+    private function validar(Folio $folio, string $numero, array $paso, bool $bloquear = false): array
     {
+        $existe = static function ($consulta) use ($bloquear): bool {
+            if ($bloquear) {
+                $consulta->lockForUpdate();
+            }
+
+            return $consulta->first(['id']) !== null;
+        };
         $cantidad = $folio->datos_externos['cantidad_cajas'] ?? null;
         if ($folio->id !== $paso['id'] || $folio->numero_folio !== $numero
             || $folio->temporada_id !== $this->temporadaEsperada
@@ -60,7 +67,7 @@ final class RegularizacionCajasRepa20261124
             || $folio->updated_at?->utc()->format('Y-m-d H:i:s') !== $paso['actualizado']) {
             throw new ConflictoOperacion("El folio {$numero} cambió respecto de la auditoría. No se aplicó el ajuste.");
         }
-        if ($folio->asignacionCargaActual()->exists() || $folio->reservaCargaActual()->exists()) {
+        if ($existe($folio->asignacionCargaActual()) || $existe($folio->reservaCargaActual())) {
             throw new ConflictoOperacion("El folio {$numero} tiene una carga o reserva vigente.");
         }
         $ubicacion = $folio->ubicacionActual;
@@ -68,15 +75,15 @@ final class RegularizacionCajasRepa20261124
             throw new ConflictoOperacion("La ubicación de {$numero} cambió respecto de la consulta.");
         }
         if ($paso['antes'] > 0) {
-            if ($folio->tareasMovimiento()->whereIn('estado', ['asumida', 'en_proceso'])->exists()
-                || CustodiaTemporalManiobra::query()->where('folio_id', $folio->id)->where('estado', 'activa')->exists()) {
+            if ($existe($folio->tareasMovimiento()->whereIn('estado', ['asumida', 'en_proceso']))
+                || $existe(CustodiaTemporalManiobra::query()->where('folio_id', $folio->id)->where('estado', 'activa'))) {
                 throw new ConflictoOperacion("El folio {$numero} tiene una maniobra o custodia en curso.");
             }
-            if ($folio->procesosPrefrio()->where(fn ($q) => $q->whereIn('estado', ['cargado', 'en_proceso'])
-                ->orWhere(fn ($pendiente) => $pendiente->pendienteRetiroParcial()))->exists()) {
+            if ($existe($folio->procesosPrefrio()->where(fn ($q) => $q->whereIn('estado', ['cargado', 'en_proceso'])
+                ->orWhere(fn ($pendiente) => $pendiente->pendienteRetiroParcial())))) {
                 throw new ConflictoOperacion("El folio {$numero} participa en prefrío activo o tiene un retiro pendiente.");
             }
-            if ($folio->movimientos()->where('created_at', '>', $paso['actualizado'])->exists()) {
+            if ($existe($folio->movimientos()->where('created_at', '>', $paso['actualizado']))) {
                 throw new ConflictoOperacion("El folio {$numero} tiene movimientos posteriores a la consulta.");
             }
         }
@@ -85,7 +92,7 @@ final class RegularizacionCajasRepa20261124
                 throw new ConflictoOperacion("La ubicación de {$numero} no identifica una cámara válida.");
             }
             $posicion = $ubicacion->posicion;
-            if ($posicion && ($posicion->reservaTareaActiva()->exists() || $posicion->reservaPreparacionSagActiva()->exists())) {
+            if ($posicion && ($existe($posicion->reservaTareaActiva()) || $existe($posicion->reservaPreparacionSagActiva()))) {
                 throw new ConflictoOperacion("La posición de {$numero} tiene una reserva operacional vigente.");
             }
         }
@@ -170,7 +177,7 @@ final class RegularizacionCajasRepa20261124
             $nuevos = [];
             foreach (self::PASOS as $numero => $paso) {
                 $folios->get($paso['id'])->setRelation('ubicacionActual', $ubicaciones->get($paso['id']));
-                $nuevos[$paso['id']] = $this->validar($folios->get($paso['id']), (string) $numero, $paso);
+                $nuevos[$paso['id']] = $this->validar($folios->get($paso['id']), (string) $numero, $paso, true);
             }
             $copia = ['operacion_id' => self::OPERACION, 'usuario_id' => $usuario->id, 'generado_utc' => now()->utc()->toAtomString(),
                 'advertencia' => 'Respaldo previo al intento. La transición operacional confirma si se aplicó.',
