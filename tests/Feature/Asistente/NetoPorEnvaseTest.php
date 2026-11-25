@@ -67,8 +67,9 @@ class NetoPorEnvaseTest extends TestCase
 
         $this->assertSame(['REC-2'], array_column($resultado->filas, 'recepcion'));
         $this->assertSame(310.5, $resultado->cifras[0]['valor']);
-        // Sin rango configurado para bins no se marca nada.
+        // Sin rango configurado para bins no se marca nada ni se dice que algo quedó fuera.
         $this->assertNull($resultado->filas[0]['rango']);
+        $this->assertStringContainsString('no hay un rango de neto configurado para bins', $resultado->resumen);
     }
 
     public function test_por_csg_agrupa_lotes_por_csg_y_envase(): void

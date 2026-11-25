@@ -117,12 +117,14 @@ class NetoPorEnvase extends ConsultaPorTema
         $minimo = $filas->min('neto_por_envase');
         $maximo = $filas->max('neto_por_envase');
         $fuera = $filas->filter(fn (array $f): bool => $f['rango'] !== null && $f['rango'] !== 'Dentro')->count();
+        $conRango = $filas->contains(fn (array $f): bool => $f['rango'] !== null);
+        $cierre = $conRango ? sprintf('%d quedaron fuera del rango de la planta.', $fuera) : "no hay un rango de neto configurado para {$tipo}.";
 
         return new ResultadoConsulta(
             ResultadoConsulta::RESPONDIDA,
             $titulo,
-            sprintf('El %s, %d recepciones en %s promediaron %s kg netos por %s (entre %s y %s kg); %d quedaron fuera del rango de la planta.',
-                $this->periodo($parametros), $filas->count(), $tipo, $this->kg($promedio), $nombre, $this->kg($minimo), $this->kg($maximo), $fuera),
+            sprintf('El %s, %d recepciones en %s promediaron %s kg netos por %s (entre %s y %s kg); %s',
+                $this->periodo($parametros), $filas->count(), $tipo, $this->kg($promedio), $nombre, $this->kg($minimo), $this->kg($maximo), $cierre),
             [
                 ResultadoConsulta::cifra("Promedio por {$nombre}", $promedio, 'kg'),
                 ResultadoConsulta::cifra('Mínimo', $minimo, 'kg'),
