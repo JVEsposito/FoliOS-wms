@@ -90,10 +90,12 @@
       "n": 9,
       "area": "Romana",
       "pregunta": "¿Cuánto da el neto por tote por CSG esta semana?",
-      "clase": "falta_consulta",
-      "consulta_objetivo": "kilos-por-csg",
-      "objetivo": "kilos-por-csg con neto por envase",
-      "responde_hoy": null
+      "clase": "reglas_bastan",
+      "consulta_objetivo": "neto-por-envase",
+      "objetivo": "neto por tote por CSG",
+      "responde_hoy": "neto-por-envase",
+      "vista": "por-csg",
+      "clase_resuelta": "neto por envase"
     },
     {
       "n": 10,
@@ -854,6 +856,61 @@
       "objetivo": "kilos por CSG",
       "responde_hoy": "kilos-por-csg",
       "clase_resuelta": "temas y vistas",
+      "periodo_explicito": true
+    },
+    {
+      "n": 86,
+      "area": "Romana",
+      "clase": "reglas_bastan",
+      "pregunta": "Promedio de totes de Valle Alto esta semana",
+      "consulta_objetivo": "neto-por-envase",
+      "objetivo": "promedio de kilos netos por tote de un cliente",
+      "responde_hoy": "neto-por-envase",
+      "clase_resuelta": "neto por envase",
+      "vista": "totes",
+      "periodo_explicito": true
+    },
+    {
+      "n": 87,
+      "area": "Romana",
+      "clase": "reglas_bastan",
+      "pregunta": "¿Cuántos kilos por bin trajo Valle Alto hoy?",
+      "consulta_objetivo": "neto-por-envase",
+      "objetivo": "kilos netos por bin",
+      "responde_hoy": "neto-por-envase",
+      "clase_resuelta": "neto por envase",
+      "vista": "bins",
+      "periodo_explicito": true
+    },
+    {
+      "n": 88,
+      "area": "Romana",
+      "clase": "reglas_bastan",
+      "pregunta": "¿Cuál es el neto por tote de cada CSG?",
+      "consulta_objetivo": "neto-por-envase",
+      "objetivo": "neto por tote por CSG",
+      "responde_hoy": "neto-por-envase",
+      "clase_resuelta": "neto por envase",
+      "vista": "por-csg"
+    },
+    {
+      "n": 89,
+      "area": "Romana",
+      "clase": "falta_consulta",
+      "pregunta": "¿Cuánto pesa un tote vacío?",
+      "consulta_objetivo": null,
+      "objetivo": "tara de un tote vacío",
+      "responde_hoy": null
+    },
+    {
+      "n": 90,
+      "area": "Romana",
+      "clase": "reglas_bastan",
+      "pregunta": "¿Cuál fue el tiempo promedio de Romana hoy?",
+      "consulta_objetivo": "tiempos-romana",
+      "objetivo": "tiempo promedio en Romana",
+      "responde_hoy": "tiempos-romana",
+      "clase_resuelta": "neto por envase",
       "periodo_explicito": true
     }
   ]
