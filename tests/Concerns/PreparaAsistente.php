@@ -47,6 +47,12 @@ trait PreparaAsistente
         }
         $this->administrador = User::factory()->create(['rol' => RolUsuario::Administrador, 'activo' => true]);
         $this->temporada = Temporada::query()->where('activa', true)->firstOrFail();
+        // Sin fecha de inicio, «esta temporada» parte en la creación real de la temporada, que
+        // es hoy. Una prueba con el reloj fijo en un día anterior pedía entonces un periodo
+        // futuro, y fallaba solo desde ciertas fechas. Se fija un inicio anterior a todo reloj fijo.
+        if ($this->temporada->fecha_inicio === null) {
+            $this->temporada->forceFill(['fecha_inicio' => '2026-10-01'])->save();
+        }
         $this->cliente = Cliente::create(['codigo' => 'ASI', 'nombre' => 'Exportadora Andina', 'activo' => true]);
         $especie = EspecieValidacion::firstOrCreate(['temporada_id' => $this->temporada->id, 'nombre' => 'Cereza'], ['activo' => true]);
         $this->variedad = VariedadValidacion::firstOrCreate(['especie_validacion_id' => $especie->id, 'nombre' => 'Santina'], ['activo' => true]);
