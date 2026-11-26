@@ -35,7 +35,11 @@ async function api(path = '', options = {}, { blob = false } = {}) {
     if (!response.ok) throw new Error(Object.values(data.errors || {}).flat().join(' ') || data.message || 'No se pudo completar la operación.');
     return data;
 }
-function message(text, tone = 'info') { $('pdMessage').textContent = text; $('pdMessage').dataset.tone = tone; }
+function message(text, tone = 'info', destino = 'pdMessage') {
+    const estado = $(destino);
+    estado.textContent = text;
+    estado.dataset.tone = tone;
+}
 async function run(action) {
     try { await action(); } catch (e) { message(e.message, 'error'); }
 }
@@ -181,6 +185,8 @@ function cargar(detalle = null) {
     state.firma = firmaEstructura(state.pallets);
     state.dirty = false; state.pendiente = null; state.descartar = null;
     $('pdMarkResult').textContent = ''; $('pdQuick').reset();
+    message('', 'info', 'pdLabelsStatus');
+    message('', 'info', 'pdExportStatus');
     state.ocrRevision += 1;
     $('pdMarkInput').value = '';
     $('pdOcrForm').reset();
@@ -256,23 +262,21 @@ function descargar(blob, nombre) {
     setTimeout(() => URL.revokeObjectURL(link.href), 60000);
 }
 async function pdf() {
-    listoParaEmitir();
     const papel = $('pdPaper').value;
     return api('/pdf', { method: 'POST', body: JSON.stringify({ ...cargaDiagrama(datos(), state.pallets, [...state.marcas]), papel, mostrar_numeros: $('pdShowNumbers').checked }) }, { blob: true });
 }
 async function etiquetas() {
-    listoParaEmitir();
     if (!state.marcas.size || !datos().exportadora.trim()) throw new Error('Marca las cajas de la muestra e ingresa la exportadora.');
     const cuerpo = cargaDiagrama(datos(), state.pallets, [...state.marcas]);
+    const nombre = nombreArchivo('-adhesivos.pdf');
     const blob = await api('/etiquetas', {
         method: 'POST',
         body: JSON.stringify({ ...cuerpo, formato: $('pdLabelFormat').value }),
     }, { blob: true });
-    descargar(blob, nombreArchivo('-adhesivos.pdf'));
-    message('Adhesivos descargados. Imprime al 100 % de escala.');
+    descargar(blob, nombre);
+    return 'Adhesivos descargados. Imprime al 100 % de escala.';
 }
 async function png() {
-    listoParaEmitir();
     const { svg, ancho, alto } = laminaSvg(datos(), state.pallets, [...state.marcas], { temporada: state.catalog.temporada.nombre, mostrarNumeros: $('pdShowNumbers').checked });
     const escala = Math.min(2, 16000 / alto);
     const imagen = new Image();
@@ -287,6 +291,7 @@ async function png() {
 }
 /** Imprime el mismo PDF, ya con el papel elegido; si el navegador no lo permite, lo abre aparte. */
 async function imprimir() {
+    const papel = $('pdPaper').value;
     const blob = await pdf();
     const fuente = URL.createObjectURL(blob);
     document.querySelector('.pd-print-frame')?.remove();
@@ -296,18 +301,36 @@ async function imprimir() {
         try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch { window.open(fuente, '_blank', 'noopener'); }
     };
     document.body.append(frame);
-    message(`Se abrió la impresión en ${$('pdPaper').value === 'a3' ? 'A3' : 'A4'} horizontal.`);
+    return `Se abrió la impresión en ${papel.toUpperCase()} horizontal.`;
 }
 
 async function exportar(tipo) {
     if (state.busy) return;
+    const destino = tipo === 'etiquetas' ? 'pdLabelsStatus' : 'pdExportStatus';
+    const botones = document.querySelectorAll('.pd-workspace [data-export]');
     state.busy = true;
+    botones.forEach((boton) => { boton.disabled = true; });
+    message('Preparando el documento…', 'info', destino);
     try {
-        if (tipo === 'pdf') { descargar(await pdf(), nombreArchivo('.pdf')); message('PDF descargado.'); }
-        if (tipo === 'png') { descargar(await png(), nombreArchivo('.png')); message('PNG descargado.'); }
-        if (tipo === 'print') await imprimir();
-        if (tipo === 'etiquetas') await etiquetas();
-    } finally { state.busy = false; }
+        listoParaEmitir();
+        let aviso;
+        if (tipo === 'etiquetas') {
+            aviso = await etiquetas();
+        } else if (tipo === 'print') {
+            aviso = await imprimir();
+        } else {
+            const nombre = nombreArchivo(`.${tipo}`);
+            const blob = tipo === 'pdf' ? await pdf() : await png();
+            descargar(blob, nombre);
+            aviso = `${tipo.toUpperCase()} descargado.`;
+        }
+        message(aviso, 'info', destino);
+    } catch (error) {
+        message(error.message, 'error', destino);
+    } finally {
+        state.busy = false;
+        botones.forEach((boton) => { boton.disabled = false; });
+    }
 }
 
 function aplicarRapido(alcance) {
@@ -413,6 +436,27 @@ $('pdOcrForm').addEventListener('submit', async (event) => {
         boton.disabled = false;
     }
 });
+function ajustarCantidadPalletsPresample(cantidad) {
+    const actual = state.pallets.length;
+    if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad === actual) return '';
+    if (cantidad > LIMITES.pallets) {
+        return `El presample indica ${cantidad} pallets. El diagrama admite hasta ${LIMITES.pallets}.`;
+    }
+
+    const conDatos = state.pallets.slice(cantidad).some((p) =>
+        p.folio || p.base !== null || p.corridas !== null || p.ultima !== null || p.declaradas !== null);
+    if (state.registro || conDatos) {
+        return `El presample indica ${cantidad} pallets y el diagrama tiene ${actual}. Revisa la cantidad en la sección Pallets.`;
+    }
+
+    if (cantidad > actual) state.pallets.push(...palletsIniciales(cantidad - actual));
+    else state.pallets.length = cantidad;
+    cambio();
+    renderPallets();
+
+    return `El diagrama quedó con ${cantidad} pallets según el presample. Completa la base y las corridas de los que falten.`;
+}
+
 // Presample USDA/SAG: se lee en el servidor, se revisa aquí y solo se aplica con el botón.
 function renderPresample(lectura) {
     const caja = $('pdPresample');
@@ -421,6 +465,8 @@ function renderPresample(lectura) {
     const resumen = [
         lectura.lote ? `Lote y presample ${esc(lectura.lote)}` : 'Sin N.º de lote',
         lectura.rangos.length ? `Folio ${esc(folioDeRangos(lectura.rangos))}` : '',
+        lectura.pallets ? `${esc(lectura.pallets)} pallets` : '',
+        lectura.partida ? `${miles(lectura.partida)} cajas en la partida` : '',
         `${lectura.cajas.length} cajas${lectura.muestra ? ` de una muestra de ${lectura.muestra}` : ''}`,
         porRevisar ? `${porRevisar} por revisar en el papel` : 'todas confirmadas por las dos lecturas',
     ].filter(Boolean).join(' · ');
@@ -433,11 +479,18 @@ function renderPresample(lectura) {
         const { campos, marcas, avisos } = aplicarPresample(datos(), lectura);
         for (const [name, value] of Object.entries(campos)) {
             const campo = form.elements.namedItem(name);
-            if (campo.value !== value) { campo.value = value; campo.dispatchEvent(new Event('input', { bubbles: true })); }
+            if (campo.value === value) continue;
+            if (campo.maxLength >= 0 && value.length > campo.maxLength) {
+                avisos.push(`El valor leído para «${campo.labels[0].textContent.trim()}» supera ${campo.maxLength} caracteres. Ingresa una referencia en Datos del diagrama.`);
+                continue;
+            }
+            campo.value = value;
+            campo.dispatchEvent(new Event('input', { bubbles: true }));
         }
+        const ajuste = ajustarCantidadPalletsPresample(lectura.pallets);
         const entrada = $('pdMarkInput');
         entrada.value = [entrada.value.trim(), marcas.join(', ')].filter(Boolean).join(', ');
-        $('pdMarkResult').textContent = [`Se agregaron ${marcas.length} cajas al campo. Revisa las amarillas y pulsa Marcar.`, ...avisos].join(' ');
+        $('pdMarkResult').textContent = [`Se agregaron ${marcas.length} cajas al campo. Revisa las amarillas y pulsa Marcar.`, ajuste, ...avisos].filter(Boolean).join(' ');
         caja.classList.add('is-hidden');
         entrada.focus();
     };
@@ -508,7 +561,7 @@ $('pdSavedRows').onclick = (e) => {
 };
 document.querySelector('.pd-workspace').addEventListener('click', (e) => {
     const tipo = e.target.closest('[data-export]')?.dataset.export;
-    if (tipo) run(() => exportar(tipo));
+    if (tipo) void exportar(tipo);
 });
 window.addEventListener('beforeunload', (e) => { if (state.dirty) e.preventDefault(); });
 

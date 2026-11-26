@@ -97,6 +97,7 @@
                     <label>Formato de adhesivos<select id="pdLabelFormat"><option value="a4">Hoja A4 para recortar</option><option value="rollo">Rollo 100 × 50 mm</option></select></label>
                     <button class="secondary-button" type="button" data-export="etiquetas">Descargar adhesivos PDF</button>
                 </div>
+                <p class="pd-message" id="pdLabelsStatus" role="status"></p>
             </section>
 
             <section class="panel">
@@ -110,6 +111,7 @@
                         <button class="secondary-button" type="button" data-export="print">Imprimir</button>
                     </div>
                 </div>
+                <p class="pd-message" id="pdExportStatus" role="status"></p>
                 <p class="pd-legend"><span class="pd-swatch" aria-hidden="true"></span>Caja marcada. Cada corrida se numera de izquierda a derecha y de abajo hacia arriba; la numeración sigue de un pallet al siguiente.</p>
                 <div class="pd-diagram" id="pdDiagram"></div>
             </section>
