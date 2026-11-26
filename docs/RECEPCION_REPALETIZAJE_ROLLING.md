@@ -41,7 +41,9 @@ retenciones y camiones confirmados en andén. El plan conserva en su contexto el
 conteo y los umbrales usados para que la decisión sea auditable. La selección de
 destinos preferentes continúa fuera de este incremento.
 
-El objetivo se completa cuando todas sus tareas, incluidas las cadenas de reemplazo, terminan completadas. Si REPA se anula antes de iniciar su ejecución, el objetivo y sus labores pendientes se cancelan en la misma transacción. Una recepción ya ejecutada bloquea la anulación.
+El objetivo se completa cuando todas sus tareas, incluidas las cadenas de reemplazo, terminan completadas, cumplidas fuera del planificador o superadas por otra REPA. Si REPA se anula antes de iniciar su ejecución, el objetivo y sus labores pendientes se cancelan en la misma transacción. Una recepción ya ejecutada bloquea la anulación.
+
+Si un pallet con retiro pendiente vuelve a repaletizarse, la nueva REPA cancela ese retiro (`superada_por_repaletizaje`) y, si el pallet sigue siendo un pallet completo con prefrío aprobado, crea el suyo y lo enlaza como reemplazo. Un retiro en proceso bloquea la nueva repa. Detalle en `MODULO_REPALETIZAJES.md`.
 
 ## Pallets que ya salieron por despacho
 
