@@ -49,6 +49,22 @@ servidor vuelve a calcular la numeración y rechaza lo que no cuadra.
   En el servidor, usa Tesseract con los datos de idioma inglés y configura
   `SAG_TESSERACT_BINARY` si el ejecutable tiene otra ruta.
 
+## Leer presample
+
+**Leer presample** recibe el «Certificado de Pre-Muestreo USDA/SAG» escaneado. Puede ser un PDF de una página o una foto PNG o JPEG, de hasta 10 MB.
+
+- **Claude** lee el documento con la clave y el modelo del asistente. Devuelve el N.º de lote, el rango «LOTE DE … A …», los tamaños de partida y de muestra, el n.º de pallets y la tabla de cajas por columna.
+- **Tesseract** lee la misma página. Una caja que también encuentra Tesseract queda *confirmada*; si no, queda *por revisar* y se muestra en amarillo. Con el escaneo real del 25-11-2026 confirmó 63 de 69 cajas.
+- **El propio documento se usa de control.** No se puede aplicar si la cantidad de cajas no es igual a la muestra, si las cajas leídas por columna no van en orden creciente o se repiten, si alguna pasa del tamaño de la partida, o si los rangos no suman el n.º de pallets.
+- **Aplicar:**
+  - El N.º de lote va al **N.º del diagrama** y al **Lote**, porque en la planta es también el número de presample.
+  - El rango va al **Folio**.
+  - Solo se completan campos vacíos. Si ya tienen otro valor, se avisa y no se cambian.
+  - Las cajas se agregan al campo de marcas y se marcan al pulsar **Marcar**.
+- **Costo.** Cada lectura cuenta en el tope mensual del asistente y queda en el registro de llamadas con la herramienta `leer_presample`. No cuenta en el límite diario de preguntas y no exige el piloto. Se permiten 6 lecturas por minuto.
+- **Sin clave, sin saldo o con falla de la API**, la revisión muestra solo la lectura de Tesseract: todas las cajas por revisar, sin lote ni rango.
+- **En el servidor.** Para leer PDF, Tesseract necesita `pdftoppm` (paquete `poppler-utils`). Si el ejecutable está en otra ruta, configura `SAG_PDFTOPPM_BINARY`. El archivo no se guarda.
+
 ## Salidas
 
 - **PDF** en A4 o A3 horizontal, generado en el servidor con lo que está en
