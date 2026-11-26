@@ -9,6 +9,8 @@ use App\Enums\EstadoTareaMovimiento;
 use App\Enums\HabilitacionAlmacenamientoFolio;
 use App\Enums\RolUsuario;
 use App\Enums\TipoBulto;
+use App\Enums\TipoPlanOperacional;
+use App\Exceptions\ConflictoOperacion;
 use App\Models\Camara;
 use App\Models\Dispositivo;
 use App\Models\Folio;
@@ -399,6 +401,107 @@ class RecepcionRepaletizajeRollingTest extends TestCase
         $this->assertSame('RES-ORIGEN ya está ubicado en Camara 09 · B01-P02-N1: el retiro de REPA se da por cumplido.', $retiros['RES-ORIGEN']->motivo_cancelacion);
         $this->assertSame('completado', PlanOperacional::query()->where('referencia_id', $repaConOrigen->id)->firstOrFail()->estado->value);
         $this->assertSame(EstadoTareaMovimiento::Pendiente, $retiros['RES-ENREPA']->refresh()->estado);
+    }
+
+    public function test_repaletizar_otra_vez_un_pallet_con_retiro_pendiente_reemplaza_su_retiro(): void
+    {
+        $this->habilitarGeneracion();
+        [$temporada, $usuario] = $this->contexto();
+        [$primera] = $this->registrar($temporada, $usuario, 'PRIMERA', CondicionTermicaFolio::PrefrioAprobado);
+        $anterior = TareaMovimiento::query()->with('folio')->firstOrFail();
+
+        // Como en planta: el pallet sigue en REPA y vuelve a armarse antes de que alguien lo retire.
+        $segunda = $this->repaletizarOtraVez($temporada, $usuario, $anterior->folio, aporte: 120, conservar: true);
+
+        $nueva = PlanOperacional::query()->where('referencia_id', $segunda->id)->firstOrFail()->tareas()->firstOrFail();
+        $anterior->refresh();
+        $this->assertSame($anterior->folio_id, $nueva->folio_id);
+        $this->assertSame(EstadoTareaMovimiento::Pendiente, $nueva->estado);
+        $this->assertSame(EstadoTareaMovimiento::Cancelada, $anterior->estado);
+        $this->assertSame($nueva->id, $anterior->reemplazada_por_tarea_id);
+        $this->assertSame(
+            "RES-PRIMERA volvió a repaletizarse en {$segunda->codigo}: su retiro de {$primera->codigo} ya no corresponde.",
+            $anterior->motivo_cancelacion,
+        );
+        $this->assertSame($segunda->codigo, $anterior->contexto['superada_por_repaletizaje']);
+        $this->assertSame('completado', $anterior->planOperacional->refresh()->estado->value);
+        $this->assertSame('cancelada', $anterior->maniobraOperacional()->firstOrFail()->estado->value);
+    }
+
+    public function test_si_el_pallet_con_retiro_pendiente_queda_como_saldo_su_retiro_se_cancela(): void
+    {
+        $this->habilitarGeneracion();
+        [$temporada, $usuario] = $this->contexto();
+        [$primera] = $this->registrar($temporada, $usuario, 'PRIMERA', CondicionTermicaFolio::PrefrioAprobado);
+        $anterior = TareaMovimiento::query()->with('folio')->firstOrFail();
+
+        $segunda = $this->repaletizarOtraVez($temporada, $usuario, $anterior->folio, aporte: 80, conservar: false);
+
+        $anterior->refresh();
+        $this->assertSame(TipoBulto::Saldo, $anterior->folio->refresh()->tipo_bulto);
+        $this->assertSame(EstadoTareaMovimiento::Cancelada, $anterior->estado);
+        $this->assertNull($anterior->reemplazada_por_tarea_id);
+        $this->assertSame($segunda->codigo, $anterior->contexto['superada_por_repaletizaje']);
+        $this->assertSame('completado', $anterior->planOperacional->refresh()->estado->value);
+        $nueva = PlanOperacional::query()->where('referencia_id', $segunda->id)->firstOrFail()->tareas()->with('folio')->sole();
+        $this->assertSame('RES-SEGUNDA', $nueva->folio->numero_folio);
+        $this->assertSame(1, TareaMovimiento::query()->where('estado', EstadoTareaMovimiento::Pendiente->value)->count());
+        $this->assertSame($primera->id, $anterior->contexto['repaletizaje_id']);
+    }
+
+    public function test_no_repaletiza_un_pallet_cuyo_retiro_de_repa_ya_esta_en_movimiento(): void
+    {
+        $this->habilitarGeneracion();
+        [$temporada, $usuario] = $this->contexto();
+        [$primera] = $this->registrar($temporada, $usuario, 'PRIMERA', CondicionTermicaFolio::PrefrioAprobado);
+        $anterior = TareaMovimiento::query()->with('folio')->firstOrFail();
+        $anterior->update(['estado' => EstadoTareaMovimiento::EnProceso, 'version' => $anterior->version + 1]);
+
+        try {
+            $this->repaletizarOtraVez($temporada, $usuario, $anterior->folio, aporte: 120, conservar: true);
+            $this->fail('La segunda repa debía rechazarse.');
+        } catch (ConflictoOperacion $error) {
+            $this->assertSame(
+                "El pallet RES-PRIMERA ya está saliendo de REPA por el retiro de {$primera->codigo}; termina esa labor antes de repaletizarlo.",
+                $error->getMessage(),
+            );
+        }
+
+        $this->assertSame(1, Repaletizaje::query()->count());
+        $this->assertSame(EstadoTareaMovimiento::EnProceso, $anterior->refresh()->estado);
+    }
+
+    public function test_el_conflicto_por_otra_labor_activa_nombra_el_pallet_y_su_objetivo(): void
+    {
+        $this->habilitarGeneracion();
+        [$temporada, $usuario] = $this->contexto();
+        $this->registrar($temporada, $usuario, 'PRIMERA', CondicionTermicaFolio::PrefrioAprobado);
+        $anterior = TareaMovimiento::query()->with('folio')->firstOrFail();
+        // Una labor que no es un retiro de REPA no se reemplaza: debe resolverse antes.
+        $anterior->planOperacional->update(['tipo' => TipoPlanOperacional::AlmacenamientoPallet, 'titulo' => 'Almacenar pallet de prueba']);
+
+        $this->expectException(ConflictoOperacion::class);
+        $this->expectExceptionMessage('El pallet RES-PRIMERA ya posee una tarea operacional activa (Almacenar pallet de prueba).');
+
+        $this->repaletizarOtraVez($temporada, $usuario, $anterior->folio, aporte: 120, conservar: true);
+    }
+
+    private function repaletizarOtraVez(Temporada $temporada, User $usuario, Folio $pallet, int $aporte, bool $conservar): Repaletizaje
+    {
+        $extra = $this->folio($temporada, 'SAL-EXTRA', 40, CondicionTermicaFolio::PrefrioAprobado);
+
+        return app(ServicioRepaletizaje::class)->registrar([
+            'operacion_id' => (string) Str::uuid(),
+            'tipo_resultado' => TipoBulto::Pallet->value,
+            'estrategia_folio' => $conservar ? 'conservar' : 'nuevo',
+            'folio_conservado_id' => $conservar ? $pallet->id : null,
+            'numero_folio_resultante' => $conservar ? $pallet->numero_folio : 'RES-SEGUNDA',
+            'cantidad_objetivo' => $aporte + 40,
+            'origenes' => [
+                ['folio_id' => $pallet->id, 'cantidad_aportada' => $aporte],
+                ['folio_id' => $extra->id, 'cantidad_aportada' => 40],
+            ],
+        ], $usuario);
     }
 
     /** @return array{User, string, ?Camara} */

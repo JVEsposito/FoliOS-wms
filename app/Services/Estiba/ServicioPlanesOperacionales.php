@@ -578,9 +578,14 @@ class ServicioPlanesOperacionales
                 EstadoTareaMovimiento::EnProceso->value,
             ])
             ->lockForUpdate()
-            ->first(['id']);
+            ->first(['id', 'plan_operacional_id']);
         if ($tareaActiva) {
-            throw new ConflictoOperacion('El pallet ya posee una tarea operacional activa.');
+            $objetivo = PlanOperacional::query()->whereKey($tareaActiva->plan_operacional_id)->value('titulo');
+            throw new ConflictoOperacion(sprintf(
+                'El pallet %s ya posee una tarea operacional activa%s.',
+                $folio->numero_folio,
+                $objetivo ? " ({$objetivo})" : '',
+            ));
         }
 
         $camaraOrigen = $this->camara($datos['camara_origen_id'] ?? null);

@@ -83,6 +83,8 @@ Cuando el planificador guiado para tablet está activo, cada resultado tipo pall
 
 La referencia al repaletizaje hace la generación idempotente. Una anulación previa a la ejecución cancela el objetivo; si su retiro ya tuvo ejecución operacional, la anulación se bloquea.
 
+Un pallet puede volver a repaletizarse mientras su retiro de una REPA anterior sigue sin ejecutarse (sigue físicamente en el área REPA). Al confirmar la nueva repa, ese retiro anterior se cancela en la misma transacción con el motivo «<folio> volvió a repaletizarse en <REPA nueva>: su retiro de <REPA anterior> ya no corresponde.» y queda marcado como superado (`superada_por_repaletizaje`). Si el pallet vuelve a requerir retiro, la labor nueva lo reemplaza (`reemplazada_por_tarea_id`); si quedó como saldo o se consumió, no se pide otro retiro. Con esa marca el objetivo de la REPA anterior se completa cuando no le quedan pallets por retirar. Si el retiro anterior ya está moviendo el pallet (en proceso), la nueva repa se rechaza hasta que esa labor termine. Cualquier otra labor activa del pallet (que no sea un retiro de REPA) también bloquea la confirmación; el mensaje nombra el pallet y el objetivo de esa labor.
+
 El buffer operacional considera únicamente pallets cuya labor continúa pendiente o
 asumida. Menos de ocho conserva prioridad normal, desde ocho usa alta y al llegar
 al máximo práctico de diez usa urgente. La categoría crítica permanece reservada

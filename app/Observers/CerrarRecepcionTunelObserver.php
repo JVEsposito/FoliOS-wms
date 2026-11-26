@@ -8,13 +8,15 @@ use App\Enums\TipoPlanOperacional;
 use App\Models\PlanOperacional;
 use App\Models\TareaMovimiento;
 use App\Services\Planificador\ServicioDepuracionIngresosCamara;
+use App\Services\Validacion\ServicioGeneracionRecepcionRepaletizaje;
 
 class CerrarRecepcionTunelObserver
 {
     public function updated(TareaMovimiento $tarea): void
     {
         $completada = $tarea->wasChanged('estado') && $tarea->estado === EstadoTareaMovimiento::Completada;
-        // Un retiro de REPA cumplido fuera del planificador (el camarero ubicó el pallet) también resuelve su objetivo.
+        // Un retiro de REPA cumplido fuera del planificador (el camarero ubicó el pallet) o superado por otra REPA
+        // (el pallet volvió a repaletizarse antes de salir) también resuelve su objetivo.
         $cumplidaFuera = $tarea->wasChanged('contexto') && $this->cumplidaFueraPlanificador($tarea);
         if (! $completada && ! $cumplidaFuera) {
             return;
@@ -117,6 +119,7 @@ class CerrarRecepcionTunelObserver
     private function cumplidaFueraPlanificador(TareaMovimiento $tarea): bool
     {
         return $tarea->estado === EstadoTareaMovimiento::Cancelada
-            && data_get($tarea->contexto, ServicioDepuracionIngresosCamara::CUMPLIDA_FUERA_PLANIFICADOR) === true;
+            && (data_get($tarea->contexto, ServicioDepuracionIngresosCamara::CUMPLIDA_FUERA_PLANIFICADOR) === true
+                || filled(data_get($tarea->contexto, ServicioGeneracionRecepcionRepaletizaje::SUPERADA_POR_REPALETIZAJE)));
     }
 }
