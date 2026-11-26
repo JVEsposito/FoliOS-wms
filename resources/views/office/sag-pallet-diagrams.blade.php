@@ -87,6 +87,12 @@
                 </form>
                 <p class="pd-help" id="pdOcrHelp">Recorta la captura a la lista de números. Revisa el texto leído y pulsa Marcar para aplicarlo.</p>
                 <p class="pd-help" id="pdOcrStatus" role="status"></p>
+                <form class="pd-mark-form" id="pdPresampleForm">
+                    <label>Presample USDA/SAG (PDF o foto)<input name="archivo" type="file" accept="application/pdf,image/png,image/jpeg" required aria-describedby="pdPresampleHelp"></label>
+                    <button class="secondary-button" type="submit">Leer presample</button>
+                </form>
+                <p class="pd-help" id="pdPresampleHelp">Claude lee el N.º de lote, el rango de lote y las cajas a timbrar, y Tesseract confirma cada caja. Revisa contra el papel las que quedan en amarillo antes de aplicar.</p>
+                <div class="pd-presample is-hidden" id="pdPresample" aria-live="polite"></div>
                 <div class="pd-actions">
                     <label>Formato de adhesivos<select id="pdLabelFormat"><option value="a4">Hoja A4 para recortar</option><option value="rollo">Rollo 100 × 50 mm</option></select></label>
                     <button class="secondary-button" type="button" data-export="etiquetas">Descargar adhesivos PDF</button>

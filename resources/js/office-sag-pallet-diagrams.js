@@ -2,6 +2,7 @@ import {
     LIMITES, cargaDiagrama, clasificarNumeros, corridasPallet, erroresPallet, firmaEstructura, interpretarNumeros,
     laminaSvg, marcasPorPallet, numerar, palletVacio, palletsIniciales, tituloDiagrama, totalPallet, ubicarCaja,
 } from './shared/sag-pallet-diagram.js';
+import { aplicarPresample, folioDeRangos } from './shared/sag-presample.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -408,6 +409,51 @@ $('pdOcrForm').addEventListener('submit', async (event) => {
         entrada.focus();
     } catch (error) {
         if (revision === state.ocrRevision) estado.textContent = error.message;
+    } finally {
+        boton.disabled = false;
+    }
+});
+// Presample USDA/SAG: se lee en el servidor, se revisa aquí y solo se aplica con el botón.
+function renderPresample(lectura) {
+    const caja = $('pdPresample');
+    const porRevisar = lectura.cajas.filter((c) => c.estado === 'revisar').length;
+    const lista = (items, clase = '') => (items.length ? `<ul class="${clase}">${items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '');
+    const resumen = [
+        lectura.lote ? `Lote y presample ${esc(lectura.lote)}` : 'Sin N.º de lote',
+        lectura.rangos.length ? `Folio ${esc(folioDeRangos(lectura.rangos))}` : '',
+        `${lectura.cajas.length} cajas${lectura.muestra ? ` de una muestra de ${lectura.muestra}` : ''}`,
+        porRevisar ? `${porRevisar} por revisar en el papel` : 'todas confirmadas por las dos lecturas',
+    ].filter(Boolean).join(' · ');
+    caja.innerHTML = `<strong>${resumen}</strong>
+        ${lista(lectura.problemas, 'pd-presample__problemas')}${lista(lectura.avisos)}
+        <div class="pd-presample__cajas">${lectura.cajas.map((c) => `<span class="${c.estado === 'revisar' ? 'is-review' : ''}" title="${c.estado === 'revisar' ? 'Revisar en el papel' : 'Confirmada'}">${c.numero}</span>`).join('')}</div>
+        <div class="pd-actions"><button class="primary-button" type="button" id="pdApplyPresample" ${lectura.problemas.length || !lectura.cajas.length ? 'disabled' : ''}>Aplicar al diagrama</button></div>`;
+    caja.classList.remove('is-hidden');
+    $('pdApplyPresample').onclick = () => {
+        const { campos, marcas, avisos } = aplicarPresample(datos(), lectura);
+        for (const [name, value] of Object.entries(campos)) {
+            const campo = form.elements.namedItem(name);
+            if (campo.value !== value) { campo.value = value; campo.dispatchEvent(new Event('input', { bubbles: true })); }
+        }
+        const entrada = $('pdMarkInput');
+        entrada.value = [entrada.value.trim(), marcas.join(', ')].filter(Boolean).join(', ');
+        $('pdMarkResult').textContent = [`Se agregaron ${marcas.length} cajas al campo. Revisa las amarillas y pulsa Marcar.`, ...avisos].join(' ');
+        caja.classList.add('is-hidden');
+        entrada.focus();
+    };
+}
+$('pdPresampleForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formulario = event.currentTarget;
+    const boton = formulario.querySelector('button');
+    const caja = $('pdPresample');
+    boton.disabled = true;
+    caja.classList.remove('is-hidden');
+    caja.textContent = 'Leyendo el presample… puede tardar unos segundos.';
+    try {
+        renderPresample(await api('/leer-presample', { method: 'POST', body: new FormData(formulario) }));
+    } catch (error) {
+        caja.textContent = error.message;
     } finally {
         boton.disabled = false;
     }

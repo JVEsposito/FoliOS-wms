@@ -53,6 +53,12 @@
 .pd-table .pd-error { color: var(--danger-text, var(--red)); font-weight: 700; }
 .pd-table .pd-row-actions { display: flex; gap: 6px; }
 .pd-mark-form { display: grid; grid-template-columns: minmax(240px, 1fr) auto auto; gap: 12px; align-items: end; }
+.pd-presample { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); }
+.pd-presample ul { margin: 0; padding-left: 18px; line-height: 1.45; }
+.pd-presample__problemas { color: var(--danger-text, var(--red)); font-weight: 700; }
+.pd-presample__cajas { display: flex; flex-wrap: wrap; gap: 6px; }
+.pd-presample__cajas span { min-width: 44px; padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--radius); text-align: center; font-variant-numeric: tabular-nums; }
+.pd-presample__cajas .is-review { border: 2px solid var(--pd-mark-border); background: var(--pd-mark); color: var(--pd-mark-text); font-weight: 700; }
 .pd-legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; color: var(--muted); }
 .pd-swatch { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--pd-mark-border); background: var(--pd-mark); }
 .pd-diagram { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 26px 30px; padding: 8px 4px 16px; overflow-x: auto; }

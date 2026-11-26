@@ -41,6 +41,16 @@ class PresupuestoHaiku
         };
     }
 
+    /** Herramientas que gastan del tope mensual pero no son preguntas: no cuentan en el límite diario. */
+    public const FUERA_DEL_LIMITE_DIARIO = ['leer_presample'];
+
+    /** Para lecturas fuera del asistente: basta la clave y el tope del mes, sin piloto ni límite diario. */
+    public function puedeGastar(float $reservaUsd): bool
+    {
+        return $this->cliente->disponible()
+            && $this->consumoMes() + $reservaUsd <= ConfiguracionAsistente::actual()->topeMensual();
+    }
+
     public function consumoMes(): float
     {
         $zona = config('app.operational_timezone');
@@ -83,6 +93,7 @@ class PresupuestoHaiku
         [$desde, $hasta] = $periodo->rango($hoy, $hoy);
 
         return LlamadaIaAsistente::query()->where('user_id', $usuario->id)
+            ->where(fn ($q) => $q->whereNull('herramienta')->orWhereNotIn('herramienta', self::FUERA_DEL_LIMITE_DIARIO))
             ->where('created_at', '>=', $desde)->where('created_at', '<', $hasta)->count();
     }
 
