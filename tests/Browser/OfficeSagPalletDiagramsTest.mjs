@@ -9,7 +9,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const html = readFileSync(resolve(root, 'storage/app/ui/oficina/sag-diagramas.html'), 'utf8');
 const catalogo = { temporada: { id: 't', codigo: 'TEMP-2627', nombre: 'Temporada 2026-2027' }, fecha_planta: '2026-11-20', csp: '3176555', especies: ['Cereza'], exportadoras: ['EXPORTADORA DEMO'], puede_gestionar: true };
 
-async function abrir({ puedeGestionar = true } = {}) {
+async function abrir({ puedeGestionar = true, presample = null } = {}) {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true });
     await context.addInitScript(() => {
@@ -18,7 +18,7 @@ async function abrir({ puedeGestionar = true } = {}) {
         localStorage.setItem('estiba_wms_office_token', 'fixture');
         localStorage.setItem('estiba_wms_office_identity', JSON.stringify({ nombre: 'Contraparte SAG', rol: 'supervisor_frio', puede_consultar_inspeccion_sag: true }));
     });
-    const writes = [], pdfs = [], errors = [];
+    const writes = [], pdfs = [], adhesivos = [], errors = [];
     let registro = null, conflicto = false;
     await context.route('http://localhost/**', async (route) => {
         const request = route.request(), path = new URL(request.url()).pathname;
@@ -29,6 +29,11 @@ async function abrir({ puedeGestionar = true } = {}) {
         }
         if (path === '/api/sag/diagramas/catalogo') return route.fulfill({ json: { ...catalogo, puede_gestionar: puedeGestionar } });
         if (path === '/api/sag/diagramas/pdf') { pdfs.push(request.postDataJSON()); return route.fulfill({ body: Buffer.from('%PDF-1.4\n%%EOF'), contentType: 'application/pdf' }); }
+        if (path === '/api/sag/diagramas/etiquetas') {
+            adhesivos.push(request.postDataJSON());
+            return route.fulfill({ body: Buffer.from('%PDF-1.4\n%%EOF'), contentType: 'application/pdf' });
+        }
+        if (path === '/api/sag/diagramas/leer-presample' && presample) return route.fulfill({ json: presample });
         if (path.startsWith('/api/sag/diagramas') && ['POST', 'PUT'].includes(request.method())) {
             const data = request.postDataJSON(); writes.push({ method: request.method(), path, data });
             if (conflicto) return route.fulfill({ status: 409, json: { message: 'Otra persona guardó este diagrama. Vuelve a abrirlo antes de guardar.' } });
@@ -44,7 +49,7 @@ async function abrir({ puedeGestionar = true } = {}) {
     await page.goto('http://localhost/oficina/frigorifico/diagramas-sag');
     await page.locator('#pdPallets tr').first().waitFor();
 
-    return { browser, page, writes, pdfs, errors, setConflicto: (v) => { conflicto = v; } };
+    return { browser, page, writes, pdfs, adhesivos, errors, setConflicto: (v) => { conflicto = v; } };
 }
 
 const rango = (page, i) => page.locator(`#pdPallets tr[data-index="${i}"] [data-cell="rango"]`).textContent();
@@ -169,12 +174,12 @@ test('guarda con un número, reintenta con la misma operación y descarga PDF, P
         await page.locator('[data-export="print"]').click();
         await page.locator('.pd-print-frame').waitFor({ state: 'attached' });
         assert.equal(pdfs.length, 2);
-        assert.match(await page.locator('#pdMessage').textContent(), /A3 horizontal/);
+        assert.match(await page.locator('#pdExportStatus').textContent(), /A3 horizontal/);
 
         // Un pallet sin configurar impide emitir hasta completarlo o quitarlo.
         await page.locator('#pdAddPallet').click();
         await page.locator('[data-export="pdf"]').click();
-        assert.match(await page.locator('#pdMessage').textContent(), /Pallet 17: falta configurar su base y sus corridas, o quítalo/);
+        assert.match(await page.locator('#pdExportStatus').textContent(), /Pallet 17: falta configurar su base y sus corridas, o quítalo/);
         assert.equal(pdfs.length, 2);
 
         // Abrir otro diagrama con cambios pide un segundo clic.
@@ -185,6 +190,65 @@ test('guarda con un número, reintenta con la misma operación y descarga PDF, P
         await page.locator('#pdMessage').filter({ hasText: 'abierto (versión 2)' }).waitFor();
         assert.equal(await page.locator('#pdPallets tr').count(), 16);
         assert.equal(await page.locator('#pdForm [name=lote]').inputValue(), '30013');
+        assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+});
+
+test('ajusta los pallets al aplicar el presample y descarga el diagrama y los adhesivos con las cajas marcadas', async () => {
+    const cajas = [12, 743, 1286, 3415];
+    const presample = {
+        fuente: 'claude', lote: '15', partida: 3432, pallets: 20, muestra: cajas.length,
+        rangos: [{ desde: '12358039', hasta: '12358058' }],
+        cajas: cajas.map((numero) => ({ numero, estado: numero === 743 ? 'revisar' : 'confirmada' })),
+        problemas: [], avisos: [],
+    };
+    const { browser, page, pdfs, adhesivos, errors } = await abrir({ presample });
+    try {
+        await campo(page, 0, 'folio').fill('12358039');
+        await campo(page, 0, 'base').fill('8');
+        await campo(page, 0, 'corridas').fill('30');
+        await page.locator('#pdForm [name=exportadora]').fill('EXPORTADORA DEMO');
+        await page.locator('#pdPresampleForm [name=archivo]').setInputFiles({
+            name: '15.png', mimeType: 'image/png', buffer: Buffer.from('presample'),
+        });
+        await page.locator('#pdPresampleForm button').click();
+        await page.locator('#pdPresample').filter({ hasText: '20 pallets' }).waitFor();
+        await page.locator('#pdApplyPresample').click();
+
+        assert.equal(await page.locator('#pdPallets tr').count(), 20);
+        assert.equal(await campo(page, 0, 'folio').inputValue(), '12358039');
+        assert.equal(await campo(page, 0, 'corridas').inputValue(), '30');
+        assert.equal(await campo(page, 19, 'corridas').inputValue(), '');
+        assert.equal(await page.locator('#pdForm [name=folio]').inputValue(), '12358039 a 12358058');
+
+        await page.locator('[data-export="etiquetas"]').click();
+        await page.locator('#pdLabelsStatus[data-tone="error"]').filter({ hasText: 'Pallet 2: falta configurar' }).waitFor();
+        await page.locator('[data-export="png"]').click();
+        await page.locator('#pdExportStatus[data-tone="error"]').filter({ hasText: 'Pallet 2: falta configurar' }).waitFor();
+        assert.equal(adhesivos.length, 0);
+
+        await page.locator('#pdQuick [name=base]').fill('8');
+        await page.locator('#pdQuick [name=corridas]').fill('21');
+        await page.locator('[data-apply="vacios"]').click();
+        await page.locator('#pdMarkForm button.primary-button').click();
+        assert.match(await page.locator('#pdMarkResult').textContent(), /4 cajas marcadas/);
+
+        for (const [tipo, nombre] of [
+            ['etiquetas', 'Diagrama-USDA-15-adhesivos.pdf'],
+            ['pdf', 'Diagrama-USDA-15.pdf'],
+            ['png', 'Diagrama-USDA-15.png'],
+        ]) {
+            const [archivo] = await Promise.all([
+                page.waitForEvent('download'),
+                page.locator(`[data-export="${tipo}"]`).click(),
+            ]);
+            assert.equal(archivo.suggestedFilename(), nombre);
+            assert.equal(await archivo.failure(), null);
+        }
+
+        assert.equal(pdfs[0].pallets.length, 20);
+        assert.deepEqual(pdfs[0].cajas_marcadas, cajas);
+        assert.deepEqual(adhesivos[0].cajas_marcadas, cajas);
         assert.deepEqual(errors, []);
     } finally { await browser.close(); }
 });
