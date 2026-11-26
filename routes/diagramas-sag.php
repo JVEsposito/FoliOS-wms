@@ -9,6 +9,8 @@ Route::middleware(['auth:sanctum', 'can:consultar-inspeccion-sag'])->prefix('sag
     Route::get('/', [DiagramaPalletsSagController::class, 'index']);
     Route::post('/pdf', [DiagramaPalletsSagController::class, 'pdf']);
     Route::post('/leer-captura', [DiagramaPalletsSagController::class, 'leerCaptura'])->middleware('throttle:12,1');
+    // Cada lectura llama a la API de Anthropic con el tope mensual del asistente.
+    Route::post('/leer-presample', [DiagramaPalletsSagController::class, 'leerPresample'])->middleware('throttle:6,1');
     Route::post('/etiquetas', [DiagramaPalletsSagController::class, 'etiquetas']);
     Route::get('/{diagrama}', [DiagramaPalletsSagController::class, 'show'])->whereUuid('diagrama');
     Route::middleware('can:gestionar-inspeccion-sag')->group(function (): void {

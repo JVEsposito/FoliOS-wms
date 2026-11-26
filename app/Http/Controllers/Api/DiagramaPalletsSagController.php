@@ -11,6 +11,7 @@ use App\Models\DiagramaPalletsSag;
 use App\Services\InspeccionSag\GeneradorDiagramaPalletsSag;
 use App\Services\InspeccionSag\GeneradorEtiquetasMuestreoSag;
 use App\Services\InspeccionSag\LectorCapturaMuestreoSag;
+use App\Services\InspeccionSag\LectorPresampleUsda;
 use App\Services\InspeccionSag\ServicioDiagramasPalletsSag;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use Illuminate\Http\Request;
@@ -94,6 +95,15 @@ class DiagramaPalletsSagController extends Controller
         $datos = $request->validate(['imagen' => ['required', 'file', 'mimes:png,jpg,jpeg', 'max:4096']]);
 
         return response()->json(['numeros' => $lector->leer($datos['imagen'])]);
+    }
+
+    /** Presample USDA/SAG escaneado: lo lee Claude, lo confirma Tesseract y la oficina lo revisa antes de aplicarlo. */
+    public function leerPresample(Request $request, LectorPresampleUsda $lector)
+    {
+        $datos = $request->validate(['archivo' => ['required', 'file', 'mimes:pdf,png,jpg,jpeg', 'max:10240']],
+            ['archivo.mimes' => 'Sube el presample en PDF, PNG o JPEG.']);
+
+        return response()->json($lector->leer($datos['archivo'], $request->user()));
     }
 
     public function etiquetas(EmitirEtiquetasMuestreoSagRequest $request, ServicioDiagramasPalletsSag $servicio, GeneradorEtiquetasMuestreoSag $generador)
