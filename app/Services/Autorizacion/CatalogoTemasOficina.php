@@ -36,13 +36,33 @@ final class CatalogoTemasOficina
             'claro' => false,
             'incluido' => true,
         ],
+        'personal-stitch' => [
+            'nombre' => 'Stitch · Experimento 626',
+            'color' => '#081a32',
+            'claro' => false,
+            'incluido' => true,
+            'formato' => 'png',
+            'fondo' => 'personal-stitch-juego.png',
+            'formato_fondo' => 'png',
+            'fondo_incluido' => true,
+            'ilustraciones' => [
+                '__FOLIOS_TEMA_STITCH_SALUDO__' => 'personal-stitch-saludo.png',
+                '__FOLIOS_TEMA_STITCH_ASOMADO__' => 'personal-stitch-asomado.png',
+                '__FOLIOS_TEMA_STITCH_DESCANSO__' => 'personal-stitch-descanso.png',
+                '__FOLIOS_TEMA_STITCH_SALTO__' => 'personal-stitch-salto.png',
+            ],
+            'exclusivo' => true,
+        ],
     ];
 
     private ?array $personales = null;
 
     public function catalogo(): array
     {
-        return self::ADICIONALES + array_column($this->personales(), 'nombre', 'clave');
+        // Un tema exclusivo se concede a una cuenta; nunca se ofrece para un perfil completo.
+        return self::ADICIONALES + array_column(array_filter(
+            $this->personales(), fn (array $tema): bool => ! $tema['exclusivo'],
+        ), 'nombre', 'clave');
     }
 
     public function preferencias(User $usuario): array
@@ -54,9 +74,10 @@ final class CatalogoTemasOficina
             $perfil = $usuario->loadMissing('perfilAcceso')->perfilAcceso;
             if ($perfil === null || $perfil->activo) {
                 $personales = $this->personales();
-                $porCorreo = array_filter($personales, fn (array $tema): bool => $tema['correo'] === $correo);
+                $porCorreo = array_filter($personales, fn (array $tema): bool => ! $tema['exclusivo'] && $tema['correo'] === $correo);
+                $exclusivos = array_filter($personales, fn (array $tema): bool => $tema['exclusivo'] && in_array((string) $usuario->getKey(), $tema['usuario_ids'], true));
                 $permitidos = $perfil?->temas_oficina ?? [...$this->predeterminados($usuario, $correo), ...array_keys($porCorreo)];
-                $temas = $this->ordenar($permitidos);
+                $temas = [...$this->ordenar($permitidos), ...array_keys($exclusivos)];
                 $personales = array_intersect_key($personales, array_flip($temas));
             }
         }
@@ -111,7 +132,7 @@ final class CatalogoTemasOficina
                 return null;
             }
 
-            return $this->plantillaIlustrada($css, "data:image/{$formato};base64,".base64_encode($contenido), $tema['fondo']);
+            return $this->plantillaIlustrada($css, "data:image/{$formato};base64,".base64_encode($contenido), $tema['fondo'], $tema['formato_fondo'], $tema['ilustraciones']);
         }
 
         if (isset(self::ESTILOS_DE_PLANTA[$clave])) {
@@ -119,21 +140,30 @@ final class CatalogoTemasOficina
             $ilustracion = $this->ilustracionIncrustada($css);
             $plantilla = $ilustracion === null ? null : $this->leerArchivo(resource_path("temas-oficina/{$clave}.css"));
             if ($plantilla !== null) {
-                return $this->plantillaIlustrada($plantilla, $ilustracion, $tema['fondo']);
+                return $this->plantillaIlustrada($plantilla, $ilustracion, $tema['fondo'], $tema['formato_fondo'], $tema['ilustraciones']);
             }
         }
 
         return $css;
     }
 
-    private function plantillaIlustrada(string $css, string $ilustracion, ?string $archivoFondo): string
+    private function plantillaIlustrada(string $css, string $ilustracion, ?string $archivoFondo, string $formatoFondo, array $ilustraciones): string
     {
         $fondo = $archivoFondo === null ? null : $this->leerArchivo($archivoFondo);
-        $capaFondo = $this->esIlustracion($fondo, 'webp')
-            ? 'url("data:image/webp;base64,'.base64_encode($fondo).'")'
+        $capaFondo = $this->esIlustracion($fondo, $formatoFondo)
+            ? 'url("data:image/'.$formatoFondo.';base64,'.base64_encode($fondo).'")'
             : 'none';
 
-        return str_replace([self::MARCADOR_ILUSTRACION, self::MARCADOR_FONDO], [$ilustracion, $capaFondo], $css);
+        $capas = [self::MARCADOR_ILUSTRACION => $ilustracion, self::MARCADOR_FONDO => $capaFondo];
+        foreach ($ilustraciones as $marcador => $ruta) {
+            $contenido = $this->leerArchivo($ruta);
+            $formato = pathinfo($ruta, PATHINFO_EXTENSION);
+            $capas[$marcador] = $this->esIlustracion($contenido, $formato)
+                ? 'url("data:image/'.$formato.';base64,'.base64_encode($contenido).'")'
+                : 'none';
+        }
+
+        return str_replace(array_keys($capas), array_values($capas), $css);
     }
 
     private function ilustracionIncrustada(string $css): ?string
@@ -195,6 +225,14 @@ final class CatalogoTemasOficina
             $ruta = "{$directorio}/{$clave}.css";
             $ilustracion = null;
             $temaPlanta = self::ESTILOS_DE_PLANTA[$clave] ?? null;
+            $exclusivo = ($temaPlanta['exclusivo'] ?? false) || array_key_exists('usuario_ids', (array) $tema);
+            $usuarioIds = $tema['usuario_ids'] ?? [];
+            // La ausencia o un valor inválido no convierte un tema exclusivo en uno compartido.
+            if ($exclusivo && (! is_array($usuarioIds) || ! array_is_list($usuarioIds) || $usuarioIds === []
+                || count(array_filter($usuarioIds, fn (mixed $id): bool => (is_int($id) && $id > 0)
+                    || (is_string($id) && preg_match('/\A[1-9][0-9]*\z/', $id)))) !== count($usuarioIds))) {
+                continue;
+            }
             $formato = $temaPlanta['formato'] ?? 'webp';
             if ($temaPlanta !== null) {
                 $arte = ($temaPlanta['incluido'] ?? false)
@@ -221,12 +259,21 @@ final class CatalogoTemasOficina
                 'clave' => $clave,
                 'nombre' => $tema['nombre'],
                 'correo' => $correo === null ? null : mb_strtolower($correo),
+                'exclusivo' => $exclusivo,
+                'usuario_ids' => $exclusivo ? array_values(array_unique(array_map('strval', $usuarioIds))) : [],
                 'color' => $tema['color'],
                 'claro' => ($tema['claro'] ?? false) === true,
                 'ruta' => $ruta,
                 'ilustracion' => $ilustracion,
                 'formato' => $formato,
-                'fondo' => isset($temaPlanta['fondo']) ? "{$directorio}/{$temaPlanta['fondo']}" : null,
+                'fondo' => isset($temaPlanta['fondo'])
+                    ? (($temaPlanta['fondo_incluido'] ?? false) ? resource_path("temas-oficina/{$temaPlanta['fondo']}") : "{$directorio}/{$temaPlanta['fondo']}")
+                    : null,
+                'formato_fondo' => $temaPlanta['formato_fondo'] ?? 'webp',
+                'ilustraciones' => array_map(
+                    fn (string $archivo): string => resource_path('temas-oficina/'.$archivo),
+                    $temaPlanta['ilustraciones'] ?? [],
+                ),
             ];
         }
 

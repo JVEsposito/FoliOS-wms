@@ -477,6 +477,7 @@
 }
 
 .estiba-office-theme-art { display: none; }
+.office-theme-mascots { display: none; }
 
 :root[data-office-theme="dark-princess"] .estiba-office-theme-art {
     background-image: url('../images/office/princesa-estelar.webp');

@@ -34,6 +34,7 @@
                         <p class="operation-now-eyebrow"><x-folios.gajo area="operacion" :size="17" />Operación ahora · Centro de control</p>
                         <h1>Operación ahora</h1>
                         <p class="operation-now-command__meta">OPN · CONTROL DE PLANTA</p>
+                        <x-office.theme-mascots />
                     </div>
                     <div class="operation-now-command__date" aria-label="Fecha y hora operacional">
                         <strong id="operationTime"><span id="operationTimeMinutes">--:--</span><span class="operation-now-command__seconds" id="operationTimeSeconds">:--</span></strong>

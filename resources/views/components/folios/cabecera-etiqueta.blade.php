@@ -10,5 +10,6 @@
         @endif
     </div>
     {{ $slot }}
+    <x-office.theme-mascots />
     <div class="folios-perforacion folios-etiqueta__corte" aria-hidden="true"></div>
 </header>
