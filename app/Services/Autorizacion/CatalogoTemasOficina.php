@@ -45,6 +45,12 @@ final class CatalogoTemasOficina
             'fondo' => 'personal-stitch-juego.png',
             'formato_fondo' => 'png',
             'fondo_incluido' => true,
+            'ilustraciones' => [
+                '__FOLIOS_TEMA_STITCH_SALUDO__' => 'personal-stitch-saludo.png',
+                '__FOLIOS_TEMA_STITCH_ASOMADO__' => 'personal-stitch-asomado.png',
+                '__FOLIOS_TEMA_STITCH_DESCANSO__' => 'personal-stitch-descanso.png',
+                '__FOLIOS_TEMA_STITCH_SALTO__' => 'personal-stitch-salto.png',
+            ],
             'exclusivo' => true,
         ],
     ];
@@ -126,7 +132,7 @@ final class CatalogoTemasOficina
                 return null;
             }
 
-            return $this->plantillaIlustrada($css, "data:image/{$formato};base64,".base64_encode($contenido), $tema['fondo'], $tema['formato_fondo']);
+            return $this->plantillaIlustrada($css, "data:image/{$formato};base64,".base64_encode($contenido), $tema['fondo'], $tema['formato_fondo'], $tema['ilustraciones']);
         }
 
         if (isset(self::ESTILOS_DE_PLANTA[$clave])) {
@@ -134,21 +140,30 @@ final class CatalogoTemasOficina
             $ilustracion = $this->ilustracionIncrustada($css);
             $plantilla = $ilustracion === null ? null : $this->leerArchivo(resource_path("temas-oficina/{$clave}.css"));
             if ($plantilla !== null) {
-                return $this->plantillaIlustrada($plantilla, $ilustracion, $tema['fondo'], $tema['formato_fondo']);
+                return $this->plantillaIlustrada($plantilla, $ilustracion, $tema['fondo'], $tema['formato_fondo'], $tema['ilustraciones']);
             }
         }
 
         return $css;
     }
 
-    private function plantillaIlustrada(string $css, string $ilustracion, ?string $archivoFondo, string $formatoFondo): string
+    private function plantillaIlustrada(string $css, string $ilustracion, ?string $archivoFondo, string $formatoFondo, array $ilustraciones): string
     {
         $fondo = $archivoFondo === null ? null : $this->leerArchivo($archivoFondo);
         $capaFondo = $this->esIlustracion($fondo, $formatoFondo)
             ? 'url("data:image/'.$formatoFondo.';base64,'.base64_encode($fondo).'")'
             : 'none';
 
-        return str_replace([self::MARCADOR_ILUSTRACION, self::MARCADOR_FONDO], [$ilustracion, $capaFondo], $css);
+        $capas = [self::MARCADOR_ILUSTRACION => $ilustracion, self::MARCADOR_FONDO => $capaFondo];
+        foreach ($ilustraciones as $marcador => $ruta) {
+            $contenido = $this->leerArchivo($ruta);
+            $formato = pathinfo($ruta, PATHINFO_EXTENSION);
+            $capas[$marcador] = $this->esIlustracion($contenido, $formato)
+                ? 'url("data:image/'.$formato.';base64,'.base64_encode($contenido).'")'
+                : 'none';
+        }
+
+        return str_replace(array_keys($capas), array_values($capas), $css);
     }
 
     private function ilustracionIncrustada(string $css): ?string
@@ -255,6 +270,10 @@ final class CatalogoTemasOficina
                     ? (($temaPlanta['fondo_incluido'] ?? false) ? resource_path("temas-oficina/{$temaPlanta['fondo']}") : "{$directorio}/{$temaPlanta['fondo']}")
                     : null,
                 'formato_fondo' => $temaPlanta['formato_fondo'] ?? 'webp',
+                'ilustraciones' => array_map(
+                    fn (string $archivo): string => resource_path('temas-oficina/'.$archivo),
+                    $temaPlanta['ilustraciones'] ?? [],
+                ),
             ];
         }
 

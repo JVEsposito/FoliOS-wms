@@ -42,6 +42,7 @@ class TemaStitchExclusivoTest extends TestCase
             $this->assertStringContainsString('.estiba-office-theme-art', $css);
             $this->assertStringContainsString('[data-folios-masthead]', $css);
             $this->assertStringNotContainsString('__FOLIOS_TEMA_', $css);
+            $this->assertSame(6, substr_count($css, 'data:image/png;base64,'));
         }
         foreach ([$ajeno, $administrador] as $cuenta) {
             Sanctum::actingAs($cuenta->fresh());

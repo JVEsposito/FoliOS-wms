@@ -86,6 +86,10 @@
         --stitch-ascua: #db91b8;
         --stitch-arte: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
         --stitch-juego: __FOLIOS_TEMA_FONDO__;
+        --stitch-saludo: __FOLIOS_TEMA_STITCH_SALUDO__;
+        --stitch-asomado: __FOLIOS_TEMA_STITCH_ASOMADO__;
+        --stitch-descanso: __FOLIOS_TEMA_STITCH_DESCANSO__;
+        --stitch-salto: __FOLIOS_TEMA_STITCH_SALTO__;
     }
 
     :root[data-office-personal-theme="personal-stitch"] .estiba-office-shell {
@@ -127,8 +131,8 @@
         inset-inline-end: 58px;
         inset-block-end: 3px;
         inline-size: 52px;
-        block-size: 60px;
-        background: var(--stitch-juego) center / contain no-repeat;
+        block-size: 40px;
+        background: var(--stitch-asomado) center bottom / contain no-repeat;
         content: "";
         pointer-events: none;
     }
@@ -146,8 +150,9 @@
 
     :root[data-office-personal-theme="personal-stitch"] .estiba-office-theme-art {
         display: block;
-        flex: 0 0 clamp(116px, calc(100dvh - 710px), 188px);
+        flex: 0 0 clamp(126px, calc(100dvh - 710px), 188px);
         margin-block-start: auto;
+        margin-inline: 18px;
         background: var(--stitch-arte) center bottom / contain no-repeat;
         pointer-events: none;
     }
@@ -161,7 +166,7 @@
     :root[data-office-personal-theme="personal-stitch"] .estiba-office-signature {
         min-block-size: 64px;
         padding-inline-end: 72px;
-        background: var(--stitch-juego) right center / 56px 56px no-repeat;
+        background: var(--stitch-descanso) right center / 56px 56px no-repeat;
     }
 
     :root[data-office-personal-theme="personal-stitch"] .estiba-ui {
@@ -202,22 +207,25 @@
 
     /* Una franja propia para las figuras: el texto, el reloj y las acciones tienen espacio reservado. */
     :root[data-office-personal-theme="personal-stitch"] .office-app :is([data-folios-masthead], .operation-now-command__title) {
-        min-block-size: 176px;
+        min-block-size: 190px;
         padding-inline-end: 400px;
         position: relative;
         overflow: clip;
-        background: radial-gradient(ellipse at right bottom, #1a5676, transparent 72%), var(--deep);
+        background:
+            radial-gradient(ellipse at 92% 70%, #d68dbc24, transparent 40%),
+            radial-gradient(ellipse at 70% 100%, #4dcfe830, transparent 65%),
+            var(--deep);
     }
 
     :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots {
         position: absolute;
         inset-inline-end: 14px;
-        inset-block-end: 0;
+        inset-block-end: 10px;
         display: flex;
         align-items: end;
-        gap: 8px;
+        gap: 12px;
         inline-size: 370px;
-        block-size: 156px;
+        block-size: 166px;
         pointer-events: none;
         user-select: none;
     }
@@ -225,19 +233,24 @@
     :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure {
         flex: 1 1 0;
         min-inline-size: 0;
-        block-size: 94%;
+        block-size: 90%;
         background-position: center bottom;
         background-repeat: no-repeat;
         background-size: contain;
     }
 
-    :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure--playful {
+    :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure--wave {
+        background-image: var(--stitch-saludo);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure--heart {
+        block-size: 100%;
         background-image: var(--stitch-juego);
     }
 
-    :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure--seated {
-        block-size: 100%;
-        background-image: var(--stitch-arte);
+    :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure--jump {
+        block-size: 88%;
+        background-image: var(--stitch-salto);
     }
 
     :root[data-office-personal-theme="personal-stitch"] .office-app [data-folios-masthead] {
@@ -300,7 +313,7 @@
         :root[data-office-personal-theme="personal-stitch"] .estiba-office-brand::after {
             inset-inline-end: 52px;
             inline-size: 42px;
-            block-size: 48px;
+            block-size: 34px;
         }
 
         :root[data-office-personal-theme="personal-stitch"] .estiba-office-shell .estiba-office-theme-select {

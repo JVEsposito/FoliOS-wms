@@ -6,9 +6,12 @@ import test from 'node:test';
 import { chromium } from 'playwright';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const css = readFileSync(resolve(root, 'resources/temas-oficina/personal-stitch.css'), 'utf8')
+let css = readFileSync(resolve(root, 'resources/temas-oficina/personal-stitch.css'), 'utf8')
     .replace('data:image/webp;base64,__FOLIOS_TEMA_WEBP__', `data:image/png;base64,${readFileSync(resolve(root, 'resources/temas-oficina/personal-stitch.png')).toString('base64')}`)
     .replace('__FOLIOS_TEMA_FONDO__', `url("data:image/png;base64,${readFileSync(resolve(root, 'resources/temas-oficina/personal-stitch-juego.png')).toString('base64')}")`);
+for (const pose of ['saludo', 'asomado', 'descanso', 'salto']) {
+    css = css.replace(`__FOLIOS_TEMA_STITCH_${pose.toUpperCase()}__`, `url("data:image/png;base64,${readFileSync(resolve(root, `resources/temas-oficina/personal-stitch-${pose}.png`)).toString('base64')}")`);
+}
 
 function luminance(rgb) {
     return rgb.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(Number).map(value => {
@@ -55,6 +58,12 @@ for (const [ruta, archivo, titulo] of [
             });
             await page.addStyleTag({ content: css });
             await page.evaluate(() => document.fonts.ready);
+            const imagenes = await page.evaluate(() => {
+                const s = getComputedStyle(document.documentElement);
+                return ['arte', 'juego', 'saludo', 'asomado', 'descanso', 'salto'].map(pose => s.getPropertyValue(`--stitch-${pose}`));
+            });
+            assert.equal(new Set(imagenes).size, 6, 'Las seis poses usan dibujos distintos');
+            assert.ok(imagenes.every(imagen => imagen.includes('data:image/png;base64,')));
             const cabecera = page.locator('[data-folios-masthead], .operation-now-command__title').first();
             for (const width of [1440, 1024, 390]) {
                 await page.setViewportSize({ width, height: 1080 });

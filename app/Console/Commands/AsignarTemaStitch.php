@@ -39,7 +39,9 @@ final class AsignarTemaStitch extends Command
         }
 
         if (! $this->option('retirar')) {
-            foreach (['personal-stitch.css', 'personal-stitch.png', 'personal-stitch-juego.png'] as $archivo) {
+            foreach (['personal-stitch.css', 'personal-stitch.png', 'personal-stitch-juego.png',
+                'personal-stitch-saludo.png', 'personal-stitch-asomado.png',
+                'personal-stitch-descanso.png', 'personal-stitch-salto.png'] as $archivo) {
                 if (! is_readable(resource_path('temas-oficina/'.$archivo))) {
                     $this->error('Falta un recurso del tema Stitch: '.$archivo);
 

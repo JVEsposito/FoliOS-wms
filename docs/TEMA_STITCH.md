@@ -3,7 +3,10 @@
 Tema personal oscuro de Oficina. Usa azul noche, azul océano y turquesa, con detalles rosa.
 Las figuras aparecen en las cabeceras compartidas, junto al logo y en el lateral, también
 fuera de Operación ahora. En pantallas pequeñas tienen una franja separada del texto.
-No contienen controles, no interceptan clics y no se imprimen.
+No contienen controles, no interceptan clics y no se imprimen. Las seis poses son dibujos
+2D distintos: saludando, abrazando un corazón, saltando, sentado, asomándose y con sueño.
+Las tres figuras de la cabecera son diferentes entre sí; las otras ocupan el logo, el
+lateral y la firma. No se usan figuras 3D.
 
 ## Asignación exclusiva
 
@@ -56,8 +59,15 @@ incluyen en los recursos del proyecto; no hace falta instalar dependencias adici
 
 Los PNG se conservan como archivos originales con transparencia, separados del CSS:
 
-- Sentado: <https://www.pngaaa.com/detail/1075274>.
-- Corazones: <https://www.pngaaa.com/detail/1075238>.
+- Sentado: <https://pngimg.com/uploads/stitch/stitch_PNG57.png>.
+- Corazón: <https://pngimg.com/uploads/stitch/stitch_PNG52.png>.
+- Saludo: <https://pngimg.com/uploads/stitch/stitch_PNG22.png>.
+- Asomado: <https://pngimg.com/uploads/stitch/stitch_PNG7.png>.
+- Con sueño: <https://pngimg.com/uploads/stitch/stitch_PNG66.png>.
+- Salto: <https://pngimg.com/uploads/stitch/stitch_PNG35.png>.
+
+Fuente: galería de Stitch de PNGimg. Se incluyen los seis PNG originales, sin recortes,
+recoloreado ni eliminación de marcas. El tamaño y la ubicación se definen en CSS.
 
 Personaje Stitch: Disney. Son recursos decorativos de este tema personal; no forman parte
 del logotipo ni de los documentos operacionales de FoliOS.
