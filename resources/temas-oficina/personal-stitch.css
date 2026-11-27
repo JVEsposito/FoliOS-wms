@@ -1,0 +1,338 @@
+/* Stitch · Experimento 626. Hoja privada; la autorización se resuelve por usuario en el servidor. */
+@media screen {
+    :root[data-office-personal-theme="personal-stitch"] {
+        color-scheme: dark;
+        --bg: #081a32;
+        --deep: #0d2647;
+        --panel: #123456;
+        --raised: #1a4164;
+        --soft: #274e70;
+        --line: #6292b6;
+        --line-soft: #305777;
+        --border: var(--line);
+        --input-border: #7aa5c5;
+        --text: #e7f6ff;
+        --text-strong: #f6fbff;
+        --text-secondary: #c6e1f5;
+        --text-subtle: #a9c9df;
+        --muted: var(--text-subtle);
+        --header-bg: var(--deep);
+        --subnav-bg: var(--panel);
+        --surface-muted: #173b5c;
+        --surface-hover: #204f73;
+        --surface-selected: #1b4c68;
+        --input-bg: #0a2542;
+        --table-head: #1c4160;
+        --row-bg: var(--panel);
+        --row-alt: #153955;
+        --row-hover: var(--surface-hover);
+        --button-secondary: #214768;
+        --button-secondary-hover: #2a5c7c;
+        --icon-surface: var(--surface-muted);
+        --primary: #60d9e8;
+        --primary-hover: #98edf5;
+        --on-primary: #082a3b;
+        --accent: var(--primary);
+        --focus-ring: #db91b8;
+        --selection-bg: #60d9e84d;
+        --green: #a3e2b5;
+        --amber: #ffd08a;
+        --red: #ffacb5;
+        --success-text: var(--green);
+        --success-bg: #153f36;
+        --warning-text: var(--amber);
+        --warning-bg: #453422;
+        --danger-text: var(--red);
+        --danger-bg: #4b2837;
+        --info-text: #b2eaff;
+        --info-bg: #173f5a;
+        --seal: var(--warning-text);
+        --seal-bg: var(--warning-bg);
+        --critical-fill: var(--danger-text);
+        --on-critical-fill: #321019;
+        --corporate-navy: var(--deep);
+        --corporate-canvas: var(--bg);
+        --corporate-card: var(--panel);
+        --corporate-border: var(--line-soft);
+        --corporate-text: var(--text);
+        --corporate-text-muted: var(--muted);
+        --corporate-blue: #75bcff;
+        --corporate-blue-dark: #2b6496;
+        --corporate-orange: #f7bb87;
+        --corporate-gold: var(--stitch-ambar);
+        --corporate-shadow: 0 4px 18px #020c1c40;
+        --corporate-shadow-raised: 0 16px 44px #020c1c80;
+        --cyan: var(--corporate-blue);
+        --cyan-light: var(--info-text);
+        --frost: var(--corporate-blue);
+        --frost-strong: var(--info-text);
+        --brand-gradient: linear-gradient(125deg, var(--deep), #164d7c 75%, #15596b);
+        --kpi-surface: #143858;
+        --logo-bg: var(--deep);
+        --logo-border: #479dc1;
+        --series-product: var(--primary);
+        --series-material: var(--stitch-ambar);
+        --chart-grid: var(--line-soft);
+        --chart-text: var(--text-secondary);
+        --chart-tooltip-bg: var(--raised);
+        --chart-tooltip-border: var(--line);
+        --area-operacion-ink: var(--stitch-ambar);
+        --area-operacion-text: #d9f6ff;
+        --area-operacion-tint: #143f5c;
+        --area-operacion-line: #4d8caf;
+        --area-operacion-bright: var(--stitch-ambar);
+        --stitch-ambar: #60d9e8;
+        --stitch-laton: #6292b6;
+        --stitch-ascua: #db91b8;
+        --stitch-arte: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
+        --stitch-juego: __FOLIOS_TEMA_FONDO__;
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-shell {
+        --shell-navy: var(--deep);
+        --shell-navy-hover: var(--surface-hover);
+        --shell-strong: var(--text-strong);
+        --shell-ink: var(--text);
+        --shell-muted: var(--text-secondary);
+        --shell-faint: var(--text-subtle);
+        --shell-line: var(--line);
+        --shell-gajo: var(--line-soft);
+        --shell-active-bg: var(--surface-selected);
+        --shell-active-ink: var(--text-strong);
+        --shell-active-gajo: var(--primary);
+        --shell-focus: var(--primary);
+        --eui-shell-frost: var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-header {
+        background: linear-gradient(110deg, #0d2647, #103b60 65%, #114f62);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-header::after {
+        height: 2px;
+        background: linear-gradient(90deg, #398bdd, #60d9e8 65%, #db91b8);
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-brand {
+        position: relative;
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-brand .folios-logo--office {
+        inline-size: 112px;
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-brand::after {
+        position: absolute;
+        inset-inline-end: 58px;
+        inset-block-end: 3px;
+        inline-size: 52px;
+        block-size: 60px;
+        background: var(--stitch-juego) center / contain no-repeat;
+        content: "";
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-sidebar {
+        background: radial-gradient(ellipse at 0 65%, #144565 0%, transparent 72%), var(--deep);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-sidebar .estiba-office-area.is-active,
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-sidebar .estiba-office-offices a.is-active {
+        background: var(--surface-selected);
+        color: var(--text-strong);
+        box-shadow: inset 3px 0 var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-theme-art {
+        display: block;
+        flex: 0 0 clamp(116px, calc(100dvh - 710px), 188px);
+        margin-block-start: auto;
+        background: var(--stitch-arte) center bottom / contain no-repeat;
+        pointer-events: none;
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-identity {
+        margin-block-start: 0;
+        border-style: solid;
+        background: #081a3266;
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-office-signature {
+        min-block-size: 64px;
+        padding-inline-end: 72px;
+        background: var(--stitch-juego) right center / 56px 56px no-repeat;
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .estiba-ui {
+        --eui-color-navy: var(--deep);
+        --eui-color-navy-hover: var(--surface-hover);
+        --eui-color-on-navy-muted: var(--text-secondary);
+        --eui-color-canvas: var(--corporate-canvas);
+        --eui-color-surface: var(--corporate-card);
+        --eui-color-subtle: var(--surface-muted);
+        --eui-color-border: var(--line);
+        --eui-color-border-soft: var(--line-soft);
+        --eui-color-input-border: var(--input-border);
+        --eui-color-text: var(--text);
+        --eui-color-text-secondary: var(--text-secondary);
+        --eui-color-muted: var(--text-subtle);
+        --eui-color-primary: var(--primary);
+        --eui-color-primary-hover: var(--primary-hover);
+        --eui-color-on-primary: var(--on-primary);
+        --eui-color-selected: var(--surface-selected);
+        --eui-color-focus: var(--focus-ring);
+        --eui-color-disabled-surface: var(--soft);
+        --eui-color-disabled-text: var(--text-subtle);
+        --eui-color-frost: var(--frost);
+        --eui-color-frost-strong: var(--frost-strong);
+        --eui-color-frost-bright: var(--frost);
+        --eui-signal-neutral-text: var(--text-subtle);
+        --eui-signal-neutral-surface: var(--surface-muted);
+        --eui-signal-neutral-border: var(--line);
+        --eui-signal-info-text: var(--info-text);
+        --eui-signal-info-surface: var(--info-bg);
+        --eui-signal-success-text: var(--success-text);
+        --eui-signal-success-surface: var(--success-bg);
+        --eui-signal-warning-text: var(--warning-text);
+        --eui-signal-warning-surface: var(--warning-bg);
+        --eui-signal-critical-text: var(--danger-text);
+        --eui-signal-critical-surface: var(--danger-bg);
+    }
+
+    /* Una franja propia para las figuras: el texto, el reloj y las acciones tienen espacio reservado. */
+    :root[data-office-personal-theme="personal-stitch"] .office-app :is([data-folios-masthead], .operation-now-command__title) {
+        min-block-size: 176px;
+        padding-inline-end: 400px;
+        position: relative;
+        overflow: clip;
+        background: radial-gradient(ellipse at right bottom, #1a5676, transparent 72%), var(--deep);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots {
+        position: absolute;
+        inset-inline-end: 14px;
+        inset-block-end: 0;
+        display: flex;
+        align-items: end;
+        gap: 8px;
+        inline-size: 370px;
+        block-size: 156px;
+        pointer-events: none;
+        user-select: none;
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure {
+        flex: 1 1 0;
+        min-inline-size: 0;
+        block-size: 94%;
+        background-position: center bottom;
+        background-repeat: no-repeat;
+        background-size: contain;
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure--playful {
+        background-image: var(--stitch-juego);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure--seated {
+        block-size: 100%;
+        background-image: var(--stitch-arte);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .office-app [data-folios-masthead] {
+        border-color: var(--line);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .operation-now .operation-now-command {
+        grid-template-areas: "title title title" "state date actions";
+        padding: 0 18px 14px;
+        border-color: var(--line);
+        background: var(--panel);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .operation-now-command__title {
+        display: grid;
+        align-content: center;
+        margin-inline: -18px;
+        padding-block: 20px;
+        padding-inline-start: 18px;
+        border-block-end: 1px solid var(--line-soft);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] #operationTime {
+        color: var(--primary);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .office-app :is([role="tab"][aria-selected="true"], .custody-tabs [aria-pressed="true"]) {
+        border-block-end-color: var(--primary);
+        background: var(--surface-selected);
+        color: var(--text-strong);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .office-app :is(button, a).primary-button {
+        border-color: var(--primary);
+        background: var(--primary);
+        color: var(--on-primary);
+    }
+
+    :root[data-office-personal-theme="personal-stitch"] .office-app :is(button, a).primary-button:hover:not(:disabled) {
+        background: var(--primary-hover);
+    }
+
+    @media (max-width: 1100px) {
+        :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots {
+            inline-size: 184px;
+            block-size: 116px;
+        }
+
+        :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure:last-child {
+            display: none;
+        }
+
+        :root[data-office-personal-theme="personal-stitch"] .office-app :is([data-folios-masthead], .operation-now-command__title) {
+            padding-inline-end: 208px;
+
+        }
+    }
+
+    @media (max-width: 760px) {
+        :root[data-office-personal-theme="personal-stitch"] .estiba-office-brand::after {
+            inset-inline-end: 52px;
+            inline-size: 42px;
+            block-size: 48px;
+        }
+
+        :root[data-office-personal-theme="personal-stitch"] .estiba-office-shell .estiba-office-theme-select {
+            max-inline-size: 46vw;
+        }
+
+        :root[data-office-personal-theme="personal-stitch"] .operation-now .operation-now-command {
+            grid-template-areas: "title title" "date actions" "state state";
+            grid-template-columns: minmax(0, 1fr) auto;
+        }
+    }
+
+    @media (max-width: 600px) {
+        :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots {
+            inline-size: 252px;
+            block-size: 96px;
+        }
+
+        :root[data-office-personal-theme="personal-stitch"] .office-theme-mascots__figure:last-child {
+            display: block;
+        }
+
+        /* En móvil, las figuras van debajo del texto en lugar de achicar el título. */
+        :root[data-office-personal-theme="personal-stitch"] .office-app :is([data-folios-masthead], .operation-now-command__title) {
+            min-block-size: 204px;
+            padding-inline-end: 18px;
+            padding-block-end: 106px;
+
+        }
+
+        :root[data-office-personal-theme="personal-stitch"] .estiba-office-brand::after {
+            inset-inline-end: 74px;
+        }
+    }
+}
