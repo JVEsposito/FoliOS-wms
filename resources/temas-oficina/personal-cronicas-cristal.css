@@ -1,0 +1,241 @@
+@media screen {
+    @font-face {
+        font-family: "Cinzel Cristal";
+        src: url("data:font/woff2;base64,__FOLIOS_TEMA_WOFF2__") format("woff2");
+        font-style: normal;
+        font-weight: 500 750;
+        font-display: swap;
+    }
+
+    :root[data-office-personal-theme="personal-cronicas-cristal"] {
+        color-scheme: dark;
+        --bg: #0b1025;
+        --deep: #111934;
+        --panel: #172144;
+        --raised: #212e57;
+        --soft: #2c3b67;
+        --line: #7186b6;
+        --line-soft: #40537e;
+        --border: var(--line);
+        --input-border: #7f94c4;
+        --text: #eef2ff;
+        --text-strong: #fffaf0;
+        --text-secondary: #d5def8;
+        --text-subtle: #b9c7e8;
+        --muted: var(--text-subtle);
+        --header-bg: var(--deep);
+        --subnav-bg: var(--panel);
+        --surface-muted: #19264c;
+        --surface-hover: #293965;
+        --surface-selected: #314478;
+        --input-bg: #121c38;
+        --table-head: #24335d;
+        --row-bg: var(--panel);
+        --row-alt: #1c294f;
+        --row-hover: var(--surface-hover);
+        --button-secondary: #24335d;
+        --button-secondary-hover: var(--surface-hover);
+        --icon-surface: var(--surface-muted);
+        --primary: #b9cbff;
+        --primary-hover: #d8e2ff;
+        --on-primary: #101832;
+        --accent: var(--primary);
+        --focus-ring: #ffda97;
+        --selection-bg: #7489cd72;
+        --green: #9be2ba;
+        --amber: #ffda97;
+        --red: #ffb2bc;
+        --success-text: var(--green);
+        --success-bg: #153a34;
+        --warning-text: var(--amber);
+        --warning-bg: #47341e;
+        --danger-text: var(--red);
+        --danger-bg: #48283c;
+        --info-text: #c4d3ff;
+        --info-bg: #263a67;
+        --seal: var(--amber);
+        --seal-bg: var(--warning-bg);
+        --critical-fill: var(--red);
+        --on-critical-fill: #351729;
+        --corporate-navy: var(--deep);
+        --corporate-canvas: var(--bg);
+        --corporate-card: var(--panel);
+        --corporate-border: var(--line-soft);
+        --corporate-text: var(--text);
+        --corporate-text-muted: var(--muted);
+        --corporate-blue: #a6beff;
+        --corporate-blue-dark: #3e568e;
+        --corporate-gold: var(--amber);
+        --corporate-shadow: 0 4px 18px #070b245c;
+        --corporate-shadow-raised: 0 16px 44px #070b2499;
+        --cyan: var(--corporate-blue);
+        --cyan-light: var(--info-text);
+        --frost: var(--corporate-blue);
+        --frost-strong: #dae5ff;
+        --brand-gradient: linear-gradient(135deg, var(--deep), #293a70);
+        --kpi-surface: var(--surface-muted);
+        --logo-bg: var(--deep);
+        --logo-border: #9d8c76;
+        --series-product: #a9c8ff;
+        --series-material: #f2c17b;
+        --chart-grid: var(--line-soft);
+        --chart-text: var(--text-secondary);
+        --chart-tooltip-bg: var(--raised);
+        --chart-tooltip-border: var(--line);
+        --cristal-serif: "Cinzel Cristal", Georgia, serif;
+        --cristal-arte: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
+        --cristal-cabecera: #111b38;
+        --cristal-borde: #98846a;
+
+        & .estiba-office-shell {
+            --shell-navy: var(--deep);
+            --shell-navy-hover: var(--surface-hover);
+            --shell-strong: var(--text-strong);
+            --shell-ink: var(--text);
+            --shell-muted: var(--text-secondary);
+            --shell-faint: var(--text-subtle);
+            --shell-line: var(--line);
+            --shell-gajo: var(--line-soft);
+            --shell-active-bg: var(--surface-selected);
+            --shell-active-ink: var(--text-strong);
+            --shell-active-gajo: var(--amber);
+            --shell-focus: var(--focus-ring);
+            --eui-shell-frost: var(--primary);
+        }
+
+        & .estiba-office-header {
+            background: linear-gradient(110deg, #111934 15%, #223360 70%, #1c2247);
+        }
+
+        & .estiba-office-header::after {
+            height: 2px;
+            background: linear-gradient(90deg, #ae8eff, #a9c8ff 46%, #ffda97 90%);
+            pointer-events: none;
+        }
+
+        & .estiba-office-sidebar {
+            background: linear-gradient(165deg, #15234b, #101832 60%);
+        }
+
+        & .estiba-ui {
+            --eui-color-navy: var(--deep);
+            --eui-color-navy-hover: var(--surface-hover);
+            --eui-color-on-navy-muted: var(--text-secondary);
+            --eui-color-canvas: var(--corporate-canvas);
+            --eui-color-surface: var(--corporate-card);
+            --eui-color-subtle: var(--surface-muted);
+            --eui-color-border: var(--line);
+            --eui-color-border-soft: var(--line-soft);
+            --eui-color-input-border: var(--input-border);
+            --eui-color-text: var(--text);
+            --eui-color-text-secondary: var(--text-secondary);
+            --eui-color-muted: var(--text-subtle);
+            --eui-color-primary: var(--primary);
+            --eui-color-primary-hover: var(--primary-hover);
+            --eui-color-on-primary: var(--on-primary);
+            --eui-color-selected: var(--surface-selected);
+            --eui-color-focus: var(--focus-ring);
+            --eui-color-disabled-surface: var(--soft);
+            --eui-color-disabled-text: var(--text-subtle);
+            --eui-color-frost: var(--frost);
+            --eui-color-frost-strong: var(--frost-strong);
+            --eui-signal-info-text: var(--info-text);
+            --eui-signal-info-surface: var(--info-bg);
+            --eui-signal-success-text: var(--success-text);
+            --eui-signal-success-surface: var(--success-bg);
+            --eui-signal-warning-text: var(--warning-text);
+            --eui-signal-warning-surface: var(--warning-bg);
+            --eui-signal-critical-text: var(--danger-text);
+            --eui-signal-critical-surface: var(--danger-bg);
+        }
+
+        & .office-app :is([data-folios-masthead], .operation-now-command__title) {
+            background:
+                linear-gradient(90deg, var(--cristal-cabecera) 12%, #111b38f5 35%, #111b38bb 53%, #111b3808 76%),
+                var(--cristal-arte) right 5% / min(64%, 740px) auto no-repeat,
+                var(--cristal-cabecera);
+        }
+
+        & .office-app [data-folios-masthead] {
+            min-block-size: clamp(116px, 13vw, 172px);
+            border-color: var(--cristal-borde);
+        }
+
+        & :is(.office-app, .folios-inicio) h1 {
+            color: var(--text-strong);
+            font-family: var(--cristal-serif);
+            font-stretch: normal;
+            font-weight: 700;
+            letter-spacing: -.025em;
+            line-height: 1.12;
+            text-wrap: balance;
+            overflow-wrap: anywhere;
+        }
+
+        & .office-app :is([data-folios-masthead], .operation-now-command__title) h1 {
+            max-inline-size: 26ch;
+            text-shadow: 0 2px 12px #090f28, 0 1px 3px #090f28;
+        }
+
+        & .office-app :is([data-folios-masthead], .operation-now-command__title) :is(.eyebrow, .eui-heading__eyebrow, .operation-now-eyebrow) {
+            color: var(--amber);
+        }
+
+        & .office-app :is([data-folios-masthead] h1 + p, .operation-now-command__meta) {
+            color: var(--text-secondary);
+            text-shadow: 0 1px 5px #070b24;
+        }
+
+        & .operation-now .operation-now-command {
+            --cristal-margen: clamp(16px, 2vw, 26px);
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            grid-template-areas: "title title title" "state date actions";
+            padding: 0 var(--cristal-margen) 12px;
+            border-color: var(--cristal-borde);
+            background: var(--panel);
+        }
+
+        & .operation-now-command__title {
+            display: grid;
+            align-content: center;
+            min-block-size: clamp(152px, 17vw, 218px);
+            margin: 0 calc(-1 * var(--cristal-margen)) 12px;
+            padding: 18px var(--cristal-margen);
+            border-block-end: 1px solid var(--cristal-borde);
+        }
+
+        & .office-app :is([role="tab"][aria-selected="true"], .custody-tabs [aria-pressed="true"]) {
+            border-block-end-color: var(--amber);
+            background: var(--surface-selected);
+            color: var(--text-strong);
+        }
+
+        @media (max-width: 760px) {
+            & .estiba-office-shell .estiba-office-theme-select {
+                max-inline-size: 43vw;
+            }
+
+            & .office-app [data-folios-masthead] {
+                background:
+                    linear-gradient(90deg, var(--cristal-cabecera) 12%, #111b38ea 55%, #111b3880),
+                    var(--cristal-arte) right 20% / auto 100% no-repeat,
+                    var(--cristal-cabecera);
+            }
+
+            & .operation-now .operation-now-command {
+                grid-template-columns: minmax(0, 1fr) auto;
+                grid-template-areas: "title title" "date actions" "state state";
+            }
+
+            & .office-app .operation-now-command__title {
+                min-block-size: 0;
+                margin-block-end: 0;
+                padding-block-end: 110px;
+                background:
+                    linear-gradient(var(--cristal-cabecera) 0 48%, #111b3800 72%),
+                    var(--cristal-arte) right calc(100% + 113px) / max(100%, 365px) auto no-repeat,
+                    var(--cristal-cabecera);
+            }
+        }
+    }
+}
