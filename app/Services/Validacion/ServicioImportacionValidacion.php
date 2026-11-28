@@ -140,17 +140,9 @@ class ServicioImportacionValidacion
             }
 
             $temporada = $this->bloqueo->adquirir($importacion->temporada_id);
-            $idsProyeccionAnteriores = [
-                'articulos' => ArticuloValidacion::query()
-                    ->where('temporada_id', $temporada->id)
-                    ->pluck('id'),
-                'origenes' => OrigenValidacion::query()
-                    ->where('temporada_id', $temporada->id)
-                    ->pluck('id'),
-                'combinaciones' => CombinacionValidacion::query()
-                    ->where('temporada_id', $temporada->id)
-                    ->pluck('id'),
-            ];
+            // La reconstrucción conserva todas las filas históricas. Contar también
+            // las inactivas distingue registros nuevos de reactivaciones.
+            $proyeccionAnterior = $this->proyector->conteos($temporada, soloActivos: false);
             $claves = [
                 'clientes', 'marcas', 'categorias', 'especies', 'variedades',
                 'calibres', 'envases', 'csg', 'autorizaciones_csg',
@@ -252,20 +244,14 @@ class ServicioImportacionValidacion
 
             $this->proyector->reconstruir($temporada);
 
-            $creados['articulos'] = ArticuloValidacion::query()
-                ->where('temporada_id', $temporada->id)
-                ->whereNotIn('id', $idsProyeccionAnteriores['articulos'])
-                ->count();
-            $creados['origenes'] = OrigenValidacion::query()
-                ->where('temporada_id', $temporada->id)
-                ->whereNotIn('id', $idsProyeccionAnteriores['origenes'])
-                ->count();
-            $creados['combinaciones'] = CombinacionValidacion::query()
-                ->where('temporada_id', $temporada->id)
-                ->whereNotIn('id', $idsProyeccionAnteriores['combinaciones'])
-                ->count();
+            foreach ($this->proyector->conteos($temporada, soloActivos: false) as $clave => $total) {
+                $creados[$clave] = $total - $proyeccionAnterior[$clave];
+            }
 
             foreach ($importacion->filas as $fila) {
+                if (! $fila['codigo_articulo'] && ! $fila['codigo_origen'] && ! $fila['codigo_combinacion']) {
+                    continue;
+                }
                 $cliente = ClienteValidacion::query()
                     ->where('temporada_id', $temporada->id)
                     ->where('cliente_id', $fila['cliente_id'])
