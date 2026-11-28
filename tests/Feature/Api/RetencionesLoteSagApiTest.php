@@ -295,6 +295,39 @@ class RetencionesLoteSagApiTest extends TestCase
             ->assertJsonPath('data.alertas_sag.0.cajas_lote', 10);
     }
 
+    public function test_operacion_calcula_retenciones_de_varias_cargas_en_una_lectura_y_totales_por_lote(): void
+    {
+        $ctx = $this->crearContextoFrio(4, 'SAGRESUMEN');
+        $cliente = $this->cliente('RESUMEN');
+        foreach ($ctx['folios'] as $folio) {
+            $this->trazar($folio, $cliente, '10056', 10);
+        }
+        [$primero, $segundo, $tercero, $despachado] = $ctx['folios'];
+        $this->crearCargaPublicada($ctx['despachador'], $ctx['anden'], [$primero, $segundo]);
+        $this->crearCargaPublicada($ctx['despachador'], $ctx['anden'], [$tercero]);
+        $despachado->update(['estado_operacional' => 'despachado']);
+        $traza = (array) DB::table('trazabilidad_folio_origenes')->where('folio_id', $primero->id)->first();
+        DB::table('trazabilidad_folio_origenes')->insert([...$traza, 'id' => (string) Str::uuid(), 'cantidad_cajas' => 6]);
+        $this->actingAs($this->admin, 'sanctum')->postJson('/api/sag/lotes-retenidos', $this->datos($cliente))->assertOk();
+
+        DB::enableQueryLog();
+        $respuesta = $this->getJson('/api/operacion-ahora');
+        $consultas = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $respuesta->assertOk()
+            ->assertJsonCount(2, 'data.despacho.cargas')
+            ->assertJsonPath('data.despacho.cargas.0.salida_restringida_sag', true)
+            ->assertJsonPath('data.despacho.cargas.1.salida_restringida_sag', true)
+            ->assertJsonCount(1, 'data.retenciones_sag')
+            ->assertJsonPath('data.retenciones_sag.0.folios', 3)
+            ->assertJsonPath('data.retenciones_sag.0.cajas_lote', 36);
+        $trazas = collect($consultas)->pluck('query')->filter(fn (string $sql): bool => str_contains($sql, 'trazabilidad_folio_origenes')
+            && str_contains($sql, 'retenciones_lote_sag'));
+        $this->assertCount(2, $trazas); // Una lectura para ambas cargas y un agregado para el tablero.
+        $this->assertTrue($trazas->contains(fn (string $sql): bool => str_contains($sql, 'COUNT(DISTINCT t.folio_id)')));
+    }
+
     public function test_reportes_llevan_logo_resoluciones_y_snapshot_de_folios(): void
     {
         $cliente = $this->cliente('REPORTES');

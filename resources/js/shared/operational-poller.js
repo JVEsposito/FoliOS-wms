@@ -141,12 +141,12 @@ export function createOperationalPoller(task, options = {}) {
     }
 
     return {
-        start({ immediate = false } = {}) {
+        start({ immediate = false, initialDelayMs = null } = {}) {
             if (!stopped) return;
             stopped = false;
             listen();
             if (immediate) void execute();
-            else schedule();
+            else schedule(initialDelayMs);
         },
         stop() {
             stopped = true;

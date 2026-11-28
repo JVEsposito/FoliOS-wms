@@ -18,6 +18,7 @@ use App\Services\Revisiones\RevisionBandejasOperacionales;
 use App\Services\Temporadas\ServicioTemporadaActiva;
 use App\Services\Validacion\ProyeccionTrazabilidadFolio;
 use DomainException;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -137,7 +138,7 @@ class ServicioRetencionesLoteSag
     }
 
     /** Identidad de origen: cliente y temporada del lote, incluso si el folio se trasladó. */
-    private function trazas(?array $folioIds = null, bool $bloquear = false, ?string $temporadaId = null): Collection
+    private function consultaTrazas(?array $folioIds = null, bool $bloquear = false, ?string $temporadaId = null): Builder
     {
         $consulta = DB::table('trazabilidad_folio_origenes as t')
             ->join('retenciones_lote_sag as r', function ($join): void {
@@ -167,7 +168,7 @@ class ServicioRetencionesLoteSag
             ]);
         }
 
-        return $consulta->get(['t.folio_id', 't.cantidad_cajas', 't.csg', 'r.id as retencion_id', 'f.numero_folio']);
+        return $consulta;
     }
 
     public function paraFolios(array $folioIds, bool $bloquear = false): array
@@ -175,7 +176,10 @@ class ServicioRetencionesLoteSag
         if ($folioIds === []) {
             return [];
         }
-        $trazas = $this->trazas($folioIds, $bloquear);
+        $trazas = $this->consultaTrazas($folioIds, $bloquear)->get(['t.folio_id', 't.cantidad_cajas', 'r.id as retencion_id']);
+        if ($trazas->isEmpty()) {
+            return [];
+        }
         $casos = RetencionLoteSag::whereIn('id', $trazas->pluck('retencion_id')->unique())
             ->when($bloquear, fn ($q) => $q->lockForUpdate())->get()->keyBy('id');
         $resumenes = $casos->map(fn ($caso): array => ['id' => $caso->id, 'cliente_id' => $caso->cliente_id,
@@ -230,6 +234,23 @@ class ServicioRetencionesLoteSag
         $porFolio = $this->paraFolios($asignaciones->pluck('folio_id')->all(), $bloquear);
 
         return $this->alertasAsignaciones($carga, $asignaciones, $porFolio, $bloquear);
+    }
+
+    /** @param  Collection<int, Carga>  $cargas */
+    public function alertasCargas(Collection $cargas): array
+    {
+        $activas = $cargas->reject(fn (Carga $carga): bool => in_array($carga->estado, EstadoCarga::terminales(), true));
+        $asignacionesPorCarga = $activas->mapWithKeys(fn (Carga $carga): array => [
+            $carga->id => $carga->asignacionesActuales->filter(fn (CargaFolio $asignacion): bool => $asignacion->estado->mantieneReserva()),
+        ]);
+        $porFolio = $this->paraFolios($asignacionesPorCarga->collapse()->pluck('folio_id')->unique()->values()->all());
+
+        return $activas->mapWithKeys(function (Carga $carga) use ($asignacionesPorCarga, $porFolio): array {
+            $asignaciones = $asignacionesPorCarga->get($carga->id);
+            $casos = array_intersect_key($porFolio, $asignaciones->pluck('folio_id')->flip()->all());
+
+            return [$carga->id => $this->alertasAsignaciones($carga, $asignaciones, $casos)];
+        })->all();
     }
 
     public function alertasTarea(string $folioId): array
@@ -343,22 +364,24 @@ class ServicioRetencionesLoteSag
 
     public function alertasOperacion(string $temporadaId, array $cargas): array
     {
-        $trazas = $this->trazas(temporadaId: $temporadaId)->groupBy('retencion_id');
+        $totales = $this->consultaTrazas(temporadaId: $temporadaId)->groupBy('r.id')
+            ->selectRaw('r.id as retencion_id, COUNT(DISTINCT t.folio_id) as folios, SUM(t.cantidad_cajas) as cajas_lote')
+            ->get()->keyBy('retencion_id');
         $bloqueos = collect($cargas)->flatMap(fn (array $carga): array => array_map(
             fn (array $alerta): array => [...$alerta, 'carga_id' => $carga['id'], 'carga' => $carga['codigo']],
             array_filter($carga['alertas_sag'], fn (array $alerta): bool => $alerta['bloquea_salida'] && ! $alerta['todos_destinos']),
         ))->groupBy(fn (array $alerta): string => implode('|', [$alerta['carga_id'], $alerta['instructivo_id'], $alerta['id']]));
         $casos = RetencionLoteSag::with('cliente:id,nombre')
-            ->whereIn('id', $trazas->keys()->merge($bloqueos->map(fn (Collection $grupo): string => $grupo->first()['id']))->unique())
+            ->whereIn('id', $totales->keys()->merge($bloqueos->map(fn (Collection $grupo): string => $grupo->first()['id']))->unique())
             ->get()->keyBy('id');
 
-        $generales = $trazas->map(function (Collection $lineas, string $id) use ($casos): ?array {
+        $generales = $totales->map(function (object $total, string $id) use ($casos): ?array {
             $caso = $casos->get($id);
 
             return $this->avisoGeneral(['id' => $caso->id, 'cliente' => $caso->cliente->nombre, 'lote' => $caso->numero_lote,
                 'estado' => $caso->estado, 'observacion' => $caso->observacion, 'todos_destinos' => $caso->todos_destinos,
-                'destinos' => $caso->destinos, 'folios' => $lineas->pluck('folio_id')->unique()->count(),
-                'cajas_lote' => (int) $lineas->sum('cantidad_cajas'), 'instruccion_segregacion' => $caso->instruccion_segregacion]);
+                'destinos' => $caso->destinos, 'folios' => (int) $total->folios,
+                'cajas_lote' => (int) $total->cajas_lote, 'instruccion_segregacion' => $caso->instruccion_segregacion]);
         })->filter();
 
         return $bloqueos->map(function (Collection $grupo) use ($casos): array {

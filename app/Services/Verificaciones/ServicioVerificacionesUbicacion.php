@@ -206,17 +206,25 @@ final class ServicioVerificacionesUbicacion
         if (! config('verificaciones.habilitada')) {
             return;
         }
-        DB::transaction(function () use ($temporada): void {
+
+        $ahora = now();
+        $pendientesVencidas = VerificacionUbicacion::query()->where('temporada_id', $temporada->id)
+            ->where('estado', 'pendiente')->where('vence_at', '<=', $ahora);
+        // Operación ahora y los registros de camareros llaman a este método.
+        // Solo hace falta bloquear la temporada si hay algo que vencer.
+        if (! $pendientesVencidas->exists()) {
+            return;
+        }
+
+        DB::transaction(function () use ($temporada, $pendientesVencidas, $ahora): void {
             if ($this->temporadas->obtener(bloquear: true)->id !== $temporada->id) {
                 return;
             }
-            $vencidas = VerificacionUbicacion::query()->where('temporada_id', $temporada->id)
-                ->where('estado', 'pendiente')->where('vence_at', '<=', now())
-                ->update(['estado' => 'vencida', 'updated_at' => now()]);
+            $vencidas = $pendientesVencidas->update(['estado' => 'vencida', 'updated_at' => $ahora]);
             if ($vencidas > 0) {
                 DB::afterCommit(fn () => app(ServicioPanelGerencial::class)->invalidar());
             }
-        });
+        }, attempts: 3);
     }
 
     private function asignar(VerificacionUbicacion $ronda, int $cantidad): void

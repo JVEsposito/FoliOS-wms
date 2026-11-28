@@ -10,6 +10,7 @@ use App\Exceptions\ServicioSagNoDisponible;
 use App\Exceptions\TemporadaConPendientesDeCierre;
 use App\Http\Middleware\AsegurarTemporadaActivaDelRegistro;
 use App\Http\Middleware\ExigirCambioPasswordTablet;
+use App\Http\Middleware\RegistrarFallasApi;
 use App\Http\Middleware\RestringirUsuarioCliente;
 use Illuminate\Contracts\Database\ConcurrencyErrorDetector;
 use Illuminate\Database\DeadlockException;
@@ -54,7 +55,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Los usuarios de clientes solo alcanzan el portal, aunque una ruta interna no tenga permiso propio.
-        $middleware->prependToGroup('api', RestringirUsuarioCliente::class);
+        $middleware->prependToGroup('api', [RegistrarFallasApi::class, RestringirUsuarioCliente::class]);
         $middleware->appendToGroup('api', ExigirCambioPasswordTablet::class);
         // Solo se escribe sobre registros de la temporada activa. Debe correr
         // cuando los parámetros de la ruta ya son modelos.
@@ -65,6 +66,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+        $exceptions->context(function (): array {
+            $referencia = app()->bound('request')
+                ? request()->attributes->get(RegistrarFallasApi::ATRIBUTO_REFERENCIA)
+                : null;
+
+            return $referencia ? ['referencia' => $referencia] : [];
+        });
 
         $exceptions->render(function (DeadlockException|QueryException $exception, Request $request) {
             if (! $request->is('api/*') || ! app(ConcurrencyErrorDetector::class)->causedByConcurrencyError($exception)) {

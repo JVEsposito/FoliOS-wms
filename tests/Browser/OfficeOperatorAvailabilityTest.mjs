@@ -22,7 +22,7 @@ const panel = () => ({ data: {
     planta: { configurado: false, catalogo: [], elementos: [] },
 } });
 
-for (const width of [1280, 390]) test(`Operación ahora anuncia una sola vez al camarero disponible y degrada la lectura sin conexión en ${width}px`, async () => {
+for (const width of [1280, 390]) test(`Operación ahora recupera la lectura y anuncia una sola vez al camarero disponible en ${width}px`, async () => {
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu'] });
     try {
         const context = await browser.newContext({ viewport: { width, height: 950 } });
@@ -38,7 +38,13 @@ for (const width of [1280, 390]) test(`Operación ahora anuncia una sola vez al 
                 try { return route.fulfill({ body: readFileSync(resolve(root, `public${path}`)), contentType: ({ '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' })[extname(path)] || 'application/octet-stream' }); }
                 catch { return route.fulfill({ status: 404 }); }
             }
-            if (path === '/api/operacion-ahora') { fullReads++; return route.fulfill({ json: panel() }); }
+            if (path === '/api/operacion-ahora') {
+                fullReads++;
+                if (width === 1280 && fullReads === 1) {
+                    return route.fulfill({ status: 503, json: { message: 'Servidor ocupado temporalmente' } });
+                }
+                return route.fulfill({ json: panel() });
+            }
             if (path === '/api/operacion-ahora/camareros') {
                 reads++;
                 if (failed) return route.fulfill({ status: 503, json: { message: 'Servidor sin respuesta' } });
@@ -52,7 +58,11 @@ for (const width of [1280, 390]) test(`Operación ahora anuncia una sola vez al 
         });
         const page = await context.newPage(); const errors = []; page.on('pageerror', (error) => errors.push(error.message));
         await page.goto('http://localhost/oficina/operacion-ahora#personal');
-        await page.locator('#operatorAvailableCount').filter({ hasText: 'Disponibles: 0' }).waitFor();
+        if (width === 1280) {
+            await page.locator('#operationConnection').filter({ hasText: 'Servidor ocupado temporalmente' }).waitFor();
+        }
+        await page.locator('#operatorAvailableCount').filter({ hasText: 'Disponibles: 0' }).waitFor({ timeout: 10000 });
+        await page.locator('#operationConnection').waitFor({ state: 'hidden' });
         assert.deepEqual(await page.locator('#operationAlertRows .operation-now-alert__items .operation-now-code').allTextContents(), [
             'Cámara de tránsito 05', 'Cámara de tránsito 07',
         ]);
@@ -81,7 +91,7 @@ for (const width of [1280, 390]) test(`Operación ahora anuncia una sola vez al 
         failed = true;
         await page.locator('#operatorAvailableCount').filter({ hasText: 'sin confirmar' }).waitFor({ timeout: 15000 });
         assert.match(await page.locator('#operationOperatorList').innerText(), /Presencia sin confirmar/);
-        assert.equal(fullReads, 1, 'el feed rápido no vuelve a cargar todo el tablero');
+        assert.equal(fullReads, width === 1280 ? 2 : 1, 'el feed rápido no vuelve a cargar todo el tablero');
         assert.deepEqual(errors, []);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
         await context.close();
