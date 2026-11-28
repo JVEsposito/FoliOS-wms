@@ -1,0 +1,294 @@
+@media screen {
+    @font-face {
+        font-family: "Bodoni Moda";
+        src: url("data:font/woff2;base64,__FOLIOS_TEMA_WOFF2__") format("woff2");
+        font-style: normal;
+        font-weight: 500 700;
+        font-display: swap;
+    }
+
+    :root[data-office-personal-theme="personal-resonancia"] {
+        color-scheme: light;
+        --bg: #f1f4f7;
+        --deep: #e8eef5;
+        --panel: #fff;
+        --raised: #f7f9fc;
+        --soft: #dfebf3;
+        --line: #8195aa;
+        --line-soft: #d1dbe5;
+        --border: var(--line);
+        --input-border: #72879b;
+        --text: #202c3b;
+        --text-strong: #10141c;
+        --text-secondary: #324256;
+        --text-subtle: #46586e;
+        --muted: var(--text-subtle);
+        --header-bg: #f8fafd;
+        --subnav-bg: var(--panel);
+        --surface-muted: #ecf3f8;
+        --surface-hover: #e4eef6;
+        --surface-selected: #dcecf5;
+        --input-bg: #fff;
+        --table-head: #e7eef7;
+        --row-bg: var(--panel);
+        --row-alt: #f5f8fb;
+        --row-hover: var(--surface-hover);
+        --button-secondary: #f4f8fc;
+        --button-secondary-hover: var(--surface-hover);
+        --icon-surface: var(--surface-muted);
+        --primary: #174972;
+        --primary-hover: #113756;
+        --on-primary: #fff;
+        --accent: var(--primary);
+        --focus-ring: #20527d;
+        --selection-bg: #a8cbe3;
+        --green: #216248;
+        --amber: #775013;
+        --red: #932642;
+        --success-text: var(--green);
+        --success-bg: #e4f2e9;
+        --warning-text: var(--amber);
+        --warning-bg: #fbefdb;
+        --danger-text: var(--red);
+        --danger-bg: #f8e8ed;
+        --info-text: #245578;
+        --info-bg: #e7eff8;
+        --seal: var(--amber);
+        --seal-bg: var(--warning-bg);
+        --critical-fill: var(--red);
+        --on-critical-fill: #fff;
+        --corporate-navy: #18324b;
+        --corporate-canvas: var(--bg);
+        --corporate-card: var(--panel);
+        --corporate-border: var(--line-soft);
+        --corporate-text: var(--text);
+        --corporate-text-muted: var(--muted);
+        --corporate-blue: var(--primary);
+        --corporate-blue-dark: #123653;
+        --corporate-gold: var(--amber);
+        --corporate-shadow: 0 4px 18px #20374514;
+        --corporate-shadow-raised: 0 16px 44px #20374524;
+        --cyan: #17617c;
+        --cyan-light: #1a597b;
+        --frost: #1b617d;
+        --frost-strong: #124861;
+        --brand-gradient: linear-gradient(135deg, #fefefe, #e7f1f6);
+        --kpi-surface: var(--surface-muted);
+        --logo-bg: #18324b;
+        --logo-border: #9cadbe;
+        --series-product: #245c88;
+        --series-material: #9a3c58;
+        --chart-grid: var(--line-soft);
+        --chart-text: var(--text-secondary);
+        --chart-tooltip-bg: var(--raised);
+        --chart-tooltip-border: var(--line);
+        --resonancia-serif: "Bodoni Moda", Georgia, serif;
+        --resonancia-arte: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
+        --resonancia-borde: #8796a5;
+        --resonancia-carmesi: #982d50;
+        --resonancia-aguamarina: #236963;
+        --resonancia-cobalto: #225d94;
+        --resonancia-violeta: #614788;
+        --resonancia-indigo: #354d76;
+        --resonancia-pizarra: #48596e;
+
+        & .estiba-office-shell {
+            --shell-navy: var(--header-bg);
+            --shell-navy-hover: var(--surface-hover);
+            --shell-strong: var(--text-strong);
+            --shell-ink: var(--text);
+            --shell-muted: var(--text-secondary);
+            --shell-faint: var(--text-subtle);
+            --shell-warning: var(--amber);
+            --shell-line: var(--line);
+            --shell-gajo: var(--line-soft);
+            --shell-active-bg: var(--surface-selected);
+            --shell-active-ink: var(--text-strong);
+            --shell-active-gajo: var(--primary);
+            --shell-focus: var(--focus-ring);
+            --eui-shell-frost: var(--primary);
+        }
+
+        & .estiba-office-header {
+            background: linear-gradient(100deg, #fff, #edf3f7);
+        }
+
+        & .estiba-office-header::after {
+            height: 2px;
+            background: linear-gradient(90deg, var(--resonancia-aguamarina), var(--resonancia-cobalto) 44%, var(--resonancia-carmesi));
+            pointer-events: none;
+        }
+
+        & .estiba-office-header .estiba-office-menu-icon { color: var(--resonancia-cobalto); }
+        & .estiba-office-header .estiba-office-status > .eui-icon { color: var(--resonancia-aguamarina); }
+        & .estiba-office-header .estiba-office-communications > svg { color: var(--resonancia-carmesi); }
+
+        & .estiba-office-sidebar {
+            background: linear-gradient(162deg, #f9fbfd, #ecf2f7 85%);
+        }
+
+        & :is(.estiba-office-sidebar .estiba-office-area, .operation-now-eyebrow) > .folios-gajo {
+            --gajo-area: var(--resonancia-icono, var(--primary));
+            --gajo-rest: color-mix(in srgb, var(--gajo-area) 44%, #fff);
+            --gajo-hub: var(--panel);
+        }
+
+        & .folios-gajo[data-area="materia-prima"] { --resonancia-icono: var(--resonancia-aguamarina); }
+        & .folios-gajo[data-area="frigorifico"] { --resonancia-icono: var(--resonancia-cobalto); }
+        & .folios-gajo[data-area="materiales"] { --resonancia-icono: var(--resonancia-carmesi); }
+        & .folios-gajo[data-area="consultas"] { --resonancia-icono: var(--resonancia-violeta); }
+        & .folios-gajo[data-area="gerencia"] { --resonancia-icono: var(--resonancia-indigo); }
+        & .folios-gajo[data-area="administracion"] { --resonancia-icono: var(--resonancia-pizarra); }
+
+        & .estiba-office-brand .folios-logo--office-dark { display: none; }
+        & .estiba-office-brand .folios-logo--office-garden { display: block; }
+
+        & .estiba-ui {
+            --eui-color-navy: var(--corporate-navy);
+            --eui-color-navy-hover: #23465f;
+            --eui-color-canvas: var(--corporate-canvas);
+            --eui-color-surface: var(--corporate-card);
+            --eui-color-subtle: var(--surface-muted);
+            --eui-color-border: var(--line);
+            --eui-color-border-soft: var(--line-soft);
+            --eui-color-input-border: var(--input-border);
+            --eui-color-text: var(--text);
+            --eui-color-text-secondary: var(--text-secondary);
+            --eui-color-muted: var(--text-subtle);
+            --eui-color-primary: var(--primary);
+            --eui-color-primary-hover: var(--primary-hover);
+            --eui-color-on-primary: var(--on-primary);
+            --eui-color-selected: var(--surface-selected);
+            --eui-color-focus: var(--focus-ring);
+            --eui-color-disabled-surface: var(--soft);
+            --eui-color-disabled-text: var(--text-subtle);
+            --eui-color-frost: var(--frost);
+            --eui-color-frost-strong: var(--frost-strong);
+            --eui-signal-info-text: var(--info-text);
+            --eui-signal-info-surface: var(--info-bg);
+            --eui-signal-success-text: var(--success-text);
+            --eui-signal-success-surface: var(--success-bg);
+            --eui-signal-warning-text: var(--warning-text);
+            --eui-signal-warning-surface: var(--warning-bg);
+            --eui-signal-critical-text: var(--danger-text);
+            --eui-signal-critical-surface: var(--danger-bg);
+        }
+
+        & .office-app :is([data-folios-masthead], .operation-now-command__title) {
+            background:
+                linear-gradient(90deg, #ffffff55, #ffffffbf 26%, #ffffff80 42%, #ffffff00 63%),
+                var(--resonancia-arte) center 28% / cover no-repeat,
+                #fff;
+        }
+
+        & .office-app [data-folios-masthead] {
+            min-block-size: clamp(118px, 14vw, 185px);
+            border-color: var(--resonancia-borde);
+        }
+
+        & :is(.office-app, .folios-inicio) h1 {
+            color: var(--text-strong);
+            font-family: var(--resonancia-serif);
+            font-stretch: normal;
+            font-weight: 700;
+            letter-spacing: .015em;
+            line-height: .98;
+            text-transform: uppercase;
+            overflow-wrap: anywhere;
+        }
+
+        & .office-app :is([data-folios-masthead], .operation-now-command__title) h1 {
+            inline-size: fit-content;
+            max-inline-size: 100%;
+            padding-block-end: .105em;
+            border-block-end: .045em solid currentColor;
+            text-shadow: 0 0 8px #fff, 0 0 14px #fff;
+            transform: scaleX(.72);
+            transform-origin: left center;
+        }
+
+        & .office-app :is([data-folios-masthead], .operation-now-command__title) :is(.eyebrow, .eui-heading__eyebrow, .operation-now-eyebrow) {
+            color: #1c506d;
+            text-shadow: 0 0 7px #fff, 0 0 11px #fff;
+        }
+
+        & .office-app :is([data-folios-masthead] h1 + p, .operation-now-command__meta) {
+            color: var(--text-secondary);
+            text-shadow: 0 0 7px #fff, 0 0 11px #fff;
+        }
+
+        & .operation-now .operation-now-command {
+            --resonancia-margen: clamp(16px, 2vw, 26px);
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            grid-template-areas: "title title title" "state date actions";
+            padding: 0 var(--resonancia-margen) 12px;
+            border-color: var(--resonancia-borde);
+            background: var(--panel);
+        }
+
+        & .operation-now-command__title {
+            display: grid;
+            align-content: end;
+            min-block-size: clamp(332px, 31.2vw, 448px);
+            margin: 0 calc(-1 * var(--resonancia-margen)) 12px;
+            padding: 24px var(--resonancia-margen) clamp(22px, 3.4vw, 48px);
+            border-block-end: 1px solid var(--resonancia-borde);
+        }
+
+        & .operation-now-command__title h1 {
+            font-size: clamp(3rem, 6.4vw, 5.75rem);
+        }
+
+        & .operation-now-panel__title h2 {
+            font-family: var(--resonancia-serif);
+            font-size: clamp(1.25rem, 1.8vw, 1.65rem);
+            font-stretch: normal;
+            font-weight: 650;
+            letter-spacing: .01em;
+            line-height: 1.1;
+        }
+
+        & .office-app :is([role="tab"][aria-selected="true"], .custody-tabs [aria-pressed="true"]) {
+            border-block-end-color: var(--resonancia-carmesi);
+            background: var(--surface-selected);
+            color: var(--text-strong);
+        }
+
+        @media (max-width: 760px) {
+            & .estiba-office-shell .estiba-office-theme-select {
+                max-inline-size: 43vw;
+            }
+
+            & .office-app [data-folios-masthead] {
+                background:
+                    linear-gradient(90deg, #ffffffed, #ffffffc4 56%, #ffffff75),
+                    var(--resonancia-arte) right 17% / auto 100% no-repeat,
+                    #fff;
+            }
+
+            & .operation-now .operation-now-command {
+                grid-template-columns: minmax(0, 1fr) auto;
+                grid-template-areas: "title title" "date actions" "state state";
+            }
+
+            & .office-app .operation-now-command__title {
+                min-block-size: 0;
+                margin-block-end: 0;
+                padding-block-end: 0;
+                background: #fff;
+            }
+
+            & .operation-now-command__title h1 {
+                font-size: clamp(1.45rem, 7.8vw, 3.25rem);
+            }
+
+            & .operation-now-command__title::after {
+                display: block;
+                block-size: clamp(190px, 52vw, 330px);
+                margin: 12px calc(-1 * var(--resonancia-margen)) 0;
+                background: var(--resonancia-arte) center 24% / cover no-repeat;
+                content: "";
+            }
+        }
+    }
+}

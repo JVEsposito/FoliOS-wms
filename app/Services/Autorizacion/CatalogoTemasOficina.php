@@ -19,6 +19,8 @@ final class CatalogoTemasOficina
 
     private const MARCADOR_FONDO = '__FOLIOS_TEMA_FONDO__';
 
+    private const MARCADOR_WOFF2 = 'data:font/woff2;base64,__FOLIOS_TEMA_WOFF2__';
+
     private const ESTILOS_DE_PLANTA = [
         'personal-gundam' => ['nombre' => 'Gundam RX-78-2', 'color' => '#101e37', 'claro' => true],
         'personal-omegamon-x' => ['nombre' => 'Omegamon X', 'color' => '#0d111b', 'claro' => false],
@@ -35,6 +37,13 @@ final class CatalogoTemasOficina
             'color' => '#15101d',
             'claro' => false,
             'incluido' => true,
+        ],
+        'personal-resonancia' => [
+            'nombre' => 'Resonancia',
+            'color' => '#f1f4f7',
+            'claro' => true,
+            'incluido' => true,
+            'fuente' => 'bodoni-moda-latin.woff2',
         ],
         'personal-stitch' => [
             'nombre' => 'Stitch · Experimento 626',
@@ -123,6 +132,14 @@ final class CatalogoTemasOficina
         $css = $this->leerArchivo($tema['ruta']);
         if ($css === null) {
             return null;
+        }
+
+        if ($tema['fuente'] !== null) {
+            $fuente = $this->leerArchivo($tema['fuente']);
+            if ($fuente === null || ! str_starts_with($fuente, 'wOF2')) {
+                return null;
+            }
+            $css = str_replace(self::MARCADOR_WOFF2, 'data:font/woff2;base64,'.base64_encode($fuente), $css);
         }
 
         if ($tema['ilustracion'] !== null) {
@@ -266,6 +283,7 @@ final class CatalogoTemasOficina
                 'ruta' => $ruta,
                 'ilustracion' => $ilustracion,
                 'formato' => $formato,
+                'fuente' => isset($temaPlanta['fuente']) ? resource_path('temas-oficina/'.$temaPlanta['fuente']) : null,
                 'fondo' => isset($temaPlanta['fondo'])
                     ? (($temaPlanta['fondo_incluido'] ?? false) ? resource_path("temas-oficina/{$temaPlanta['fondo']}") : "{$directorio}/{$temaPlanta['fondo']}")
                     : null,

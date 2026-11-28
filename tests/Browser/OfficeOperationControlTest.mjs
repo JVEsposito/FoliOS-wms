@@ -7,6 +7,8 @@ import { chromium } from 'playwright';
 import { PNG } from 'pngjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
+const resonancia = 'personal-resonancia';
+const ultimaNoche = 'personal-majora-link';
 const webpMagenta = 'UklGRhwAAABXRUJQVlA4TBAAAAAvB4AAAAcQxS9y/wMR0f8A';
 function luminance(rgb) {
     const [red, green, blue] = rgb.match(/\d+/g).slice(0, 3).map((channel) => {
@@ -26,13 +28,17 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
             'personal-omegamon-x': { nombre: 'Omegamon X', color: '#0d111b', claro: false },
             'personal-mugiwara': { nombre: 'Mugiwara', color: '#071c28', claro: false },
             'personal-nerv': { nombre: 'NERV', color: '#0c090a', claro: false },
-            'personal-majora-link': { nombre: 'Majora y Link · Última noche', color: '#15101d', claro: false },
+            [ultimaNoche]: { nombre: 'Majora y Link · Última noche', color: '#15101d', claro: false },
+            [resonancia]: { nombre: 'Resonancia', color: '#f1f4f7', claro: true },
         };
         const preferencias = { temas_oficina: Object.keys(temas), temas_oficina_personales: temas };
         const identity = {
             nombre: 'Supervisión', rol: 'consulta', inicio: '/oficina/operacion-ahora',
             puede_consultar_panel_gerencial: true, puede_consultar_prefrio: true,
-            modulos_acceso: ['gerencia.panel', 'frigorifico.prefrio'], ...preferencias,
+            puede_consultar_materia_prima: true, puede_consultar_despachos_materiales: true,
+            puede_consultar_oficina_consultas: true, puede_consultar_accesos: true,
+            modulos_acceso: ['gerencia.panel', 'frigorifico.prefrio', 'materia-prima.digitacion', 'materiales.resumen', 'consultas.busqueda', 'administracion.accesos'],
+            ...preferencias,
         };
         await context.addInitScript((user) => {
             localStorage.setItem('estiba_wms_office_token', 'fixture');
@@ -83,11 +89,15 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
             const tema = pathname.slice('/api/oficina/tema-personal/'.length);
             if (pathname.startsWith('/api/oficina/tema-personal/') && Object.hasOwn(temas, tema)) {
                 const css = readFileSync(resolve(root, 'resources', 'temas-oficina', `${tema}.css`), 'utf8');
-                const webp = tema === 'personal-majora-link'
+                const webp = [ultimaNoche, resonancia].includes(tema)
                     ? readFileSync(resolve(root, 'resources', 'temas-oficina', `${tema}.webp`)).toString('base64')
                     : webpMagenta;
                 const ilustracion = tema === 'personal-nerv' ? `data:image/png;base64,${pngMagenta}` : `data:image/webp;base64,${webp}`;
-                const body = css.replace('data:image/webp;base64,__FOLIOS_TEMA_WEBP__', ilustracion).replace('__FOLIOS_TEMA_FONDO__', 'none');
+                let body = css.replace('data:image/webp;base64,__FOLIOS_TEMA_WEBP__', ilustracion).replace('__FOLIOS_TEMA_FONDO__', 'none');
+                if (tema === resonancia) {
+                    const fuente = readFileSync(resolve(root, 'resources/temas-oficina/bodoni-moda-latin.woff2')).toString('base64');
+                    body = body.replace('__FOLIOS_TEMA_WOFF2__', fuente);
+                }
                 return route.fulfill({ contentType: 'text/css', body });
             }
             return route.fulfill({ json: { data: { planta: 'Pruebas', temporada: snapshot.temporada, ...preferencias } } });
@@ -194,7 +204,7 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
 
         const cabecera = page.locator('.operation-now-command__title');
-        for (const tema of Object.keys(temas).filter((theme) => theme !== 'personal-majora-link')) {
+        for (const tema of Object.keys(temas).filter((theme) => ![ultimaNoche, resonancia].includes(theme))) {
             await page.setViewportSize({ width: 1440, height: 900 });
             await selector.selectOption(tema);
             await page.waitForFunction(clave => document.documentElement.dataset.officePersonalTheme === clave, tema);
@@ -213,7 +223,6 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         }
         assert.equal(await page.locator('.estiba-office-search input').evaluate(input => getComputedStyle(input).backgroundColor), 'rgb(17, 13, 14)');
         assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()), '#f47583');
-        const ultimaNoche = 'personal-majora-link';
         const estilosUltimaNoche = () => page.locator('#operationValidationRows td').first().evaluate((cell) => {
             const style = getComputedStyle(cell);
             const header = getComputedStyle(document.querySelector('.operation-now-command__title'));
@@ -250,6 +259,44 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         await selector.selectOption(ultimaNoche);
         await page.waitForFunction((theme) => document.documentElement.dataset.officePersonalTheme === theme, ultimaNoche);
         assert.deepEqual(await estilosUltimaNoche(), noche);
+
+        await selector.selectOption(resonancia);
+        await page.waitForFunction((theme) => document.documentElement.dataset.officePersonalTheme === theme, resonancia);
+        const fuentes = await page.evaluate(async () => (await document.fonts.load('700 32px "Bodoni Moda"', 'Operación ahora')).map(font => font.status));
+        assert.deepEqual(fuentes, ['loaded']);
+        const iconos = page.locator('.estiba-office-sidebar [data-domain-key]:visible .folios-gajo__leaf.is-area');
+        const colores = await iconos.evaluateAll(hojas => hojas.map(hoja => getComputedStyle(hoja).fill));
+        assert.equal(colores.length, 6);
+        assert.equal(new Set(colores).size, 6);
+        assert.equal(await page.locator('[data-domain-key="materiales"] .is-area').evaluate(hoja => getComputedStyle(hoja).fill), 'rgb(152, 45, 80)');
+        assert.match(await page.locator('#operationValidationTitle').evaluate(titulo => getComputedStyle(titulo).fontFamily), /Bodoni Moda/);
+        for (const width of [1440, 1024, 390]) {
+            await page.setViewportSize({ width, height: 1040 });
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
+            const estilo = await cabecera.evaluate((element, movil) => {
+                const titulo = getComputedStyle(element.querySelector('h1'));
+                const fondo = getComputedStyle(element);
+                const arte = movil ? getComputedStyle(element, '::after') : fondo;
+                return {
+                    fuente: titulo.fontFamily, color: titulo.color, base: fondo.backgroundColor,
+                    arte: arte.backgroundImage.includes('data:image/webp;base64,'), alto: parseFloat(arte.blockSize),
+                };
+            }, width <= 760);
+            assert.match(estilo.fuente, /Bodoni Moda/);
+            assert.equal(estilo.arte, true);
+            assert.ok(estilo.alto >= (width <= 760 ? 190 : 320), `La portada conserva su altura a ${width}px`);
+            assert.ok((luminance(estilo.base) + 0.05) / (luminance(estilo.color) + 0.05) >= 4.5);
+            await page.locator('#operationRefresh').click({ trial: true });
+            if (process.env.FOLIOS_UI_CAPTURE_DIR) {
+                await page.evaluate(() => window.scrollTo(0, 0));
+                await page.screenshot({ path: resolve(process.env.FOLIOS_UI_CAPTURE_DIR, `resonancia-${width}.png`) });
+                if (width === 1440) {
+                    await page.locator('.estiba-office-areas').screenshot({ path: resolve(process.env.FOLIOS_UI_CAPTURE_DIR, 'resonancia-iconos.png') });
+                }
+            }
+        }
+        await selector.selectOption('dark-industrial');
+        assert.equal(await cabecera.evaluate(el => getComputedStyle(el.querySelector('h1')).fontFamily.includes('Bodoni Moda')), false);
         assert.equal(new URL(page.url()).hash, '#validacion-pt');
         assert.deepEqual(errors, []);
         await context.close();
