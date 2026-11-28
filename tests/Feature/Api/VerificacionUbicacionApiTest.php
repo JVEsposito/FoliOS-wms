@@ -343,9 +343,20 @@ class VerificacionUbicacionApiTest extends TestCase
         $this->posicion();
         $servicio = app(ServicioVerificacionesUbicacion::class);
         $ronda = $servicio->actual($this->camarero, $this->tablet);
+        $temporada = app(ServicioTemporadaActiva::class)->obtener();
+
+        DB::enableQueryLog();
+        $servicio->vencer($temporada);
+        $consultas = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $this->assertCount(1, $consultas);
+        $this->assertStringContainsString('exists', $consultas[0]['query']);
+        $this->assertDatabaseHas('verificaciones_ubicacion', ['id' => $ronda->id, 'estado' => 'pendiente']);
+
         DB::table('verificaciones_ubicacion')->where('id', $ronda->id)
             ->update(['vence_at' => now()->subMinute()]);
-        $servicio->vencer(app(ServicioTemporadaActiva::class)->obtener());
+        $servicio->vencer($temporada);
         $this->assertDatabaseHas('verificaciones_ubicacion', ['id' => $ronda->id, 'estado' => 'vencida']);
         $metricas = (new \ReflectionMethod(ServicioPanelGerencial::class, 'verificaciones'))
             ->invoke(app(ServicioPanelGerencial::class), $this->temporadaId);

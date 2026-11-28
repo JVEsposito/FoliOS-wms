@@ -358,8 +358,13 @@ async function api(path, options = {}) {
     const timeout = window.setTimeout(() => controller.abort(), 12_000);
 
     let response;
+    let data;
     try {
         response = await fetch(path, { ...options, headers, signal: controller.signal });
+        data = await response.json().catch((error) => {
+            if (controller.signal.aborted) throw error;
+            return {};
+        });
     } catch (error) {
         const message = error?.name === 'AbortError'
             ? 'El servidor tardó demasiado en responder.'
@@ -369,7 +374,6 @@ async function api(path, options = {}) {
         window.clearTimeout(timeout);
     }
 
-    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
         if (response.status === 401) clearSession();
         throw new ApiError(errorMessage(data, 'No fue posible consultar la operación.'), response.status);
@@ -1589,12 +1593,17 @@ async function load({ blocking = false, silent = false, propagate = false } = {}
         const incoming = validateSnapshot(payload.data);
         render(reconcilePlantSnapshot(incoming, state.snapshot, requestMapRevision, state.mapRevision));
         elements.connection.hidden = true;
+        startOperatorPolling();
         if (!silent) toast('Operación actualizada.');
         return true;
     } catch (error) {
         showConnectionIssue(error);
         if (!silent || !state.snapshot) toast(error.message, true);
-        if (error.status === 403) window.location.replace('/oficina/administracion');
+        if (error.status === 403) {
+            state.poller?.stop();
+            state.operatorPoller?.stop();
+            window.location.replace('/oficina/administracion');
+        }
         if (propagate) throw error;
         return false;
     } finally {
@@ -1634,26 +1643,25 @@ async function loadOperatorAvailability() {
     }
 }
 
-function startPolling() {
-    state.poller?.stop();
+function startPolling(initialDelayMs = null) {
     const seconds = Math.max(10, Number(state.snapshot?.actualizacion_sugerida_segundos || 30));
     state.poller = createOperationalPoller(
         () => load({ silent: true, propagate: true }),
         {
             intervalMs: seconds * 1000,
             canRun: () => Boolean(state.token) && !state.loading && !state.mapSaving && !state.interventionSaving,
-            onError: (error) => showConnectionIssue(error),
         },
     );
-    state.poller.start();
-    state.operatorPoller?.stop();
+    state.poller.start({ initialDelayMs });
+}
+
+function startOperatorPolling() {
+    if (state.operatorPoller) return;
     state.operatorPoller = createOperationalPoller(loadOperatorAvailability, {
         intervalMs: 5_000, maxBackoffMs: 30_000,
         canRun: () => Boolean(state.token) && !state.operatorReading,
-        onError: () => {},
     });
-    state.operatorPoller.start();
-    void loadOperatorAvailability().catch(() => {});
+    state.operatorPoller.start({ immediate: true });
 }
 
 async function logout() {
@@ -2148,8 +2156,7 @@ elements.facilityMap.addEventListener('keydown', (event) => {
 });
 
 elements.refresh.addEventListener('click', async () => {
-    const success = await load();
-    if (success && !state.poller) startPolling();
+    await load();
 });
 
 // PIN de operadores: el supervisor de frío restablece el PIN de camareros, operadores de
@@ -2221,9 +2228,18 @@ async function boot() {
     if (validationLink) validationLink.hidden = !can('puede_consultar_validaciones_pallet') || !hasModule('frigorifico.validacion');
     if (pinElements.open) pinElements.open.hidden = !can('puede_gestionar_pines_operadores');
 
-    if (!navigator.onLine) showConnectionIssue(new ApiError('El equipo no tiene conexión de red.'));
-    const success = await load({ blocking: true, silent: true });
-    if (success) startPolling();
+    let initialDelayMs = null;
+    if (!navigator.onLine) {
+        showConnectionIssue(new ApiError('El equipo no tiene conexión de red.'));
+    } else {
+        try {
+            await load({ blocking: true, silent: true, propagate: true });
+        } catch (error) {
+            if (error.status === 401 || error.status === 403) return;
+            initialDelayMs = 2_000 + Math.round(Math.random() * 1_000);
+        }
+    }
+    if (state.token) startPolling(initialDelayMs);
 }
 
 void boot();

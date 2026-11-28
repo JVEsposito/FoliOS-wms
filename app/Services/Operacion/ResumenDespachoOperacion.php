@@ -52,10 +52,11 @@ class ResumenDespachoOperacion
             ->orderBy('publicada_at')
             ->get();
         $exigeCargados = (bool) config('despacho.cierre_exige_pallets_cargados');
+        $alertasPorCarga = app(ServicioRetencionesLoteSag::class)->alertasCargas($cargas);
 
-        $filas = $cargas->map(function (Carga $carga) use ($exigeCargados): array {
+        $filas = $cargas->map(function (Carga $carga) use ($exigeCargados, $alertasPorCarga): array {
             $asignaciones = $carga->asignacionesActuales;
-            $alertasSag = app(ServicioRetencionesLoteSag::class)->alertasCarga($carga, $asignaciones);
+            $alertasSag = $alertasPorCarga[$carga->id] ?? [];
             $salidaRestringidaSag = collect($alertasSag)->contains('bloquea_salida', true);
             $progreso = $this->concentracion->calcular($asignaciones);
             $total = (int) $progreso['total'];
