@@ -20,20 +20,20 @@ class ServicioProyeccionCatalogoValidacion
     /**
      * @return array{articulos: int, origenes: int, combinaciones: int}
      */
-    public function conteos(Temporada $temporada): array
+    public function conteos(Temporada $temporada, bool $soloActivos = true): array
     {
         return [
             'articulos' => ArticuloValidacion::query()
                 ->where('temporada_id', $temporada->id)
-                ->where('activo', true)
+                ->when($soloActivos, fn ($consulta) => $consulta->where('activo', true))
                 ->count(),
             'origenes' => OrigenValidacion::query()
                 ->where('temporada_id', $temporada->id)
-                ->where('activo', true)
+                ->when($soloActivos, fn ($consulta) => $consulta->where('activo', true))
                 ->count(),
             'combinaciones' => CombinacionValidacion::query()
                 ->where('temporada_id', $temporada->id)
-                ->where('activo', true)
+                ->when($soloActivos, fn ($consulta) => $consulta->where('activo', true))
                 ->count(),
         ];
     }

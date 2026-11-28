@@ -2,10 +2,13 @@
 
 namespace Tests\Feature\Domain;
 
+use App\Models\ArticuloValidacion;
 use App\Models\Cliente;
 use App\Models\ClienteValidacion;
+use App\Models\CombinacionValidacion;
 use App\Models\EnvaseValidacion;
 use App\Models\ImportacionValidacion;
+use App\Models\OrigenValidacion;
 use App\Models\User;
 use App\Services\Validacion\ServicioImportacionValidacion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -98,6 +101,31 @@ class ImportacionCatalogoJerarquicoValidacionTest extends TestCase
             'activo' => true,
         ]);
         $this->assertDatabaseHas('combinaciones_validacion', [
+            'codigo_externo' => 'COM-001',
+            'activo' => true,
+        ]);
+
+        $combinacion = CombinacionValidacion::where('temporada_id', $temporada->id)->sole();
+        $combinacion->update(['activo' => false]);
+        ArticuloValidacion::findOrFail($combinacion->articulo_validacion_id)->update(['activo' => false]);
+        OrigenValidacion::findOrFail($combinacion->origen_validacion_id)->update(['activo' => false]);
+
+        $nuevaImportacion = $importacion->replicate();
+        $nuevaImportacion->checksum = hash('sha256', 'catalogo-2028-sin-codigos');
+        $nuevaImportacion->filas = [[
+            ...$importacion->filas[0],
+            'codigo_articulo' => null,
+            'codigo_origen' => null,
+            'codigo_combinacion' => null,
+        ]];
+        $nuevaImportacion->save();
+        $resultado = app(ServicioImportacionValidacion::class)->confirmar($nuevaImportacion, $usuario);
+
+        $this->assertSame(0, $resultado->resumen['creados']['articulos']);
+        $this->assertSame(0, $resultado->resumen['creados']['origenes']);
+        $this->assertSame(0, $resultado->resumen['creados']['combinaciones']);
+        $this->assertDatabaseHas('combinaciones_validacion', [
+            'id' => $combinacion->id,
             'codigo_externo' => 'COM-001',
             'activo' => true,
         ]);
