@@ -606,6 +606,7 @@ Route::middleware('auth:sanctum')->group(function () {
         ->group(function () {
             Route::middleware('can:consultar-catalogos-validacion')->group(function () {
                 Route::get('/', [AdministracionValidacionController::class, 'index']);
+                Route::get('/maestros', [AdministracionValidacionController::class, 'maestros']);
                 Route::get('/temporadas/{temporada}/catalogo', [CatalogoJerarquicoValidacionController::class, 'index']);
             });
             Route::middleware('can:administrar-catalogos-validacion')->group(function () {

@@ -1,4 +1,4 @@
-import { optionMatches } from './shared/validation-correction-logic.js';
+import { optionMatcher } from './shared/validation-correction-logic.js';
 
 const byId = (id) => document.getElementById(id);
 const keys = { token: 'estiba_wms_office_token', identity: 'estiba_wms_office_identity' };
@@ -17,6 +17,8 @@ const state = {
     projection: { articulos: 0, origenes: 0, combinaciones: 0 },
     showInactive: false,
 };
+const renderedPanels = new Set();
+const dateFormatter = new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short' });
 const elements = {
     user: byId('officeUserName'), initials: byId('officeInitials'), logout: byId('officeLogoutButton'),
     selector: byId('catalogSeasonSelector'), reload: byId('catalogReload'),
@@ -43,9 +45,15 @@ class ApiError extends Error {
 function readJson(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } }
 function escapeHtml(value) { return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
 function statusText(value) { return String(value || '').replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase()); }
-function formatDate(value, fallback = 'Sin fecha') { if (!value) return fallback; const date = new Date(value); return Number.isNaN(date.getTime()) ? fallback : new Intl.DateTimeFormat('es-CL', { dateStyle: 'short', timeStyle: 'short' }).format(date); }
+function formatDate(value, fallback = 'Sin fecha') { if (!value) return fallback; const date = new Date(value); return Number.isNaN(date.getTime()) ? fallback : dateFormatter.format(date); }
 function errorMessage(data, fallback) { return Object.values(data?.errors || {}).flat()[0] || data?.message || fallback; }
-function setBusy(active, message = 'Procesando…') { elements.loadingText.textContent = message; elements.loading.classList.toggle('is-hidden', !active); elements.loading.setAttribute('aria-hidden', String(!active)); }
+function setBusy(active, message = 'Procesando…') {
+    elements.loadingText.textContent = message;
+    elements.loading.classList.toggle('is-hidden', !active);
+    elements.loading.setAttribute('aria-hidden', String(!active));
+    elements.selector.disabled = active;
+    elements.reload.disabled = active;
+}
 function toast(message, error = false) { const node = document.createElement('div'); node.className = `toast${error ? ' toast--error' : ''}`; node.textContent = message; elements.toasts.append(node); window.setTimeout(() => node.remove(), 4500); }
 function wait(milliseconds) { return new Promise((resolve) => window.setTimeout(resolve, milliseconds)); }
 
@@ -83,18 +91,23 @@ function verifyAccess() {
 }
 
 async function fetchCatalog(seasonId) {
-    const suffix = `?resumen=1${seasonId ? `&temporada_id=${encodeURIComponent(seasonId)}` : ''}`;
-    const admin = await api(`/api/administracion/validacion${suffix}`);
-    const season = admin.temporada || null;
-    const hierarchy = season
-        ? await api(`/api/administracion/validacion/temporadas/${season.id}/catalogo`)
-        : {};
-    // Publicar ambos resultados juntos evita mezclar temporadas si falla la segunda petición.
+    const suffix = seasonId ? `?temporada_id=${encodeURIComponent(seasonId)}` : '';
+    const catalog = await api(`/api/administracion/validacion/maestros${suffix}`);
+    if (!Array.isArray(catalog?.temporadas) || !Object.hasOwn(catalog, 'temporada')) {
+        throw new Error('La respuesta del catálogo llegó incompleta.');
+    }
+    if (state.loaded && state.season?.id !== catalog.temporada?.id) {
+        for (const config of Object.values(entityConfig)) resetForm(byId(config.form));
+        elements.importForm.reset();
+        elements.importError.textContent = '';
+        state.preview = null;
+        elements.importPreview.classList.add('is-hidden');
+    }
     Object.assign(state, {
-        seasons: admin.temporadas || [], season: hierarchy.temporada || season, imports: admin.importaciones || [],
-        clients: hierarchy.clientes || [], categories: hierarchy.categorias || [],
-        species: hierarchy.especies || [], csg: hierarchy.csg || [],
-        projection: hierarchy.proyeccion || { articulos: 0, origenes: 0, combinaciones: 0 },
+        seasons: catalog.temporadas || [], season: catalog.temporada || null, imports: catalog.importaciones || [],
+        clients: catalog.clientes || [], categories: catalog.categorias || [],
+        species: catalog.especies || [], csg: catalog.csg || [],
+        projection: catalog.proyeccion || { articulos: 0, origenes: 0, combinaciones: 0 },
         loaded: true,
     });
 }
@@ -151,40 +164,46 @@ function render() {
     byId('projectionArticleCount').textContent = state.projection.articulos || 0;
     byId('projectionOriginCount').textContent = state.projection.origenes || 0;
     byId('projectionCombinationCount').textContent = state.projection.combinaciones || 0;
-    elements.importList.innerHTML = state.imports.map((item) => `<article class="validation-row"><div><strong>${escapeHtml(item.nombre_archivo)}</strong><small>${escapeHtml(statusText(item.estado))} · ${escapeHtml(formatDate(item.created_at))} · ${item.resumen?.filas_validas || 0} filas válidas</small></div>${item.estado === 'borrador' ? `<button data-confirm-import="${item.id}" type="button">Confirmar</button>` : ''}</article>`).join('') || '<p class="empty-validation">Sin importaciones recientes para esta temporada.</p>';
-
     elements.selector.innerHTML = state.seasons.map((season) => option(season.id, `${season.codigo} · ${season.nombre}${season.activa ? ' (activa)' : ''}`)).join('') || '<option value="">Sin temporadas</option>';
     elements.selector.value = state.season?.id || '';
 
-    const clientOptions = '<option value="">Selecciona un cliente</option>' + active(state.clients).map((item) => option(item.id, `${item.codigo_externo || 'SIN-CÓDIGO'} · ${item.nombre}`)).join('');
-    byId('brandForm').elements.cliente_validacion_id.innerHTML = clientOptions;
-    renderPackageParents(itemFor('package', byId('packageForm').elements.id.value));
+    renderedPanels.clear();
+    const selected = document.querySelector('[data-office-panel-switcher="validation-catalog"] [aria-selected="true"]');
+    renderPanel(selected?.dataset.officePanelTarget || 'clients');
+}
 
-    const speciesOptions = '<option value="">Selecciona una especie</option>' + active(state.species).map((item) => option(item.id, item.nombre)).join('');
-    for (const formId of ['varietyForm', 'caliberForm']) byId(formId).elements.especie_validacion_id.innerHTML = speciesOptions;
-
-    const varieties = active(state.species).flatMap((species) => active(species.variedades || []).map((item) => ({ ...item, species: species.nombre })));
-    byId('csgVarietyOptions').innerHTML = varieties.map((item) => `<label><input name="variedad_ids" type="checkbox" value="${item.id}"><span>${escapeHtml(item.species)} · ${escapeHtml(item.nombre)}</span></label>`).join('') || '<p class="empty-validation">Crea variedades antes de registrar un CSG.</p>';
-
+function renderClients() {
     const clients = visible(state.clients);
     byId('clientCount').textContent = String(clients.length);
     byId('clientList').innerHTML = clients.map((item) => `<article class="validation-row${activeClass(item)}"><div><strong>${escapeHtml(item.codigo_externo || 'SIN-CÓDIGO')} · ${escapeHtml(item.nombre)}</strong><small>Administrado en Accesos</small></div></article>`).join('') || '<p class="empty-validation">Sin clientes. Crea o activa el cliente en Accesos.</p>';
+}
 
-    const brands = clients.flatMap((client) => visible(client.marcas || []).map((item) => ({ ...item, clientId: client.id, client: client.nombre })));
+function renderBrands() {
+    replaceOptions(byId('brandForm').elements.cliente_validacion_id,
+        option('', 'Selecciona un cliente') + active(state.clients).map((item) => option(item.id, clientLabel(item))).join(''));
+    const brands = visible(state.clients).flatMap((client) => visible(client.marcas || []).map((item) => ({ ...item, client: client.nombre })));
     byId('brandCount').textContent = String(brands.length);
     byId('brandList').innerHTML = brands.map((item) => row(item.nombre, `Cliente: ${item.client}`, 'brand', item)).join('') || '<p class="empty-validation">Sin marcas.</p>';
+}
 
+function renderCategories() {
     const categories = visible(state.categories);
     byId('categoryCount').textContent = String(categories.length);
     byId('categoryList').innerHTML = categories.map((item) => row(item.nombre, item.codigo_externo || 'Disponible para todas las especies y marcas', 'category', item)).join('') || '<p class="empty-validation">Sin categorías.</p>';
+}
 
+function renderSpecies() {
     const species = visible(state.species);
     byId('speciesCount').textContent = String(species.length);
     byId('speciesList').innerHTML = species.map((item) => row(item.nombre, `${item.variedades?.length || 0} variedades · ${item.calibres?.length || 0} calibres · ${item.envases?.length || 0} envases`, 'species', item)).join('') || '<p class="empty-validation">Sin especies.</p>';
+}
 
-    renderChildren('variety', 'varietyCount', 'varietyList', 'variedades');
-    renderChildren('caliber', 'caliberCount', 'caliberList', 'calibres');
-    renderPackages();
+function renderCsg() {
+    const options = byId('csgVarietyOptions');
+    const checked = new Set([...options.querySelectorAll('input:checked')].map((input) => input.value));
+    const varieties = active(state.species).flatMap((species) => active(species.variedades || []).map((item) => ({ ...item, species: species.nombre })));
+    options.innerHTML = varieties.map((item) => `<label><input name="variedad_ids" type="checkbox" value="${escapeHtml(item.id)}"><span>${escapeHtml(item.species)} · ${escapeHtml(item.nombre)}</span></label>`).join('') || '<p class="empty-validation">Crea variedades antes de registrar un CSG.</p>';
+    options.querySelectorAll('input').forEach((input) => { input.checked = checked.has(input.value); });
 
     const csg = visible(state.csg);
     byId('csgCount').textContent = String(csg.length);
@@ -202,30 +221,44 @@ function render() {
     }).join('') || '<p class="empty-validation">Sin CSG.</p>';
 }
 
-function renderChildren(type, countId, listId, relation) {
-    const items = visible(state.species).flatMap((species) => visible(species[relation] || []).map((item) => ({ ...item, speciesId: species.id, species: species.nombre })));
-    byId(countId).textContent = String(items.length);
-    byId(listId).innerHTML = items.map((item) => row(item.nombre, `Especie: ${item.species}`, type, item)).join('') || '<p class="empty-validation">Sin registros.</p>';
+function renderImports() {
+    elements.importList.innerHTML = state.imports.map((item) => `<article class="validation-row"><div><strong>${escapeHtml(item.nombre_archivo)}</strong><small>${escapeHtml(statusText(item.estado))} · ${escapeHtml(formatDate(item.created_at))} · ${item.resumen?.filas_validas || 0} filas válidas</small></div>${item.estado === 'borrador' ? `<button data-confirm-import="${item.id}" type="button">Confirmar</button>` : ''}</article>`).join('') || '<p class="empty-validation">Sin importaciones recientes para esta temporada.</p>';
+}
+
+function renderChildren(type, relation) {
+    replaceOptions(byId(entityConfig[type].form).elements.especie_validacion_id,
+        option('', 'Selecciona una especie') + active(state.species).map((item) => option(item.id, item.nombre)).join(''));
+    const items = visible(state.species).flatMap((species) => visible(species[relation] || []).map((item) => ({ ...item, species: species.nombre })));
+    byId(`${type}Count`).textContent = String(items.length);
+    byId(entityConfig[type].list).innerHTML = items.map((item) => row(item.nombre, `Especie: ${item.species}`, type, item)).join('') || '<p class="empty-validation">Sin registros.</p>';
+}
+
+function replaceOptions(field, html) {
+    const previous = field.value;
+    field.innerHTML = html;
+    if ([...field.options].some((entry) => entry.value === previous)) field.value = previous;
+}
+
+function clientLabel(client) {
+    return `${client.codigo_externo || 'SIN-CÓDIGO'} · ${client.nombre}`;
 }
 
 function renderPackageParents(item) {
     const form = byId('packageForm');
     const options = [
-        ['cliente_validacion_id', state.clients, 'Selecciona un cliente', (client) => `${client.codigo_externo || 'SIN-CÓDIGO'} · ${client.nombre}`],
+        ['cliente_validacion_id', state.clients, 'Selecciona un cliente', clientLabel],
         ['especie_validacion_id', state.species, 'Selecciona una especie', (species) => species.nombre],
     ];
     for (const [name, items, placeholder, label] of options) {
-        const field = form.elements[name];
-        const previous = field.value;
-        field.innerHTML = option('', placeholder) + items.filter((parent) => parent.activo || parent.id === item?.[name])
-            .map((parent) => option(parent.id, `${label(parent)}${parent.activo ? '' : ' · Inactivo'}`)).join('');
-        if ([...field.options].some((entry) => entry.value === previous)) field.value = previous;
+        replaceOptions(form.elements[name], option('', placeholder) + items.filter((parent) => parent.activo || parent.id === item?.[name])
+            .map((parent) => option(parent.id, `${label(parent)}${parent.activo ? '' : ' · Inactivo'}`)).join(''));
     }
 }
 
 function renderPackages() {
     const status = elements.packageStatus.value;
     const query = elements.packageSearch.value;
+    const matches = optionMatcher(query);
     const clients = new Map(state.clients.map((client) => [client.id, client]));
     const rows = [];
     for (const species of state.species) {
@@ -233,14 +266,35 @@ function renderPackages() {
             if (status === 'active' && (!item.activo || !species.activo)) continue;
             if (status === 'removed' && item.activo) continue;
             const client = clients.get(item.cliente_validacion_id);
-            if (!optionMatches({ label: item.nombre, search: [item.codigo_externo, client?.nombre, client?.codigo_externo, species.nombre].filter(Boolean).join(' ') }, query)) continue;
-            const clientLabel = client ? `${client.codigo_externo || 'SIN-CÓDIGO'} · ${client.nombre}${client.activo ? '' : ' (inactivo)'}` : 'Sin cliente asignado';
-            const detail = `${item.codigo_externo ? `${item.codigo_externo} · ` : ''}Especie: ${species.nombre}${species.activo ? '' : ' (inactiva)'} · Cliente: ${clientLabel} · ${item.kilos_netos_por_caja ?? 'Sin configurar'} kg/caja`;
+            if (query && !matches({ label: item.nombre, search: [item.codigo_externo, client?.nombre, client?.codigo_externo, species.nombre].filter(Boolean).join(' ') })) continue;
+            const clientDetail = client ? `${clientLabel(client)}${client.activo ? '' : ' (inactivo)'}` : 'Sin cliente asignado';
+            const detail = `${item.codigo_externo ? `${item.codigo_externo} · ` : ''}Especie: ${species.nombre}${species.activo ? '' : ' (inactiva)'} · Cliente: ${clientDetail} · ${item.kilos_netos_por_caja ?? 'Sin configurar'} kg/caja`;
             rows.push(row(item.nombre, detail, 'package', item));
         }
     }
     byId('packageCount').textContent = String(rows.length);
     byId('packageList').innerHTML = rows.join('') || '<p class="empty-validation">Sin envases que coincidan con los filtros.</p>';
+}
+
+const panelRenderers = {
+    clients: renderClients,
+    brands: renderBrands,
+    categories: renderCategories,
+    species: renderSpecies,
+    varieties: () => renderChildren('variety', 'variedades'),
+    calibers: () => renderChildren('caliber', 'calibres'),
+    packages: () => {
+        renderPackageParents(itemFor('package', byId('packageForm').elements.id.value));
+        renderPackages();
+    },
+    csg: renderCsg,
+    imports: renderImports,
+};
+
+function renderPanel(panel) {
+    if (!state.loaded || renderedPanels.has(panel)) return;
+    panelRenderers[panel]();
+    renderedPanels.add(panel);
 }
 
 function resetForm(form) {
@@ -255,12 +309,18 @@ function resetForm(form) {
 }
 
 function itemFor(type, id) {
-    if (type === 'brand') return state.clients.flatMap((parent) => (parent.marcas || []).map((item) => ({ ...item, cliente_validacion_id: parent.id }))).find((item) => item.id === id);
+    if (!id) return undefined;
     if (type === 'category') return state.categories.find((item) => item.id === id);
     if (type === 'species') return state.species.find((item) => item.id === id);
     if (type === 'csg') return state.csg.find((item) => item.id === id);
-    const relation = type === 'variety' ? 'variedades' : type === 'caliber' ? 'calibres' : 'envases';
-    return state.species.flatMap((parent) => (parent[relation] || []).map((item) => ({ ...item, especie_validacion_id: parent.id }))).find((item) => item.id === id);
+    const relations = { brand: 'marcas', variety: 'variedades', caliber: 'calibres', package: 'envases' };
+    const parents = type === 'brand' ? state.clients : state.species;
+    const parentKey = type === 'brand' ? 'cliente_validacion_id' : 'especie_validacion_id';
+    for (const parent of parents) {
+        const item = parent[relations[type]]?.find((entry) => entry.id === id);
+        if (item) return { ...item, [parentKey]: parent.id };
+    }
+    return undefined;
 }
 
 function edit(type, id) {
@@ -300,22 +360,11 @@ function applySaved(type, { data, publicacion } = {}) {
         if (!state[root].some((parent) => parent.id === data[parentKey])) return false;
         state[root] = state[root].map((parent) => ({ ...parent, [relation]: parent.id === data[parentKey]
             ? upsert(parent[relation] || []) : (parent[relation] || []).filter((item) => item.id !== data.id) }));
-        if (type === 'variety') state.csg = state.csg.map((csg) => ({ ...csg,
-            variedades: (csg.variedades || []).map((item) => item.id === data.id ? { ...item, ...data } : item) }));
     } else return false;
     state.season = { ...state.season, version_catalogo: publicacion.version_catalogo };
     state.seasons = state.seasons.map((season) => season.id === state.season.id ? state.season : season);
     state.projection = publicacion.proyeccion;
-    const retained = Object.values(entityConfig).flatMap((config) => [...byId(config.form).querySelectorAll('input,select,textarea')]
-        .map((field) => ({ form: config.form, name: field.name, value: field.value, checked: field.checked, type: field.type })));
     render();
-    for (const old of retained) {
-        for (const field of byId(old.form).querySelectorAll('input,select,textarea')) {
-            if (field.name !== old.name || (old.type === 'checkbox' && field.value !== old.value)) continue;
-            if (old.type === 'checkbox') field.checked = old.checked;
-            else if (field.tagName !== 'SELECT' || [...field.options].some((option) => option.value === old.value)) field.value = old.value;
-        }
-    }
     return true;
 }
 
@@ -427,9 +476,10 @@ async function submitImport(event) {
     setBusy(true, 'Leyendo y validando planilla…');
     try {
         const response = await api('/api/administracion/validacion/importaciones/previsualizar', { method: 'POST', body: data });
+        const { id, nombre_archivo, estado, resumen, created_at } = response.data;
         renderImportPreview(response.data);
-        await fetchCatalog(state.season.id);
-        render();
+        state.imports = [{ id, nombre_archivo, estado, resumen, created_at }, ...state.imports.filter((item) => item.id !== id)].slice(0, 10);
+        renderImports();
     } catch (error) {
         elements.importError.textContent = error.message;
     } finally {
@@ -455,6 +505,9 @@ document.addEventListener('click', (event) => {
 
 elements.selector.addEventListener('change', () => void load(elements.selector.value));
 elements.reload.addEventListener('click', () => void load(state.season?.id, { announce: true }));
+document.addEventListener('estiba:office-panel-change', ({ detail }) => {
+    if (detail.group === 'validation-catalog') renderPanel(detail.panel);
+});
 elements.toggleInactive.addEventListener('click', () => {
     if (!state.loaded) return;
     state.showInactive = !state.showInactive;

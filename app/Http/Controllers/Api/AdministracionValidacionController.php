@@ -8,6 +8,7 @@ use App\Models\CombinacionValidacion;
 use App\Models\ImportacionValidacion;
 use App\Models\OrigenValidacion;
 use App\Models\Temporada;
+use App\Services\Validacion\ServicioCatalogoJerarquicoValidacion;
 use App\Services\Validacion\ServicioCatalogoValidacion;
 use App\Services\Validacion\ServicioImportacionValidacion;
 use Illuminate\Http\JsonResponse;
@@ -21,15 +22,24 @@ class AdministracionValidacionController extends Controller
         Request $request,
         ServicioCatalogoValidacion $servicio,
     ): JsonResponse {
-        $request->validate([
-            'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
-            'resumen' => ['sometimes', 'boolean'],
-        ]);
-        $temporada = $request->filled('temporada_id')
-            ? Temporada::query()->findOrFail($request->string('temporada_id')->toString())
-            : null;
+        return response()->json($servicio->datosAdministracion(
+            $this->temporadaSolicitada($request, ['resumen' => ['sometimes', 'boolean']]), $request->boolean('resumen'),
+        ));
+    }
 
-        return response()->json($servicio->datosAdministracion($temporada, $request->boolean('resumen')));
+    public function maestros(
+        Request $request,
+        ServicioCatalogoValidacion $servicio,
+        ServicioCatalogoJerarquicoValidacion $catalogo,
+    ): JsonResponse {
+        $inicio = hrtime(true);
+        $resumen = $servicio->datosAdministracion($this->temporadaSolicitada($request), resumen: true);
+        $temporada = $resumen['temporada'];
+
+        return response()->json($temporada
+            ? [...$resumen, ...$catalogo->datos($temporada, paraOficina: true)]
+            : $resumen)
+            ->header('Server-Timing', 'catalog;dur='.round((hrtime(true) - $inicio) / 1000000, 2));
     }
 
     public function storeArticulo(
@@ -123,6 +133,19 @@ class AdministracionValidacionController extends Controller
         return response()->json([
             'data' => $servicio->confirmar($importacionValidacion, $request->user()),
         ]);
+    }
+
+    /** @param array<string, list<string>> $reglas */
+    private function temporadaSolicitada(Request $request, array $reglas = []): ?Temporada
+    {
+        $request->validate([
+            'temporada_id' => ['nullable', 'uuid', 'exists:temporadas,id'],
+            ...$reglas,
+        ]);
+
+        return $request->filled('temporada_id')
+            ? Temporada::query()->findOrFail($request->string('temporada_id')->toString())
+            : null;
     }
 
     /**

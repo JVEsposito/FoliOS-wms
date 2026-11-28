@@ -28,9 +28,9 @@ class ServicioCatalogoJerarquicoValidacion
     /**
      * @return array<string, mixed>
      */
-    public function datos(Temporada $temporada): array
+    public function datos(Temporada $temporada, bool $paraOficina = false): array
     {
-        return DB::transaction(function () use ($temporada): array {
+        return DB::transaction(function () use ($temporada, $paraOficina): array {
             $temporada = Temporada::sharedLock()->findOrFail($temporada->id);
 
             return [
@@ -50,7 +50,7 @@ class ServicioCatalogoJerarquicoValidacion
                         'variedades' => fn ($query) => $query->orderBy('nombre'),
                         'calibres' => fn ($query) => $query->orderBy('nombre'),
                         'envases' => fn ($query) => $query
-                            ->with('cliente:id,nombre,codigo_externo')
+                            ->unless($paraOficina, fn ($query) => $query->with('cliente:id,nombre,codigo_externo'))
                             ->orderBy('nombre'),
                     ])
                     ->orderBy('nombre')
@@ -58,8 +58,11 @@ class ServicioCatalogoJerarquicoValidacion
                 'csg' => CsgValidacion::query()
                     ->where('temporada_id', $temporada->id)
                     ->with([
-                        'variedades:id,especie_validacion_id,nombre,activo',
+                        $paraOficina ? 'variedades:id' : 'variedades:id,especie_validacion_id,nombre,activo',
+                        'productor' => fn ($consulta) => $consulta
+                            ->when($paraOficina, fn ($consulta) => $consulta->select('id')),
                         'productor.clientes' => fn ($consulta) => $consulta
+                            ->when($paraOficina, fn ($consulta) => $consulta->select('clientes.id', 'clientes.nombre'))
                             ->where('clientes_productores_csg.activo', true),
                     ])
                     ->orderBy('codigo')

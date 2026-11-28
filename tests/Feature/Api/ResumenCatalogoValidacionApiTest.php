@@ -4,13 +4,21 @@ namespace Tests\Feature\Api;
 
 use App\Enums\RolUsuario;
 use App\Models\ArticuloValidacion;
+use App\Models\Cliente;
+use App\Models\ClienteValidacion;
 use App\Models\CombinacionValidacion;
+use App\Models\CsgValidacion;
+use App\Models\EnvaseValidacion;
+use App\Models\EspecieValidacion;
 use App\Models\ImportacionValidacion;
 use App\Models\OrigenValidacion;
+use App\Models\ProductorCsg;
 use App\Models\Temporada;
 use App\Models\User;
+use App\Models\VariedadValidacion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ResumenCatalogoValidacionApiTest extends TestCase
@@ -137,8 +145,64 @@ class ResumenCatalogoValidacionApiTest extends TestCase
     public function test_resumen_conserva_la_autorizacion_del_catalogo(): void
     {
         $this->getJson('/api/administracion/validacion?resumen=1')->assertUnauthorized();
+        $this->getJson('/api/administracion/validacion/maestros')->assertUnauthorized();
         $validador = User::factory()->create(['rol' => RolUsuario::Validador]);
         $this->actingAs($validador, 'sanctum')
             ->getJson('/api/administracion/validacion?resumen=1')->assertForbidden();
+        $this->getJson('/api/administracion/validacion/maestros')->assertForbidden();
+    }
+
+    public function test_maestros_entrega_el_catalogo_de_la_temporada_sin_el_detalle_sag(): void
+    {
+        $temporada = Temporada::create([
+            ...$this->vigenciaProductiva(), 'codigo' => 'HIST', 'nombre' => 'Histórica', 'activa' => false,
+        ]);
+        $administrador = User::factory()->create(['rol' => RolUsuario::Administrador]);
+        $cliente = Cliente::create(['codigo' => 'EXP', 'nombre' => 'Exportadora', 'activo' => true]);
+        $maestro = ClienteValidacion::create([
+            'temporada_id' => $temporada->id, 'cliente_id' => $cliente->id, 'nombre' => $cliente->nombre, 'activo' => true,
+        ]);
+        $especie = EspecieValidacion::create(['temporada_id' => $temporada->id, 'nombre' => 'Ciruela', 'activo' => true]);
+        $variedad = VariedadValidacion::create(['especie_validacion_id' => $especie->id, 'nombre' => 'Angeleno', 'activo' => true]);
+        $envase = EnvaseValidacion::create([
+            'especie_validacion_id' => $especie->id, 'cliente_validacion_id' => $maestro->id,
+            'nombre' => 'Caja 5 kg', 'kilos_netos_por_caja' => 5, 'activo' => false,
+        ]);
+        $productor = ProductorCsg::create([
+            'codigo' => '00123', 'razon_social' => 'Productor SAG', 'predio' => 'Predio SAG', 'estado_sag' => 'activo',
+            'fuente_url' => 'https://example.test', 'primera_verificacion_at' => now(), 'ultima_verificacion_at' => now(),
+            'ultima_consulta_user_id' => $administrador->id, 'respuesta_hash' => hash('sha256', 'fixture'),
+            'datos_fuente' => ['respuesta' => 'detalle SAG'],
+        ]);
+        $productor->clientes()->attach($cliente->id, [
+            'id' => Str::uuid(), 'activo' => true, 'asociado_por_user_id' => $administrador->id, 'actualizado_por_user_id' => $administrador->id,
+        ]);
+        $csg = CsgValidacion::create([
+            'temporada_id' => $temporada->id, 'codigo' => $productor->codigo, 'productor_csg_id' => $productor->id, 'activo' => true,
+        ]);
+        $csg->variedades()->attach($variedad->id);
+
+        $this->actingAs($administrador, 'sanctum')
+            ->getJson('/api/administracion/validacion/maestros?temporada_id='.$temporada->id)
+            ->assertOk()
+            ->assertJsonPath('temporada.id', $temporada->id)
+            ->assertJsonPath('clientes.0.id', $maestro->id)
+            ->assertJsonPath('especies.0.envases.0.id', $envase->id)
+            ->assertJsonPath('especies.0.envases.0.activo', false)
+            ->assertJsonPath('especies.0.envases.0.cliente_validacion_id', $maestro->id)
+            ->assertJsonPath('especies.0.envases.0.kilos_netos_por_caja', '5.0000')
+            ->assertJsonMissingPath('especies.0.envases.0.cliente')
+            ->assertJsonPath('csg.0.productor.clientes.0.nombre', $cliente->nombre)
+            ->assertJsonPath('csg.0.variedades.0.id', $variedad->id)
+            ->assertJsonMissingPath('csg.0.productor.datos_fuente')
+            ->assertJsonMissingPath('csg.0.variedades.0.nombre')
+            ->assertJsonPath('proyeccion.combinaciones', 0)
+            ->assertJsonMissingPath('combinaciones');
+
+        $this->getJson("/api/administracion/validacion/temporadas/{$temporada->id}/catalogo")
+            ->assertOk()
+            ->assertJsonPath('especies.0.envases.0.cliente.id', $maestro->id)
+            ->assertJsonPath('csg.0.productor.datos_fuente.respuesta', 'detalle SAG')
+            ->assertJsonPath('csg.0.variedades.0.nombre', $variedad->nombre);
     }
 }
