@@ -35,7 +35,10 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         const identity = {
             nombre: 'Supervisión', rol: 'consulta', inicio: '/oficina/operacion-ahora',
             puede_consultar_panel_gerencial: true, puede_consultar_prefrio: true,
-            modulos_acceso: ['gerencia.panel', 'frigorifico.prefrio'], ...preferencias,
+            puede_consultar_materia_prima: true, puede_consultar_despachos_materiales: true,
+            puede_consultar_oficina_consultas: true, puede_consultar_accesos: true,
+            modulos_acceso: ['gerencia.panel', 'frigorifico.prefrio', 'materia-prima.digitacion', 'materiales.resumen', 'consultas.busqueda', 'administracion.accesos'],
+            ...preferencias,
         };
         await context.addInitScript((user) => {
             localStorage.setItem('estiba_wms_office_token', 'fixture');
@@ -261,22 +264,35 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         await page.waitForFunction((theme) => document.documentElement.dataset.officePersonalTheme === theme, resonancia);
         const fuentes = await page.evaluate(async () => (await document.fonts.load('700 32px "Bodoni Moda"', 'Operación ahora')).map(font => font.status));
         assert.deepEqual(fuentes, ['loaded']);
+        const iconos = page.locator('.estiba-office-sidebar [data-domain-key]:visible .folios-gajo__leaf.is-area');
+        const colores = await iconos.evaluateAll(hojas => hojas.map(hoja => getComputedStyle(hoja).fill));
+        assert.equal(colores.length, 6);
+        assert.equal(new Set(colores).size, 6);
+        assert.equal(await page.locator('[data-domain-key="materiales"] .is-area').evaluate(hoja => getComputedStyle(hoja).fill), 'rgb(152, 45, 80)');
+        assert.match(await page.locator('#operationValidationTitle').evaluate(titulo => getComputedStyle(titulo).fontFamily), /Bodoni Moda/);
         for (const width of [1440, 1024, 390]) {
-            await page.setViewportSize({ width, height: 900 });
+            await page.setViewportSize({ width, height: 1040 });
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
             const estilo = await cabecera.evaluate((element, movil) => {
                 const titulo = getComputedStyle(element.querySelector('h1'));
                 const fondo = getComputedStyle(element);
                 const arte = movil ? getComputedStyle(element, '::after') : fondo;
-                return { fuente: titulo.fontFamily, color: titulo.color, base: fondo.backgroundColor, arte: arte.backgroundImage.includes('data:image/webp;base64,') };
+                return {
+                    fuente: titulo.fontFamily, color: titulo.color, base: fondo.backgroundColor,
+                    arte: arte.backgroundImage.includes('data:image/webp;base64,'), alto: parseFloat(arte.blockSize),
+                };
             }, width <= 760);
             assert.match(estilo.fuente, /Bodoni Moda/);
             assert.equal(estilo.arte, true);
+            assert.ok(estilo.alto >= (width <= 760 ? 190 : 320), `La portada conserva su altura a ${width}px`);
             assert.ok((luminance(estilo.base) + 0.05) / (luminance(estilo.color) + 0.05) >= 4.5);
             await page.locator('#operationRefresh').click({ trial: true });
             if (process.env.FOLIOS_UI_CAPTURE_DIR) {
                 await page.evaluate(() => window.scrollTo(0, 0));
                 await page.screenshot({ path: resolve(process.env.FOLIOS_UI_CAPTURE_DIR, `resonancia-${width}.png`) });
+                if (width === 1440) {
+                    await page.locator('.estiba-office-areas').screenshot({ path: resolve(process.env.FOLIOS_UI_CAPTURE_DIR, 'resonancia-iconos.png') });
+                }
             }
         }
         await selector.selectOption('dark-industrial');

@@ -86,6 +86,11 @@
         --resonancia-arte: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
         --resonancia-borde: #8796a5;
         --resonancia-carmesi: #982d50;
+        --resonancia-aguamarina: #236963;
+        --resonancia-cobalto: #225d94;
+        --resonancia-violeta: #614788;
+        --resonancia-indigo: #354d76;
+        --resonancia-pizarra: #48596e;
 
         & .estiba-office-shell {
             --shell-navy: var(--header-bg);
@@ -110,13 +115,30 @@
 
         & .estiba-office-header::after {
             height: 2px;
-            background: linear-gradient(90deg, #2a7799, #557496 44%, var(--resonancia-carmesi));
+            background: linear-gradient(90deg, var(--resonancia-aguamarina), var(--resonancia-cobalto) 44%, var(--resonancia-carmesi));
             pointer-events: none;
         }
+
+        & .estiba-office-header .estiba-office-menu-icon { color: var(--resonancia-cobalto); }
+        & .estiba-office-header .estiba-office-status > .eui-icon { color: var(--resonancia-aguamarina); }
+        & .estiba-office-header .estiba-office-communications > svg { color: var(--resonancia-carmesi); }
 
         & .estiba-office-sidebar {
             background: linear-gradient(162deg, #f9fbfd, #ecf2f7 85%);
         }
+
+        & :is(.estiba-office-sidebar .estiba-office-area, .operation-now-eyebrow) > .folios-gajo {
+            --gajo-area: var(--resonancia-icono, var(--primary));
+            --gajo-rest: color-mix(in srgb, var(--gajo-area) 44%, #fff);
+            --gajo-hub: var(--panel);
+        }
+
+        & .folios-gajo[data-area="materia-prima"] { --resonancia-icono: var(--resonancia-aguamarina); }
+        & .folios-gajo[data-area="frigorifico"] { --resonancia-icono: var(--resonancia-cobalto); }
+        & .folios-gajo[data-area="materiales"] { --resonancia-icono: var(--resonancia-carmesi); }
+        & .folios-gajo[data-area="consultas"] { --resonancia-icono: var(--resonancia-violeta); }
+        & .folios-gajo[data-area="gerencia"] { --resonancia-icono: var(--resonancia-indigo); }
+        & .folios-gajo[data-area="administracion"] { --resonancia-icono: var(--resonancia-pizarra); }
 
         & .estiba-office-brand .folios-logo--office-dark { display: none; }
         & .estiba-office-brand .folios-logo--office-garden { display: block; }
@@ -206,15 +228,24 @@
 
         & .operation-now-command__title {
             display: grid;
-            align-content: center;
-            min-block-size: clamp(196px, 23vw, 282px);
+            align-content: end;
+            min-block-size: clamp(332px, 31.2vw, 448px);
             margin: 0 calc(-1 * var(--resonancia-margen)) 12px;
-            padding: 18px var(--resonancia-margen);
+            padding: 24px var(--resonancia-margen) clamp(22px, 3.4vw, 48px);
             border-block-end: 1px solid var(--resonancia-borde);
         }
 
         & .operation-now-command__title h1 {
-            font-size: clamp(2.6rem, 6.2vw, 5.1rem);
+            font-size: clamp(3rem, 6.4vw, 5.75rem);
+        }
+
+        & .operation-now-panel__title h2 {
+            font-family: var(--resonancia-serif);
+            font-size: clamp(1.25rem, 1.8vw, 1.65rem);
+            font-stretch: normal;
+            font-weight: 650;
+            letter-spacing: .01em;
+            line-height: 1.1;
         }
 
         & .office-app :is([role="tab"][aria-selected="true"], .custody-tabs [aria-pressed="true"]) {
@@ -253,7 +284,7 @@
 
             & .operation-now-command__title::after {
                 display: block;
-                block-size: clamp(124px, 32vw, 180px);
+                block-size: clamp(190px, 52vw, 330px);
                 margin: 12px calc(-1 * var(--resonancia-margen)) 0;
                 background: var(--resonancia-arte) center 24% / cover no-repeat;
                 content: "";
