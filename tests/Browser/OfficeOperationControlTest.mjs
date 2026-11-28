@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 import { PNG } from 'pngjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const cronicas = 'personal-cronicas-cristal';
+const resonancia = 'personal-resonancia';
 const ultimaNoche = 'personal-majora-link';
 const webpMagenta = 'UklGRhwAAABXRUJQVlA4TBAAAAAvB4AAAAcQxS9y/wMR0f8A';
 function luminance(rgb) {
@@ -29,7 +29,7 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
             'personal-mugiwara': { nombre: 'Mugiwara', color: '#071c28', claro: false },
             'personal-nerv': { nombre: 'NERV', color: '#0c090a', claro: false },
             [ultimaNoche]: { nombre: 'Majora y Link · Última noche', color: '#15101d', claro: false },
-            [cronicas]: { nombre: 'Crónicas del Cristal', color: '#0b1025', claro: false },
+            [resonancia]: { nombre: 'Resonancia', color: '#f1f4f7', claro: true },
         };
         const preferencias = { temas_oficina: Object.keys(temas), temas_oficina_personales: temas };
         const identity = {
@@ -86,13 +86,13 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
             const tema = pathname.slice('/api/oficina/tema-personal/'.length);
             if (pathname.startsWith('/api/oficina/tema-personal/') && Object.hasOwn(temas, tema)) {
                 const css = readFileSync(resolve(root, 'resources', 'temas-oficina', `${tema}.css`), 'utf8');
-                const webp = [ultimaNoche, cronicas].includes(tema)
+                const webp = [ultimaNoche, resonancia].includes(tema)
                     ? readFileSync(resolve(root, 'resources', 'temas-oficina', `${tema}.webp`)).toString('base64')
                     : webpMagenta;
                 const ilustracion = tema === 'personal-nerv' ? `data:image/png;base64,${pngMagenta}` : `data:image/webp;base64,${webp}`;
                 let body = css.replace('data:image/webp;base64,__FOLIOS_TEMA_WEBP__', ilustracion).replace('__FOLIOS_TEMA_FONDO__', 'none');
-                if (tema === cronicas) {
-                    const fuente = readFileSync(resolve(root, 'resources/temas-oficina/cinzel-latin.woff2')).toString('base64');
+                if (tema === resonancia) {
+                    const fuente = readFileSync(resolve(root, 'resources/temas-oficina/bodoni-moda-latin.woff2')).toString('base64');
                     body = body.replace('__FOLIOS_TEMA_WOFF2__', fuente);
                 }
                 return route.fulfill({ contentType: 'text/css', body });
@@ -201,7 +201,7 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
 
         const cabecera = page.locator('.operation-now-command__title');
-        for (const tema of Object.keys(temas).filter((theme) => ![ultimaNoche, cronicas].includes(theme))) {
+        for (const tema of Object.keys(temas).filter((theme) => ![ultimaNoche, resonancia].includes(theme))) {
             await page.setViewportSize({ width: 1440, height: 900 });
             await selector.selectOption(tema);
             await page.waitForFunction(clave => document.documentElement.dataset.officePersonalTheme === clave, tema);
@@ -257,29 +257,30 @@ test('el centro de control conserva la pestaña y pinta las cabeceras de los tem
         await page.waitForFunction((theme) => document.documentElement.dataset.officePersonalTheme === theme, ultimaNoche);
         assert.deepEqual(await estilosUltimaNoche(), noche);
 
-        await selector.selectOption(cronicas);
-        await page.waitForFunction((theme) => document.documentElement.dataset.officePersonalTheme === theme, cronicas);
-        const fuentes = await page.evaluate(async () => (await document.fonts.load('700 32px "Cinzel Cristal"', 'Operación ahora')).map(font => font.status));
+        await selector.selectOption(resonancia);
+        await page.waitForFunction((theme) => document.documentElement.dataset.officePersonalTheme === theme, resonancia);
+        const fuentes = await page.evaluate(async () => (await document.fonts.load('700 32px "Bodoni Moda"', 'Operación ahora')).map(font => font.status));
         assert.deepEqual(fuentes, ['loaded']);
         for (const width of [1440, 1024, 390]) {
             await page.setViewportSize({ width, height: 900 });
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
-            const estilo = await cabecera.evaluate((element) => {
+            const estilo = await cabecera.evaluate((element, movil) => {
                 const titulo = getComputedStyle(element.querySelector('h1'));
                 const fondo = getComputedStyle(element);
-                return { fuente: titulo.fontFamily, color: titulo.color, base: fondo.backgroundColor, arte: fondo.backgroundImage.includes('data:image/webp;base64,') };
-            });
-            assert.match(estilo.fuente, /Cinzel Cristal/);
+                const arte = movil ? getComputedStyle(element, '::after') : fondo;
+                return { fuente: titulo.fontFamily, color: titulo.color, base: fondo.backgroundColor, arte: arte.backgroundImage.includes('data:image/webp;base64,') };
+            }, width <= 760);
+            assert.match(estilo.fuente, /Bodoni Moda/);
             assert.equal(estilo.arte, true);
-            assert.ok((luminance(estilo.color) + 0.05) / (luminance(estilo.base) + 0.05) >= 4.5);
+            assert.ok((luminance(estilo.base) + 0.05) / (luminance(estilo.color) + 0.05) >= 4.5);
             await page.locator('#operationRefresh').click({ trial: true });
             if (process.env.FOLIOS_UI_CAPTURE_DIR) {
                 await page.evaluate(() => window.scrollTo(0, 0));
-                await page.screenshot({ path: resolve(process.env.FOLIOS_UI_CAPTURE_DIR, `cronicas-cristal-${width}.png`) });
+                await page.screenshot({ path: resolve(process.env.FOLIOS_UI_CAPTURE_DIR, `resonancia-${width}.png`) });
             }
         }
         await selector.selectOption('dark-industrial');
-        assert.equal(await cabecera.evaluate(el => getComputedStyle(el.querySelector('h1')).fontFamily.includes('Cinzel Cristal')), false);
+        assert.equal(await cabecera.evaluate(el => getComputedStyle(el.querySelector('h1')).fontFamily.includes('Bodoni Moda')), false);
         assert.equal(new URL(page.url()).hash, '#validacion-pt');
         assert.deepEqual(errors, []);
         await context.close();

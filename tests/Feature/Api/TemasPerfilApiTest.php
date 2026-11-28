@@ -150,10 +150,10 @@ class TemasPerfilApiTest extends TestCase
         $this->getJson($rutaPorPerfil)->assertNotFound();
     }
 
-    public function test_cronicas_del_cristal_entrega_arte_y_fuente_solo_al_perfil_habilitado(): void
+    public function test_resonancia_entrega_arte_y_fuente_solo_al_perfil_habilitado(): void
     {
         Storage::fake('local');
-        $tema = 'personal-cronicas-cristal';
+        $tema = 'personal-resonancia';
         $ruta = '/api/oficina/tema-personal/'.$tema;
         $this->getJson($ruta)->assertUnauthorized();
 
@@ -164,14 +164,14 @@ class TemasPerfilApiTest extends TestCase
 
         Sanctum::actingAs(User::factory()->create(['rol' => RolUsuario::Administrador]));
         $this->getJson('/api/administracion/perfiles-acceso')->assertOk()
-            ->assertJsonPath('catalogo_temas.'.$tema, 'Crónicas del Cristal');
+            ->assertJsonPath('catalogo_temas.'.$tema, 'Resonancia');
         $this->patchJson("/api/administracion/perfiles-acceso/{$perfil->id}/temas", ['temas_oficina' => [$tema]])->assertOk();
 
         Sanctum::actingAs($supervisor->fresh());
         $this->getJson('/api/oficina/contexto')->assertOk()
             ->assertJsonPath('data.temas_oficina', [$tema])
-            ->assertJsonPath('data.temas_oficina_personales.'.$tema.'.color', '#0b1025')
-            ->assertJsonPath('data.temas_oficina_personales.'.$tema.'.claro', false);
+            ->assertJsonPath('data.temas_oficina_personales.'.$tema.'.color', '#f1f4f7')
+            ->assertJsonPath('data.temas_oficina_personales.'.$tema.'.claro', true);
         $css = $this->get($ruta)->assertOk()->assertHeader('Content-Type', 'text/css; charset=UTF-8')->getContent();
         $this->assertStringContainsString('data:image/webp;base64,UklGR', $css);
         $this->assertStringContainsString('data:font/woff2;base64,d09GMg', $css);

@@ -1,126 +1,129 @@
 @media screen {
     @font-face {
-        font-family: "Cinzel Cristal";
+        font-family: "Bodoni Moda";
         src: url("data:font/woff2;base64,__FOLIOS_TEMA_WOFF2__") format("woff2");
         font-style: normal;
-        font-weight: 500 750;
+        font-weight: 500 700;
         font-display: swap;
     }
 
-    :root[data-office-personal-theme="personal-cronicas-cristal"] {
-        color-scheme: dark;
-        --bg: #0b1025;
-        --deep: #111934;
-        --panel: #172144;
-        --raised: #212e57;
-        --soft: #2c3b67;
-        --line: #7186b6;
-        --line-soft: #40537e;
+    :root[data-office-personal-theme="personal-resonancia"] {
+        color-scheme: light;
+        --bg: #f1f4f7;
+        --deep: #e8eef5;
+        --panel: #fff;
+        --raised: #f7f9fc;
+        --soft: #dfebf3;
+        --line: #8195aa;
+        --line-soft: #d1dbe5;
         --border: var(--line);
-        --input-border: #7f94c4;
-        --text: #eef2ff;
-        --text-strong: #fffaf0;
-        --text-secondary: #d5def8;
-        --text-subtle: #b9c7e8;
+        --input-border: #72879b;
+        --text: #202c3b;
+        --text-strong: #10141c;
+        --text-secondary: #324256;
+        --text-subtle: #46586e;
         --muted: var(--text-subtle);
-        --header-bg: var(--deep);
+        --header-bg: #f8fafd;
         --subnav-bg: var(--panel);
-        --surface-muted: #19264c;
-        --surface-hover: #293965;
-        --surface-selected: #314478;
-        --input-bg: #121c38;
-        --table-head: #24335d;
+        --surface-muted: #ecf3f8;
+        --surface-hover: #e4eef6;
+        --surface-selected: #dcecf5;
+        --input-bg: #fff;
+        --table-head: #e7eef7;
         --row-bg: var(--panel);
-        --row-alt: #1c294f;
+        --row-alt: #f5f8fb;
         --row-hover: var(--surface-hover);
-        --button-secondary: #24335d;
+        --button-secondary: #f4f8fc;
         --button-secondary-hover: var(--surface-hover);
         --icon-surface: var(--surface-muted);
-        --primary: #b9cbff;
-        --primary-hover: #d8e2ff;
-        --on-primary: #101832;
+        --primary: #174972;
+        --primary-hover: #113756;
+        --on-primary: #fff;
         --accent: var(--primary);
-        --focus-ring: #ffda97;
-        --selection-bg: #7489cd72;
-        --green: #9be2ba;
-        --amber: #ffda97;
-        --red: #ffb2bc;
+        --focus-ring: #20527d;
+        --selection-bg: #a8cbe3;
+        --green: #216248;
+        --amber: #775013;
+        --red: #932642;
         --success-text: var(--green);
-        --success-bg: #153a34;
+        --success-bg: #e4f2e9;
         --warning-text: var(--amber);
-        --warning-bg: #47341e;
+        --warning-bg: #fbefdb;
         --danger-text: var(--red);
-        --danger-bg: #48283c;
-        --info-text: #c4d3ff;
-        --info-bg: #263a67;
+        --danger-bg: #f8e8ed;
+        --info-text: #245578;
+        --info-bg: #e7eff8;
         --seal: var(--amber);
         --seal-bg: var(--warning-bg);
         --critical-fill: var(--red);
-        --on-critical-fill: #351729;
-        --corporate-navy: var(--deep);
+        --on-critical-fill: #fff;
+        --corporate-navy: #18324b;
         --corporate-canvas: var(--bg);
         --corporate-card: var(--panel);
         --corporate-border: var(--line-soft);
         --corporate-text: var(--text);
         --corporate-text-muted: var(--muted);
-        --corporate-blue: #a6beff;
-        --corporate-blue-dark: #3e568e;
+        --corporate-blue: var(--primary);
+        --corporate-blue-dark: #123653;
         --corporate-gold: var(--amber);
-        --corporate-shadow: 0 4px 18px #070b245c;
-        --corporate-shadow-raised: 0 16px 44px #070b2499;
-        --cyan: var(--corporate-blue);
-        --cyan-light: var(--info-text);
-        --frost: var(--corporate-blue);
-        --frost-strong: #dae5ff;
-        --brand-gradient: linear-gradient(135deg, var(--deep), #293a70);
+        --corporate-shadow: 0 4px 18px #20374514;
+        --corporate-shadow-raised: 0 16px 44px #20374524;
+        --cyan: #17617c;
+        --cyan-light: #1a597b;
+        --frost: #1b617d;
+        --frost-strong: #124861;
+        --brand-gradient: linear-gradient(135deg, #fefefe, #e7f1f6);
         --kpi-surface: var(--surface-muted);
-        --logo-bg: var(--deep);
-        --logo-border: #9d8c76;
-        --series-product: #a9c8ff;
-        --series-material: #f2c17b;
+        --logo-bg: #18324b;
+        --logo-border: #9cadbe;
+        --series-product: #245c88;
+        --series-material: #9a3c58;
         --chart-grid: var(--line-soft);
         --chart-text: var(--text-secondary);
         --chart-tooltip-bg: var(--raised);
         --chart-tooltip-border: var(--line);
-        --cristal-serif: "Cinzel Cristal", Georgia, serif;
-        --cristal-arte: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
-        --cristal-cabecera: #111b38;
-        --cristal-borde: #98846a;
+        --resonancia-serif: "Bodoni Moda", Georgia, serif;
+        --resonancia-arte: url("data:image/webp;base64,__FOLIOS_TEMA_WEBP__");
+        --resonancia-borde: #8796a5;
+        --resonancia-carmesi: #982d50;
 
         & .estiba-office-shell {
-            --shell-navy: var(--deep);
+            --shell-navy: var(--header-bg);
             --shell-navy-hover: var(--surface-hover);
             --shell-strong: var(--text-strong);
             --shell-ink: var(--text);
             --shell-muted: var(--text-secondary);
             --shell-faint: var(--text-subtle);
+            --shell-warning: var(--amber);
             --shell-line: var(--line);
             --shell-gajo: var(--line-soft);
             --shell-active-bg: var(--surface-selected);
             --shell-active-ink: var(--text-strong);
-            --shell-active-gajo: var(--amber);
+            --shell-active-gajo: var(--primary);
             --shell-focus: var(--focus-ring);
             --eui-shell-frost: var(--primary);
         }
 
         & .estiba-office-header {
-            background: linear-gradient(110deg, #111934 15%, #223360 70%, #1c2247);
+            background: linear-gradient(100deg, #fff, #edf3f7);
         }
 
         & .estiba-office-header::after {
             height: 2px;
-            background: linear-gradient(90deg, #ae8eff, #a9c8ff 46%, #ffda97 90%);
+            background: linear-gradient(90deg, #2a7799, #557496 44%, var(--resonancia-carmesi));
             pointer-events: none;
         }
 
         & .estiba-office-sidebar {
-            background: linear-gradient(165deg, #15234b, #101832 60%);
+            background: linear-gradient(162deg, #f9fbfd, #ecf2f7 85%);
         }
 
+        & .estiba-office-brand .folios-logo--office-dark { display: none; }
+        & .estiba-office-brand .folios-logo--office-garden { display: block; }
+
         & .estiba-ui {
-            --eui-color-navy: var(--deep);
-            --eui-color-navy-hover: var(--surface-hover);
-            --eui-color-on-navy-muted: var(--text-secondary);
+            --eui-color-navy: var(--corporate-navy);
+            --eui-color-navy-hover: #23465f;
             --eui-color-canvas: var(--corporate-canvas);
             --eui-color-surface: var(--corporate-card);
             --eui-color-subtle: var(--surface-muted);
@@ -151,61 +154,71 @@
 
         & .office-app :is([data-folios-masthead], .operation-now-command__title) {
             background:
-                linear-gradient(90deg, var(--cristal-cabecera) 12%, #111b38f5 35%, #111b38bb 53%, #111b3808 76%),
-                var(--cristal-arte) right 5% / min(64%, 740px) auto no-repeat,
-                var(--cristal-cabecera);
+                linear-gradient(90deg, #ffffff55, #ffffffbf 26%, #ffffff80 42%, #ffffff00 63%),
+                var(--resonancia-arte) center 28% / cover no-repeat,
+                #fff;
         }
 
         & .office-app [data-folios-masthead] {
-            min-block-size: clamp(116px, 13vw, 172px);
-            border-color: var(--cristal-borde);
+            min-block-size: clamp(118px, 14vw, 185px);
+            border-color: var(--resonancia-borde);
         }
 
         & :is(.office-app, .folios-inicio) h1 {
             color: var(--text-strong);
-            font-family: var(--cristal-serif);
+            font-family: var(--resonancia-serif);
             font-stretch: normal;
             font-weight: 700;
-            letter-spacing: -.025em;
-            line-height: 1.12;
-            text-wrap: balance;
+            letter-spacing: .015em;
+            line-height: .98;
+            text-transform: uppercase;
             overflow-wrap: anywhere;
         }
 
         & .office-app :is([data-folios-masthead], .operation-now-command__title) h1 {
-            max-inline-size: 26ch;
-            text-shadow: 0 2px 12px #090f28, 0 1px 3px #090f28;
+            inline-size: fit-content;
+            max-inline-size: 100%;
+            padding-block-end: .105em;
+            border-block-end: .045em solid currentColor;
+            text-shadow: 0 0 8px #fff, 0 0 14px #fff;
+            transform: scaleX(.72);
+            transform-origin: left center;
         }
 
         & .office-app :is([data-folios-masthead], .operation-now-command__title) :is(.eyebrow, .eui-heading__eyebrow, .operation-now-eyebrow) {
-            color: var(--amber);
+            color: #1c506d;
+            text-shadow: 0 0 7px #fff, 0 0 11px #fff;
         }
 
         & .office-app :is([data-folios-masthead] h1 + p, .operation-now-command__meta) {
             color: var(--text-secondary);
-            text-shadow: 0 1px 5px #070b24;
+            text-shadow: 0 0 7px #fff, 0 0 11px #fff;
         }
 
         & .operation-now .operation-now-command {
-            --cristal-margen: clamp(16px, 2vw, 26px);
+            --resonancia-margen: clamp(16px, 2vw, 26px);
             grid-template-columns: minmax(0, 1fr) auto auto;
             grid-template-areas: "title title title" "state date actions";
-            padding: 0 var(--cristal-margen) 12px;
-            border-color: var(--cristal-borde);
+            padding: 0 var(--resonancia-margen) 12px;
+            border-color: var(--resonancia-borde);
             background: var(--panel);
         }
 
         & .operation-now-command__title {
             display: grid;
             align-content: center;
-            min-block-size: clamp(152px, 17vw, 218px);
-            margin: 0 calc(-1 * var(--cristal-margen)) 12px;
-            padding: 18px var(--cristal-margen);
-            border-block-end: 1px solid var(--cristal-borde);
+            min-block-size: clamp(196px, 23vw, 282px);
+            margin: 0 calc(-1 * var(--resonancia-margen)) 12px;
+            padding: 18px var(--resonancia-margen);
+            border-block-end: 1px solid var(--resonancia-borde);
+        }
+
+        & .operation-now-command__title h1 {
+            font-size: clamp(2.6rem, 6.2vw, 5.1rem);
         }
 
         & .office-app :is([role="tab"][aria-selected="true"], .custody-tabs [aria-pressed="true"]) {
-            border-block-end-color: var(--amber);
+            border-block-end-color: var(--resonancia-carmesi);
             background: var(--surface-selected);
             color: var(--text-strong);
         }
@@ -217,9 +230,9 @@
 
             & .office-app [data-folios-masthead] {
                 background:
-                    linear-gradient(90deg, var(--cristal-cabecera) 12%, #111b38ea 55%, #111b3880),
-                    var(--cristal-arte) right 20% / auto 100% no-repeat,
-                    var(--cristal-cabecera);
+                    linear-gradient(90deg, #ffffffed, #ffffffc4 56%, #ffffff75),
+                    var(--resonancia-arte) right 17% / auto 100% no-repeat,
+                    #fff;
             }
 
             & .operation-now .operation-now-command {
@@ -230,11 +243,20 @@
             & .office-app .operation-now-command__title {
                 min-block-size: 0;
                 margin-block-end: 0;
-                padding-block-end: 110px;
-                background:
-                    linear-gradient(var(--cristal-cabecera) 0 48%, #111b3800 72%),
-                    var(--cristal-arte) right calc(100% + 113px) / max(100%, 365px) auto no-repeat,
-                    var(--cristal-cabecera);
+                padding-block-end: 0;
+                background: #fff;
+            }
+
+            & .operation-now-command__title h1 {
+                font-size: clamp(1.45rem, 7.8vw, 3.25rem);
+            }
+
+            & .operation-now-command__title::after {
+                display: block;
+                block-size: clamp(124px, 32vw, 180px);
+                margin: 12px calc(-1 * var(--resonancia-margen)) 0;
+                background: var(--resonancia-arte) center 24% / cover no-repeat;
+                content: "";
             }
         }
     }

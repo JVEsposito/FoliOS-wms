@@ -38,12 +38,12 @@ final class CatalogoTemasOficina
             'claro' => false,
             'incluido' => true,
         ],
-        'personal-cronicas-cristal' => [
-            'nombre' => 'Crónicas del Cristal',
-            'color' => '#0b1025',
-            'claro' => false,
+        'personal-resonancia' => [
+            'nombre' => 'Resonancia',
+            'color' => '#f1f4f7',
+            'claro' => true,
             'incluido' => true,
-            'fuente' => 'cinzel-latin.woff2',
+            'fuente' => 'bodoni-moda-latin.woff2',
         ],
         'personal-stitch' => [
             'nombre' => 'Stitch · Experimento 626',
