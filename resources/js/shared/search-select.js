@@ -49,7 +49,7 @@ export function createSearchSelect(container, { label, placeholder = 'Buscar…'
         input.setAttribute('aria-expanded', 'true');
         container.classList.add('is-open');
         active = -1;
-        if (!allowCustomValue) active = query ? 0 : Math.max(0, filterOptions(options, '').findIndex((option) => option.value === value));
+        if (!allowCustomValue) active = query ? 0 : Math.max(0, options.findIndex((option) => option.value === value));
         render(query);
     }
 

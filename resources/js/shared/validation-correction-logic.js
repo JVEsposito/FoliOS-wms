@@ -15,15 +15,17 @@ export function normalizeSearch(value) {
 }
 
 /** Cada palabra buscada debe aparecer en el texto de la opción. */
-export function optionMatches(option, query) {
+export function optionMatcher(query) {
     const words = normalizeSearch(query).split(' ').filter(Boolean);
-    if (!words.length) return true;
-    const text = normalizeSearch([option.label, option.hint, option.search].filter(Boolean).join(' '));
-    return words.every((word) => text.includes(word));
+    if (!words.length) return () => true;
+    return (option) => {
+        const text = normalizeSearch([option.label, option.hint, option.search].filter(Boolean).join(' '));
+        return words.every((word) => text.includes(word));
+    };
 }
 
 export function filterOptions(options, query) {
-    return options.filter((option) => optionMatches(option, query));
+    return options.filter(optionMatcher(query));
 }
 
 function sameText(first, second) {
